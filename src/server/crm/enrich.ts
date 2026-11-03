@@ -7,6 +7,7 @@ import { CrmError } from "./access";
 import { claudeWebResearch, crmCredentials, dataRule, fenced, runCrmAi, assertUnderCap, recordAiUsage, withTier } from "./ai";
 import type { AiWho } from "./ai-tx";
 import { updateCompany } from "./companies";
+import { costOf, meterUse } from "./spend";
 import {
   connectedDataProviders,
   dataKey,
@@ -207,13 +208,15 @@ async function tryStep(
       standin: () => ({ facts: [], notes: [] }),
     });
     await withSystemOrgTx(who.organizationId, ({ db }) =>
-      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: r }),
+      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: r, extraMicros: r.webSearchMicros }),
     );
     const results = r.sources.map((x) => ({ title: x.label, url: x.url, content: "" }));
     return factsFrom(r.data, results);
   }
   const key = await dataKey(who.organizationId, step);
   if (!key) return "skip";
+  const what = step === "hunter" ? "hunter.lookup" : step === "prospeo" ? "prospeo.lookup" : "tavily.search";
+  await assertUnderCap(who.organizationId, costOf(what));
   let found: FoundValues | null = null;
   const urls: Record<string, string> = {};
   if (step === "hunter") {
@@ -225,9 +228,7 @@ async function tryStep(
     found = await prospeoPerson(key, { email: s.email, linkedinUrl: s.linkedinUrl });
   } else {
     const results = await tavilySearch(key, kind === "person" ? `"${s.name}" ${s.companyName ?? ""} ${s.title ?? ""}` : `${s.name} ${s.domain ?? ""} company`, { maxResults: 5 });
-    await withSystemOrgTx(who.organizationId, ({ db }) =>
-      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", result: { usage: null, model: "tavily-search" } }),
-    );
+    await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", what: "tavily.search" });
     if (results.length === 0) return null;
     const r = await runCrmAi({
       organizationId: who.organizationId,
@@ -243,11 +244,7 @@ async function tryStep(
     });
     return factsFrom(r.data, results);
   }
-  {
-    await withSystemOrgTx(who.organizationId, ({ db }) =>
-      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, result: { usage: null, model: `${step}-lookup` } }),
-    );
-  }
+  await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, what });
   return found ? { values: found, urls } : null;
 }
 

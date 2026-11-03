@@ -16,6 +16,7 @@ import {
   dataRule,
   estimateCostMicros,
   fenced,
+  NoAiConnectionError,
   providerOf,
   paidByOf,
   readClaudeBatch,
@@ -27,6 +28,7 @@ import { recordContext } from "./ai-context";
 import type { AiWho, CrmTx } from "./ai-tx";
 import { updateCompany } from "./companies";
 import { connectedDataProviders, dataKey, tavilySearch, type WebResult } from "./data-connectors";
+import { costOf, meterUse } from "./spend";
 import { updateDeal } from "./deals";
 import { patchEnrichment, readEnrichment, type EnrichmentEntry } from "./enrichment-store";
 import { newBatchId } from "./history";
@@ -165,10 +167,9 @@ async function research(organizationId: string, ref: AiFieldRef, p: Prepared): P
   const key = await dataKey(organizationId, "tavily");
   if (!key) return [];
   const prompt = cleanText(ref.field.options.prompt, 150) ?? ref.field.name;
+  await assertUnderCap(organizationId, costOf("tavily.search"));
   const results = await tavilySearch(key, `${p.name} ${prompt}`, { maxResults: 4 });
-  await withSystemOrgTx(organizationId, ({ db }) =>
-    recordAiUsage(db, { organizationId, userId: null, feature: "crm.ai_field", provider: "tavily", result: { usage: null, model: "tavily-search" } }),
-  );
+  await meterUse({ organizationId, userId: null, feature: "crm.ai_field", provider: "tavily", what: "tavily.search" });
   return results;
 }
 
@@ -322,7 +323,7 @@ export async function startColumnFill(who: AiWho, fieldId: string, options: { on
   if (!cleanText(ref.field.options.prompt, 2000)) throw new CrmError(`Say what "${ref.field.name}" should hold first (its prompt, in the field's settings).`);
   if (ids.length === 0) return { rows: 0, mode: "none" };
   const creds = await crmCredentials(who.organizationId);
-  if (!creds) throw new CrmError("Connect your organization's AI model first (Integrations and apps).");
+  if (!creds) throw new NoAiConnectionError();
   if (creds.protocol === "anthropic" && !ref.field.options.research && ids.length >= BATCH_MIN) {
     await startBatch(who, ref, ids, creds);
     return { rows: ids.length, mode: "batch" };

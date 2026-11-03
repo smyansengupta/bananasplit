@@ -14,6 +14,7 @@ import {
   type ConsentChannel,
   type Keyword,
 } from "@/lib/crm/phone";
+import { missingKeyMessage } from "@/lib/crm/org-keys";
 import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
@@ -92,7 +93,7 @@ export async function queueText(
   if (body.length > MAX_TEXT) throw new CrmError(`Keep a text under ${MAX_TEXT} characters.`);
   // Which provider and number: the service path (members can't read integrations).
   const status = await phoneStatus(organizationId);
-  if (!status.active) throw new CrmError("Connect Telnyx or Twilio on Integrations and apps to text from here.");
+  if (!status.active) throw new CrmError(missingKeyMessage("Telnyx or Twilio"));
   if (!status.number) throw new CrmError("Pick the number texts go out from on Integrations and apps.");
   const person = await db.crmPerson.findFirst({
     where: { id: input.personId, organizationId, deletedAt: null },

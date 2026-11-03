@@ -19,8 +19,9 @@ import {
   twilioRecordingUrl,
   twilioSendText,
 } from "./providers";
+import { billedMinutes, costOf, meterUse, textSegments, underCap } from "../spend";
 import { summarizeTranscript, summaryText } from "./summary";
-import { NO_DEEPGRAM_NOTE } from "./voice-notes";
+import { CAPPED_NOTE, NO_DEEPGRAM_NOTE } from "./voice-notes";
 
 /**
  * The phone's jobs (src/server/jobs/registry.ts rows crm-text-send,
@@ -62,6 +63,12 @@ export const crmTextSendJob: JobHandler<{ textId: string }> = async (run) => {
     await setTextStatus(orgId, text.id, "failed");
     throw new PermanentJobError("the phone provider was disconnected");
   }
+  // Past the organization's monthly spending cap nothing more goes out.
+  const segments = textSegments(text.body);
+  if (!(await underCap(orgId, costOf("text.segment", segments)))) {
+    await setTextStatus(orgId, text.id, "failed");
+    return;
+  }
   const urls = phoneWebhookUrls(orgId);
   try {
     const sent = await sendOrgSms(text.toNumber, text.body, () =>
@@ -86,6 +93,9 @@ export const crmTextSendJob: JobHandler<{ textId: string }> = async (run) => {
         });
       }
     });
+    if (sent.delivery === "live") {
+      await meterUse({ organizationId: orgId, userId: text.userId, feature: "crm.text", provider: conn.provider, what: "text.segment", units: segments });
+    }
   } catch (error) {
     console.warn(`[crm:text] text to ${maskNumber(text.toNumber)} failed: ${error instanceof Error ? error.message : "error"}`);
     if (run.attempt >= run.maxAttempts || (error instanceof ProviderError && error.permanent)) {
@@ -177,11 +187,15 @@ export const crmTranscribeJob: JobHandler<{ callId?: string; activityId?: string
     );
     if (!call?.recordingKey || call.transcript) return;
     if (!key) return;
+    // Past the monthly spending cap the recording stays as audio.
+    if (!(await underCap(orgId, costOf("transcript.minute", billedMinutes(call.durationSec) || 1)))) return;
     const audio = await getBlob(call.recordingKey);
     if (!audio) return;
     let text: string;
     try {
-      text = transcriptText(await deepgramTranscribe(key, audio, run.signal));
+      const t = await deepgramTranscribe(key, audio, run.signal);
+      text = transcriptText(t);
+      await meterUse({ organizationId: orgId, userId: call.userId, feature: "crm.transcript", provider: "deepgram", what: "transcript.minute", units: billedMinutes(t.durationSec) || 1 });
     } catch (error) {
       permanentIf(error);
     }
@@ -219,11 +233,22 @@ export const crmTranscribeJob: JobHandler<{ callId?: string; activityId?: string
       );
       return;
     }
+    if (!(await underCap(orgId, costOf("transcript.minute")))) {
+      await withSystemOrgTx(orgId, ({ db }) =>
+        db.crmActivity.update({
+          where: { id: note.id },
+          data: { body: CAPPED_NOTE, meta: { ...meta, transcribing: false } as Prisma.InputJsonObject },
+        }),
+      );
+      return;
+    }
     const audio = await getBlob(meta.audioKey);
     if (!audio) return;
     let text: string;
     try {
-      text = transcriptText(await deepgramTranscribe(key, audio, run.signal));
+      const t = await deepgramTranscribe(key, audio, run.signal);
+      text = transcriptText(t);
+      await meterUse({ organizationId: orgId, userId: note.createdById, feature: "crm.transcript", provider: "deepgram", what: "transcript.minute", units: billedMinutes(t.durationSec) || 1 });
     } catch (error) {
       if (run.attempt >= run.maxAttempts || (error instanceof ProviderError && error.permanent)) {
         await withSystemOrgTx(orgId, ({ db }) =>

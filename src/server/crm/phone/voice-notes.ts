@@ -1,3 +1,4 @@
+import { ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
 import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
@@ -14,7 +15,10 @@ import { readPhoneStatus } from "./connection";
  */
 
 export const NO_DEEPGRAM_NOTE =
-  "Voice note, kept as audio. Connect Deepgram on Integrations and apps to have voice notes written out.";
+  `Voice note, kept as audio. Add a Deepgram key in ${ORG_KEYS_PLACE} to have voice notes written out.`;
+
+/** A voice note past the organization's monthly spending cap. */
+export const CAPPED_NOTE = "Voice note, kept as audio. Your organization has reached this month's spending cap.";
 
 export interface VoiceNoteInput {
   organizationId: string;

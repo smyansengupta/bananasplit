@@ -8,6 +8,7 @@ import { EmailConfigError } from "@/server/email/transport";
 
 import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
+import { costOf, meterUseIn, underCap } from "../spend";
 import { messageIdFor, replyAddress, sendFromMailbox, type MailPurpose, type SentEmail } from "./mailbox";
 import { clickUrl, mailToken, oneClickUrl, pixelUrl, unsubscribeUrl } from "./tokens";
 
@@ -779,6 +780,12 @@ export async function deliver(
     return "later";
   }
   const p = outcome.send;
+  // Bulk mail is volume on the organization's own Resend account: past the
+  // monthly spending cap it stops (one-to-one mail still goes).
+  if (p.purpose === "bulk" && !(await underCap(organizationId, costOf("email.sent")))) {
+    await withSystemOrgTx(organizationId, ({ db }) => markFailed(db, organizationId, messageId, "This month's spending cap is reached"));
+    return "failed";
+  }
   try {
     const sent = await sendFromMailbox({
       organizationId,
@@ -789,7 +796,12 @@ export async function deliver(
       idempotencyKey: p.messageId,
       signal,
     });
-    await withSystemOrgTx(organizationId, ({ db }) => markSent(db, p, sent, new Date()));
+    await withSystemOrgTx(organizationId, async ({ db }) => {
+      await markSent(db, p, sent, new Date());
+      if (sent.paidBy === "ORG_KEY") {
+        await meterUseIn(db, { organizationId, userId: p.senderId, feature: "crm.email", provider: "resend", what: "email.sent" });
+      }
+    });
     return "sent";
   } catch (error) {
     if (error instanceof EmailConfigError) {

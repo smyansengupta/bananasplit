@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 
+import { capReachedMessage, NO_AI_KEY_MESSAGE, ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { claudeModel, DEFAULT_CLAUDE_MODEL } from "@/lib/org-chart/models";
 import { assertNoTx, withSystemOrgTx, type TxClient } from "@/server/db/context";
@@ -25,10 +26,12 @@ import {
  * - Which size of model per job is set in one place (CRM_AI_JOBS): a small
  *   fast model for summaries and reading, the organization's chosen model
  *   for drafts and research.
- * - The organization's hard monthly cap (CrmSettings.aiMonthlyCapCents) is
- *   checked before every call, on the service path so it counts everyone's
- *   spend (members can read only their own AiUsage rows), and each call
- *   writes one AiUsage row after, whoever paid.
+ * - The organization's hard monthly spending cap
+ *   (CrmSettings.aiMonthlyCapCents) is checked before every call, on the
+ *   service path so it counts everyone's spend (members can read only their
+ *   own AiUsage rows), and each call writes one AiUsage row after, whoever
+ *   paid. The same cap covers searches, lookups, texts, calls, transcripts
+ *   and bulk email (src/server/crm/spend.ts meters those).
  * - Rate limits per member and per organization, like the AI imports.
  * - The model call runs outside any transaction (generateStructured
  *   asserts it); what members and contacts wrote goes in as data, the
@@ -98,7 +101,7 @@ function monthStart(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-/** This month's AI spend on the org's own key, in micro-dollars (service path: everyone's). */
+/** This month's spend on the org's own keys (AI and every other per-use cost), in micro-dollars (service path: everyone's). */
 export async function aiSpendThisMonth(db: TxClient, organizationId: string): Promise<number> {
   const agg = await db.aiUsage.aggregate({
     where: { organizationId, paidBy: "ORG_KEY", createdAt: { gte: monthStart() } },
@@ -108,13 +111,15 @@ export async function aiSpendThisMonth(db: TxClient, organizationId: string): Pr
 }
 
 export class AiCapError extends AiImportError {
-  constructor() {
-    super("Your organization has used this month's AI budget. An owner or admin can raise it in CRM settings.", 429);
+  readonly capCents: number | null;
+  constructor(capCents: number | null = null) {
+    super(capReachedMessage(capCents), 429);
     this.name = "AiCapError";
+    this.capCents = capCents;
   }
 }
 
-/** Throws when the organization has reached its monthly AI cap (or would, with `upcomingMicros` more). */
+/** Throws when the organization has reached its monthly spending cap (or would, with `upcomingMicros` more). */
 export async function checkAiCap(db: TxClient, organizationId: string, upcomingMicros = 0): Promise<void> {
   const settings = await db.crmSettings.findUnique({
     where: { organizationId },
@@ -123,7 +128,7 @@ export async function checkAiCap(db: TxClient, organizationId: string, upcomingM
   const cap = settings?.aiMonthlyCapCents;
   if (cap == null) return;
   const spent = await aiSpendThisMonth(db, organizationId);
-  if (spent + upcomingMicros >= cap * 10_000) throw new AiCapError();
+  if (spent + upcomingMicros >= cap * 10_000) throw new AiCapError(cap);
 }
 
 /** The cap check on the service path (any caller, no transaction open). */
@@ -194,10 +199,7 @@ export function withTier(creds: AiCredentials, tier: Tier): AiCredentials {
 
 export class NoAiConnectionError extends AiImportError {
   constructor() {
-    super(
-      "No AI model is connected yet. An owner or admin can connect your organization's Claude key, or another model, in Integrations and apps.",
-      409,
-    );
+    super(NO_AI_KEY_MESSAGE, 409);
     this.name = "NoAiConnectionError";
   }
 }
@@ -278,6 +280,8 @@ export async function recordAiUsage(
     result: Pick<StructuredResult<unknown>, "usage" | "model">;
     paidBy?: "ORG_KEY" | "PLATFORM";
     batch?: boolean;
+    /** Billed on top of the tokens (Claude's web searches, $10 per thousand). */
+    extraMicros?: number;
   },
 ): Promise<void> {
   const inputTokens = input.result.usage?.input ?? 0;
@@ -291,13 +295,18 @@ export async function recordAiUsage(
       model: input.result.model,
       inputTokens,
       outputTokens,
-      costMicros: estimateCostMicros(input.result.model, inputTokens, outputTokens, { batch: input.batch }),
+      costMicros:
+        estimateCostMicros(input.result.model, inputTokens, outputTokens, { batch: input.batch }) +
+        Math.max(0, Math.round(input.extraMicros ?? 0)),
       paidBy: input.paidBy ?? "ORG_KEY",
     },
   });
 }
 
 // ---------------------------------------------------------------- Claude with web search
+
+/** Claude's web search: $10 per thousand searches, on top of the tokens. */
+const WEB_SEARCH_MICROS = 10_000;
 
 /**
  * Research with Claude's own web search (the research agent's fallback when
@@ -310,7 +319,7 @@ export async function claudeWebResearch<S extends z.ZodObject>(
   creds: Extract<AiCredentials, { protocol: "anthropic" }>,
   req: StructuredRequest<S>,
   maxSearches = 3,
-): Promise<StructuredResult<z.infer<S>> & { sources: { label: string; url: string }[] }> {
+): Promise<StructuredResult<z.infer<S>> & { sources: { label: string; url: string }[]; webSearchMicros: number }> {
   assertNoTx("claudeWebResearch");
   const format = betaZodOutputFormat(req.schema);
   let response: Anthropic.Beta.BetaMessage;
@@ -325,10 +334,10 @@ export async function claudeWebResearch<S extends z.ZodObject>(
     });
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
-      throw new AiImportError("Claude rejected the API key. An owner or admin can update it in Integrations and apps.", 502);
+      throw new AiImportError(`Claude rejected the API key. An owner or admin can update it in ${ORG_KEYS_PLACE}.`, 502);
     }
     if (error instanceof Anthropic.BadRequestError) {
-      throw new AiImportError("Claude's web search isn't available to this key. Connect Tavily to research instead.", 422);
+      throw new AiImportError(`Claude's web search isn't available to this key. Add a Tavily key in ${ORG_KEYS_PLACE} to research instead.`, 422);
     }
     if (error instanceof Anthropic.RateLimitError) throw new AiImportError("Claude is busy right now. Try again in a minute.", 429);
     throw new AiImportError("Claude couldn't be reached. Try again in a moment.", 502);
@@ -361,6 +370,7 @@ export async function claudeWebResearch<S extends z.ZodObject>(
     model: creds.model,
     label: creds.label,
     sources,
+    webSearchMicros: WEB_SEARCH_MICROS * (response.usage.server_tool_use?.web_search_requests ?? 0),
   };
 }
 

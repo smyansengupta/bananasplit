@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { cleanList, cleanText, ResearchOutput, type ResearchData } from "@/lib/crm/ai-outputs";
 import { workDomain } from "@/lib/crm/dedupe";
+import { NO_AI_KEY_MESSAGE, ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
 import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 
@@ -13,6 +14,7 @@ import { connectedDataProviders, dataKey, tavilySearch, type WebResult } from ".
 import { patchEnrichment } from "./enrichment-store";
 import { notContacted } from "./lookups";
 import { proposeChange } from "./review";
+import { costOf, meterUse } from "./spend";
 
 /**
  * The CRM's agents (docs/features/crm.md module 10): a research agent on a
@@ -219,7 +221,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
     const connected = await connectedDataProviders(who.organizationId);
     const creds = await crmCredentials(who.organizationId);
     if (!creds) {
-      log.note("No AI model is connected, so there's nothing to research with. Connect your organization's Claude key or another model.");
+      log.note(NO_AI_KEY_MESSAGE);
       await finishRun(log, "stopped");
       return "stopped";
     }
@@ -228,6 +230,8 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
     let model: string;
     if (connected.includes("tavily")) {
       const key = await dataKey(who.organizationId, "tavily");
+      const searches = key ? (kind === "company" ? 2 : 1) : 0;
+      await assertUnderCap(who.organizationId, costOf("tavily.search", searches));
       log.note(`Searched the web with Tavily for ${ctx.name}.`);
       results = key ? await tavilySearch(key, query, { maxResults: 6 }) : [];
       if (kind === "company" && key) {
@@ -235,9 +239,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
         results = [...results, ...news.filter((n) => !results.some((r) => r.url === n.url))];
         log.note("Looked for recent news.");
       }
-      await withSystemOrgTx(who.organizationId, ({ db }) =>
-        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "tavily", result: { usage: null, model: "tavily-search" } }),
-      );
+      await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "tavily", what: "tavily.search", units: searches });
       log.note(`${results.length} pages found.`);
       const r = await runCrmAi({
         organizationId: who.organizationId,
@@ -274,7 +276,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
         standin: () => ({ summary: "", facts: [], news: [], talkingPoints: [], notes: [] }),
       });
       await withSystemOrgTx(who.organizationId, ({ db }) =>
-        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "claude", result: r }),
+        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "claude", result: r, extraMicros: r.webSearchMicros }),
       );
       results = r.sources.map((s) => ({ title: s.label, url: s.url, content: "" }));
       data = r.data;
@@ -291,7 +293,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
       };
       model = "stand-in";
     } else {
-      log.note("Web research needs a Tavily key (Integrations and apps), or your organization's Claude key, which can search the web itself.");
+      log.note(`Web research needs a Tavily key, or your organization's Claude key, which can search the web itself. Add one in ${ORG_KEYS_PLACE}.`);
       await finishRun(log, "stopped");
       return "stopped";
     }

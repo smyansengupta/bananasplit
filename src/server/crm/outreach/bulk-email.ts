@@ -5,6 +5,7 @@ import { renderMerge } from "@/lib/crm/outreach/merge";
 
 import { CrmError, type CrmAccess, type CrmActor } from "../access";
 import type { RoleOwner } from "../owners";
+import { assertCanSpend, costOf } from "../spend";
 import { startBulk } from "./campaigns";
 import { listPeople } from "./lists";
 import { messageIdFor, type SenderCheck } from "./mailbox";
@@ -92,6 +93,7 @@ export async function sendBulk(
   if (!view) throw new CrmError("Pick a list.");
   const r = await recipients(actor, input.viewId, roles);
   if (r.ok.length === 0) throw new CrmError("Nobody on that list can be emailed.");
+  await assertCanSpend(organizationId, costOf("email.sent", r.ok.length));
   const campaign = await db.crmCampaign.create({
     data: {
       organizationId,

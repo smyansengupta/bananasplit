@@ -33,7 +33,8 @@ function monthStart(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-const LOOKUP_PROVIDERS = new Set(["tavily", "hunter", "prospeo"]);
+// Everything metered per use that isn't a model call (src/server/crm/spend.ts).
+const LOOKUP_PROVIDERS = new Set(["tavily", "hunter", "prospeo", "telnyx", "twilio", "deepgram", "resend"]);
 
 export async function usageThisMonth(db: TxClient, organizationId: string): Promise<UsageSummary> {
   const since = monthStart();
@@ -87,10 +88,10 @@ export async function usageThisMonth(db: TxClient, organizationId: string): Prom
 
 /** Owners and admins set the hard monthly cap (null: no cap). */
 export async function setAiCap(actor: CrmActor & { admin: boolean }, capDollars: number | null): Promise<number | null> {
-  if (!actor.admin) throw new CrmError("Only owners and admins can set the AI budget.");
+  if (!actor.admin) throw new CrmError("Only owners and admins can set the monthly spending cap.");
   let cents: number | null = null;
   if (capDollars !== null) {
-    if (!Number.isFinite(capDollars) || capDollars < 0 || capDollars > 100_000) throw new CrmError("Enter a monthly budget between $0 and $100,000.");
+    if (!Number.isFinite(capDollars) || capDollars < 0 || capDollars > 100_000) throw new CrmError("Enter a monthly cap between $0 and $100,000.");
     cents = Math.round(capDollars * 100);
   }
   await actor.db.crmSettings.update({ where: { organizationId: actor.organizationId }, data: { aiMonthlyCapCents: cents } });
