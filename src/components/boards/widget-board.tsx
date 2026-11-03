@@ -99,7 +99,7 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
-import { BAND_COLUMNS, ambientLayout } from "@/lib/overview/ambient";
+import { ambientLayout } from "@/lib/overview/ambient";
 import type { WidgetScore } from "@/lib/overview/priority";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -1187,11 +1187,8 @@ function BoardItem({
         bare
           ? "rounded-block"
           : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
-        band
-          ? !bare && band.span < BAND_COLUMNS && "lg:max-h-[34rem]"
-          : w.h
-            ? ROWS_TALL
-            : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
+        // Packed Ambient shows every widget whole: nothing beside it needs evening up.
+        band ? null : w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
         editing &&
           "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
         editing && !coarse && "touch-none",
