@@ -6,6 +6,7 @@ import { SponsorshipStatus, SponsorshipType } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
 import { withOrgAction } from "@/server/db/context";
+import { createSponsorshipRecord } from "@/server/finance/sponsorship-create";
 import { setSponsorshipStatus } from "@/server/finance/sponsorship-status";
 import { dropDealForSponsorship, syncDealFromSponsorship } from "@/server/crm/sponsor-sync";
 
@@ -126,34 +127,20 @@ export const createSponsorship = sponsorshipsAction(
     });
     if (!owner) return { error: "Owner must be a member of this organization." };
 
-    const created = await ctx.db.sponsorship.create({
-      data: {
-        organizationId,
-        sponsorId: sponsor.id,
-        budgetPeriodId: data.budgetPeriodId,
-        type: data.type,
-        amountCents: data.amountCents,
-        tier: data.tier || null,
-        deliverables: data.deliverables || null,
-        expectedOn: data.expectedOn ? new Date(data.expectedOn) : null,
-        ownerId,
-      },
+    const made = await createSponsorshipRecord(ctx, {
+      sponsorId: sponsor.id,
+      budgetPeriodId: data.budgetPeriodId,
+      type: data.type,
+      amountCents: data.amountCents,
+      tier: data.tier,
+      deliverables: data.deliverables,
+      expectedOn: data.expectedOn ? new Date(data.expectedOn) : null,
+      ownerId,
+      status: data.status,
     });
-    await writeFinanceAuditLog(ctx.db, {
-      organizationId,
-      sponsorshipId: created.id,
-      action: "SPONSORSHIP_CREATE",
-      after: created,
-    });
-    if (data.status && data.status !== SponsorshipStatus.PROSPECT) {
-      const moved = await setSponsorshipStatus(ctx, created.id, data.status);
-      if (moved.error) return moved;
-    } else {
-      // The CRM's Sponsorships pipeline shows it too (when the CRM has one).
-      await syncDealFromSponsorship(ctx.db, organizationId, ctx.userId, created.id);
-    }
+    if (made.error) return made;
 
-    return { sponsorshipId: created.id, sponsorId: sponsor.id };
+    return { sponsorshipId: made.sponsorshipId, sponsorId: sponsor.id };
   },
 );
 

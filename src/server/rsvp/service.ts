@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
 import { placeRegistration, promotableCount, type ClosedReason } from "@/lib/rsvp/format";
+import { queueCrmRefreshFor } from "@/server/crm/schedule";
 import { enqueueJob, prepareJob, type EnqueueInput } from "@/server/jobs/enqueue";
 
 /**
@@ -240,6 +241,8 @@ export async function registerGuest(
     placed.status === "GOING" ? "registered" : "waitlisted",
     { dedupe: now.getTime().toString(36) },
   );
+  // The CRM's timeline for whoever signed up, now rather than at the nightly run.
+  await queueCrmRefreshFor(db, event.organizationId, { kind: "registration", id: row.id });
   return { kind: "registered", registrationId: row.id, status: placed.status };
 }
 

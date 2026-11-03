@@ -1,4 +1,5 @@
 import type { RSVPStatus } from "@/generated/prisma/client";
+import { queueCrmRefreshFor } from "@/server/crm/schedule";
 import type { MemberContext } from "@/server/db/context";
 
 /**
@@ -20,5 +21,7 @@ export async function setOwnRsvp(
     data: { rsvp: status },
   });
   if (updated.count === 0) return { error: NOT_INVITED };
+  // The CRM's timeline for them, now rather than at the nightly run.
+  await queueCrmRefreshFor(ctx.db, ctx.organizationId, { kind: "user", id: ctx.userId });
   return {};
 }

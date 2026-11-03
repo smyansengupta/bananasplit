@@ -27,6 +27,8 @@ export interface NeedsYouParts {
   tasks: number;
   requests: number;
   reviews: number;
+  /** The CRM's rows: people to reach today and its Review suggestions. */
+  crm?: number;
 }
 
 /** "2 approvals, 1 form to review", at most three parts, biggest asks first. */
@@ -36,6 +38,7 @@ function needsYouLine(parts: NeedsYouParts): string {
     parts.reviews > 0 ? `${plural(parts.reviews, "form")} to review` : null,
     parts.invites > 0 ? `${plural(parts.invites, "invite")} to answer` : null,
     parts.tasks > 0 ? `${plural(parts.tasks, "task")} due` : null,
+    parts.crm ? `${plural(parts.crm, "CRM follow-up")}` : null,
   ].filter((w): w is string => w !== null);
   return words.slice(0, 3).join(", ");
 }

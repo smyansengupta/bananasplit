@@ -41,7 +41,7 @@ import { toReviewForOwner } from "@/server/forms/forms";
 import { signalsFor } from "@/server/crm/signals";
 import { crmRecordHref } from "@/lib/crm/href";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
-import { crmInboxItems } from "@/server/crm/outreach/inbox";
+import { crmInboxItems, crmReviewRow } from "@/server/crm/outreach/inbox";
 import { rolePositions } from "@/server/crm/owners";
 import { loadInboxState } from "@/server/inbox/state";
 import { RECAP_TITLE } from "@/server/overview/recap-week-text";
@@ -170,6 +170,9 @@ export default async function InboxPage({
       select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
     });
     const crm = crmRoles ? await crmInboxItems(db, org.id, user.id, orgSlug, crmRoles, now).catch(() => []) : [];
+    // Review suggestions assigned to them, as one row with the count.
+    const review = crmRoles ? await crmReviewRow(db, org.id, user.id, orgSlug) : null;
+    if (review) crm.unshift(review);
     return {
       crm,
       tz,

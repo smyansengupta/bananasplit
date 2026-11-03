@@ -1,12 +1,11 @@
-import { lookup } from "node:dns/promises";
-
 import type { Prisma } from "@/generated/prisma/client";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { readWorkflow, renderMessage, type RunLogEntry } from "@/lib/crm/workflows";
 import { withSystemOrgTx } from "@/server/db/context";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 
-import { checkCallUrl, isPrivateAddress } from "./call-url";
+import { checkCallUrl } from "./call-url";
+import { webhookTransport } from "./webhooks/guard";
 import { loadTarget, targetPath } from "./workflow-target";
 import type { TriggerRef } from "./workflow-engine";
 
@@ -18,7 +17,10 @@ import type { TriggerRef } from "./workflow-engine";
  * - Slack only at hooks.slack.com, Discord only at discord.com (or
  *   discordapp.com) /api/webhooks/;
  * - the host must not be an IP literal or resolve to a private, loopback,
- *   link-local or otherwise internal address (checked just before the call);
+ *   link-local or otherwise internal address, checked in the connection's
+ *   own DNS lookup (the address it connects to is the one checked, so a
+ *   name that rebinds between a check and the connect is still refused):
+ *   the same guarded transport outgoing webhooks use (webhooks/guard.ts);
  * - redirects are refused, the call gives up after 10 seconds, and only
  *   the status is kept;
  * - the webhook body is the event and the record's ids, kind and name, so
@@ -29,12 +31,6 @@ import type { TriggerRef } from "./workflow-engine";
  */
 
 const TIMEOUT_MS = 10_000;
-
-async function assertPublicHost(url: URL): Promise<void> {
-  const answers = await lookup(url.hostname, { all: true, verbatim: true }).catch(() => []);
-  if (answers.length === 0) throw new PermanentJobError("That address doesn't resolve.");
-  if (answers.some((a) => isPrivateAddress(a.address))) throw new PermanentJobError("That address is inside a private network.");
-}
 
 type CallPayload = { runId: string; index: number };
 
@@ -62,7 +58,6 @@ export const crmWorkflowCallJob: JobHandler<CallPayload> = async (run) => {
   } else {
     try {
       const url = checkCallUrl(action.type, action.params.url);
-      await assertPublicHost(url);
       const link = target ? absoluteAppUrl(targetPath(loaded.slug, target.kind, target.id)) : null;
       const merge = { ...(target?.merge ?? {}), link, workflow: loaded.run.workflow.name };
       const body =
@@ -77,16 +72,21 @@ export const crmWorkflowCallJob: JobHandler<CallPayload> = async (run) => {
                 runId,
                 at: new Date().toISOString(),
               };
-      const signal = AbortSignal.any([run.signal, AbortSignal.timeout(TIMEOUT_MS)]);
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", "user-agent": "Bananasplit-CRM-Automation" },
-        body: JSON.stringify(body),
-        redirect: "manual",
-        signal,
-      });
+      if (run.signal.aborted) throw new Error("The job was stopped.");
+      const res = await webhookTransport
+        .post(url, JSON.stringify(body), { "Content-Type": "application/json", "User-Agent": "Bananasplit-CRM-Automation" }, { timeoutMs: TIMEOUT_MS })
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error?.code === "EBLOCKED") throw new PermanentJobError("That address is inside a private network.");
+          if (error?.code === "ENOTFOUND") throw new PermanentJobError("That address doesn't resolve.");
+          if (error instanceof Error && /timed out/.test(error.message)) {
+            const t = new Error("It didn't answer within 10 seconds.");
+            t.name = "TimeoutError";
+            throw t;
+          }
+          throw error;
+        });
       if (res.status >= 300 && res.status < 400) throw new PermanentJobError("It answered with a redirect, which isn't followed.");
-      if (!res.ok) {
+      if (res.status < 200 || res.status >= 300) {
         if (res.status >= 500 && run.attempt < run.maxAttempts) throw new Error(`It answered ${res.status}; trying again.`);
         throw new PermanentJobError(`It answered ${res.status}.`);
       }

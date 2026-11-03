@@ -8,7 +8,7 @@ import type { TxClient } from "@/server/db/context";
 
 import { csvDate, dateCell, num, text } from "../format";
 import type { FieldSpec, QuerySpec } from "../query-builder";
-import type { DatabaseSource, MappedRow, ViewContext } from "../types";
+import type { DatabaseSource, ListArgs, MappedRow, ViewContext } from "../types";
 
 /**
  * The CRM's databases in Databases (docs/features/crm.md, "How it fits into
@@ -19,8 +19,10 @@ import type { DatabaseSource, MappedRow, ViewContext } from "../types";
  * under the viewer's RLS (OWN access applies here too), and a row opens the
  * CRM record itself: one row, one record.
  *
- * Custom columns filter (equals, contains, more or less than) but don't
- * sort: Prisma can't order by a JSON path.
+ * Custom columns filter (equals, contains, more or less than) and sort.
+ * Prisma can't order by a JSON path, so a sort on a custom column reads the
+ * matching rows' ids and values (up to CUSTOM_SORT_LIMIT), orders them here
+ * by the field's type, and then loads just the page.
  */
 
 const STATUS_OPTIONS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }));
@@ -29,8 +31,82 @@ function customKey(fieldId: string): string {
   return `cf_${fieldId.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
+/** How many rows a custom-column sort orders in memory. */
+export const CUSTOM_SORT_LIMIT = 5000;
+const CUSTOM_SORT = "__crmCustomSort";
+
+function sortsByValue(f: FieldDef): boolean {
+  return f.type !== "LONG_TEXT" && f.type !== "RELATION";
+}
+
+/** The value a custom field sorts by: numbers, dates (YYYY-MM-DD), choices in their order, text without case. */
+export function customSortValue(f: FieldDef, raw: unknown): number | string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  switch (f.type) {
+    case "NUMBER":
+    case "CURRENCY":
+      return typeof raw === "number" ? raw : Number.isFinite(Number(raw)) ? Number(raw) : null;
+    case "CHECKBOX":
+      return raw === true ? 1 : 0;
+    case "SELECT":
+    case "MULTI_SELECT": {
+      const first = Array.isArray(raw) ? raw[0] : raw;
+      const i = (f.options.choices ?? []).findIndex((c) => c.id === first);
+      return i === -1 ? null : i;
+    }
+    case "DATE":
+      return typeof raw === "string" ? raw.slice(0, 10) : null;
+    default:
+      return typeof raw === "string" ? raw.trim().toLowerCase() : typeof raw === "number" ? raw : null;
+  }
+}
+
+/** Ids in order for a custom-column sort (empty values last, ties by id). */
+export function orderByCustom(
+  rows: readonly { id: string; custom: unknown }[],
+  f: FieldDef,
+  dir: "asc" | "desc",
+): string[] {
+  const keyed = rows.map((r) => ({ id: r.id, v: customSortValue(f, ((r.custom ?? {}) as Record<string, unknown>)[f.id]) }));
+  const sign = dir === "asc" ? 1 : -1;
+  const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -sign : a.id > b.id ? sign : 0);
+  keyed.sort((a, b) => {
+    if (a.v === null && b.v === null) return byId(a, b);
+    if (a.v === null) return 1;
+    if (b.v === null) return -1;
+    const c = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : String(a.v).localeCompare(String(b.v));
+    return c !== 0 ? c * sign : byId(a, b);
+  });
+  return keyed.map((k) => k.id);
+}
+
+/**
+ * When the view sorts by a custom column: the page's ids, in order (or null
+ * for an ordinary sort, which Prisma does itself). The export's keyset
+ * cursor ({id}) picks up after its row.
+ */
+async function customPage(
+  args: ListArgs,
+  fields: readonly FieldDef[],
+  readAll: () => Promise<{ id: string; custom: unknown }[]>,
+): Promise<string[] | null> {
+  const marker = (args.orderBy[0] ?? {})[CUSTOM_SORT] as { field: string; dir: "asc" | "desc" } | undefined;
+  if (!marker) return null;
+  const f = fields.find((x) => x.id === marker.field);
+  if (!f) return null;
+  const ids = orderByCustom(await readAll(), f, marker.dir);
+  const cursorId = (args.cursor as { id?: string } | undefined)?.id;
+  const start = cursorId ? ids.indexOf(cursorId) + 1 : (args.skip ?? 0);
+  return ids.slice(start, start + args.take);
+}
+
+function inOrder<T extends { id: string }>(ids: readonly string[], rows: readonly T[]): T[] {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.map((id) => byId.get(id)).filter((r): r is T => Boolean(r));
+}
+
 function customColumn(f: FieldDef): ColumnConfigInput {
-  const base = { key: customKey(f.id), label: f.name.slice(0, 80), filterable: true, hiddenByDefault: false };
+  const base = { key: customKey(f.id), label: f.name.slice(0, 80), filterable: true, sortable: sortsByValue(f), hiddenByDefault: false };
   switch (f.type) {
     case "NUMBER":
     case "CURRENCY":
@@ -57,6 +133,12 @@ function customColumn(f: FieldDef): ColumnConfigInput {
 }
 
 function customSpec(f: FieldDef): FieldSpec {
+  const spec = customFilterSpec(f);
+  if (!sortsByValue(f)) return spec;
+  return { ...spec, sortable: true, orderBy: (dir) => [{ [CUSTOM_SORT]: { field: f.id, dir } }] };
+}
+
+function customFilterSpec(f: FieldDef): FieldSpec {
   const path = [f.id];
   const json = (cond: Record<string, unknown>) => ({ custom: { path, ...cond } });
   switch (f.type) {
@@ -257,14 +339,20 @@ export function crmPeopleSource(fields: readonly FieldDef[], relationships: read
     query,
     baseWhere: (ctx) => ({ organizationId: ctx.organizationId, deletedAt: null }),
     async list(db, args, ctx) {
-      const rows = await db.crmPerson.findMany({
-        where: args.where as Prisma.CrmPersonWhereInput,
-        orderBy: args.orderBy as Prisma.CrmPersonOrderByWithRelationInput[],
-        skip: args.skip,
-        take: args.take,
-        ...(args.cursor ? { cursor: args.cursor as Prisma.CrmPersonWhereUniqueInput, skip: 1 } : {}),
-        select: personSelect,
-      });
+      const where = args.where as Prisma.CrmPersonWhereInput;
+      const page = await customPage(args, fields, () =>
+        db.crmPerson.findMany({ where, select: { id: true, custom: true }, take: CUSTOM_SORT_LIMIT }),
+      );
+      const rows = page
+        ? inOrder(page, await db.crmPerson.findMany({ where: { AND: [where, { id: { in: page } }] }, select: personSelect }))
+        : await db.crmPerson.findMany({
+            where,
+            orderBy: args.orderBy as Prisma.CrmPersonOrderByWithRelationInput[],
+            skip: args.skip,
+            take: args.take,
+            ...(args.cursor ? { cursor: args.cursor as Prisma.CrmPersonWhereUniqueInput, skip: 1 } : {}),
+            select: personSelect,
+          });
       const names = await memberNames(db, ctx.organizationId);
       const labels = await relationLabels(db, ctx.organizationId, fields, rows);
       return rows.map((p): MappedRow => {
@@ -355,12 +443,20 @@ export function crmCompaniesSource(fields: readonly FieldDef[]): DatabaseSource 
     query,
     baseWhere: (ctx) => ({ organizationId: ctx.organizationId, deletedAt: null }),
     async list(db, args, ctx) {
-      const rows = await db.crmCompany.findMany({
-        where: args.where as Prisma.CrmCompanyWhereInput,
-        orderBy: args.orderBy as Prisma.CrmCompanyOrderByWithRelationInput[],
-        skip: args.skip,
-        take: args.take,
-        ...(args.cursor ? { cursor: args.cursor as Prisma.CrmCompanyWhereUniqueInput, skip: 1 } : {}),
+      const where = args.where as Prisma.CrmCompanyWhereInput;
+      const page = await customPage(args, fields, () =>
+        db.crmCompany.findMany({ where, select: { id: true, custom: true }, take: CUSTOM_SORT_LIMIT }),
+      );
+      const found = await db.crmCompany.findMany({
+        where: page ? { AND: [where, { id: { in: page } }] } : where,
+        ...(page
+          ? {}
+          : {
+              orderBy: args.orderBy as Prisma.CrmCompanyOrderByWithRelationInput[],
+              skip: args.skip,
+              take: args.take,
+              ...(args.cursor ? { cursor: args.cursor as Prisma.CrmCompanyWhereUniqueInput, skip: 1 } : {}),
+            }),
         select: {
           id: true,
           name: true,
@@ -376,6 +472,7 @@ export function crmCompaniesSource(fields: readonly FieldDef[]): DatabaseSource 
           _count: { select: { people: { where: { deletedAt: null } } } },
         },
       });
+      const rows = page ? inOrder(page, found) : found;
       const names = await memberNames(db, ctx.organizationId);
       const labels = await relationLabels(db, ctx.organizationId, fields, rows);
       return rows.map((c): MappedRow => {
@@ -481,12 +578,20 @@ export function crmPipelineSource(pipeline: PipelineSourceInfo, fields: readonly
     query,
     baseWhere: (ctx) => ({ organizationId: ctx.organizationId, pipelineId: pipeline.id, deletedAt: null }),
     async list(db, args, ctx) {
-      const rows = await db.crmDeal.findMany({
-        where: args.where as Prisma.CrmDealWhereInput,
-        orderBy: args.orderBy as Prisma.CrmDealOrderByWithRelationInput[],
-        skip: args.skip,
-        take: args.take,
-        ...(args.cursor ? { cursor: args.cursor as Prisma.CrmDealWhereUniqueInput, skip: 1 } : {}),
+      const where = args.where as Prisma.CrmDealWhereInput;
+      const page = await customPage(args, fields, () =>
+        db.crmDeal.findMany({ where, select: { id: true, custom: true }, take: CUSTOM_SORT_LIMIT }),
+      );
+      const found = await db.crmDeal.findMany({
+        where: page ? { AND: [where, { id: { in: page } }] } : where,
+        ...(page
+          ? {}
+          : {
+              orderBy: args.orderBy as Prisma.CrmDealOrderByWithRelationInput[],
+              skip: args.skip,
+              take: args.take,
+              ...(args.cursor ? { cursor: args.cursor as Prisma.CrmDealWhereUniqueInput, skip: 1 } : {}),
+            }),
         select: {
           id: true,
           title: true,
@@ -503,6 +608,7 @@ export function crmPipelineSource(pipeline: PipelineSourceInfo, fields: readonly
           company: { select: { name: true } },
         },
       });
+      const rows = page ? inOrder(page, found) : found;
       const names = await memberNames(db, ctx.organizationId);
       const labels = await relationLabels(db, ctx.organizationId, fields, rows);
       return rows.map((d): MappedRow => {

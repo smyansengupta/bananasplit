@@ -67,6 +67,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
 import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
+import { rolePositions } from "@/server/crm/owners";
 import { sidebarCounts } from "@/server/inbox/counts";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import {
@@ -209,6 +210,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   // Website polls (elections) come from the website data sync; without it
   // they're stale leftovers nobody can update or remove, so Home leaves them out.
   const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => false);
+  // The CRM's role owners, for its Inbox rows in the Today strip's count (read before the transaction).
+  const crmRoles = settings?.addOns?.includes("crm") ? await rolePositions(org.id).catch(() => null) : null;
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const homeMode = await loadHomeMode(db, org.id, user.id);
@@ -425,6 +428,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         can({ role }, "finance.manage") && (settings?.addOns?.includes("finance") ?? true),
       canReviewForms:
         can({ role }, "databases.write") && (settings?.addOns?.includes("forms") ?? true),
+      crm: crmRoles ? { orgSlug, roles: crmRoles } : null,
       now,
     }).catch(() => null);
     return { ...rest, widgets, online, since, needsYou };

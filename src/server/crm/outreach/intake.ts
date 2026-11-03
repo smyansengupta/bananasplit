@@ -11,6 +11,7 @@ import { logActivity } from "../activity";
 import { companyByDomain } from "../companies";
 import { createDeal } from "../deals";
 import { emitCrmEvent } from "../events";
+import { queueCrmRefreshFor } from "../schedule";
 import { createPerson, updatePerson } from "../people";
 
 /**
@@ -83,6 +84,8 @@ export async function formToCrm(target: { organizationId: string; formId: string
     const crm = await db.crmSettings.findUnique({ where: { organizationId: orgId }, select: { setupDoneAt: true } });
     const addOns = await db.orgSettings.findUnique({ where: { organizationId: orgId }, select: { addOns: true } });
     if (!crm?.setupDoneAt || !addOns?.addOns.includes("crm")) return null;
+    // Whoever answered is on a timeline now, not at the nightly run (any form, a CRM destination or not).
+    await queueCrmRefreshFor(db, orgId, { kind: "response", id: responseId });
     const form = await db.form.findFirst({
       where: { id: target.formId, organizationId: orgId },
       select: { id: true, title: true, questions: true, crmDestination: true, createdById: true, anonymous: true },

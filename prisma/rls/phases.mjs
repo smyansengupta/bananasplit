@@ -5872,6 +5872,76 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     );
   }
   await tcase(
+    "P-CRM-05",
+    "CRM workflows are private to the people who shape the CRM: their webhook, Slack and Discord addresses and run logs are read only by owners, admins and CRM managers; a member reads the switched-on trigger types from CrmSettings instead",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","workflowTriggers","updatedAt")
+         VALUES ('org_A',ARRAY['u_bothAB'],ARRAY['record.created'],now())`,
+      );
+      await q(
+        `INSERT INTO "CrmWorkflow" ("id","organizationId","name","status","trigger","actions","createdById","updatedAt")
+         VALUES ('wf_1','org_A','Ping','ON','{"type":"record.created"}',
+                 '[{"type":"webhook.call","params":{"url":"https://hooks.example.com/secret-token"}}]','u_adminA',now())`,
+      );
+      await q(`INSERT INTO "CrmWorkflowRun" ("id","organizationId","workflowId","status") VALUES ('wr_1','org_A','wf_1','DONE')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.admin_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.member_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      s.member_edits = await rc(q, `UPDATE "CrmWorkflow" SET "status" = 'OFF'`);
+      s.member_deletes = await rc(q, `DELETE FROM "CrmWorkflow"`);
+      s.member_reads_triggers = (await q(`SELECT "workflowTriggers" FROM "CrmSettings" WHERE "organizationId" = 'org_A'`)).rows[0]?.workflowTriggers ?? null;
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.manager_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      return s;
+    },
+    {
+      value: {
+        admin_reads: 1,
+        admin_reads_runs: 1,
+        member_reads: 0,
+        member_reads_runs: 0,
+        member_edits: 0,
+        member_deletes: 0,
+        member_reads_triggers: ["record.created"],
+        manager_reads: 1,
+        manager_reads_runs: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CRM-06",
+    "the jobs (app_service) still read and run every workflow of their own organization, and nobody else's",
+    "app_service",
+    null,
+    async (q) => {
+      const s = {};
+      await q(`SELECT app.set_context(NULL,'org_A')`);
+      s.writes = await tryq(
+        q,
+        `INSERT INTO "CrmWorkflow" ("id","organizationId","name","status","trigger","updatedAt")
+         VALUES ('wf_svc','org_A','Svc','ON','{"type":"record.created"}',now())`,
+      );
+      s.own_org = await count(q, `SELECT count(*) n FROM "CrmWorkflow" WHERE "id" = 'wf_svc'`);
+      s.runs = await rc(q, `UPDATE "CrmWorkflow" SET "runCount" = "runCount" + 1 WHERE "id" = 'wf_svc'`);
+      s.logs = await tryq(q, `INSERT INTO "CrmWorkflowRun" ("id","organizationId","workflowId","status") VALUES ('wr_svc','org_A','wf_svc','DONE')`);
+      await q(`SELECT app.set_context(NULL,'org_B')`);
+      s.other_org = await count(q, `SELECT count(*) n FROM "CrmWorkflow" WHERE "id" = 'wf_svc'`);
+      s.other_org_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun" WHERE "id" = 'wr_svc'`);
+      return s;
+    },
+    { value: { writes: 1, own_org: 1, runs: 1, logs: 1, other_org: 0, other_org_runs: 0 } },
+  );
+  await tcase(
     "P-REPORTS-02",
     "sharing reports outside the organization, and deleting them: only a report's editors see, add and remove its invites or touch its link, only on a report the organization shares, and deleting takes its copies and invites with it",
     "app_user",

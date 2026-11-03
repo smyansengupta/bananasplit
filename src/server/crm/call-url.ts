@@ -2,38 +2,22 @@ import { isIP } from "node:net";
 
 import { PermanentJobError } from "@/server/jobs/types";
 
+import { isBlockedAddress } from "./webhooks/guard";
+
 /**
  * Where a workflow may call (src/server/crm/workflow-calls.ts): https on the
  * default port, a name (no IP literal, no private-looking name), and Slack
  * and Discord only at their own webhook hosts. Pure, so it is tested
- * without the network.
+ * without the network. What the name resolves to is checked as the
+ * connection is made (webhooks/guard.ts), so DNS rebinding can't slip by.
  */
 
-/** An IPv4 or IPv6 address nobody outside should be able to make us call. */
+/**
+ * An IPv4 or IPv6 address nobody outside should be able to make us call:
+ * the one list outgoing webhooks use too (webhooks/guard.ts).
+ */
 export function isPrivateAddress(address: string): boolean {
-  const v = isIP(address);
-  if (v === 4) {
-    const [a, b] = address.split(".").map(Number) as [number, number, number, number];
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 192 && b === 0) ||
-      (a === 198 && (b === 18 || b === 19)) ||
-      a >= 224
-    );
-  }
-  if (v === 6) {
-    const x = address.toLowerCase();
-    if (x === "::" || x === "::1") return true;
-    if (x.startsWith("::ffff:")) return isPrivateAddress(x.slice(7));
-    return x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb") || x.startsWith("ff");
-  }
-  return true;
+  return isBlockedAddress(address);
 }
 
 export type CallKind = "slack.post" | "discord.post" | "webhook.call";

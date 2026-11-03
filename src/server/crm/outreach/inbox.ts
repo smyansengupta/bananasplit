@@ -1,6 +1,7 @@
 import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "../owners";
+import { REVIEW_WHERE } from "../review";
 import { followUpQueue } from "./queue";
 
 /**
@@ -46,4 +47,31 @@ export async function crmInboxItems(
       group: first.kind === "reply" || first.kind === "step" || i.urgent ? "overdue" : first.kind === "followup" ? "today" : "review",
     };
   });
+}
+
+/**
+ * The CRM's Review suggestions assigned to this member (an AI draft, an
+ * automation's email to look over, someone new from their mail), as one
+ * Inbox row with the count, key "crm:review" (snoozed like any other row).
+ * Signals are their own rows; null when nothing waits.
+ */
+export async function crmReviewRow(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  orgSlug: string,
+): Promise<CrmInboxItem | null> {
+  const n = await db.crmSuggestion.count({
+    where: { organizationId, ...REVIEW_WHERE, status: "PENDING", assigneeId: userId },
+  });
+  if (n === 0) return null;
+  return {
+    key: "crm:review",
+    id: "review",
+    title: n === 1 ? "1 suggestion to review in the CRM" : `${n} suggestions to review in the CRM`,
+    meta: "Drafts, changes and new people waiting for a yes",
+    href: `/app/${orgSlug}/crm/queue?mine=1`,
+    urgent: false,
+    group: "review",
+  };
 }

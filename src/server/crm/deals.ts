@@ -2,6 +2,8 @@ import type { CrmForecastCategory, Prisma } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import { builtinField, formatMoney } from "@/lib/crm/fields";
 import { missingMessage } from "@/lib/crm/validate";
+import { ensureActivePeriod } from "@/server/finance/periods";
+import { createSponsorshipRecord } from "@/server/finance/sponsorship-create";
 import { isSponsorshipStatus, setSponsorshipStatus } from "@/server/finance/sponsorship-status";
 import type { TxClient } from "@/server/db/context";
 
@@ -88,6 +90,7 @@ async function pipelineOf(db: TxClient, organizationId: string, pipelineId: stri
       itemNoun: true,
       currency: true,
       hasAmount: true,
+      template: true,
       stages: { orderBy: { sortOrder: "asc" }, select: { id: true } },
     },
   });
@@ -182,6 +185,12 @@ export async function createDeal(
   const missing = await stageMissing(db, organizationId, pipeline.id, stage.requiredFields, { ...data, custom });
   if (missing.keys.length > 0) throw new CrmError(missingMessage(missing.labels, stage.name), missing.keys);
   if (data.ownerId === undefined && data.ownerRoleKey === undefined) data.ownerId = userId;
+  // The Sponsorships pipeline is Finance's sponsorships: a new item there is a new
+  // sponsorship too, made through Finance's own code, so the two stay in step.
+  const sponsorshipId =
+    pipeline.template === "sponsors"
+      ? await sponsorshipFor(actor, { ...data, stageKey: stage.key, itemNoun: pipeline.itemNoun })
+      : null;
   const last = await db.crmDeal.aggregate({
     where: { organizationId, pipelineId: pipeline.id, stageId },
     _max: { rank: true },
@@ -189,6 +198,7 @@ export async function createDeal(
   const created = await db.crmDeal.create({
     data: {
       ...(data as Prisma.CrmDealUncheckedCreateInput),
+      ...(sponsorshipId ? { sponsorshipId } : {}),
       title: String(data.title),
       organizationId,
       pipelineId: pipeline.id,
@@ -217,6 +227,66 @@ export async function createDeal(
     batchId: options.batchId,
   });
   return created;
+}
+
+/** Finance's sponsorship for a new Sponsorships item (and its sponsor, from the company). */
+async function sponsorshipFor(
+  actor: CrmActor,
+  data: Record<string, unknown> & { stageKey: string | null; itemNoun: string },
+): Promise<string> {
+  const { db, organizationId, userId } = actor;
+  if (!can(actor, "finance.manage")) {
+    throw new CrmError("A new sponsorship goes into Finance's books, so owners and treasurers add them. Ask one, or add it in Finance.");
+  }
+  if (!data.companyId) throw new CrmError("Pick the company that's sponsoring.", ["companyId"]);
+  const amount = typeof data.amountCents === "number" ? data.amountCents : null;
+  if (!amount || amount <= 0) throw new CrmError(`Give the ${data.itemNoun} an amount.`, ["amount"]);
+  const company = await db.crmCompany.findFirst({
+    where: { id: String(data.companyId), organizationId },
+    select: { id: true, name: true, sponsorId: true, description: true },
+  });
+  if (!company) throw new CrmError("That company isn't in the CRM any more.");
+  let sponsorId = company.sponsorId;
+  if (!sponsorId) {
+    const contact = data.primaryPersonId
+      ? await db.crmPerson.findFirst({ where: { id: String(data.primaryPersonId), organizationId }, select: { name: true, primaryEmail: true } })
+      : null;
+    const same = await db.sponsor.findFirst({
+      where: { organizationId, name: { equals: company.name, mode: "insensitive" } },
+      select: { id: true },
+    });
+    sponsorId =
+      same?.id ??
+      (
+        await db.sponsor.create({
+          data: {
+            organizationId,
+            name: company.name.slice(0, 200),
+            contactName: contact?.name ?? null,
+            contactEmail: contact?.primaryEmail ?? null,
+            notes: company.description?.slice(0, 2000) ?? null,
+          },
+          select: { id: true },
+        })
+      ).id;
+    await db.crmCompany.updateMany({ where: { id: company.id, organizationId }, data: { sponsorId } });
+  }
+  const period = await ensureActivePeriod(db, organizationId);
+  const ownerId = typeof data.ownerId === "string" ? data.ownerId : userId;
+  const made = await createSponsorshipRecord(
+    { db, organizationId, userId },
+    {
+      sponsorId,
+      budgetPeriodId: period.id,
+      amountCents: amount,
+      expectedOn: data.expectedOn instanceof Date ? data.expectedOn : null,
+      ownerId,
+      status: data.stageKey && isSponsorshipStatus(data.stageKey) ? data.stageKey : undefined,
+    },
+    { fromCrm: true },
+  );
+  if (made.error || !made.sponsorshipId) throw new CrmError(made.error ?? "Finance couldn't take that sponsorship.");
+  return made.sponsorshipId;
 }
 
 export async function updateDeal(

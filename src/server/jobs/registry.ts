@@ -463,6 +463,11 @@ export const JOB_KINDS = {
         personId: id.optional(),
         /** Where the last run stopped, for a continuation. */
         step: z.enum(["mirror", "strength", "dedupe"]).optional(),
+        /** Whoever a workspace change is about (a form answer, an RSVP, a check-in): their timeline only. */
+        match: z
+          .object({ user: id.optional(), contact: id.optional(), registration: id.optional(), response: id.optional() })
+          .strict()
+          .optional(),
       })
       .strict(),
     scope: "org",
@@ -472,7 +477,7 @@ export const JOB_KINDS = {
     afterEligible: true,
     handler: () => import("@/server/crm/jobs").then((m) => m.crmRefreshJob),
     description:
-      "CRM upkeep: mirror workspace activity onto timelines (idempotent by sourceKind/sourceId), recompute relationship strength, look for duplicates. Key crm-refresh:{orgId} (setup, nightly), crm-refresh:p:{personId} (a new person).",
+      "CRM upkeep: mirror workspace activity onto timelines (idempotent by sourceKind/sourceId), recompute relationship strength, look for duplicates. Key crm-refresh:{orgId} (setup, nightly), crm-refresh:p:{personId} (a new person), crm-refresh:m:{kind}:{id} (a form answer, RSVP or check-in: the people it matches).",
   }),
   "crm-import": kind({
     payload: z
