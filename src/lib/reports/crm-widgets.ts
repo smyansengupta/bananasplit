@@ -221,10 +221,15 @@ export function formatCrmValue(value: number | null, format: CrmValueFormat): st
       return `${money(value)} a day`;
     case "percent":
       return `${Math.round(value * 100)}%`;
-    case "hours":
-      return value < 48 ? `${Math.round(value * 10) / 10} hours` : `${Math.round(value / 24)} days`;
-    case "days":
-      return `${Math.round(value * 10) / 10} days`;
+    case "hours": {
+      if (value >= 48) return `${Math.round(value / 24)} days`;
+      const h = Math.round(value * 10) / 10;
+      return `${h} ${h === 1 ? "hour" : "hours"}`;
+    }
+    case "days": {
+      const d = Math.round(value * 10) / 10;
+      return `${d} ${d === 1 ? "day" : "days"}`;
+    }
     default:
       return value.toLocaleString("en-US");
   }

@@ -267,8 +267,8 @@ function TriggerEditor({ trigger, onChange, ctx }: { trigger: Trigger; onChange:
             label="Into"
             options={[
               { value: "any", label: "Any stage" },
-              { value: "WON", label: "Won" },
-              { value: "LOST", label: "Lost" },
+              { value: "WON", label: "Any won stage" },
+              { value: "LOST", label: "Any lost stage" },
               ...(pipeline?.stages ?? []).map((s) => ({ value: s.id, label: s.name })),
             ]}
             value={p.toStageId ?? p.toKind ?? "any"}

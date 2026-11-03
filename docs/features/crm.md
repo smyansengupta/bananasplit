@@ -1,7 +1,7 @@
 # CRM add-on: plan
 
-Status: Phase 1 built on `claude/crm` (see "Phase 1 as built" at the
-end); phases 2 to 6 are plan. Source material: the CRM teardown PDF (seven
+Status: Phase 1 built on `claude/crm` and Phase 3 on `claude/crm-p3` (see "Phase 1 as built" and "Phase 3 as built" at the
+end); the other phases are plan. Source material: the CRM teardown PDF (seven
 CRMs, 12 modules, rebuild costs), read against this repo on `claude/fc-all`,
 plus three research passes on 2026-11-02: user complaints (about 80
 sources), 53 newer CRMs and tools, and the facts on self-hosted models,
@@ -915,3 +915,155 @@ Keys: j and k, Enter, x, n, /.
   as in Finance; its stage moves only through Finance's rules.
 - The intake forms and starter report from setup come with Forms to CRM
   (Phase 2) and the CRM's own widgets (Phase 3).
+
+
+## Phase 3 as built
+
+Automation and numbers, on `claude/crm-p3`. What exists, where it lives,
+and what's left.
+
+### Schema
+
+No new tables. `20261105120000_crm_automation`:
+
+- the Inbox key check accepts `signal:<id>` (the CRM's signals are Inbox
+  rows members snooze and finish);
+- `ItemLink` gains an `app_service` INSERT policy and grant, pinned to the
+  job's organization, so a workflow running in a job links the task,
+  project or Finance item it made to the record (the grant matrix in
+  `prisma/rls/phases.mjs` now reads `SID` for the service role);
+- `ItemLink_kinds_known` learns `crm-person`, `crm-company` and `crm-deal`
+  (Phase 1 had them in `src/lib/links.ts`, but the database refused them).
+
+`app.security_manifest` is unchanged. Stored without new columns: the
+learned model is a `CrmScoreRule` of objectKind `deals-model` (its JSON in
+`condition`); a manager's forecast call is a `CrmForecastSnapshot` with
+`periodLabel` `call:<period>`; signals are `CrmSuggestion` rows with source
+`SIGNAL` (kind `CREATE_TASK`, `payload.key` raises each one once);
+round-robin turns come from `CrmWorkflow.runCount`.
+
+### Workflows (module 6)
+
+- The model, pure and shared by the builder and the engine:
+  `src/lib/crm/workflows.ts` (triggers, conditions on any field including
+  `custom.<fieldId>`, the 14 step types, zod schemas, `triggerMatches`,
+  `conditionsHold`, `loopAllows`, `underRunCap`, merge fields).
+- The engine: `src/server/crm/workflow-engine.ts`. `crmEventJob`
+  (events.ts) imports it directly, so it runs wherever jobs run. Each
+  workflow runs in its own transaction as its acting member (its maker
+  while still an owner, admin or CRM manager, else an owner), each step in
+  a savepoint, with each step's outcome in `CrmWorkflowRun.log`.
+- Loop protection: steps run inside `withAutomationScope` (events.ts), so
+  the events their changes emit carry `workflowId` and `depth`. A workflow
+  never fires on its own change, a chain stops 3 deep, and a workflow runs
+  at most 5 times an hour on one record (one SKIPPED run says so). A job
+  run twice runs each workflow once (the run keeps the job's key).
+- Scheduled triggers (a date comes, nothing happens for N days, an item
+  stuck past its stage's limit) run in the new `crm-daily` job, once per
+  date, quiet spell or stage stay.
+- Steps: `src/server/crm/workflow-actions.ts`. Tasks go through the Tasks
+  service (`createTask`); a project is an epic with its tasks, the item's
+  owner and its linked files; Finance items are drafts for money out and
+  need a treasurer's automation for money in. Slack, Discord and webhooks
+  are queued as `crm-workflow-call` jobs (`src/server/crm/workflow-calls.ts`;
+  address rules in `call-url.ts`: https on 443, no IP literals or private
+  names, every resolved address public, Slack and Discord only at their
+  own hosts, a 10 second timeout, no redirects).
+- **Rewire points for outreach (Phase 2)**, one function each in
+  `workflow-actions.ts`: `sendTemplateAction` (today a `DRAFT_EMAIL`
+  suggestion for the owner to review; nothing sends unreviewed),
+  `enrollInSequenceAction` (an ACTIVE `CrmEnrollment` the sequence runner
+  picks up; never someone unsubscribed or do-not-contact) and
+  `inviteToEventAction` (a member joins the event's invitees; anyone else
+  gets a `DRAFT_EMAIL` with the event).
+- Recipes: `src/lib/crm/recipes.ts` (12, naming pipelines, stages and
+  templates by reference, resolved when switched on; starter Welcome and
+  Receipt templates are made when missing). Saving, switching and recipes:
+  `src/server/crm/workflows.ts`.
+- Describe it in words: `src/lib/crm/describe.ts` (schema, names mapped to
+  ids, the stand-in's keyword reading) and `src/server/crm/describe.ts`
+  (context and prompt), through `crmGenerate`, the monthly cap and
+  `AiUsage`. With no AI connected it says what connecting one adds.
+- UI: the Automations tab (managers only): `crm/automations` (the list with
+  on and off, Recipes, Scoring) and `crm/automations/[id]` (the builder in
+  `src/components/crm/workflow-builder.tsx`, Try it, run history).
+  Actions: `crm/automation-actions.ts`.
+
+### Reports (module 7)
+
+Thirteen widgets on reports of the CRM's databases
+(`src/lib/reports/crm-widgets.ts`, computed as the viewer in
+`src/server/crm/report-widgets.ts`, drawn in `widget-bodies.tsx`): people
+reached, reply rate, time to first reply, follow-ups overdue,
+relationships going cold, pipeline velocity, outreach by member, campaign
+progress, stage-to-stage conversion, time in stage, conversion by source,
+amounts raised by source, goals. `SourceSummary.crm` marks a CRM source.
+They read the timeline, `CrmEmailMessage`, campaigns and field history
+directly, and say so when there's nothing yet.
+
+### Forecasting and goals (module 8)
+
+`src/lib/crm/forecast.ts` (quarters and years only; weighted, categories,
+a trend once 20 items closed in the four quarters before; snapshot diffs;
+attainment against an even pace), `src/server/crm/forecast.ts`,
+`src/server/crm/goals.ts`. The Forecast tab (`crm/forecast`): per
+pipeline, money or a count, everyone's or mine; members mark Commit, Best
+case, Pipeline or Left out; managers save their own call; goals (a member
+or the team, a quarter or a year); and how the forecast moved (weekly
+snapshots from `crm-daily`, a line, and what changed since the week
+before). Goals also show on the CRM's home and as a Reports widget.
+
+### Scoring and signals (module 9)
+
+- Rules (`src/lib/crm/scoring.ts`, `src/server/crm/scoring.ts`): field
+  conditions, or behaviour within N days (replied, met, booked, attended,
+  RSVPed, a form, a call, a payment), recomputed in pages by `crm-daily`
+  and written straight to `score`; starter rules in one click.
+- The learned model: logistic regression in TypeScript, trained nightly
+  once 200 items have closed (at least 20 won and 20 lost), one in five
+  held back to say how often it's right. Open items' scores become their
+  chance of winning, with the top reasons on the item's page.
+- Score is a sort on People, Companies and pipelines, a Databases column
+  and a Reports field.
+- Signals (`src/server/crm/signals.ts`): stuck, no next step, went quiet,
+  renewal coming up, stopped coming, pledge overdue, back at events,
+  outreach dropped. Raised once each by `crm-daily`, expired when their
+  reason goes, shown in each member's Inbox under To review and counted
+  in the sidebar.
+
+### Setup
+
+Each pipeline gets saved views (Stuck, No next step, Mine, Best scores,
+shown above its board) and a starter report with the pipeline widgets;
+People gets an Outreach report (`src/server/crm/starter.ts`).
+
+### Jobs
+
+`crm-workflow-call` (fast, after()-eligible) and `crm-daily` (fast, 60
+seconds, continues itself; scheduled once a day beside `crm-refresh`).
+`crm-event` takes `workflowId` and `depth`.
+
+### Tests
+
+`src/lib/crm/automation.test.ts` (matching, conditions, loop protection,
+recipes, scoring, the regression, forecasts, describe-it),
+`src/server/crm/call-url.test.ts`, and `src/server/crm/automation.db.test.ts`
+(setup's views and reports; a recipe run end to end from a real stage
+move; loop protection and the cap; a dry run; scores, signals, snapshots
+and a widget against the database).
+
+### Known gaps
+
+- Webhook addresses are kept in the workflow's JSON, which every member
+  can read through RLS (the Automations tab is managers only); they should
+  move to `OrgSecret`. DNS is checked just before the call, so a host that
+  rebinds between the check and the connect could still slip through.
+- The starter templates' merge fields (`{{first_name}}`) are a guess;
+  Phase 2's renderer decides.
+- Phase 4's review queue should leave out `source: SIGNAL` rows. A signal
+  marked Done stays PENDING in the table (hidden by the member's Inbox
+  state) until it expires.
+- A goal for "the team" means the whole organization (optionally one
+  pipeline); there's no grouping of members into teams.
+- Periods are calendar quarters and years by UTC dates, not the
+  organization's time zone.

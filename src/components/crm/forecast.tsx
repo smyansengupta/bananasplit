@@ -38,7 +38,7 @@ const CATEGORIES: { value: Category; label: string }[] = [
 function useAct() {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const act = (call: () => Promise<{ ok: boolean; error?: string }>, done?: string) =>
+  const act = (call: () => Promise<{ ok: boolean; error?: string }>, done?: string, after?: () => void) =>
     start(async () => {
       const r = await runAction(call);
       if (!r) return;
@@ -47,6 +47,7 @@ function useAct() {
         return;
       }
       if (done) toast({ title: done });
+      after?.();
       router.refresh();
     });
   return { pending, act };
@@ -262,6 +263,10 @@ export function GoalList({
                         pipelineId: metric === "amount_won" || metric === "items_won" ? pipelineId : null,
                       }),
                     "Goal set",
+                    () => {
+                      setAdding(false);
+                      setTarget("");
+                    },
                   )
                 }
               >
