@@ -1794,3 +1794,105 @@ called "Sponsorships", turns "sponsor" people into "partner" (and folds the
 type into Partner in each organization's relationship types, views,
 workflow conditions and score rules), and renames the untouched starter
 email and recipe workflow.
+
+## Redesign
+
+The CRM is four tabs now: Today (`/crm`), People (`/crm/people`, with a
+People | Companies switch), Deals (`/crm/deals`) and Outreach
+(`/crm/outreach`), plus Settings (the round button in the header), Setup
+and Reports. `src/lib/crm/nav.ts` holds the four tabs; each stays lit on
+the older pages it now holds (`also`) until those move or redirect.
+
+Every CRM tab page is laid out like Tasks: `CrmHeader` (the "CRM" title,
+the split create button New person with New company, New deal and Import a
+spreadsheet in its menu, then the round settings button) with a
+`CrmToolbar` under it (the tab switch, the page's round buttons, Filters
+holding every picker, a spacer and the search pill). No stat strips.
+Both live in `src/components/crm/chrome/`.
+
+Buttons on rows and cards are ambient buttons
+(`src/components/ambient/ambient-button.tsx`): they show only when the
+state calls for one, do the job in place, say why on the same line, leave
+when it's done, and there are at most two on anything.
+
+### The overlay contract
+
+Whatever opens (a person, company, deal, Power hour, Done on its own, Ask,
+New, a goal) opens as one kind of centered card over the page you're on,
+named by one search param (`src/lib/crm/overlay.ts`):
+
+| `?open=` | Card |
+| --- | --- |
+| `person:<id>`, `company:<id>`, `deal:<id>` | the record |
+| `power` | Power hour |
+| `log` | Done on its own |
+| `ask` | Ask (not built yet) |
+| `new:person`, `new:company`, `new:deal` | New |
+| `goal`, `goal:<id>` | a goal (not built yet) |
+
+- **Opening and closing.** `useCrmOpen()` (client) gives the open card,
+  `hrefFor(open)`, `setOpen(open)` (a push, so Back closes it) and
+  `close()` (a replace that removes `open` and keeps the rest of the URL).
+  Rows link with `hrefFor`, so a card opens over the list you had.
+- **Record links.** `crmRecordHref(orgSlug, kind, id)` is for links from
+  outside the CRM: `/crm/people?open=person:<id>`,
+  `/crm/people?view=companies&open=company:<id>`,
+  `/crm/deals?open=deal:<id>`. Inside the CRM, `useCrmRecordHref(orgSlug)`
+  sets `open` on the current page when it renders overlays
+  (`rendersOverlays`), else falls back to `crmRecordHref`. The old
+  `people/[personId]`, `companies/[companyId]` and `items/[itemId]` pages
+  redirect to those URLs.
+- **Rendering.** Each page that shows cards renders, once, after its own
+  content: `<CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />`
+  (`src/components/crm/overlays/crm-overlays.tsx`, a server component). It
+  parses `open`, loads that card's data in its own transaction and renders
+  it, keyed by the `open` value. Add the page's path to `rendersOverlays`
+  when it starts rendering them.
+- **Adding a card kind.** Write a server loader taking
+  `OverlayProps<"kind">` (`shell`, `orgSlug`, `open`, `searchParams`) that
+  returns a client card, and add it to `CRM_CARDS` in
+  `crm-overlays.tsx`. A kind with no entry opens nothing.
+- **The frame.** Cards are built on `CrmCard`
+  (`src/components/crm/card/crm-card.tsx`): Tasks' task dialog at 680px
+  with a fixed header (`avatar`, `title`, `subtitle`, round `actions`, an
+  optional "…" `menu`, Close), `tabs` drawn as the pill segment (children
+  can be a function of the tab), a scrolling body and an optional fixed
+  `foot`. `CrmAvatar` and `CrmCardButton` go with it; `RecordActions` with
+  `menu` draws history, merge and trash as the round "…".
+
+### What's built
+
+- **Today** (`src/server/crm/today.ts`, `src/components/crm/today/`): one
+  list grouped as Replies, Due today, To approve and Calls, from the
+  follow-up queue, stuck deals and deals with no next step, the review
+  queue, duplicates and the viewer's call steps. Each row carries at most
+  two ambient buttons with the reason beside them; a done row shrinks to a
+  line, with Undo where there is one (a held send, an accepted
+  suggestion). Mine and Everyone's are round buttons; Filters picks a
+  group; search narrows by name. Goals and Coming up (meetings in the next
+  week) sit on the right. Power hour is one light strip; Snooze hides it
+  until 2 PM, or 8 AM the next day, where the member is
+  (`src/lib/crm/power-hour.ts`, an `InboxItemState` row keyed
+  `crm-power-hour`), with Undo.
+- **Person card**: header with Call (when there's a number) and "…",
+  tabs Overview (the next step with Done and Push, then two likely next
+  steps; the kept brief; the latest thing with Reply when they wrote and
+  nobody answered; money their company pledged with Remind), Timeline,
+  Deals and Details (the record fields). One composer at the foot cycles
+  Email, Text (when the phone is set up) and Note; an email is queued ten
+  seconds out with Undo (cancelEmail), a text or note waits ten seconds in
+  the card (closing sends it); `/` lists templates, the member's booking
+  link and a voice note; a red line names who else reached them lately.
+- **Power hour card**: the Today rows that are people, replies first; the
+  draft waiting for each (or a blank one); Send (E), Snooze a week (S),
+  Skip (J); a send waits ten seconds with Undo in a toast.
+- **Done on its own** (`src/server/crm/on-its-own.ts`): automation and
+  sequence mail (Undo while it's still waiting), fields an automation or
+  the system changed (Undo puts the record back, while nothing changed it
+  since), an automation's other steps, and what was held back (Send anyway
+  for a draft an automation held for review). Kinds with no real undo show
+  no button.
+- **Company and deal cards** are a plain first cut (facts, people, deals,
+  timeline, details) until their own designs land; **New** makes a person,
+  company or deal and opens its card. `/crm/deals` lists the pipelines for
+  now.
