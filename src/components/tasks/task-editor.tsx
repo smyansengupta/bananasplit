@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
+import { Maximize2, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
@@ -13,11 +13,9 @@ import {
   selfAssignTask,
   updateTask,
 } from "@/app/app/[orgSlug]/tasks/actions";
-import { useModKey } from "@/components/command-palette/use-mod-key";
 import { PinToggle } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
@@ -25,47 +23,25 @@ import { canAcknowledgeFlag, canEditTask } from "@/lib/tasks/access";
 import { relationFor } from "@/lib/tasks/assignment";
 import { dueDateKey } from "@/lib/tasks/dates";
 import { allowedTypes, TASK_TYPES, typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
-import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
 import { epicColor, parentTypesFor } from "@/lib/tasks/epic";
-import { MAX_BLOCKED_REASON } from "@/lib/tasks/status";
 import { canChangeVisibility, namedAudienceIds } from "@/lib/tasks/visibility";
 import { cn } from "@/lib/utils";
 
-import { MentionTextarea } from "./mention-textarea";
-import { TaskTitle } from "./task-title";
-import { TitleTextarea } from "./task-title-field";
 import { useConfirmFlagged } from "./prompts";
 import { Subtasks } from "./subtasks";
 import { TaskActivity } from "./task-activity";
 import { FlagBadge, isTaskPrivate, PrivateBadge } from "./task-badges";
 import { TaskComments } from "./task-comments";
-import {
-  DueField,
-  Field,
-  FieldLabel,
-  LabelsField,
-  OwnerField,
-  PeopleField,
-  PRIORITY_OPTIONS,
-  PartOfField,
-  SegmentBox,
-  STATUS_OPTIONS,
-  VISIBILITY_OPTIONS,
-} from "./task-fields";
-import { TaskMarkdown } from "./task-markdown";
-import { TaskTypeChip, TYPE_OPTIONS } from "./task-type";
-import { HashTagHint } from "./tag-menu";
 import { useHashTags } from "./use-hash-tags";
 import { accessSubjectOf, useTasks, visibilitySubjectOf } from "./tasks-context";
 import type { TaskItem } from "./types";
+import { TaskFormFields } from "./task-form-fields";
 import { AudienceList } from "./visibility-control";
 
 /**
- * The task form, in the side panel and on the task's own page, laid out as
- * the task drawer design has it: the title and description set straight on
- * the panel, then labelled fields (dropdown wells, and segments for status,
- * priority and who can see it), with Cancel and Create (⌘↵) along the
- * bottom.
+ * The task form, in the task window and on the task's own page. Its head,
+ * fields (TaskFormFields) and foot are New task's, so creating and editing
+ * read as one form; editing adds subtasks, comments and history below.
  * Create and edit:
  * title, description with @mentions, status (a reason when Blocked),
  * priority, due date (and a start date for epics and stories), what it's
@@ -111,13 +87,13 @@ export function TaskEditor({
   mode?: "dialog" | "page";
   initialComments?: React.ComponentProps<typeof TaskComments>["initial"];
 }) {
-  const { org, viewer, actor, labels, memberById, members, announce, parentById } = useTasks();
+  const { org, viewer, actor, labels, memberById, members, announce, parents, parentById } =
+    useTasks();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
   const [confirmEl, confirm] = useConfirm();
   const hashTags = useHashTags();
-  const mod = useModKey();
   const saving = useRef(false);
 
   const isNew = task === null;
@@ -161,11 +137,21 @@ export function TaskEditor({
       defaults?.parentType ??
       "STORY")
     : null;
-  const typeOptions = TYPE_OPTIONS.filter((o) =>
+  const typeChoices = TASK_TYPES.filter((o) =>
     allowedTypes({ parentType, childTypes: task?.subtasks.map((s) => s.type) ?? [] }).includes(
       o.value,
     ),
   );
+  const parentChoices = parents.filter(
+    (p) => p.id !== task?.id && parentTypesFor(type).includes(p.type as "EPIC" | "STORY"),
+  );
+
+  function pickType(next: TaskTypeValue) {
+    setType(next);
+    // An epic sits at the top; a story only inside an epic.
+    if (next === "EPIC") setParentTaskId(null);
+    if (next === "STORY" && parentType === "STORY") setParentTaskId(null);
+  }
   // Whether it can hold subtasks: an epic or a story, or a plain task that
   // breaking down would make a story (not one already inside a story).
   const canHoldChildren = type !== "TASK" || parentType === null || parentType === "EPIC";
@@ -197,7 +183,6 @@ export function TaskEditor({
       ...members.filter((m) => m.role === "OWNER" || m.role === "ADMIN").map((m) => m.id),
     ]),
   ];
-  const ownerRequired = org.requireOwner && isTopLevel;
   const dueRequired = org.requireDueDate && isTopLevel;
   const hasStart = type === "EPIC" || type === "STORY";
 
@@ -364,15 +349,17 @@ export function TaskEditor({
   const involved = self.owner || self.joined;
   const isAssignee = self.joined;
 
-  const heading = isNew ? `New ${typeLabel(type).toLowerCase()}` : typeLabel(type);
-  const visibilityHint =
-    visibility === TaskVisibility.PRIVATE
-      ? "Only the people on it, plus the organization's owners and admins, can see this task."
-      : "Anyone in the organization can find and open this task.";
+  const noun = typeLabel(type).toLowerCase();
+  const heading = isNew ? `New ${noun}` : readOnly ? typeLabel(type) : `Edit ${noun}`;
 
+  // The same foot as New task: Cancel and the save button on the right,
+  // with Delete on the left once there's something to delete.
   const footer = (
     <div
-      className={cn("flex items-center gap-2", mode === "dialog" ? "border-t px-5 py-3.5" : "pt-1")}
+      className={cn(
+        "flex shrink-0 items-center gap-2",
+        mode === "dialog" ? "border-t px-6 py-4" : "px-6 pb-2",
+      )}
     >
       {task && canEdit && (
         <Button
@@ -382,280 +369,52 @@ export function TaskEditor({
           disabled={isPending}
         >
           <Trash2 className="size-4" aria-hidden="true" />
-          Delete {typeLabel(type).toLowerCase()}
+          Delete {noun}
         </Button>
       )}
       <span className="flex-1" />
       {mode === "dialog" && onDone && (
-        <Button type="button" variant="outline" size="lg" className="px-4" onClick={onDone}>
+        <Button type="button" variant="outline" onClick={onDone}>
           {canEdit ? "Cancel" : "Close"}
         </Button>
       )}
       {canEdit && (
-        <Button
-          type="button"
-          size="lg"
-          className="gap-3 ps-[18px] pe-2"
-          onClick={() => void save()}
-          disabled={isPending || !title.trim()}
-        >
-          {isPending ? "Saving…" : isNew ? `Create ${typeLabel(type).toLowerCase()}` : "Save"}
-          <span aria-hidden="true" className="hidden gap-0.5 sm:inline-flex">
-            <kbd className="bg-primary-foreground/15 inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] px-1 font-mono text-[11px] font-semibold">
-              {mod}
-            </kbd>
-            <kbd className="bg-primary-foreground/15 inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] font-mono text-[11px] font-semibold">
-              ↵
-            </kbd>
-          </span>
+        <Button type="button" onClick={() => void save()} disabled={isPending || !title.trim()}>
+          {isPending ? "Saving…" : isNew ? `Create ${noun}` : "Save"}
         </Button>
       )}
     </div>
   );
 
   const form = (
-    <div className="flex flex-col gap-[18px]">
-      {/* Title and description, set straight onto the panel. */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="task-title" className="sr-only">
-          Title
-        </label>
-        {readOnly ? (
-          // Nothing to type into: the title reads as text, and its file
-          // references are the links through to the files.
-          <p className="text-[26px] leading-[1.25] font-semibold tracking-[-0.015em]">
-            <TaskTitle linked>{title || "Untitled task"}</TaskTitle>
-          </p>
-        ) : (
-          <TitleTextarea
-            id="task-title"
-            rows={1}
-            value={title}
-            autoFocus={isNew}
-            placeholder="Untitled task"
-            onChange={(next) => setTitle(next.replace(/\n/g, " "))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
-            }}
-            className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
-          />
-        )}
-        {!readOnly && <HashTagHint title={title} />}
-        <label htmlFor="task-description" className="sr-only">
-          Description
-        </label>
-        {readOnly ? (
-          description ? (
-            <TaskMarkdown className="text-foreground/80 text-sm">{description}</TaskMarkdown>
-          ) : (
-            <p className="text-muted-foreground text-sm">No description.</p>
-          )
-        ) : (
-          <MentionTextarea
-            id="task-description"
-            audience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
-            linkFrom={task ? { kind: "task", id: task.id } : null}
-            value={description}
-            onChange={setDescription}
-            onSubmitShortcut={() => void save()}
-            rows={2}
-            placeholder="Add a description. Markdown, @mentions and /file links work."
-            className="text-foreground/80 placeholder:text-muted-foreground/70 field-sizing-content min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-[1.55] shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
-          />
-        )}
-      </div>
-
-      {typeOptions.length > 1 && (
-        <Field>
-          <FieldLabel htmlFor="task-type">Type</FieldLabel>
-          <SegmentBox
-            id="task-type"
-            label="Type"
-            value={type}
-            onChange={setType}
-            options={typeOptions}
-            disabled={readOnly}
-          />
-          <p className="text-muted-foreground text-xs">
-            {TASK_TYPES.find((t) => t.value === type)?.hint}
-            {type === "EPIC" && ". Its progress rolls up from the stories and tasks inside it."}
-          </p>
-        </Field>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="task-owner" required={ownerRequired}>
-            Owner
-          </FieldLabel>
-          <OwnerField id="task-owner" value={ownerId} onChange={setOwnerId} disabled={readOnly} />
-          {ownerId &&
-            relationFor(viewer.chart, ownerId) === "ABOVE" &&
-            ownerId !== task?.ownerId && (
-              <p className="text-warning text-xs">
-                Above your level: this assignment will be flagged.
-              </p>
-            )}
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="task-involved" optional>
-            Involved people
-          </FieldLabel>
-          <PeopleField
-            id="task-involved"
-            value={assigneeIds}
-            onChange={setAssigneeIds}
-            exclude={ownerId}
-            disabled={readOnly}
-          />
-        </Field>
-      </div>
-
-      {hasStart && (
-        <Field>
-          <FieldLabel htmlFor="task-start-date" optional>
-            Start date
-          </FieldLabel>
-          <DueField
-            id="task-start-date"
-            label="Start date"
-            emptyLabel="No start date"
-            value={startDate}
-            onChange={setStartDate}
-            disabled={readOnly}
-          />
-        </Field>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="task-due-date" required={dueRequired}>
-            Due date
-          </FieldLabel>
-          <DueField id="task-due-date" value={dueDate} onChange={setDueDate} disabled={readOnly} />
-        </Field>
-        {type === "EPIC" ? (
-          <Field>
-            <FieldLabel htmlFor="task-color" optional>
-              Colour
-            </FieldLabel>
-            <div
-              id="task-color"
-              role="radiogroup"
-              aria-label="Epic colour"
-              className="flex flex-wrap items-center gap-1.5 py-1.5"
-            >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={color === null}
-                aria-label="Theme colour"
-                title="Theme colour"
-                disabled={readOnly}
-                onClick={() => setColor(null)}
-                className={cn(
-                  "focus-glow hatch bg-muted size-6 rounded-full transition-transform active:scale-[0.94]",
-                  color === null && "ring-foreground ring-offset-card ring-2 ring-offset-2",
-                )}
-              />
-              {LABEL_COLOR_PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={color === c}
-                  aria-label={`Colour ${c}`}
-                  disabled={readOnly}
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    "focus-glow size-6 rounded-full transition-transform active:scale-[0.94]",
-                    color === c && "ring-foreground ring-offset-card ring-2 ring-offset-2",
-                  )}
-                  style={{ background: c }}
-                />
-              ))}
-            </div>
-          </Field>
-        ) : (
-          <Field>
-            <FieldLabel htmlFor="task-parent" optional>
-              Part of
-            </FieldLabel>
-            <PartOfField
-              id="task-parent"
-              value={parentTaskId}
-              onChange={setParentTaskId}
-              types={parentTypesFor(type)}
-              disabled={readOnly}
-              current={task?.parentTask ?? null}
-              excludeId={task?.id}
-            />
-          </Field>
-        )}
-      </div>
-
-      <Field>
-        <FieldLabel htmlFor="task-status">Status</FieldLabel>
-        <SegmentBox
-          id="task-status"
-          label="Status"
-          value={status}
-          onChange={setStatus}
-          options={STATUS_OPTIONS}
-          disabled={readOnly}
-        />
-        {status === TaskStatus.BLOCKED && (
-          <Textarea
-            id="task-blocked-reason"
-            aria-label="Blocked on"
-            value={blockedReason}
-            maxLength={MAX_BLOCKED_REASON}
-            rows={2}
-            disabled={readOnly}
-            placeholder="What is it blocked on?"
-            onChange={(e) => setBlockedReason(e.target.value)}
-            className="bg-card dark:bg-card min-h-0 rounded-[11px] text-[13px]"
-          />
-        )}
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="task-priority">Priority</FieldLabel>
-        <SegmentBox
-          id="task-priority"
-          label="Priority"
-          value={priority}
-          onChange={setPriority}
-          options={PRIORITY_OPTIONS}
-          disabled={readOnly}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="task-labels" optional>
-          Tags
-        </FieldLabel>
-        <LabelsField
-          id="task-labels"
-          labels={labels}
-          value={labelIds}
-          onChange={setLabelIds}
-          disabled={readOnly}
-        />
-      </Field>
-
-      <Field>
-        <FieldLabel htmlFor="task-visibility">Who can see it</FieldLabel>
-        <SegmentBox
-          id="task-visibility"
-          label="Who can see this task"
-          value={visibility}
-          onChange={setVisibility}
-          options={VISIBILITY_OPTIONS}
-          disabled={readOnly || !canSetVisibility}
-        />
-        <p className="text-muted-foreground text-xs">{visibilityLocked ?? visibilityHint}</p>
-        {visibility === TaskVisibility.PRIVATE && (
+    <TaskFormFields
+      title={{ value: title, set: (next) => setTitle(next.replace(/\n/g, " ")) }}
+      type={{ value: type, set: pickType }}
+      typeChoices={typeChoices}
+      priority={{ value: priority, set: setPriority }}
+      owner={{ value: ownerId, set: setOwnerId }}
+      ownerAbove={
+        ownerId !== null &&
+        ownerId !== task?.ownerId &&
+        relationFor(viewer.chart, ownerId) === "ABOVE"
+      }
+      people={{ value: assigneeIds, set: setAssigneeIds }}
+      parent={{ value: parentTaskId, set: setParentTaskId }}
+      parentChoices={parentChoices}
+      color={{ value: color, set: setColor }}
+      due={{ value: dueDate, set: setDueDate }}
+      dueRequired={dueRequired}
+      description={{ value: description, set: setDescription }}
+      descriptionAudience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
+      linkFrom={task ? { kind: "task", id: task.id } : null}
+      onSubmitShortcut={() => void save()}
+      labels={{ value: labelIds, set: setLabelIds }}
+      labelOptions={labels}
+      status={{ value: status, set: setStatus }}
+      visibility={{ value: visibility, set: setVisibility }}
+      visibilityLocked={visibilityLocked}
+      visibilityExtra={
+        visibility === TaskVisibility.PRIVATE && (
           <div className="bg-card rounded-[11px] border p-3">
             <AudienceList
               ownerId={ownerId}
@@ -670,18 +429,14 @@ export function TaskEditor({
               them here first.
             </p>
           </div>
-        )}
-      </Field>
-
-      {task && (
-        <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
-          Created by
-          <UserAvatar user={task.createdBy} size="xs" />
-          <span className="text-foreground">{task.createdBy.name ?? "a former member"}</span>
-          on {format(new Date(task.createdAt), "MMM d, yyyy")}
-        </p>
-      )}
-    </div>
+        )
+      }
+      start={{ value: startDate, set: setStartDate }}
+      blockedReason={{ value: blockedReason, set: setBlockedReason }}
+      error={error}
+      readOnly={readOnly}
+      autoFocus={isNew}
+    />
   );
 
   const notices = (
@@ -766,7 +521,7 @@ export function TaskEditor({
   );
 
   const extras = task && (
-    <div className="space-y-6">
+    <div className="space-y-6 border-t pt-5">
       {canHoldChildren && (
         <Subtasks
           parentId={task.id}
@@ -796,7 +551,7 @@ export function TaskEditor({
     <div
       className={cn(
         "flex min-h-0 flex-col",
-        mode === "dialog" ? "h-full" : "bg-background rounded-xl border",
+        mode === "dialog" ? "flex-1" : "bg-card rounded-xl border",
       )}
       onKeyDown={(e) => {
         // A field that already handled ⌘↵ (the description) marks it.
@@ -816,22 +571,29 @@ export function TaskEditor({
       {confirmElement}
       {confirmEl}
 
-      <header className="flex shrink-0 items-center justify-between gap-2 py-3.5 ps-6 pe-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {isNew ? (
-            <span
-              aria-hidden="true"
-              className="bg-muted grid size-6 shrink-0 place-items-center rounded-full"
-            >
-              <Plus className="size-3.5" strokeWidth={2.2} />
-            </span>
-          ) : (
-            <TaskTypeChip type={type} iconOnly />
-          )}
-          <span className="truncate text-sm font-semibold">{heading}</span>
-          {task && isTaskPrivate(task) && <PrivateBadge />}
+      {/* The same head as New task, with the task's own buttons on the right. */}
+      <header className="flex shrink-0 items-start justify-between gap-3 px-6 pt-6 pb-2">
+        <div className="flex min-w-0 flex-col gap-2">
+          <h2 className="heading flex items-center gap-2 text-lg leading-tight">
+            {heading}
+            {task && isTaskPrivate(task) && <PrivateBadge />}
+          </h2>
+          <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-sm">
+            {task ? (
+              <>
+                Created by
+                <UserAvatar user={task.createdBy} size="xs" />
+                <span className="text-foreground">{task.createdBy.name ?? "a former member"}</span>
+                on {format(new Date(task.createdAt), "MMM d, yyyy")}
+              </>
+            ) : type === "EPIC" ? (
+              "A big outcome that spans weeks. Its stories and tasks roll up into it."
+            ) : (
+              "A title is all it takes. Everything else has a sensible default."
+            )}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="-me-2 -mt-1.5 flex shrink-0 items-center gap-1">
           {task && <PinToggle path={`/tasks/${task.id}`} label={task.title} />}
           {task && mode === "dialog" && (
             <Button asChild variant="ghost" size="icon-sm">
@@ -866,19 +628,17 @@ export function TaskEditor({
 
       <div
         className={cn(
-          "min-h-0 flex-1 space-y-[18px] px-6 pb-6",
-          mode === "dialog" && "overflow-y-auto",
+          "min-h-0 flex-1",
+          mode === "dialog" &&
+            "[scrollbar-width:thin] overflow-x-hidden overflow-y-auto overscroll-contain",
         )}
       >
-        {notices}
-        {form}
-        {error && (
-          <p className="text-destructive text-sm" role="alert">
-            {error}
-          </p>
+        {(task?.parentTask || flaggedPeople.length > 0 || (task && readOnly)) && (
+          <div className="flex flex-col gap-3 px-6 pt-2">{notices}</div>
         )}
+        {form}
         {mode === "page" && footer}
-        {extras}
+        {extras && <div className="px-6 pb-6">{extras}</div>}
       </div>
 
       {mode === "dialog" && footer}

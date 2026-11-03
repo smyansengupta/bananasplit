@@ -6,7 +6,8 @@ import { TaskEditor, type TaskEditorDefaults } from "./task-editor";
 import type { TaskItem } from "./types";
 
 /**
- * The one task surface: a centred window, like New task and the epic
+ * The one task surface: a centred window, the same size as New task (and
+ * drawn with the same head, fields and foot), like the epic
  * dialog, so creating and editing always happen in the same place in the
  * middle of the screen (never a panel from the side). Its body scrolls;
  * the header and footer stay put.
@@ -38,7 +39,7 @@ export function TaskDetailSheet({
       <DialogContent
         aria-busy={busy}
         showCloseButton={false}
-        className="bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]"
+        className="flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
       >
         <DialogTitle className="sr-only">{heading}</DialogTitle>
         <DialogDescription className="sr-only">

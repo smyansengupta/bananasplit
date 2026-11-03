@@ -164,7 +164,7 @@ export function WorkspaceToolbar() {
             ))}
           </div>
 
-          {/* Filters: one chip that opens Person, Epic, Tag and Status. */}
+          {/* Filters: one chip that opens Person, Epic, Tag, Status and, on the board, Group. */}
           <FiltersMenu
             count={ws.filterCount + (ws.query.epicId ? 1 : 0)}
             items={[
@@ -172,12 +172,11 @@ export function WorkspaceToolbar() {
               { name: "Epic", node: <EpicFilter /> },
               ...(labels.length > 0 ? [{ name: "Tag", node: <TagFilter /> }] : []),
               { name: "Status", node: <StatusFilter /> },
+              ...(ws.query.view === "board" ? [{ name: "Group", node: <GroupMenu /> }] : []),
             ]}
           />
 
           <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
-            {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
-            {ws.query.view === "board" && <GroupMenu />}
             <TaskSearch
               key={ws.query.q ?? ""}
               inputRef={searchRef}
@@ -792,7 +791,7 @@ const SCOPE_ICONS: Record<string, typeof UserRound> = {
   all: Globe,
 };
 
-/** Group the board: none, or a lane per epic (?lanes=epic). */
+/** Group the board, the last of the Filters: none, or a lane per epic (?lanes=epic). */
 function GroupMenu() {
   const router = useRouter();
   const pathname = usePathname();
