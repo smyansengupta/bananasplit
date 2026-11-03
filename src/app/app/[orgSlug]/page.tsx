@@ -584,6 +584,13 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     context: { links: data.links, details: data.details, lastActions, seats: turnout.seats },
   });
 
+  // Meetings: a repeating meeting shows once, its next time, not every week ahead.
+  const seriesKey = (m: { id: string; title: string }) =>
+    data.details.get(m.id)?.seriesId ?? m.title;
+  const nextMeetings = data.meetings.filter(
+    (m, i, all) => all.findIndex((o) => seriesKey(o) === seriesKey(m)) === i,
+  );
+
   // Meetings and Events: what each is tied to, its agenda or its sign-ups.
   const noteChips = (id: string): ItemRef[] =>
     (data.details.get(id)?.notes ?? []).map((n) => ({
@@ -769,7 +776,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     meetings: (
       <MeetingsList
         orgSlug={orgSlug}
-        meetings={data.meetings}
+        meetings={nextMeetings}
         extras={eventExtras}
         rsvps={data.rsvps}
         zones={zones}
@@ -877,7 +884,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       </CardControls>
     ),
     meetings: (
-      <CardControls count={data.meetings.length || undefined}>
+      <CardControls count={nextMeetings.length || undefined}>
         <OpenLink href={`${base}/meetings`} label="Meetings" />
       </CardControls>
     ),

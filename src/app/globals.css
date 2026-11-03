@@ -567,7 +567,7 @@
  */
 .home-glow {
   position: absolute;
-  inset: -3rem -2rem auto;
+  inset: -3rem 0 auto;
   height: 24rem;
   z-index: -1;
   pointer-events: none;
