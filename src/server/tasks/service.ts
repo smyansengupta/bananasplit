@@ -567,6 +567,36 @@ async function notifyAssignment(
 }
 
 /**
+ * A task nobody owns, posted for anyone to take: an Inbox notice to the
+ * members who can see it (everyone, or a private task's own audience),
+ * except whoever posted it and the people already on it, who were told
+ * they're on it. One notice per task per member (the dedupe key), so
+ * taking the owner off again doesn't repeat it.
+ */
+async function notifyUpForGrabs(
+  env: TaskEnv,
+  task: { id: string; title: string; dueDate: Date | null; priority: TaskPriority },
+  subject: TaskVisibilitySubject,
+): Promise<void> {
+  const { db, organizationId } = env.ctx;
+  const audience = isPrivate(subject)
+    ? [...namedAudienceIds(subject), ...env.adminIds]
+    : [...env.memberIds];
+  const skip = new Set([env.actor.userId, ...subject.assigneeIds]);
+  const recipients = audience.filter((id) => !skip.has(id));
+  if (recipients.length === 0) return;
+  await notifyUsers(db, organizationId, recipients, {
+    type: NotificationType.TASK_UP_FOR_GRABS,
+    title: `${quoted(task.title)} is up for grabs`,
+    body: `${actorName(env)} posted it for anyone to take. ${assignmentBody(env, task, false)}`,
+    linkUrl: taskPath(env.org.slug, task.id),
+    taskId: task.id,
+    actorId: env.actor.userId,
+    dedupeKey: `up-for-grabs:${task.id}`,
+  });
+}
+
+/**
  * Who may be mentioned on this task, or null when anyone in the org may
  * (C4). On a PRIVATE task a mention would otherwise put the title in front
  * of somebody outside the audience — in the bell, in the email and in the
@@ -878,6 +908,10 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
   ]);
   const mentions = await syncMentions(env, { ...task, ...created }, "desc", d.description ?? null);
   await notifyAssignment(env, task, plan);
+  // Nobody owns it: tell the people who could take it.
+  if (!created.ownerId && nesting.childType !== TaskType.EPIC && status !== TaskStatus.COMPLETED) {
+    await notifyUpForGrabs(env, task, created);
+  }
   await scheduleTaskReminders(
     db,
     env.org,
@@ -1147,6 +1181,16 @@ async function applyUpdate(
     dropped = sync.dropped;
   }
   await notifyAssignment(env, after, plan);
+  // Its owner came off and nobody took their place: it's up for grabs now.
+  if (
+    plan?.ownerChange &&
+    !plan.ownerChange.ownerId &&
+    s.ownerId &&
+    (data.type ?? s.type) !== TaskType.EPIC &&
+    nextStatus !== TaskStatus.COMPLETED
+  ) {
+    await notifyUpForGrabs(env, after, afterVisibility);
+  }
 
   // Reminders: everyone on a moved or reopened task; otherwise only the newcomers.
   const recipients =

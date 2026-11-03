@@ -92,7 +92,7 @@ import { JUST_ENDED_MS, buildUpNext, type LastMeetingActions } from "@/server/ov
 import { reportTier } from "@/server/reports/tier";
 import { hideUpNextCard, showHiddenUpNextCards, unhideUpNextCard } from "./up-next-actions";
 import { rsvpToEvent } from "./calendar/actions";
-import { setTaskStatus } from "./tasks/actions";
+import { setTaskStatus, takeTask } from "./tasks/actions";
 import { listPins, listRecent } from "@/server/pins";
 import {
   getPulseIssue,
@@ -251,6 +251,20 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       orderBy: [{ dueDate: "asc" }, { id: "asc" }],
       take: 60,
     });
+    // Up for grabs: the open task nobody owns that's due soonest (Up next offers Take it).
+    const upForGrabs = await db.task.findFirst({
+      where: {
+        AND: [taskFilterWhere(org.id, { unowned: true }), { type: { not: "EPIC" } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        status: true,
+        parentTask: { select: { title: true } },
+      },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+    });
     const memberCount = await db.membership.count({ where: { organizationId: org.id } });
     // What's open in Forms and the member polls, read once for every widget.
     const shared = await readHomeShared(db, {
@@ -329,6 +343,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       timeZone: tz,
       todayKey: dayKey,
       hiddenUpNext: dismissed.map((d) => `${d.kind}:${d.refId}`),
+      upForGrabs,
       // Your face for "members online" when you're the only one here.
       you: { id: user.id, name: me?.name ?? null, image: me?.image ?? null, avatar: me?.avatar },
       firstName: me?.name?.trim().split(/\s+/)[0] ?? null,
@@ -626,6 +641,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     polls: data.polls,
     ended: data.ended,
     hidden: new Set(data.hiddenUpNext),
+    upForGrabs: data.upForGrabs,
     context: {
       links: data.links,
       details: data.details,
@@ -1106,6 +1122,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               onUnhide={unhideUpNextCard.bind(null, org.id)}
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
               onDone={setTaskStatus.bind(null, org.id)}
+              onTake={takeTask.bind(null, org.id)}
               onRsvp={rsvpToEvent.bind(null, org.id)}
               onVote={voteOnQuestionPoll.bind(null, org.id)}
               hiddenCount={data.hiddenUpNext.length}

@@ -168,6 +168,7 @@ export default async function TasksPage({
     flagged: ws.flagged,
     overdue: ws.overdue,
     blockers: ws.blockers,
+    unowned: ws.unowned,
     visibility: ws.visibility,
   };
 

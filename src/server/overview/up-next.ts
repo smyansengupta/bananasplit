@@ -91,6 +91,17 @@ export interface UpNextBlock extends UpNextCandidate {
   chips?: ItemRef[];
   /** Its ambient buttons right now (Join, Open check-in, Add notes), two at most. */
   acts?: HomeAct[];
+  /** A task nobody owns: the card offers Take it instead of Done. */
+  grabs?: boolean;
+}
+
+/** The open task nobody owns that's due soonest: anyone can take it. */
+export interface UpForGrabs {
+  id: string;
+  title: string;
+  dueDate: Date | null;
+  status: TaskStatus;
+  parentTask: { title: string } | null;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -117,6 +128,8 @@ export function buildUpNext(input: {
   ended?: readonly CalendarEventSummary[];
   /** "{kind}:{id}" of the cards this member hid (UpNextDismissal). */
   hidden?: ReadonlySet<string>;
+  /** A task nobody owns yet, offered with Take it. */
+  upForGrabs?: UpForGrabs | null;
   context?: UpNextContext;
 }) {
   const base = `/app/${input.orgSlug}`;
@@ -179,6 +192,33 @@ export function buildUpNext(input: {
       faces: extra?.people ?? [],
       facesTotal: extra?.people.length ?? 0,
       href: `${base}/tasks/${task.id}`,
+    });
+  }
+
+  // Up for grabs: nobody owns it, so it waits on whoever takes it.
+  const grabs = input.upForGrabs;
+  if (grabs && !blocks.some((b) => b.id === grabs.id)) {
+    const dueKey = grabs.dueDate ? dueDateKey(grabs.dueDate) : null;
+    blocks.push({
+      id: grabs.id,
+      kind: "task",
+      grabs: true,
+      taskStatus: grabs.status,
+      tone: "answer",
+      // No date: it waits behind everything dated.
+      at: grabs.dueDate ?? new Date(input.now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      kicker: "Up for grabs",
+      title: grabs.title,
+      subtitle: [
+        dueKey ? `Due ${dueLabel(dueKey, input.todayKey).text}.` : null,
+        "Nobody owns it yet.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      chips: chipsOf(linked(`task:${grabs.id}`)),
+      faces: [],
+      facesTotal: 0,
+      href: `${base}/tasks/${grabs.id}`,
     });
   }
 

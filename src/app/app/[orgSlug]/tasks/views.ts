@@ -127,6 +127,8 @@ export interface WorkspaceQuery {
   /** Open and due before today (?overdue=1), from the Overdue stat. */
   overdue: boolean;
   blockers: boolean;
+  /** Open with nobody owning it (?unowned=1): up for grabs, anyone can take it. */
+  unowned: boolean;
   visibility?: TaskVisibility;
 }
 
@@ -175,6 +177,7 @@ export function parseWorkspaceQuery(query: Query): WorkspaceQuery {
     flagged: str(query.flagged) === "1",
     overdue: str(query.overdue) === "1",
     blockers: str(query.blockers) === "1",
+    unowned: str(query.unowned) === "1",
     visibility,
   };
 }
@@ -192,6 +195,7 @@ export function activeFilterCount(q: WorkspaceQuery): number {
     q.flagged || undefined,
     q.overdue || undefined,
     q.blockers || undefined,
+    q.unowned || undefined,
     q.visibility,
   ].filter(Boolean).length;
 }
@@ -215,6 +219,7 @@ export function workspaceHref(
   if (q.flagged) p.set("flagged", "1");
   if (q.overdue) p.set("overdue", "1");
   if (q.blockers) p.set("blockers", "1");
+  if (q.unowned) p.set("unowned", "1");
   if (q.visibility) p.set("visibility", q.visibility);
   for (const [k, v] of Object.entries(extra ?? {})) {
     if (typeof v === "string" && v.length > 0) p.set(k, v);

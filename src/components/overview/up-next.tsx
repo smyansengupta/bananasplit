@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowUpRight, CalendarCheck2, Check, EyeOff, RotateCcw, X } from "@/components/icons";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  Check,
+  EyeOff,
+  RotateCcw,
+  UserPlus,
+  X,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
@@ -93,6 +101,8 @@ export function UpNext({
   onShowAll,
   /** Done on a task card, bound to the space like onHide. */
   onDone,
+  /** Take it on a task nobody owns, bound to the space like onHide. */
+  onTake,
   orgId,
   /** Going / Can't go on an invitation card, bound to the space like onHide. */
   onRsvp,
@@ -106,6 +116,7 @@ export function UpNext({
   onUnhide?: (kind: string, refId: string) => Promise<unknown>;
   onShowAll?: () => Promise<unknown>;
   onDone?: (taskId: string, status: TaskStatus) => Promise<unknown>;
+  onTake?: (taskId: string) => Promise<unknown>;
   /** The space, for Push on a task that's due today or late. */
   orgId?: string;
   onRsvp?: (eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
@@ -166,6 +177,20 @@ export function UpNext({
       });
     });
 
+  const take = (item: UpNextBlock) =>
+    start(async () => {
+      if (!onTake) return;
+      setBusy(item.id);
+      const failed = errorOf(await onTake(item.id));
+      setBusy(null);
+      if (failed) {
+        toast({ title: failed, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({ title: "It's yours", tone: "success" });
+    });
+
   const answer = (item: UpNextBlock, rsvp: RSVPStatus) =>
     start(async () => {
       if (!onRsvp) return;
@@ -217,6 +242,14 @@ export function UpNext({
   /** The card's own job, right on it. */
   const actionsOf = (item: UpNextBlock) => {
     const working = pending && busy === item.id;
+    if (item.grabs) {
+      return onTake ? (
+        <button type="button" disabled={working} onClick={() => take(item)} className={ACT}>
+          <UserPlus className="size-3.5" aria-hidden="true" />
+          Take it
+        </button>
+      ) : null;
+    }
     if (item.kind === "task" && onDone) {
       return (
         <>

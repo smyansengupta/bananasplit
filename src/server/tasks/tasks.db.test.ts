@@ -395,6 +395,30 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
     expect(second).toEqual([{ userId: p.alex.id }, { userId: p.smyan.id }]);
   });
 
+  it("a task left for anyone tells everyone who can see it, once", async () => {
+    const id = await create({
+      title: "B6 test: up for grabs",
+      ownerId: null,
+      openToAnyone: true,
+      dueDate: due(8),
+    });
+    const told = () =>
+      read(({ db }) =>
+        db.notification.findMany({
+          where: { taskId: id, type: NotificationType.TASK_UP_FOR_GRABS },
+          select: { userId: true },
+        }),
+      );
+    const first = (await told()).map((n) => n.userId);
+    // Not whoever posted it; everyone else in the organization.
+    expect(first).not.toContain(p.oliver.id);
+    expect(first).toEqual(expect.arrayContaining([p.jackson.id, p.alex.id, p.smyan.id]));
+    // Taken, then left for anyone again: nobody is told twice.
+    await act(svc.updateTask)(s.cbcId, id, { ownerId: p.oliver.id });
+    await act(svc.updateTask)(s.cbcId, id, { ownerId: null, openToAnyone: true });
+    expect(await told()).toHaveLength(first.length);
+  });
+
   it("the digest records once per local date, however often it runs", async () => {
     // Opt Oliver into the digest for this test, then restore his preferences.
     const original = await authDb.user.findUnique({

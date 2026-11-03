@@ -153,6 +153,11 @@ export async function selfAssignTask(orgId: string, taskId: string, action: svc.
   return run(() => selfAssignTx(orgId, taskId, action));
 }
 
+/** Take a task nobody owns (Take it on Home's Up next). */
+export async function takeTask(orgId: string, taskId: string) {
+  return run(() => selfAssignTx(orgId, taskId, "claim"));
+}
+
 export async function acknowledgeTaskFlag(orgId: string, taskId: string, userId: string) {
   return run(() => acknowledgeTx(orgId, taskId, userId));
 }

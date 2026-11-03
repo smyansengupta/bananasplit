@@ -1,7 +1,7 @@
 import { Bookmark, Layers, SquareCheck, type IconComponent } from "@/components/icons";
 import type { CSSProperties } from "react";
 
-import { TASK_TYPES, typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
+import { typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
 import { cn } from "@/lib/utils";
 
 export const TYPE_ICON: Record<TaskTypeValue, IconComponent> = {
@@ -9,16 +9,6 @@ export const TYPE_ICON: Record<TaskTypeValue, IconComponent> = {
   STORY: Bookmark,
   TASK: SquareCheck,
 };
-
-/** The editor's Type segments. */
-export const TYPE_OPTIONS = TASK_TYPES.map((t) => {
-  const Icon = TYPE_ICON[t.value];
-  return {
-    value: t.value,
-    label: t.label,
-    icon: <Icon className="size-[15px]" aria-hidden="true" />,
-  };
-});
 
 /** Epics take chart slot 4, stories slot 2; a plain task is a quiet fill. */
 const TYPE_TINT: Record<TaskTypeValue, string | null> = {

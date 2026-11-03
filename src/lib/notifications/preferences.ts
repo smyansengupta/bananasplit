@@ -54,6 +54,8 @@ export const notificationPreferencesSchema = z
 /** Types that stay off until the user turns them on (Tasks). */
 export const DEFAULT_OFF_TYPES: ReadonlySet<NotificationType> = new Set([
   NotificationType.TASK_COMMENTED,
+  // Everyone who can see the task gets it, so it's Inbox-only unless asked for.
+  NotificationType.TASK_UP_FOR_GRABS,
 ]);
 
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
@@ -215,6 +217,7 @@ export const NOTIFICATION_TYPE_META: Record<
   TASK_DUE_TODAY: { label: "One of my tasks is due today", group: "tasks" },
   TASK_OVERDUE: { label: "One of my tasks is overdue", group: "tasks" },
   TASK_DUE_SOON: { label: "One of my tasks is due soon", group: "tasks" },
+  TASK_UP_FOR_GRABS: { label: "A task is up for grabs (nobody owns it)", group: "tasks" },
   TASK_FLAGGED: {
     label: "A task assignment needs my review",
     group: "tasks",

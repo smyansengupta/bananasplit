@@ -1,4 +1,4 @@
-import { Bookmark, Clock } from "@/components/icons";
+import { Ban, Bookmark, Clock } from "@/components/icons";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { daysBetweenKeys, dueDateKey } from "@/lib/tasks/dates";
@@ -42,8 +42,8 @@ const PRIORITY: Record<string, { label: string; className: string }> = {
  * priority in words and the tags as a dot and a name. The foot is the date
  * (a red count of days once it's late), then the one ambient button beside
  * the faces in the right corner; with nobody on it (Take it) the button
- * takes the corner itself. Nothing else: comments, subtasks and the blocked
- * note live on the task.
+ * takes the corner itself. Nothing else: comments and subtasks live on the
+ * task, and a blocked one shows a small mark whose hover says what it waits on.
  * Plain and presentational: inside a sortable list the wrapper owns click,
  * focus and drag. A private task keeps its dashed edge. `dragging` is the
  * lifted copy.
@@ -120,6 +120,18 @@ export function TaskCard({
 
       {!done && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+          {task.status === "BLOCKED" && (
+            // Blocked: what it waits on, on hover (the column already says Blocked).
+            <span
+              className="text-destructive inline-flex shrink-0 items-center"
+              title={task.blockedReason ? `Blocked: ${task.blockedReason}` : "Blocked"}
+            >
+              <Ban className="size-3.5" aria-hidden="true" />
+              <span className="sr-only">
+                {task.blockedReason ? `Blocked: ${task.blockedReason}` : "Blocked"}
+              </span>
+            </span>
+          )}
           {priority && (
             <span className={cn("font-bold", priority.className)}>
               {priority.label}

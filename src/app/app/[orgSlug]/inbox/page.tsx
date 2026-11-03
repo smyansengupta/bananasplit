@@ -430,6 +430,7 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   TASK_DUE_TODAY: "task",
   TASK_OVERDUE: "task",
   TASK_DIGEST: "task",
+  TASK_UP_FOR_GRABS: "task",
   WEEKLY_UPDATE_REMINDER: "task",
   EVENT_INVITE: "meeting",
   EVENT_UPDATED: "meeting",

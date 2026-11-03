@@ -240,6 +240,9 @@ export function WorkspaceToolbar() {
               onClear={() => ws.setFilters({ ownerId: undefined, assigneeId: undefined })}
             />
           )}
+          {ws.query.unowned && (
+            <FilterPill label="Up for grabs" onClear={() => ws.setFilters({ unowned: false })} />
+          )}
           {ws.query.blockers && (
             <FilterPill label="Blockers" onClear={() => ws.setFilters({ blockers: false })} />
           )}
@@ -559,11 +562,12 @@ function PersonFilter() {
   const person = personId ? memberById.get(personId) : undefined;
   const [ownedOnly, setOwnedOnly] = useState(Boolean(ws.query.ownerId));
 
+  const grabs = ws.query.unowned;
   const choose = (userId: string | undefined, owned = ownedOnly) =>
     ws.setFilters(
       owned
-        ? { ownerId: userId, assigneeId: undefined }
-        : { assigneeId: userId, ownerId: undefined },
+        ? { ownerId: userId, assigneeId: undefined, unowned: false }
+        : { assigneeId: userId, ownerId: undefined, unowned: false },
     );
   const search = useMemberSearch(members, {
     always: true,
@@ -590,10 +594,21 @@ function PersonFilter() {
         <button
           type="button"
           title={`Filter by person (${TASK_KEYS.person})`}
-          aria-label={person ? `Filtered to ${person.name ?? "a member"}` : "Filter by person"}
-          className={cn(chipClass(Boolean(person)), person && "ps-1")}
+          aria-label={
+            person
+              ? `Filtered to ${person.name ?? "a member"}`
+              : grabs
+                ? "Filtered to tasks up for grabs"
+                : "Filter by person"
+          }
+          className={cn(chipClass(Boolean(person) || grabs), person && "ps-1")}
         >
-          {person ? (
+          {grabs ? (
+            <>
+              <UsersRound className="size-3.5" aria-hidden="true" />
+              <span>Up for grabs</span>
+            </>
+          ) : person ? (
             <>
               <UserAvatar user={person} size="xs" />
               <span className="max-w-32 truncate">{person.name ?? "Member"}</span>
@@ -624,7 +639,7 @@ function PersonFilter() {
           aria-label="Person"
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
-          {person && (
+          {(person || grabs) && (
             <button
               type="button"
               role="option"
@@ -639,6 +654,23 @@ function PersonFilter() {
               Anyone
             </button>
           )}
+          {/* Nobody owns it yet: the tasks anyone can take. */}
+          <button
+            type="button"
+            role="option"
+            aria-selected={grabs}
+            className={menuItemClass(grabs)}
+            onClick={() => {
+              ws.setFilters({ unowned: true, ownerId: undefined, assigneeId: undefined });
+              setOpen(false);
+            }}
+          >
+            <UsersRound className="size-3.5" aria-hidden="true" />
+            Up for grabs
+            {grabs && (
+              <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+            )}
+          </button>
           {search.filtered.length === 0 && (
             <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}
