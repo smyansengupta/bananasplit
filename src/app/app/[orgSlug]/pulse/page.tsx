@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { pulseReady } from "@/lib/ambient/forms";
 import { can } from "@/lib/auth/permissions";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { safeTimeZone } from "@/lib/calendar/dates";
@@ -15,6 +16,7 @@ import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listPulseIssues, nextPulseLabel } from "@/server/pulse/queries";
 
+import { SendPulseNow } from "./send-now-button";
 import { TurnPulseOnButton } from "./turn-on-button";
 
 export const metadata = { title: "Weekly pulse" };
@@ -108,6 +110,15 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
                   aria-hidden="true"
                 />
               </Link>
+              {isAdmin && pulseReady(issue, pulse.pulseEnabled) && (
+                <div className="px-4 pb-3 pl-[72px]">
+                  <SendPulseNow
+                    orgId={org.id}
+                    issueId={issue.id}
+                    reason={`The draft is ready, it goes out ${next}`}
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ul>

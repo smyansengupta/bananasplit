@@ -6,11 +6,13 @@ import { FilesDropZone } from "@/components/notes/files-drop-zone";
 import { NotesLibrary } from "@/components/notes/notes-library";
 import { NotesNewMenu } from "@/components/notes/notes-new-menu";
 import { PageHeader } from "@/components/page-header";
+import { fileToShare } from "@/lib/ambient/files";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
 import { isPersonalSpace, spaceLimits } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { fileLinkCounts } from "@/server/notes/ambient";
 import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
 import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
@@ -155,6 +157,18 @@ export default async function NotesPage({
   const files = data.files.filter(
     (f) => (!visibility || f.visibility === visibility) && (!author || f.uploadedBy.id === author),
   );
+  // Private files of yours the organization uses get Share with everyone.
+  const mine = files.filter((f) => f.visibility === "PRIVATE" && f.uploadedBy.id === user.id);
+  const fileLinks = mine.length
+    ? await withOrgTx(org.id, ({ db }) =>
+        fileLinkCounts(
+          db,
+          org.id,
+          mine.map((f) => f.id),
+        ),
+      )
+    : new Map<string, number>();
+  const folderName = new Map(data.folders.map((f) => [f.id, f.name]));
 
   return (
     <div className="space-y-6">
@@ -227,6 +241,15 @@ export default async function NotesPage({
           excerpt: f.excerpt,
           folderId: f.folderId,
           canMove: isAdmin || f.uploadedBy.id === user.id,
+          share:
+            fileToShare({
+              visibility: f.visibility,
+              uploadedById: f.uploadedBy.id,
+              viewerId: user.id,
+              personal,
+              links: fileLinks.get(f.id) ?? 0,
+              folderName: f.folderId ? (folderName.get(f.folderId) ?? null) : null,
+            })?.reason ?? null,
         }))}
         pinnedHrefs={data.pins.map((p) => p.href)}
         totals={{ ...data.totals, trash: data.trashCount }}

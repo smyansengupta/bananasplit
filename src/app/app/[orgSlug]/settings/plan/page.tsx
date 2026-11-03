@@ -29,6 +29,8 @@ import {
   spaceStatus,
   trialDaysLeft,
 } from "@/lib/billing/space";
+import { AmbientActions } from "@/components/ambient/ambient-button";
+import { storageNearlyFull } from "@/lib/ambient/forms";
 import { formatStorage } from "@/lib/billing/storage";
 import { StorageMeter } from "@/components/billing/storage-meter";
 import { connectorsConfig } from "@/server/connectors/config";
@@ -218,6 +220,10 @@ export default async function PlanSettingsPage({
       </>
     );
   const base = `/app/${organization.slug}`;
+  // Free up space: 90% used, for those who can clear files (src/lib/ambient/forms.ts).
+  const full = showFiles
+    ? storageNearlyFull(usedBytes, spaceLimits(organization).storageBytes)
+    : null;
 
   return (
     <div className="max-w-4xl space-y-7.5">
@@ -226,6 +232,22 @@ export default async function PlanSettingsPage({
         {summary}
         {!canSwitch && " Only the owner can choose a plan."}
       </p>
+      {full !== null && (
+        <AmbientActions
+          why
+          className="-mt-3 items-start"
+          actions={[
+            {
+              key: "space",
+              label: "Free up space",
+              reason: `Storage is ${Math.min(100, Math.round(full * 100))}% full`,
+              tone: "spark",
+              // The largest files and the trash, just below.
+              href: "#largest-heading",
+            },
+          ]}
+        />
+      )}
       <PlanCards
         orgId={organization.id}
         kind={organization.kind}

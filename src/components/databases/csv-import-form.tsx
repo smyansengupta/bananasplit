@@ -3,8 +3,9 @@
 import { CircleAlert } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/table";
 
 import { FieldSelect } from "@/components/ui/field-select";
+import { rowsToFix } from "@/lib/ambient/databases";
 import { readTableFile, SpreadsheetError } from "@/lib/finance/import/sheet";
 
 import { fileInputClass, notice } from "./styles";
@@ -38,11 +40,11 @@ function csvField(text: string): string {
 }
 
 /**
- * The chosen file as the CSV the import reads: a workbook or TSV is read
- * here and written out as CSV, and a session picked on the page fills a
- * `session` column on every row the sheet left without one.
+ * The chosen file as the rows the import reads: a workbook or TSV is read
+ * here, and a session picked on the page fills a `session` column on every
+ * row the sheet left without one.
  */
-async function asCsv(file: File, session: string | null): Promise<File> {
+async function sheetRows(file: File, session: string | null): Promise<string[][]> {
   const sheets = readTableFile(file.name, new Uint8Array(await file.arrayBuffer()));
   const rows = (sheets.find((x) => !x.hidden) ?? sheets[0])?.rows ?? [];
   const [header = [], ...body] = rows;
@@ -57,8 +59,43 @@ async function asCsv(file: File, session: string | null): Promise<File> {
       lines = body.map((r) => r.map((cell, i) => (i === at && !cell.trim() ? session : cell)));
     }
   }
-  const text = [head, ...lines].map((r) => r.map(csvField).join(",")).join("\r\n");
+  return [head, ...lines];
+}
+
+const toCsv = (rows: string[][]) => rows.map((r) => r.map(csvField).join(",")).join("\r\n");
+
+/** The chosen file as the CSV the import reads. */
+async function asCsv(file: File, session: string | null): Promise<File> {
+  const text = toCsv(await sheetRows(file, session));
   return new File([text], file.name.replace(/\.[^.]+$/, "") + ".csv", { type: "text/csv" });
+}
+
+/**
+ * "Fix 3 rows": the rows the import skipped, as a CSV with what's wrong
+ * with each in a last column, downloaded to fix and choose here again.
+ * Lines count like the server's (header line 1, blank rows not counted).
+ */
+async function downloadRowsToFix(
+  file: File,
+  session: string | null,
+  issues: { line: number; message: string }[],
+): Promise<void> {
+  const [head = [], ...body] = await sheetRows(file, session);
+  const lines = body.filter((r) => r.some((f) => f.trim() !== ""));
+  const problems = new Map<number, string[]>();
+  for (const i of issues) {
+    if (i.line > 1) problems.set(i.line, [...(problems.get(i.line) ?? []), i.message]);
+  }
+  const rows = [...problems]
+    .sort(([a], [b]) => a - b)
+    .map(([line, messages]) => [...(lines[line - 2] ?? []), messages.join(" ")]);
+  const blob = new Blob([toCsv([[...head, "problem"], ...rows])], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${file.name.replace(/\.[^.]+$/, "")} rows to fix.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** A CSV column name as a header: "checked_in_at" reads "Checked in at". */
@@ -90,6 +127,7 @@ export function CsvImportForm({
   const [session, setSession] = useState<string>("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
 
   // A new file, or a different session, previews by itself (from their own onChange).
   const send = async (mode: "preview" | "commit", f = file, chosen = session) => {
@@ -124,6 +162,7 @@ export function CsvImportForm({
     preview && !preview.committed && !preview.error && (preview.valid ?? 0) > 0,
   );
   const columns = preview?.sample?.[0] ? Object.keys(preview.sample[0]) : [];
+  const fix = rowsToFix(preview?.issues, Boolean(preview?.committed));
 
   return (
     <Card>
@@ -156,6 +195,7 @@ export function CsvImportForm({
             type="file"
             accept=".csv,.tsv,.xlsx,.xlsm,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             aria-label="File"
+            ref={input}
             onChange={(e) => {
               const f = e.target.files?.[0] ?? null;
               setFile(f);
@@ -172,10 +212,33 @@ export function CsvImportForm({
           </p>
         )}
         {preview?.committed && (
-          <p role="status" className={notice.success}>
-            Imported {preview.committed.created} rows ({preview.committed.skipped} skipped as
-            duplicates or problems).
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p role="status" className={notice.success}>
+              Imported {preview.committed.created} rows ({preview.committed.skipped} skipped as
+              duplicates or problems).
+            </p>
+            {fix && file && (
+              <AmbientActions
+                why
+                actions={[
+                  {
+                    key: "fix",
+                    label: `Fix ${fix.count} ${fix.count === 1 ? "row" : "rows"}`,
+                    reason: fix.reason,
+                    tone: "spark",
+                    run: async () => {
+                      await downloadRowsToFix(file, session || null, preview.issues ?? []);
+                      // Ready for the fixed file.
+                      setFile(null);
+                      setPreview(null);
+                      if (input.current) input.current.value = "";
+                    },
+                    done: "Fix them in the file, then choose it here",
+                  },
+                ]}
+              />
+            )}
+          </div>
         )}
         {preview && !preview.committed && !preview.error && (
           <p className="text-sm tabular-nums" role="status">

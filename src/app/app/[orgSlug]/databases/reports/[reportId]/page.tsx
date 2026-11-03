@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { RangePicker } from "@/components/reports/range-picker";
@@ -19,6 +20,7 @@ import {
 import { AskReports } from "@/components/reports/saved/ask-reports";
 import { ReportBoard } from "@/components/reports/saved/report-board";
 import { WidgetBody } from "@/components/reports/saved/widget-bodies";
+import { copyIsStale, failedSend } from "@/lib/ambient/reports";
 import { can } from "@/lib/auth/permissions";
 import { boardTypes } from "@/lib/reports/catalog";
 import { spanPhrase } from "@/lib/reports/compute";
@@ -27,6 +29,7 @@ import { describeSchedule } from "@/lib/reports/schedule";
 import { listAiConnections } from "@/server/ai/connections";
 import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { reportDataChangedAt, reportSendJobs } from "@/server/reports/ambient";
 import { clampRefreshSeconds } from "@/server/reports/cache";
 import { builtInInsights, reportViewer, runReport } from "@/server/reports/run";
 import { canEditReport, getReport, listSnapshots } from "@/server/reports/saved";
@@ -36,6 +39,7 @@ import { getVisibleReports } from "@/server/reports/visibility";
 
 import { DatabasesTabs } from "../../databases-tabs";
 import { PeopleSummarySection, RsvpAttendanceSection } from "../organization-sections";
+import { refreshCopyAction, sendReportAgainAction } from "../report-actions";
 
 export const metadata = { title: "Report" };
 
@@ -70,15 +74,28 @@ export default async function SavedReportPage({
     });
     const report = await getReport(ctx.db, organization.id, reportId).catch(() => null);
     if (!report) return null;
+    const snapshots = await listSnapshots(ctx.db, organization.id, report.id);
     return {
       report,
       tz: v.tz,
       run: await runReport(v, report, sp),
-      snapshots: await listSnapshots(ctx.db, organization.id, report.id),
+      snapshots,
+      // Its ambient buttons (src/lib/ambient/reports.ts): the newest copy is
+      // behind the data; the last scheduled send gave up (admins read jobs).
+      stale: snapshots[0]
+        ? copyIsStale(
+            snapshots[0].takenAt,
+            await reportDataChangedAt(ctx.db, organization.id, report),
+          )
+        : null,
+      failed:
+        isAdmin && report.schedule
+          ? failedSend(await reportSendJobs(ctx.db, organization.id, report.id), report.id)
+          : null,
     };
   });
   if (!loaded) notFound();
-  const { report, run, snapshots, tz } = loaded;
+  const { report, run, snapshots, tz, stale, failed } = loaded;
   const { source, range, computed } = run;
   const canEdit = canEditReport(report, user.id, role);
   const joinedName = report.joinWith
@@ -91,17 +108,34 @@ export default async function SavedReportPage({
       title={report.title}
       description={source?.name ?? "A database you can't see"}
       actions={
-        <ReportHeaderControls
-          orgId={organization.id}
-          orgSlug={orgSlug}
-          reportId={report.id}
-          title={report.title}
-          access={report.access}
-          canEdit={canEdit}
-          isOwner={report.createdById === user.id}
-          schedule={report.schedule}
-          linkOn={report.linkOn}
-        />
+        <>
+          {failed && (
+            <AmbientActions
+              why
+              actions={[
+                {
+                  key: "send-again",
+                  label: "Send again",
+                  reason: failed.reason,
+                  tone: "spark",
+                  run: sendReportAgainAction.bind(null, organization.id, report.id),
+                  done: "Sending it again",
+                },
+              ]}
+            />
+          )}
+          <ReportHeaderControls
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            reportId={report.id}
+            title={report.title}
+            access={report.access}
+            canEdit={canEdit}
+            isOwner={report.createdById === user.id}
+            schedule={report.schedule}
+            linkOn={report.linkOn}
+          />
+        </>
       }
       tabs={
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -318,9 +352,31 @@ export default async function SavedReportPage({
 
         {snapshots.length > 0 && (
           <section aria-labelledby="copies" className="space-y-3">
-            <h2 id="copies" className="heading text-[17px]">
-              Saved copies
-            </h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 id="copies" className="heading text-[17px]">
+                Saved copies
+              </h2>
+              {stale && (
+                <AmbientActions
+                  why
+                  actions={[
+                    {
+                      key: "refresh",
+                      label: "Refresh",
+                      reason: stale.reason,
+                      // A new copy over the same dates as the newest one.
+                      run: refreshCopyAction.bind(
+                        null,
+                        organization.id,
+                        report.id,
+                        snapshots[0].rangeLabel,
+                      ),
+                      done: "Kept a fresh copy",
+                    },
+                  ]}
+                />
+              )}
+            </div>
             <ul className="flex flex-wrap gap-2">
               {snapshots.map((s) => (
                 <li key={s.id}>

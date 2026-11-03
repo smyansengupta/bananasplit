@@ -12,6 +12,7 @@ import {
   deleteSponsor,
   deleteSponsorship,
 } from "@/app/app/[orgSlug]/finance/sponsorships-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { TableFrame } from "@/components/databases/table-frame";
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toaster";
 import { SponsorshipStatus, SponsorshipType } from "@/generated/prisma/enums";
+import { invoiceLate, lateReason, reminderMailto } from "@/lib/ambient/finance";
 import { formatCents, parseDollarsToCents } from "@/lib/finance/money";
 
 /**
@@ -58,7 +60,14 @@ interface Sponsorship {
   amountCents: number;
   tier: string | null;
   status: SponsorshipStatus;
-  sponsor: { id: string; name: string };
+  /** When the money is due (a late invoice gets Send a reminder). */
+  expectedOn?: Date | string | null;
+  sponsor: {
+    id: string;
+    name: string;
+    contactName?: string | null;
+    contactEmail?: string | null;
+  };
   owner: { id: string; name: string | null; email: string };
 }
 
@@ -111,6 +120,7 @@ export function SponsorshipsView({
   members,
   currentUserId,
   budgetHref,
+  orgName = "our organization",
 }: {
   orgId: string;
   sponsors: Sponsor[];
@@ -120,8 +130,12 @@ export function SponsorshipsView({
   /** A new sponsorship is yours to look after unless you pick someone else. */
   currentUserId?: string;
   budgetHref?: string;
+  /** Signs the reminder to a sponsor. */
+  orgName?: string;
 }) {
   const router = useRouter();
+  // When the page was loaded: how late an invoice is.
+  const [now] = useState(() => new Date());
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -523,6 +537,7 @@ export function SponsorshipsView({
                             Mark received
                           </Button>
                         )}
+                        <LateInvoice sponsorship={s} orgName={orgName} now={now} />
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         <AmountCell
@@ -667,5 +682,46 @@ function AmountCell({
         className="hover:border-input focus-visible:border-input h-8 w-28 border-transparent bg-transparent pl-5 text-right tabular-nums shadow-none"
       />
     </span>
+  );
+}
+
+/**
+ * Send a reminder, on an invoice past its date: the email written and ready
+ * in the treasurer's own mail app, to the sponsor's contact.
+ */
+function LateInvoice({
+  sponsorship: s,
+  orgName,
+  now,
+}: {
+  sponsorship: Sponsorship;
+  orgName: string;
+  now: Date;
+}) {
+  const late = s.expectedOn
+    ? invoiceLate({ status: s.status, expectedOn: s.expectedOn }, now)
+    : null;
+  const to = s.sponsor.contactEmail?.trim();
+  if (late === null || !s.expectedOn || !to) return null;
+  return (
+    <AmbientActions
+      why
+      className="ms-1 mt-1 items-start"
+      actions={[
+        {
+          key: "remind",
+          label: "Send a reminder",
+          reason: lateReason(s.expectedOn, late),
+          ariaLabel: `Send ${s.sponsor.name} a reminder`,
+          href: reminderMailto({
+            to,
+            contactName: s.sponsor.contactName ?? null,
+            orgName,
+            amountCents: s.amountCents,
+            expectedOn: s.expectedOn,
+          }),
+        },
+      ]}
+    />
   );
 }

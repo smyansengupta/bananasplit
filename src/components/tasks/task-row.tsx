@@ -1,7 +1,5 @@
 "use client";
 
-import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions";
-import { dueDateKey } from "@/lib/tasks/dates";
 import { MessageSquare } from "@/components/icons";
 
 import { PinToggle } from "@/components/pins/pins-context";
@@ -22,6 +20,7 @@ import {
   isTaskFlagged,
   isTaskPrivate,
 } from "./task-badges";
+import { TaskAmbientActions } from "./task-ambient";
 import { TaskItemMenu } from "./task-item-menu";
 import { ProgressBar, TaskTypeChip } from "./task-type";
 import { TaskTitle } from "./task-title";
@@ -32,7 +31,8 @@ import type { TaskItem } from "./types";
  * One task as a list row (Moonstone 7.11) — the Week, the List and
  * Personal home all use it, so a task reads the same wherever you meet it.
  * The circle, the title, a meta row (epic chip, due date, tags, progress,
- * comments), then the priority chip, the owner and the ••• on the right.
+ * comments), then its ambient buttons, the priority chip, the owner and the
+ * ••• on the right.
  * Rows become a soft tile on hover; a full-width line ends each task.
  * `depth` hangs a story's tasks under it in the List, on a rail from the
  * story's circle.
@@ -60,9 +60,6 @@ export function TaskRow({
   const access = accessSubjectOf(task);
   const editable = canEditTask(actor, access);
   const done = task.status === "COMPLETED";
-  // Late: due before today and not done. Its row offers Push or Nudge.
-  const late =
-    !done && task.type !== "EPIC" && !!task.dueDate && dueDateKey(task.dueDate) < org.todayKey;
   const priv = isTaskPrivate(task);
   const flagged = isTaskFlagged(task);
   const involvedOnly =
@@ -148,12 +145,8 @@ export function TaskRow({
       </button>
 
       <div className="flex shrink-0 items-center gap-2">
-        {late && task.ownerId === viewer.userId && editable && (
-          <PushBackButton orgId={org.id} taskId={task.id} title={task.title} size="icon-sm" />
-        )}
-        {late && task.owner && task.ownerId !== viewer.userId && (
-          <NudgeButton orgId={org.id} taskId={task.id} person={task.owner} />
-        )}
+        {/* What moves it now (late, blocked, unowned, finished, quiet): src/lib/ambient/tasks.ts. */}
+        <TaskAmbientActions task={task} />
         {task.priority === "HIGH" && !done && (
           <Badge variant="accent" className="max-sm:hidden">
             High

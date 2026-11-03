@@ -3,6 +3,7 @@
 import { Layers } from "@/components/icons";
 import { useOptimistic, useTransition, type CSSProperties } from "react";
 
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { useCompleteTask } from "@/components/tasks/quick-controls";
 import { TaskCheck } from "@/components/tasks/task-check";
@@ -11,7 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskStatus } from "@/generated/prisma/enums";
+import { epicReadyToClose } from "@/lib/ambient/tasks";
 import { addDaysToKey, mondayOfKey } from "@/lib/tasks/dates";
+
+import { setTaskStatus } from "../actions";
 import { epicColor } from "@/lib/tasks/epic";
 import { cn } from "@/lib/utils";
 import type { RoadmapEpic } from "@/server/tasks/queries";
@@ -174,7 +178,7 @@ function EpicRow({
   startCol: number;
   endCol: number;
 }) {
-  const { openTask } = useTasks();
+  const { org, openTask } = useTasks();
   const complete = useCompleteTask();
   const [status, setOptimistic] = useOptimistic(e.status);
   const [, startTransition] = useTransition();
@@ -216,6 +220,24 @@ function EpicRow({
               </span>
             )}
           </span>
+          {/* Every task in it is done: one click closes it. */}
+          {epicReadyToClose({ status, done: e.done, total: e.total }) && (
+            <AmbientActions
+              why
+              className="mt-1.5 items-start"
+              actions={[
+                {
+                  key: "close-epic",
+                  label: "Close the epic",
+                  reason: "Every task in it is done",
+                  tone: "solid",
+                  ariaLabel: `Close ${e.title}`,
+                  run: () => setTaskStatus(org.id, e.id, TaskStatus.COMPLETED),
+                  done: `Closed ${e.title}`,
+                },
+              ]}
+            />
+          )}
         </span>
         {e.owner && <UserAvatar user={e.owner} size="xs" className="mt-0.5" />}
       </span>

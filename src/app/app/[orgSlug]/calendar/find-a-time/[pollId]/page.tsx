@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { PollResponder } from "@/components/calendar/poll-responder";
+import { PickTimeAmbient } from "@/components/polls/pick-time-ambient";
 import { PollResultsHero } from "@/components/polls/poll-results-hero";
+import { timeForEveryone } from "@/lib/ambient/calendar";
 import { can } from "@/lib/auth/permissions";
 import { buildPollView } from "@/lib/polls/poll-view";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -41,6 +43,29 @@ export default async function FindATimePollPage({
   const isOpen = !poll.finalizedEventId && !(poll.closesAt && poll.closesAt < new Date());
 
   const view = buildPollView(poll, { kind: "member", userId: user.id }, { memberNames });
+  // One time works for everyone who answered: Pick it.
+  const forAll =
+    isOpen && canFinalize
+      ? timeForEveryone(
+          poll.slots,
+          poll.responses.map((r) => ({
+            slotId: r.slotId,
+            who: r.userId ?? r.guestKeyHash ?? `guest:${r.guestName ?? ""}`,
+            availability: r.availability,
+          })),
+        )
+      : null;
+  const pickLabel = forAll
+    ? new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: poll.timezone,
+      })
+        .format(forAll.slot.startsAt)
+        // "Thu 6 PM", not "Thu 6:00 PM".
+        .replace(/:00/, "")
+    : "";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -62,6 +87,16 @@ export default async function FindATimePollPage({
       </div>
       {/* The answer first: the best times and who can make them. */}
       <PollResultsHero poll={view} />
+      {forAll && (
+        <PickTimeAmbient
+          orgId={org.id}
+          orgSlug={orgSlug}
+          pollId={poll.id}
+          slotId={forAll.slot.id}
+          label={pickLabel}
+          reason={`Works for all ${forAll.people} who answered`}
+        />
+      )}
       <PollResponder
         poll={view}
         respondAs="member"

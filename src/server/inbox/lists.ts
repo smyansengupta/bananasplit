@@ -38,6 +38,7 @@ export function listRequestsToReview(
       eventId: true,
       categoryId: true,
       submittedBy: { select: userPublicSelect },
+      _count: { select: { receipts: true } },
     },
     take: INBOX_LIST_LIMIT,
   });

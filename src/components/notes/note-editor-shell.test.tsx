@@ -31,6 +31,7 @@ vi.mock("@/app/app/[orgSlug]/notes/actions", () => actions);
 // The rail's and the live pieces' actions aren't under test here.
 vi.mock("@/app/app/[orgSlug]/notes/comment-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/notes/version-actions", () => ({}));
+vi.mock("@/app/app/[orgSlug]/notes/ambient-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/notes/embed-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/links/actions", () => ({ addLinkAction: vi.fn() }));

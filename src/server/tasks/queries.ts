@@ -33,6 +33,8 @@ export const taskListSelect = {
   color: true,
   createdById: true,
   createdAt: true,
+  // Its last change: a row asks "Still needed?" after two quiet weeks.
+  updatedAt: true,
   completedAt: true,
   blockedAt: true,
   blockedReason: true,

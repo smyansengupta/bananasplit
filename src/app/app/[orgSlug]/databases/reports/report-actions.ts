@@ -16,6 +16,10 @@ import {
   type WidgetConfig,
 } from "@/lib/reports/catalog";
 import { appUrl } from "@/lib/app-url";
+import { failedSend, rangeOfCopy } from "@/lib/ambient/reports";
+import { writeOrgAuditLog } from "@/server/audit";
+import { enqueueJob } from "@/server/jobs/enqueue";
+import { reportSendJobs } from "@/server/reports/ambient";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { resolveAiCredentials } from "@/server/ai/connections";
 import { AiImportError } from "@/server/ai/generate";
@@ -371,6 +375,69 @@ export async function takeSnapshotAction(
     })(organizationId);
     refresh();
     return { ok: true, id };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * "Refresh" (a kept copy whose data changed since): a new copy over the same
+ * dates, as this person sees it now. Hands back its id, for the page to open.
+ */
+export async function refreshCopyAction(
+  organizationId: string,
+  reportId: string,
+  label: string,
+): Promise<ReportResult<{ id: string }>> {
+  return takeSnapshotAction(organizationId, reportId, rangeOfCopy(String(label ?? "")));
+}
+
+/**
+ * "Send again" (owners and admins: only they can read the send jobs): the
+ * last scheduled send's copy or emails that gave up are queued once more,
+ * with the same keys, so nobody who already got it gets it twice.
+ */
+export async function sendReportAgainAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult> {
+  try {
+    const queued = await reportsAction(async (ctx) => {
+      requirePermission(ctx, "databases.write");
+      const report = await getReport(ctx.db, organizationId, reportId);
+      if (!report.schedule) throw new ReportInputError("This report isn't on a schedule.");
+      const failed = failedSend(await reportSendJobs(ctx.db, organizationId, reportId), reportId);
+      if (!failed) return 0;
+      let n = 0;
+      for (const job of failed.retry) {
+        const id =
+          job.kind === "report-send"
+            ? await enqueueJob(ctx.db, {
+                orgId: organizationId,
+                kind: "report-send",
+                key: job.key,
+                payload: { reportId, sendKey: failed.day },
+              })
+            : await enqueueJob(ctx.db, {
+                orgId: organizationId,
+                kind: "report-email",
+                key: job.key,
+                payload: { reportId, userId: String(job.payload.userId ?? "") },
+              });
+        if (id) n += 1;
+      }
+      await writeOrgAuditLog(ctx.db, {
+        organizationId,
+        action: "report.send_retried",
+        targetType: "Report",
+        targetId: reportId,
+        diff: { day: failed.day, jobs: n },
+      });
+      return n;
+    })(organizationId);
+    if (queued === 0) return { ok: false, error: "The last send already went out." };
+    refresh();
+    return { ok: true };
   } catch (error) {
     return failure(error);
   }

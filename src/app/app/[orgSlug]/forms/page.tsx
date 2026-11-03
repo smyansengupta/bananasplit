@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { NewFormButton, TemplateRow } from "@/components/forms/new-form";
 import { FormList, type FormListRow } from "@/components/forms/form-list";
+import { shareAgain, shareAgainPost } from "@/lib/ambient/forms";
+import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { sectionLabel } from "@/lib/nav/sidebar";
@@ -45,12 +47,31 @@ export default async function FormsPage({
     website: await listWebsitePolls(db, org.id),
   }));
 
+  // Share again compares with the organization's form before it ("fewer than last time").
+  const byAge = forms
+    .filter((f) => f.form.kind === "FORM" && f.form.publishedAt !== null)
+    .sort((a, b) => a.form.createdAt.getTime() - b.form.createdAt.getTime());
+  const lastTime = (id: string) => {
+    const i = byAge.findIndex((f) => f.form.id === id);
+    return i > 0 ? byAge[i - 1]!.responses : null;
+  };
   const short = (at: Date) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(at);
   const rows: (FormListRow & { at: number })[] = [
     ...forms.map(({ form, responses, toReview, databaseKey, members }) => {
       const open = isFormOpen(form, responses, now);
       const draft = form.publishedAt === null;
+      const share = shareAgain(
+        {
+          open,
+          draft,
+          closesAt: form.closesAt,
+          responses,
+          outOf: form.access === "MEMBERS" ? members : null,
+          lastTime: form.kind === "FORM" ? lastTime(form.id) : null,
+        },
+        now,
+      );
       const who =
         form.access === "MEMBERS"
           ? form.onePerPerson
@@ -82,6 +103,13 @@ export default async function FormsPage({
         toReview,
         databaseHref: canMake ? `${base}/databases/${databaseKey}` : null,
         canTrash: canMake,
+        shareAgain:
+          share && form.closesAt
+            ? {
+                reason: share.reason,
+                ...shareAgainPost(form.title, form.closesAt, appUrl(`/f/${form.slug}`), timeZone),
+              }
+            : null,
         at: form.createdAt.getTime(),
       };
     }),

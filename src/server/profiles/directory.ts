@@ -2,6 +2,7 @@ import { Prisma, type Role } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import { chartTeams, parseNamedTeams, type ChartTeams } from "@/lib/org-chart/teams";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
+import { lightestMember, tooMuchOnPlate } from "@/lib/ambient/people";
 import { effectiveTimezone } from "@/lib/profile/timezone";
 import { ago } from "@/lib/relative-time";
 import { parseQuery } from "@/lib/search/text";
@@ -360,6 +361,13 @@ export interface PersonSheet {
   leads: SheetPositionRef[];
   tasks: SheetTask[];
   taskCount: number;
+  /** Open tasks they own (taskCount also counts the ones they're on). */
+  ownedOpen: number;
+  /**
+   * Hand one off, when they own too much (src/lib/ambient/people.ts): the
+   * first of their open tasks, and the member with the fewest of their own.
+   */
+  handOff: { tasks: SheetTask[]; to: { id: string; name: string | null } } | null;
   /** Today in the org's time zone, for due labels. */
   todayKey: string;
 }
@@ -456,6 +464,7 @@ export async function getPersonSheet(
       .filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
       .slice(0, 5)
       .map((t) => ({ id: t.id, title: t.title, dueKey: t.dueDate ? dueDateKey(t.dueDate) : null }));
+    const handOff = tooMuchOnPlate(open.ownedCount) ? await handOffTo(db, organizationId, userId) : null;
 
     return {
       id: user.id,
@@ -486,7 +495,47 @@ export async function getPersonSheet(
       leads,
       tasks,
       taskCount: open.ownedCount + open.involvedCount,
+      ownedOpen: open.ownedCount,
+      handOff: handOff
+        ? {
+            tasks: open.owned.map((t) => ({
+              id: t.id,
+              title: t.title,
+              dueKey: t.dueDate ? dueDateKey(t.dueDate) : null,
+            })),
+            to: handOff,
+          }
+        : null,
       todayKey: localDateKey(now, orgTimezone),
     };
   });
+}
+
+/** Who could take one of `userId`'s tasks: the member owning the fewest open ones. */
+async function handOffTo(
+  db: Db,
+  organizationId: string,
+  userId: string,
+): Promise<{ id: string; name: string | null } | null> {
+  const members = await db.membership.findMany({
+    where: { organizationId },
+    select: { user: { select: { id: true, name: true } } },
+    take: DIRECTORY_LIMIT,
+  });
+  const counts = await db.task.groupBy({
+    by: ["ownerId"],
+    where: {
+      organizationId,
+      deletedAt: null,
+      status: { in: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED"] },
+      ownerId: { not: null },
+    },
+    _count: { _all: true },
+  });
+  const open = new Map(counts.map((c) => [c.ownerId, c._count._all]));
+  const pick = lightestMember(
+    members.map((m) => ({ id: m.user.id, name: m.user.name, open: open.get(m.user.id) ?? 0 })),
+    userId,
+  );
+  return pick ? { id: pick.id, name: pick.name } : null;
 }

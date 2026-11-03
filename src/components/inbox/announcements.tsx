@@ -4,6 +4,7 @@ import { ChartLine, Megaphone } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
 
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { OpenLink } from "@/components/overview/bits";
 import { Insight, LinkChips, type ItemRef } from "@/components/overview/connections";
 import { Button } from "@/components/ui/button";
@@ -386,23 +387,25 @@ function Composer({
     });
 
   // The recap is written only when asked for, so the Inbox never loads it.
+  // It opens the composer with the recap in it; nothing comes back to the
+  // button, which stays (an ambient one goes once the recap is posted).
+  const writeRecap = async () => {
+    const result = await runAction(
+      () => draftRecapAnnouncement(orgId),
+      "Couldn't write the recap. Try again.",
+    );
+    if (!result) return;
+    if (!result.ok) {
+      toast(result.quiet ? { title: result.error } : { title: result.error, tone: "error" });
+      return;
+    }
+    setTitle(result.title);
+    setBody(result.body);
+    setEventId(NO_EVENT);
+    setWriting(true);
+  };
   const draftRecap = () => {
-    if (drafting) return;
-    startDraft(async () => {
-      const result = await runAction(
-        () => draftRecapAnnouncement(orgId),
-        "Couldn't write the recap. Try again.",
-      );
-      if (!result) return;
-      if (!result.ok) {
-        toast(result.quiet ? { title: result.error } : { title: result.error, tone: "error" });
-        return;
-      }
-      setTitle(result.title);
-      setBody(result.body);
-      setEventId(NO_EVENT);
-      setWriting(true);
-    });
+    if (!drafting) startDraft(writeRecap);
   };
 
   if (!writing) {
@@ -432,16 +435,33 @@ function Composer({
             <Megaphone data-icon="inline-start" aria-hidden="true" />
             {empty ? "Post the first announcement" : "Post an announcement"}
           </Button>
-          <Button
-            size="sm"
-            variant={recapDue ? "default" : "outline"}
-            onClick={draftRecap}
-            disabled={drafting}
-            aria-busy={drafting || undefined}
-          >
-            <ChartLine data-icon="inline-start" aria-hidden="true" />
-            {drafting ? "Writing the recap…" : "Post this week’s recap"}
-          </Button>
+          {recapDue ? (
+            // From Friday, while the week's recap hasn't gone out (src/lib/ambient/inbox.ts).
+            <AmbientActions
+              why
+              actions={[
+                {
+                  key: "recap",
+                  label: "Post this week’s recap",
+                  icon: ChartLine,
+                  reason: "It’s the end of the week and the recap isn’t posted",
+                  tone: "spark",
+                  run: writeRecap,
+                },
+              ]}
+            />
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={draftRecap}
+              disabled={drafting}
+              aria-busy={drafting || undefined}
+            >
+              <ChartLine data-icon="inline-start" aria-hidden="true" />
+              {drafting ? "Writing the recap…" : "Post this week’s recap"}
+            </Button>
+          )}
         </span>
       </div>
     );

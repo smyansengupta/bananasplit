@@ -11,6 +11,17 @@ import { InboxView, type InboxRow, type InboxView as View } from "@/components/i
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
 import { listWhen } from "@/components/meetings/meeting-card";
 import { PageHeader } from "@/components/page-header";
+import {
+  canWaitTillMonday,
+  inviteReason,
+  mentionReason,
+  mentionWaiting,
+  recapIsDue,
+  requestReason,
+  reviewAction,
+  smallBatch,
+  smallBatchTitle,
+} from "@/lib/ambient/inbox";
 import { can } from "@/lib/auth/permissions";
 import { groupForDay, groupForPast, inboxKey, type InboxGroup } from "@/lib/inbox/items";
 import { sectionLabel } from "@/lib/nav/sidebar";
@@ -140,16 +151,19 @@ export default async function InboxPage({
     // Sign-ups are for owners and admins to read, so only they get the fact.
     const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
     // Friday to Sunday: is this week's recap still to go out? (One posted since Friday is it.)
-    const recapDue = recapFrom
-      ? (await db.announcement.count({
-          where: {
-            organizationId: org.id,
-            deletedAt: null,
-            title: { startsWith: RECAP_TITLE },
-            createdAt: { gte: recapFrom },
-          },
-        })) === 0
-      : false;
+    const recapDue = recapIsDue(
+      recapFrom,
+      recapFrom
+        ? await db.announcement.count({
+            where: {
+              organizationId: org.id,
+              deletedAt: null,
+              title: { startsWith: RECAP_TITLE },
+              createdAt: { gte: recapFrom },
+            },
+          })
+        : 0,
+    );
     const eventChoices = await db.event.findMany({
       where: {
         organizationId: org.id,
@@ -184,20 +198,25 @@ export default async function InboxPage({
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
   const needs: InboxRow[] = [
-    ...data.invites.map(({ event: e }): InboxRow => ({
-      key: inboxKey("invite", e.id),
-      kind: "invite",
-      id: e.id,
-      title: e.title,
-      meta: [listWhen(e.startsAt, e.endsAt, tz, e.allDay), e.location?.trim() || null]
-        .filter(Boolean)
-        .join(", "),
-      group: groupForDay(localDateKey(e.startsAt, tz), todayKey),
-      category: "meeting",
-      href: `${base}/meetings/${e.id}`,
-      peek: { kind: "event", id: e.id },
-      actor: e.host ?? e.createdBy,
-    })),
+    ...data.invites.map(({ event: e }): InboxRow => {
+      const dayKey = localDateKey(e.startsAt, tz);
+      return {
+        key: inboxKey("invite", e.id),
+        kind: "invite",
+        id: e.id,
+        title: e.title,
+        meta: [listWhen(e.startsAt, e.endsAt, tz, e.allDay), e.location?.trim() || null]
+          .filter(Boolean)
+          .join(", "),
+        group: groupForDay(dayKey, todayKey),
+        category: "meeting",
+        href: `${base}/meetings/${e.id}`,
+        peek: { kind: "event", id: e.id },
+        actor: e.host ?? e.createdBy,
+        why: inviteReason(dayKey, todayKey),
+        canWait: canWaitTillMonday({ dayKey }, todayKey),
+      };
+    }),
     ...data.tasks
       .filter((t) => t.dueDate && dueDateKey(t.dueDate) <= weekEnd)
       .map((t): InboxRow => {
@@ -219,6 +238,10 @@ export default async function InboxPage({
           href: `${base}/tasks/${t.id}`,
           peek: { kind: "task", id: t.id },
           task: { status: t.status, dueKey: key },
+          canWait: canWaitTillMonday(
+            { urgent: overdue || key === todayKey, dayKey: key },
+            todayKey,
+          ),
         };
       }),
     ...data.toReview.map((t): InboxRow => ({
@@ -233,6 +256,7 @@ export default async function InboxPage({
       peek: { kind: "transaction", id: t.id },
       actor: t.submittedBy,
       actorName: t.submittedBy?.name ?? null,
+      why: requestReason({ receipts: t._count.receipts, createdAt: t.createdAt }, now),
     })),
     ...data.forms.map((f): InboxRow => ({
       key: inboxKey("review", f.id),
@@ -244,8 +268,21 @@ export default async function InboxPage({
       category: "form",
       href: `${base}/forms/${f.id}?tab=responses&view=review`,
       peek: { kind: "form", id: f.id },
+      review: reviewAction(f.count),
+      canWait: true,
     })),
   ];
+  // Approve all: three or more small requests with receipts, at the top of Needs you.
+  const batch = smallBatch(
+    data.toReview
+      .filter((t) => live({ key: inboxKey("request", t.id) }))
+      .map((t) => ({
+        id: t.id,
+        amountCents: t.amountCents,
+        receipts: t._count.receipts,
+        createdAt: t.createdAt,
+      })),
+  );
 
   const updates: InboxRow[] = data.notifications.map((n): InboxRow => {
     const category = CATEGORY[n.type] ?? "other";
@@ -263,11 +300,21 @@ export default async function InboxPage({
       when: ago(n.createdAt, now),
       unread: n.readAt === null,
       replyTaskId: n.taskId && (category === "mention" || category === "comment") ? n.taskId : null,
+      // A mention left about a day: Reply comes forward, with a few replies written.
+      replyWhy:
+        n.taskId && category === "mention" && mentionWaiting(n.createdAt, now)
+          ? mentionReason(n.actor?.name, n.createdAt, now)
+          : null,
+      canWait: true,
     };
   });
 
-  const snoozedAt = (r: InboxRow) => state.snoozed.get(r.key);
-  const live = (r: InboxRow) => !snoozedAt(r) && !state.done.has(r.key);
+  function snoozedAt(r: Pick<InboxRow, "key">) {
+    return state.snoozed.get(r.key);
+  }
+  function live(r: Pick<InboxRow, "key">) {
+    return !snoozedAt(r) && !state.done.has(r.key);
+  }
   const needsNow = needs.filter(live).sort(byGroup);
   const updatesNow = collapseRepeats(updates.filter(live));
   const isSnoozed = (r: InboxRow) => Boolean(snoozedAt(r)) && !state.done.has(r.key);
@@ -382,6 +429,9 @@ export default async function InboxPage({
             : []),
         ]}
         rows={rows}
+        batch={
+          view === "needs" && batch ? { ...batch, title: smallBatchTitle(batch.ids.length) } : null
+        }
         empty={caughtUp}
       />
     </div>

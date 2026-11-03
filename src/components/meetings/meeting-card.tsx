@@ -5,6 +5,7 @@ import { KIND_INK, kindStyle } from "@/components/calendar/kinds";
 import { MapPin, Ticket, TriangleAlert, Video } from "@/components/icons";
 import { hasMeetingLogo, MeetingLogo } from "@/components/meeting-logos";
 import { CopyLinkButton } from "@/components/meetings/copy-link-button";
+import { EventsListAmbient } from "@/components/meetings/meeting-ambient";
 import { RsvpButtons } from "@/components/meetings/rsvp-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ import { CONFERENCE_LABELS, type ConferenceStatus } from "@/lib/meetings/confere
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
 import { until } from "@/lib/relative-time";
+import { eventAmbient } from "@/lib/ambient/calendar";
+import { appUrl } from "@/lib/app-url";
 import { rsvpCover } from "@/lib/rsvp/cover";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
@@ -168,6 +171,30 @@ export function MeetingCard({
   const answerable = Boolean(orgId) && myRsvp !== null && !past && !hosting;
   const counts = signups();
   const part = yourPart();
+  // Two days out with few sign-ups: share the link, remind members (hosts).
+  const rsvpUrl = e.rsvpEnabled && e.rsvpSlug ? appUrl(`/e/${e.rsvpSlug}`) : null;
+  const nudge =
+    canManage && orgId && !past
+      ? eventAmbient(
+          {
+            startsAt: e.startsAt,
+            endsAt: e.endsAt,
+            timeZone,
+            canEdit: true,
+            rsvp: {
+              enabled: e.rsvpEnabled,
+              url: rsvpUrl,
+              going,
+              waitlist: waiting,
+              capacity: e.rsvpCapacity,
+              waitlistOn: true,
+            },
+            checkedIn: 0,
+            thankedAt: null,
+          },
+          now,
+        ).filter((a) => a.kind === "share-rsvp" || a.kind === "remind-members")
+      : [];
 
   /**
    * Your part in it. The list is the whole organization's, so a meeting you
@@ -381,7 +408,7 @@ export function MeetingCard({
             )}
           </div>
 
-          {(crowd || counts || actions || answerable) && (
+          {(crowd || counts || actions || answerable || nudge.length > 0) && (
             <div className="border-border/70 mt-auto flex flex-col gap-3 border-t pt-4">
               {(crowd || actions) && (
                 <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
@@ -399,6 +426,15 @@ export function MeetingCard({
                 />
               )}
               {counts}
+              {nudge.length > 0 && (
+                <EventsListAmbient
+                  orgId={orgId!}
+                  eventId={e.id}
+                  title={e.title}
+                  rsvpUrl={rsvpUrl}
+                  items={nudge}
+                />
+              )}
             </div>
           )}
         </div>

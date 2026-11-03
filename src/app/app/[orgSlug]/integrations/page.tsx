@@ -1,19 +1,21 @@
 import Link from "next/link";
 
 import { AddOnCards } from "@/components/addons/addon-cards";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { IntegrationDialog } from "@/components/integrations/integration-dialog";
 import { BrandMark } from "@/components/marketing/brand-mark";
 import type { Brand } from "@/components/marketing/brands";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { needsReconnect, suggestGoogleCalendar } from "@/lib/ambient/integrations";
 import { can } from "@/lib/auth/permissions";
 import { ADD_ON_INFO, ADD_ONS, readAddOns } from "@/lib/addons";
 import { spaceIncludes } from "@/lib/billing/space";
 import { brandOr, INTEGRATION_MARKS as M } from "@/lib/integrations/marks";
 import { planGate } from "@/server/billing/plan-gate";
 import { loadMeetingConnections } from "@/server/conference/connections";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { loadIntegrations } from "@/server/integrations/service";
 
@@ -47,7 +49,37 @@ interface Tile {
   panel?: boolean;
   /** A video-call provider connects in one click (a POST to its OAuth start). */
   connectSlug?: string;
+  /** Its ambient button (src/lib/ambient/integrations.ts), instead of its plain action. */
+  ambient?: { label: string; reason: string };
 }
+
+const DAY_MS = 86_400_000;
+
+/** Forms made while the add-on was off (Add Forms), and events made lately (Google Calendar). */
+async function loadUsage(orgId: string): Promise<{ forms: number; events: number; now: Date }> {
+  const now = new Date();
+  const since = new Date(now.getTime() - 30 * DAY_MS);
+  return withOrgTx(orgId, async ({ db }) => ({
+    now,
+    forms: await db.form.count({ where: { organizationId: orgId } }),
+    events: await db.event.count({
+      where: { organizationId: orgId, deletedAt: null, createdAt: { gte: since } },
+    }),
+  }));
+}
+
+/** The stored integration behind each tile's window, for its state's reason. */
+const INTEGRATION_KEYS: Record<string, string> = {
+  email: "EMAIL_RESEND",
+  "google-calendar": "GOOGLE_CALENDAR",
+  claude: "CLAUDE",
+  "ai-model": "OPENAI_COMPATIBLE",
+  "data-source": "SUPABASE_SOURCE",
+  website: "NETLIFY_BUILD_HOOK",
+  zoom: "ZOOM",
+  "google-meet": "GOOGLE_MEET",
+  "microsoft-teams": "MICROSOFT_TEAMS",
+};
 
 const checked = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
@@ -63,6 +95,7 @@ export default async function IntegrationsPage({
   // A Personal space has no add-ons (its sidebar is fixed); a team keeps
   // its add-ons here even on a plan without connected apps, since Forms is
   // on every plan.
+  const usage = await loadUsage(org.id);
   const addOns =
     org.kind === "PERSONAL" ? null : (
       <section className="space-y-4" aria-labelledby="int-addons">
@@ -74,6 +107,7 @@ export default async function IntegrationsPage({
           orgSlug={orgSlug}
           added={readAddOns(ctx.settings?.addOns)}
           canManage={can({ role: ctx.role }, "settings.general.write")}
+          formsInUse={usage.forms}
           locked={ADD_ONS.filter((id) => !spaceIncludes(org, ADD_ON_INFO[id].feature))}
         />
       </section>
@@ -275,6 +309,22 @@ export default async function IntegrationsPage({
   ];
 
   const all = groups.flatMap((g) => g.tiles);
+  // Ambient: Reconnect what broke, and Google Calendar for an organization making events.
+  for (const t of all) {
+    if (t.state !== "attention" || !t.panel) continue;
+    const dto = dtos.find((d) => INTEGRATION_KEYS[t.key] === d.provider);
+    const why = needsReconnect(dto ?? { status: "NEEDS_REAUTH", lastVerifiedAt: null }, usage.now);
+    if (why) t.ambient = { label: "Reconnect", reason: why.reason };
+  }
+  const google = all.find((t) => t.key === "google-calendar");
+  const suggest = suggestGoogleCalendar({
+    googleStatus: dtoOf("GOOGLE_CALENDAR")?.status ?? null,
+    canManage,
+    recentEvents: usage.events,
+  });
+  if (google && google.state === "off" && suggest) {
+    google.ambient = { label: "Connect Google Calendar", reason: suggest.reason };
+  }
   // Needs reconnecting first: it's the one thing here that's broken; then
   // what's connected, then what can be connected today.
   const rank = (t: Tile) => (t.state === "attention" ? 0 : t.state === "connected" ? 1 : 2);
@@ -365,7 +415,24 @@ function AppRow({
         </p>
       </div>
       <StateBadge state={t.state} />
-      {canManage && <TileAction tile={t} orgId={orgId} base={base} />}
+      {canManage &&
+        (t.ambient ? (
+          <AmbientActions
+            why
+            actions={[
+              {
+                key: t.key,
+                label: t.ambient.label,
+                reason: t.ambient.reason,
+                tone: "spark",
+                href: `${base}?app=${t.key}`,
+                ariaLabel: `${t.ambient.label}: ${t.name}`,
+              },
+            ]}
+          />
+        ) : (
+          <TileAction tile={t} orgId={orgId} base={base} />
+        ))}
     </li>
   );
 }

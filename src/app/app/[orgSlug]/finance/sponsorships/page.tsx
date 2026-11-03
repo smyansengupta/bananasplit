@@ -43,6 +43,7 @@ export default async function SponsorshipsPage({
       members={members}
       currentUserId={user.id}
       budgetHref={`/app/${orgSlug}/finance/budget`}
+      orgName={org.name}
     />
   );
 }

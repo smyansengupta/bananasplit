@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
 
+import { syncGoogleNow } from "@/app/app/[orgSlug]/calendar/sync/actions";
+import { syncNowAction } from "@/app/app/[orgSlug]/databases/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { SyncPanel } from "@/components/calendar/sync-panel";
 import { CircleCheck, Info, TriangleAlert } from "@/components/icons";
 import { VideoProviderPanel } from "@/components/integrations/video-provider-panel";
 import type { IntegrationProvider } from "@/generated/prisma/enums";
+import { domainToVerify, syncToRetry } from "@/lib/ambient/integrations";
 import type { PlanFeature } from "@/lib/billing/features";
 import { planGate } from "@/server/billing/plan-gate";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -16,8 +20,10 @@ import {
   GOOGLE_CALLBACK_MESSAGES,
   type GoogleCallbackError,
 } from "@/server/integrations/google-connect";
+import { loadSyncStatus } from "@/server/sync/status";
 
 import { SetupHelp } from "./integration-header";
+import { testIntegrationAction } from "./actions";
 import { StatusPanel, TestAndRemove } from "./integration-ui";
 import { loadIntegrationPage } from "./load";
 import {
@@ -99,6 +105,29 @@ export async function loadPanel(
               </span>
             </p>
             <StatusPanel dto={dto} secretLabel="API key" />
+            {(() => {
+              const verify = canWrite
+                ? domainToVerify({ hasSecret: dto.hasSecret, domainStatus })
+                : null;
+              return (
+                verify && (
+                  <AmbientActions
+                    why
+                    className="items-start"
+                    actions={[
+                      {
+                        key: "verify",
+                        label: "Verify domain",
+                        reason: verify.reason,
+                        tone: "spark",
+                        run: testIntegrationAction.bind(null, organization.id, "EMAIL_RESEND"),
+                        done: "Your domain is verified",
+                      },
+                    ]}
+                  />
+                )
+              );
+            })()}
             <EmailSenderForm
               orgId={organization.id}
               dto={dto}
@@ -178,6 +207,19 @@ export async function loadPanel(
                 </p>
               )}
               <StatusPanel dto={dto} secretLabel="Refresh token" />
+              <RetryNow
+                why={
+                  canWrite && syncStatus
+                    ? syncToRetry({
+                        status: dto.status,
+                        failed: syncStatus.counts.FAILED ?? 0,
+                        lastError: null,
+                      })
+                    : null
+                }
+                action={syncGoogleNow}
+                args={[organization.id]}
+              />
               <GoogleCalendarPanel
                 orgId={organization.id}
                 dto={dto}
@@ -262,6 +304,10 @@ export async function loadPanel(
     case "data-source":
       return withIntegration(orgSlug, "SUPABASE_SOURCE", "integrations", "Supabase", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;
+        const sync =
+          canWrite && dto.hasSecret
+            ? await withOrgTx(organization.id, ({ db }) => loadSyncStatus(db, organization.id))
+            : null;
         const version =
           typeof dto.config.contractVersion === "string" ? dto.config.contractVersion : null;
         return (
@@ -272,6 +318,19 @@ export async function loadPanel(
               {version ? ` Export contract version ${version}.` : ""}
             </p>
             <StatusPanel dto={dto} secretLabel="Password" />
+            <RetryNow
+              why={
+                sync
+                  ? syncToRetry({
+                      status: dto.status,
+                      failed: sync.streams.filter((s) => s.lastError).length,
+                      lastError: sync.lastError,
+                    })
+                  : null
+              }
+              action={syncNowAction}
+              args={[organization.id, false]}
+            />
             <SupabaseForm orgId={organization.id} dto={dto} canWrite={canWrite} />
             {dto.hasSecret && (
               <TestAndRemove
@@ -318,6 +377,15 @@ export async function loadPanel(
                 schedule (at most once a minute).
               </p>
               <StatusPanel dto={dto} secretLabel="Hook" />
+              <RetryNow
+                why={
+                  canWrite && dto.hasSecret
+                    ? syncToRetry({ status: dto.status, failed: 0, lastError: dto.lastError })
+                    : null
+                }
+                action={testIntegrationAction}
+                args={[organization.id, "NETLIFY_BUILD_HOOK"]}
+              />
               <NetlifyForm orgId={organization.id} dto={dto} canWrite={canWrite} />
               {dto.hasSecret && (
                 <TestAndRemove
@@ -338,6 +406,37 @@ export async function loadPanel(
 }
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof loadIntegrationPage>>>;
+
+/** An app window's "Retry now" (src/lib/ambient/integrations.ts says when). */
+function RetryNow<A extends unknown[]>({
+  why,
+  action,
+  args,
+}: {
+  why: { reason: string } | null;
+  /** The server action that retries, and what it's called with (bound only when shown). */
+  action: (...args: A) => Promise<unknown>;
+  args: A;
+}) {
+  if (!why) return null;
+  const run = (action as (...a: unknown[]) => Promise<unknown>).bind(null, ...args);
+  return (
+    <AmbientActions
+      why
+      className="items-start"
+      actions={[
+        {
+          key: "retry",
+          label: "Retry now",
+          reason: why.reason,
+          tone: "spark",
+          run,
+          done: "Trying again",
+        },
+      ]}
+    />
+  );
+}
 
 /** A stored integration's window: the plan check, the viewer's rights, then its body. */
 async function withIntegration(

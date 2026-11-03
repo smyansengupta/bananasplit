@@ -1467,6 +1467,20 @@ export async function restoreTask(env: TaskEnv, taskId: string): Promise<TaskAct
   return { taskId: s.id };
 }
 
+/**
+ * "Still needed?" answered Keep: the task counts as touched today, so it
+ * stops asking for another two weeks. Nothing else about it changes.
+ */
+export async function keepTask(env: TaskEnv, taskId: string): Promise<TaskActionResult> {
+  const s = await loadSubject(env, taskId);
+  if (!canEditTask(env.actor, accessOf(s))) throw new TaskError("You can't edit this task.");
+  await env.ctx.db.task.updateMany({
+    where: { organizationId: env.ctx.organizationId, id: s.id },
+    data: { updatedAt: env.now },
+  });
+  return { taskId: s.id };
+}
+
 // ---- Comments ------------------------------------------------------------------------
 
 export const MAX_COMMENT_LENGTH = 10000;

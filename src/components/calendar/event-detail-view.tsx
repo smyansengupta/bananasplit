@@ -4,7 +4,6 @@ import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types
 import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
-  DoorOpen,
   CalendarPlus,
   ExternalLink,
   MapPin,
@@ -106,7 +105,19 @@ export function EventDetailView({
   tasks = null,
   recording = null,
   askedRsvp = null,
+  ambient = null,
+  agendaAmbient = null,
+  invitedAmbient = null,
+  syncAmbient = null,
 }: {
+  /** Its ambient buttons (components/meetings/meeting-ambient), under the header. */
+  ambient?: ReactNode;
+  /** The agenda's (Carry them over), under its heading. */
+  agendaAmbient?: ReactNode;
+  /** The Invited card's (Remind maybes). */
+  invitedAmbient?: ReactNode;
+  /** Retry sync, beside the "sync failed" note. */
+  syncAmbient?: ReactNode;
   /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
   askedRsvp?: "YES" | "NO" | "MAYBE" | null;
   /** The Linked panel (components/links), first in the side column. */
@@ -200,19 +211,6 @@ export function EventDetailView({
   const typeColor =
     (event.meetingType ? meetingTypeColor(meetingTypes ?? [], event.meetingType) : null) ??
     `var(${KIND_META[event.kind].token})`;
-  // On the meeting's own day, the door list is one click from the header.
-  const dayKey = (d: Date) =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(d);
-  const doorToday =
-    section === "meetings" &&
-    canEdit &&
-    rsvp.enabled &&
-    dayKey(event.startsAt) === dayKey(new Date());
   // A meeting with no call (stored as In person), on its own page, for those who can edit it.
   const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
@@ -266,14 +264,6 @@ export function EventDetailView({
         <div className="flex flex-wrap items-center gap-2">
           {canEdit ? (
             <>
-              {doorToday && (
-                <Button asChild>
-                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
-                    <DoorOpen aria-hidden className="size-4" />
-                    Door
-                  </Link>
-                </Button>
-              )}
               {/* Delete is in the form, with Undo; one place, not two. */}
               <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
                 <Repeat aria-hidden className="size-4" />
@@ -287,6 +277,8 @@ export function EventDetailView({
           ) : null}
         </div>
       </header>
+      {/* On the day, the door list is one click away: Open door check-in is here. */}
+      {ambient}
 
       {event.needsReview && canEdit && (
         <p
@@ -301,13 +293,16 @@ export function EventDetailView({
           duplicates another session and merge them in Databases &gt; Sessions.
         </p>
       )}
-      {canEdit && event.googleSyncState === "FAILED" && event.googleSyncError && (
-        <p
-          className="bg-tint-danger text-tint-danger-foreground rounded-field p-3.5 text-sm"
+      {canEdit && event.googleSyncState === "FAILED" && (event.googleSyncError || syncAmbient) && (
+        <div
+          className="bg-tint-danger text-tint-danger-foreground rounded-field flex flex-wrap items-center gap-3 p-3.5 text-sm"
           role="note"
         >
-          Google Calendar sync failed: {event.googleSyncError}
-        </p>
+          <span className="min-w-0 flex-1">
+            Google Calendar sync failed{event.googleSyncError ? `: ${event.googleSyncError}` : "."}
+          </span>
+          {syncAmbient}
+        </div>
       )}
 
       {/* On a phone the two columns fold into one list (display: contents),
@@ -322,6 +317,7 @@ export function EventDetailView({
                 eventId={event.id}
                 initial={event.description}
                 canEdit={canEdit}
+                aside={agendaAmbient}
               />
               {recording}
 
@@ -577,6 +573,7 @@ export function EventDetailView({
                   />
                 </div>
               )}
+              {invitedAmbient && <div className="mb-3">{invitedAmbient}</div>}
               {event.attendees.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-3 text-[13px] tabular-nums">

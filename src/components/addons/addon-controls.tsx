@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { addAddOnAction, removeAddOnAction } from "@/app/app/[orgSlug]/integrations/addon-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { Button } from "@/components/ui/button";
 import { toast, undoable } from "@/components/ui/toaster";
 import { ADD_ON_INFO, type AddOnId } from "@/lib/addons";
@@ -54,6 +55,29 @@ export function AddAddOnButton({
     >
       {pending ? "Adding…" : `Add ${name}`}
     </Button>
+  );
+}
+
+/**
+ * "Add Forms" as an ambient button: the organization already has forms, so
+ * adding it just puts them back in the sidebar (no ready-made forms to pick).
+ */
+export function AddFormsAmbient({ orgId, reason }: { orgId: string; reason: string }) {
+  return (
+    <AmbientActions
+      why
+      className="items-start"
+      actions={[
+        {
+          key: "add-forms",
+          label: "Add Forms",
+          reason,
+          tone: "spark",
+          run: () => addAddOnAction(orgId, "forms"),
+          done: "Forms is in the sidebar now.",
+        },
+      ]}
+    />
   );
 }
 

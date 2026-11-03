@@ -53,6 +53,7 @@ export function TaskCard({
   dragging = false,
   showEpic = true,
   check,
+  ambient,
 }: {
   task: TaskCardData;
   todayKey: string;
@@ -61,6 +62,8 @@ export function TaskCard({
   showEpic?: boolean;
   /** The completion circle, for cards in the Completed column. */
   check?: React.ReactNode;
+  /** Its ambient buttons (an unowned card's Take it and Assign), under the meta row. */
+  ambient?: React.ReactNode;
 }) {
   const done = task.status === "COMPLETED";
   const flagged = isTaskFlagged(task);
@@ -145,6 +148,7 @@ export function TaskCard({
           </span>
         )}
       </div>
+      {ambient}
     </div>
   );
 }

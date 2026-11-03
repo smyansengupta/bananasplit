@@ -8,7 +8,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { loadEventForEdit, moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { updateTask } from "@/app/app/[orgSlug]/tasks/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { toast } from "@/components/ui/toaster";
+import { firstClash } from "@/lib/ambient/calendar";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -626,6 +628,10 @@ export function EventCalendar({
           </section>
         )}
 
+        {range.view === "timeGridWeek" && canManage && (
+          <WeekClash orgSlug={orgSlug} items={items} />
+        )}
+
         {(range.view === "timeGridWeek" || range.view === "timeGridDay") && (
           <WeekGrid
             items={items}
@@ -783,4 +789,39 @@ function nextLabel(view: CalendarView): string {
   if (view === "timeGridWeek") return "Next week";
   if (view === "timeGridDay") return "Next day";
   return "Next month";
+}
+
+/**
+ * Two events this week overlap: Move one opens the later one's form, where
+ * its time is chosen (src/lib/ambient/calendar.ts picks the pair).
+ */
+function WeekClash({ orgSlug, items }: { orgSlug: string; items: CalendarItem[] }) {
+  const clash = firstClash(
+    items
+      .filter((i) => !i.task)
+      .map((i) => ({
+        id: i.id,
+        title: i.title,
+        allDay: i.allDay,
+        startsAt: new Date(i.start),
+        endsAt: new Date(i.end),
+      })),
+  );
+  if (!clash) return null;
+  const reason = `${clash.keep.title} and ${clash.move.title} overlap`;
+  return (
+    <AmbientActions
+      why
+      className="mb-3 items-start"
+      actions={[
+        {
+          key: "move-one",
+          label: "Move one",
+          reason,
+          ariaLabel: `Move ${clash.move.title}`,
+          href: `/app/${orgSlug}/meetings/${clash.move.id}?edit=1`,
+        },
+      ]}
+    />
+  );
 }

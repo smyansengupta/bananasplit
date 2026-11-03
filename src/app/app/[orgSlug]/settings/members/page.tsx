@@ -5,11 +5,13 @@ import { JoinCodeCard } from "@/components/onboarding/join-code-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Role } from "@/generated/prisma/enums";
+import { inviteReason, roleFix, staleInviteDays } from "@/lib/ambient/people";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
+import { INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
-import { loadDirectory } from "@/server/profiles/directory";
+import { loadChartForPeople, loadDirectory } from "@/server/profiles/directory";
 
 import { SettingsCard } from "../settings-card";
 import { InviteDialog } from "./invite-dialog";
@@ -19,6 +21,13 @@ import { MembersRoster } from "./members-roster";
 /** Request-time check, outside the render body (react-hooks/purity). */
 function isPast(date: Date): boolean {
   return date.getTime() <= Date.now();
+}
+
+/** Resend invite's reason, once an invite has waited three days since its last send. */
+function staleReason(expiresAt: Date): string | undefined {
+  const sentAt = new Date(expiresAt.getTime() - INVITATION_EXPIRY_DAYS * 86_400_000);
+  const days = staleInviteDays(sentAt.toISOString(), new Date());
+  return days === null ? undefined : inviteReason(days);
 }
 
 /**
@@ -40,7 +49,7 @@ export default async function MembersPage({
   const showEmails =
     can({ role }, "members.viewEmails") || settings?.showMemberEmailsToMembers === true;
 
-  const [{ ownerCount, joinCode, emailRows, inviteRows }, directory] = await Promise.all([
+  const [{ ownerCount, joinCode, emailRows, inviteRows, chart }, directory] = await Promise.all([
     withOrgTx(orgId, async ({ db }) => ({
       ownerCount: await db.membership.count({
         where: { organizationId: orgId, role: Role.OWNER },
@@ -60,6 +69,8 @@ export default async function MembersPage({
             select: { id: true, email: true, role: true, expiresAt: true },
           })
         : [],
+      // Seats on the published chart, for Fix role (owners and admins).
+      chart: can({ role }, "members.changeRole") ? await loadChartForPeople(db, orgId) : null,
     })),
     loadDirectory(orgId, organization.timezone),
   ]);
@@ -73,7 +84,19 @@ export default async function MembersPage({
     role: i.role,
     expiresAt: i.expiresAt.toISOString(),
     expired: isPast(i.expiresAt),
+    stale: staleReason(i.expiresAt),
   }));
+  // Fix role: someone whose role gives less than their seat needs.
+  const roleFixes: Record<string, { to: Role; reason: string }> = {};
+  if (chart) {
+    for (const p of directory.people) {
+      const seats = chart.positions
+        .filter((s) => s.userId === p.id)
+        .map((s) => ({ title: s.title, top: !s.reportsToId, isAdvisor: s.isAdvisor }));
+      const fix = seats.length > 0 ? roleFix(p.role, seats) : null;
+      if (fix) roleFixes[p.id] = { to: fix.to, reason: fix.reason };
+    }
+  }
 
   return (
     <div className="space-y-7.5">
@@ -132,6 +155,7 @@ export default async function MembersPage({
           people={directory.people}
           emails={emails}
           invites={invites}
+          roleFixes={roleFixes}
           access={{
             role: role ?? "MEMBER",
             canManage: can({ role }, "members.changeRole"),

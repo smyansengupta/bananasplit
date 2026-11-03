@@ -21,13 +21,23 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { markNotificationRead } from "@/app/app/notifications-actions";
 import { rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
-import { approveExpense, rejectExpense } from "@/app/app/[orgSlug]/finance/transactions-actions";
+import {
+  approveExpense,
+  approveExpenses,
+  rejectExpense,
+} from "@/app/app/[orgSlug]/finance/transactions-actions";
 import {
   setInboxItemDone,
   snoozeInboxItem,
   unsnoozeInboxItem,
 } from "@/app/app/[orgSlug]/inbox/actions";
 import { addTaskComment, setTaskStatus, updateTask } from "@/app/app/[orgSlug]/tasks/actions";
+import {
+  AmbientActions,
+  AmbientButton,
+  AmbientWhy,
+  type AmbientAction,
+} from "@/components/ambient/ambient-button";
 import { SidePeek } from "@/components/links/side-peek";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 import { TaskCheck } from "@/components/tasks/task-check";
@@ -38,7 +48,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Segmented, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { Segmented } from "@/components/ui/segmented";
 import { ExpandChip } from "@/components/ui/toolbar-chips";
 import { toast, undoable } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
@@ -51,6 +61,7 @@ import {
   type InboxKind,
   type SnoozeChoice,
 } from "@/lib/inbox/items";
+import { SUGGESTED_REPLIES } from "@/lib/ambient/inbox";
 import type { LinkKind } from "@/lib/links";
 import { addDaysToKey, mondayOfKey } from "@/lib/tasks/dates";
 import { runAction } from "@/lib/run-action";
@@ -92,6 +103,23 @@ export interface InboxRow {
   backAt?: string;
   /** The same update again: the other notifications this row stands for. */
   also?: string[];
+  /** Why the row's ambient buttons are here (an invite's Going, a request's Approve). */
+  why?: string;
+  /** Snooze to Monday shows on hover (src/lib/ambient/inbox.ts). */
+  canWait?: boolean;
+  /** A form's new answers: "Review 12". */
+  review?: { label: string; reason: string } | null;
+  /** A mention left about a day: Reply comes forward as an ambient button. */
+  replyWhy?: string | null;
+}
+
+/** Approve all: a run of small reimbursements, at the top of Needs you. */
+export interface InboxBatch {
+  ids: string[];
+  /** "3 reimbursements under $50 are waiting". */
+  title: string;
+  label: string;
+  reason: string;
 }
 
 /** Every key a row stands for (itself, and its repeats). */
@@ -177,6 +205,7 @@ export function InboxView({
   view,
   views,
   rows,
+  batch = null,
   empty,
 }: {
   orgId: string;
@@ -184,6 +213,7 @@ export function InboxView({
   view: InboxView;
   views: InboxViewLink[];
   rows: InboxRow[];
+  batch?: InboxBatch | null;
   /** Shown when there's nothing here, or the last row is dealt with. */
   empty: React.ReactNode;
 }) {
@@ -374,25 +404,52 @@ export function InboxView({
     [hide, orgId, router, show],
   );
 
+  /** Approve, from its ambient button (which shows an error; the row comes back). */
   const approve = useCallback(
-    (row: InboxRow) => {
+    async (row: InboxRow) => {
       hide(row.key);
-      start(async () => {
-        const result = await runAction(() => approveExpense(orgId, row.id));
-        if (!result) return show(row.key);
-        if ("error" in result && result.error) {
-          show(row.key);
-          toast({ title: result.error, tone: "error" });
-          return;
-        }
-        toast({
-          title: "Approved",
-          action: row.href ? { label: "Open", run: () => router.push(row.href!) } : undefined,
-        });
-        router.refresh();
-      });
+      try {
+        const result = await approveExpense(orgId, row.id);
+        if ("error" in result && result.error) show(row.key);
+        else
+          toast({
+            title: "Approved",
+            action: row.href ? { label: "Open", run: () => router.push(row.href!) } : undefined,
+          });
+        return result;
+      } catch (error) {
+        show(row.key);
+        throw error;
+      }
     },
     [hide, orgId, router, show],
+  );
+
+  /** Approve all: the small ones leave together; if any didn't go, they come back. */
+  const approveBatch = useCallback(
+    async (ids: string[]) => {
+      const keys = ids.map((id) => `request:${id}`);
+      keys.forEach(hide);
+      try {
+        const result = await approveExpenses(orgId, ids);
+        if (result.done === 0) {
+          keys.forEach(show);
+          return { error: result.error ?? "None of them went through." };
+        }
+        if (result.failed > 0) {
+          keys.forEach(show);
+          toast({
+            title: `Approved ${result.done}`,
+            description: `${result.failed} skipped: ${result.error}`,
+          });
+        } else toast({ title: `Approved ${result.done}` });
+        return null;
+      } catch (error) {
+        keys.forEach(show);
+        throw error;
+      }
+    },
+    [hide, orgId, show],
   );
 
   const decline = useCallback(
@@ -533,9 +590,29 @@ export function InboxView({
   }
   let index = -1;
 
+  const batchLeft = batch?.ids.filter((id) => !gone.has(`request:${id}`)) ?? [];
+
   return (
     <div className="space-y-6">
       {bar}
+
+      {batch && batchLeft.length === batch.ids.length && (
+        <div className="bg-card edge rounded-card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <span className="text-[15px] font-semibold">{batch.title}</span>
+          <AmbientActions
+            why
+            actions={[
+              {
+                key: "approve-all",
+                label: batch.label,
+                reason: batch.reason,
+                tone: "solid",
+                run: () => approveBatch(batch.ids),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {groups.map(({ group, rows: groupRows }) => (
         <section key={group ?? "all"} aria-label={group ? GROUP_LABEL[group] : "Snoozed"}>
@@ -575,11 +652,13 @@ export function InboxView({
                   onMove={(key, label) => moveTask(row, key, label)}
                   onAnswer={(rsvp) => answer(row, rsvp)}
                   onApprove={() => approve(row)}
+                  onSnoozeMonday={async () => snooze(row, "week")}
                   onDecline={(reason) => decline(row, reason)}
                   onReply={() => setReplyFor(replyFor === row.key ? null : row.key)}
                   reply={
                     replyFor === row.key && row.replyTaskId ? (
                       <ReplyBox
+                        suggestions={row.replyWhy ? SUGGESTED_REPLIES : []}
                         onCancel={() => setReplyFor(null)}
                         onSend={async (body) => {
                           const result = await addTaskComment(orgId, row.replyTaskId!, body);
@@ -645,6 +724,7 @@ function Row({
   onApprove,
   onDecline,
   onReply,
+  onSnoozeMonday,
 }: {
   row: InboxRow;
   view: InboxView;
@@ -660,13 +740,68 @@ function Row({
   onFinish: () => void;
   onMove: (dueKey: string, label: string) => void;
   onAnswer: (rsvp: RSVPStatus) => void;
-  onApprove: () => void;
+  onApprove: () => Promise<unknown>;
   onDecline: (reason: string) => void;
   onReply: () => void;
+  onSnoozeMonday: () => Promise<void>;
 }) {
   const snoozed = view === "snoozed";
   const look = LOOK[row.category];
   const second = snoozed ? [row.backAt, row.meta].filter(Boolean).join(", ") : row.meta;
+
+  // The row's ambient buttons, two at most (src/lib/ambient/inbox.ts says when).
+  const ambient: AmbientAction[] = [];
+  if (!snoozed && row.kind === "invite") {
+    const why = row.why ?? "You haven't answered";
+    ambient.push(
+      {
+        key: "going",
+        label: "Going",
+        reason: why,
+        tone: "solid",
+        ariaLabel: `Going to ${row.title}`,
+        // The row leaves and the toast has Undo; nothing to hand back.
+        run: async () => onAnswer("YES"),
+      },
+      {
+        key: "cant",
+        label: "Can't go",
+        reason: why,
+        ariaLabel: `Can't go to ${row.title}`,
+        run: async () => onAnswer("NO"),
+      },
+    );
+  }
+  if (!snoozed && row.kind === "review" && row.review && row.href) {
+    ambient.push({
+      key: "review",
+      label: row.review.label,
+      reason: row.review.reason,
+      href: row.href,
+    });
+  }
+  if (!snoozed && row.replyTaskId && row.replyWhy && !replying) {
+    ambient.push({
+      key: "reply",
+      label: "Reply",
+      reason: row.replyWhy,
+      ariaLabel: `Reply to ${row.title}`,
+      // Opens the reply box: no result, so the button stays until it's sent.
+      run: async () => onReply(),
+    });
+  }
+  const requestRow = !snoozed && row.kind === "request";
+  // Snooze to Monday, on hover, while the row has room for another.
+  const monday: AmbientAction | null =
+    !snoozed && row.canWait && !requestRow && ambient.length < 2
+      ? {
+          key: "monday",
+          label: "Snooze to Monday",
+          reason: "This can wait",
+          ariaLabel: `Snooze ${row.title} to Monday`,
+          run: onSnoozeMonday,
+        }
+      : null;
 
   return (
     <li data-active={active} className={cn(ROW, active && "bg-muted/60")}>
@@ -727,45 +862,48 @@ function Row({
           </Button>
         ) : (
           <>
+            {monday && <AmbientButton action={monday} className={QUIET} />}
             {row.kind === "invite" && (
-              <span
-                className={cn(segmentedTrack, "h-9")}
-                role="group"
-                aria-label={`Answer ${row.title}`}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={QUIET}
+                onClick={() => onAnswer("MAYBE")}
+                aria-label={`Maybe for ${row.title}`}
               >
-                {(
-                  [
-                    ["YES", "Going"],
-                    ["MAYBE", "Maybe"],
-                    ["NO", "Can't go"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => onAnswer(value)}
-                    className={cn(segmentedItem(false), "h-7")}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </span>
+                Maybe
+              </Button>
             )}
             {row.kind === "task" && row.task && <MoveMenu row={row} onMove={onMove} />}
-            {row.kind === "request" && (
-              <>
-                <DeclineButton title={row.title} onDecline={onDecline} />
-                <Button size="sm" onClick={onApprove}>
-                  Approve
-                </Button>
-              </>
+            {requestRow && (
+              <span className="inline-flex flex-col items-end gap-1">
+                <span className="inline-flex items-center gap-1.5">
+                  <DeclineButton
+                    title={row.title}
+                    onDecline={onDecline}
+                    why={row.why ?? "Waiting on you"}
+                  />
+                  <AmbientButton
+                    action={{
+                      key: "approve",
+                      label: "Approve",
+                      reason: row.why ?? "Waiting on you",
+                      tone: "solid",
+                      ariaLabel: `Approve ${row.title}`,
+                      run: onApprove,
+                    }}
+                  />
+                </span>
+                {row.why && <AmbientWhy>{row.why}</AmbientWhy>}
+              </span>
             )}
-            {row.kind === "review" && row.href && (
+            {ambient.length > 0 && <AmbientActions why actions={ambient} />}
+            {row.kind === "review" && row.href && !row.review && (
               <Button variant="outline" size="sm" asChild>
                 <Link href={row.href}>Review</Link>
               </Button>
             )}
-            {row.replyTaskId && (
+            {row.replyTaskId && !row.replyWhy && (
               <Button
                 variant={replying ? "secondary" : "outline"}
                 size="sm"

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { PersonSheet, SheetPositionRef } from "@/server/profiles/directory";
 
 import { CopyEmailButton } from "./copy-email-button";
+import { PersonAmbient } from "./person-ambient";
 import { WeekStrip } from "./week-strip";
 
 /**
@@ -62,6 +63,10 @@ export interface PersonProfileProps {
   onSelectPerson?: (userId: string) => void;
   /** Extra actions at the end of the action row (the sheet's ↗ and ×). */
   extraActions?: ReactNode;
+  /** With it, the profile's ambient buttons (Say hi, Check in, Give them a task). */
+  orgId?: string;
+  /** Owners and admins: Hand one off on anyone's profile, not only their own. */
+  canManageTasks?: boolean;
   className?: string;
 }
 
@@ -74,6 +79,8 @@ export function PersonProfile({
   headingLevel = "h2",
   onSelectPerson,
   extraActions,
+  orgId,
+  canManageTasks = false,
   className,
 }: PersonProfileProps) {
   const name = person.name ?? "Unnamed member";
@@ -188,6 +195,15 @@ export function PersonProfile({
           )}
           {extraActions}
         </div>
+        {orgId && (
+          <PersonAmbient
+            orgId={orgId}
+            orgSlug={orgSlug}
+            person={person}
+            viewerId={viewerId}
+            canManageTasks={canManageTasks}
+          />
+        )}
 
         {/* A section with nothing in it is left out (your own page keeps them, with the way to fill them). */}
         {(person.bio || isSelf) && (

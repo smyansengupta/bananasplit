@@ -98,6 +98,8 @@ export interface PeopleDirectoryProps {
   loadSheet?: (orgId: string, userId: string) => Promise<PersonSheet | null>;
   /** The Org chart view (?view=chart), rendered on the server. */
   chart?: OrgChartSection;
+  /** Owners and admins: the sheet's Hand one off on anyone's profile. */
+  canManageTasks?: boolean;
 }
 
 type Row = { kind: "header"; group: PeopleGroup } | { kind: "person"; person: DirectoryPerson };
@@ -120,6 +122,7 @@ export function PeopleDirectory({
   search = searchPeopleAction,
   loadSheet = loadPersonSheetAction,
   chart,
+  canManageTasks = false,
 }: PeopleDirectoryProps) {
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -372,6 +375,8 @@ export function PeopleDirectory({
   const profile = sheet ? (
     <PersonProfile
       person={sheet}
+      orgId={orgId}
+      canManageTasks={canManageTasks}
       orgSlug={orgSlug}
       viewerId={viewerId}
       timeZone={orgTimezone}

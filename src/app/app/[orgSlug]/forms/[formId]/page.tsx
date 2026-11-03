@@ -1,13 +1,17 @@
 import { notFound, redirect } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { FormAmbient } from "@/components/forms/form-ambient";
 import { FormDesignPanel } from "@/components/forms/form-design";
 import { FormBuilder, FormSettingsPanel, SharePanel } from "@/components/forms/form-editor";
 import { LinkedSection } from "@/components/links/linked-section";
 import { FormPublish } from "@/components/forms/form-publish";
 import { FormResponses } from "@/components/forms/form-responses";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { makeReport, shareAgain, shareAgainPost } from "@/lib/ambient/forms";
 import { appUrl } from "@/lib/app-url";
+import { spaceIncludes } from "@/lib/billing/space";
+import { safeTimeZone } from "@/lib/calendar/dates";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { can } from "@/lib/auth/permissions";
 import { readDesign } from "@/lib/forms/design";
@@ -16,6 +20,7 @@ import { summarize } from "@/lib/forms/summary";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { isFormOpen, loadForm, loadResponses } from "@/server/forms/forms";
 import { planGate } from "@/server/billing/plan-gate";
+import { reportTier } from "@/server/reports/tier";
 
 const TABS = ["build", "design", "settings", "share", "responses"] as const;
 type Tab = (typeof TABS)[number];
@@ -69,18 +74,27 @@ export default async function FormPage({
         const id = fileIdOf(r.values[f]);
         if (id) fileIds.add(id);
       }
+    // Make a report: only for those who make reports, and only while none reads it.
+    const reports =
+      spaceIncludes(org, "reports") &&
+      reportTier(ctx.role) &&
+      can({ role: ctx.role }, "reports.view")
+        ? await db.report.count({
+            where: { organizationId: org.id, source: `custom:${form.databaseId}` },
+          })
+        : null;
     const files = fileIds.size
       ? await db.orgFile.findMany({
           where: { organizationId: org.id, id: { in: [...fileIds] }, deletedAt: null },
           select: { id: true, name: true, contentType: true, sizeBytes: true },
         })
       : [];
-    return { form, admin: true as const, rows, choices, members, files };
+    return { form, admin: true as const, rows, choices, members, files, reports };
   });
   if (!loaded) notFound();
   if (!loaded.admin) redirect(`/f/${loaded.form.slug}`);
 
-  const { form, rows, choices, members, files } = loaded;
+  const { form, rows, choices, members, files, reports } = loaded;
   const base = `/app/${orgSlug}`;
   const tab: Tab = TABS.find((t) => t === sp.tab) ?? (rows.length > 0 ? "responses" : "build");
   const view: View = VIEWS.find((v) => v === sp.view) ?? (form.review ? "review" : "summary");
@@ -90,6 +104,21 @@ export default async function FormPage({
   const href = (t: Tab, v?: View) => `${base}/forms/${form.id}?tab=${t}${v ? `&view=${v}` : ""}`;
   const fresh = rows.filter((r) => r.status === "NEW").length;
   const databaseHref = `${base}/databases/${form.database.key}`;
+  const draft = form.publishedAt === null;
+  const share = shareAgain(
+    {
+      open,
+      draft,
+      closesAt: form.closesAt,
+      responses: rows.length,
+      outOf: form.access === "MEMBERS" ? members.length : null,
+    },
+    new Date(),
+  );
+  const report =
+    reports === null
+      ? null
+      : makeReport({ open, draft, responses: rows.length, hasReport: reports > 0 });
 
   return (
     <div className="space-y-7">
@@ -118,6 +147,26 @@ export default async function FormPage({
               ]}
             />
           </div>
+          <FormAmbient
+            orgId={org.id}
+            formTitle={form.title}
+            share={
+              share && form.closesAt
+                ? {
+                    reason: share.reason,
+                    ...shareAgainPost(form.title, form.closesAt, link, safeTimeZone(org.timezone)),
+                  }
+                : null
+            }
+            report={
+              report
+                ? {
+                    reason: report.reason,
+                    href: `${base}/databases/reports/new?source=${encodeURIComponent(form.database.key)}`,
+                  }
+                : null
+            }
+          />
           <FormPublish
             orgId={org.id}
             formId={form.id}

@@ -20,6 +20,24 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/components/meetings/meeting-tasks", () => ({ MeetingTasks: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
 vi.mock("@/components/meetings/create-meeting-notes", () => ({ CreateMeetingNotes: () => null }));
+vi.mock("@/components/meetings/meeting-ambient", () => ({
+  CarryOver: () => null,
+  MeetingHeaderAmbient: () => null,
+  MeetingNotesAmbient: () => null,
+  RemindMaybes: () => null,
+}));
+vi.mock("@/components/calendar/retry-sync", () => ({ RetrySync: () => null }));
+vi.mock("@/server/meetings/ambient", () => ({
+  loadMeetingAmbient: async () => ({
+    openTasks: [],
+    carryOver: [],
+    todos: [],
+    decisions: [],
+    noteId: null,
+    checkedIn: 0,
+    thankedAt: null,
+  }),
+}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");

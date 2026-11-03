@@ -24,7 +24,7 @@ import {
   Trash2,
 } from "@/components/icons";
 import Link from "next/link";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   addChoiceAction,
@@ -207,6 +207,7 @@ export function DatabaseGrid({
   trash,
   timezone,
   personal = false,
+  ambient = null,
 }: {
   orgId: string;
   orgSlug: string;
@@ -217,6 +218,8 @@ export function DatabaseGrid({
   timezone: string;
   /** A Personal space: settings don't ask who can see or edit it. */
   personal?: boolean;
+  /** Its ambient buttons (Make a report), from the page. */
+  ambient?: ReactNode;
 }) {
   const [confirmEl, confirm] = useConfirm();
   const [fields, setFields] = useState(database.fields);
@@ -815,6 +818,7 @@ export function DatabaseGrid({
           actions={
             <>
               {!trash && status}
+              {ambient}
               {trash && database.canManage && records.length > 0 && (
                 <Button variant="destructive" onClick={() => void purge("all")}>
                   <Trash2 aria-hidden="true" />

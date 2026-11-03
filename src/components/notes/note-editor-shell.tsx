@@ -18,6 +18,7 @@ import {
   PanelRightClose,
   PanelTop,
   RotateCcw,
+  Send,
   Trash2,
 } from "@/components/icons";
 import Link from "next/link";
@@ -33,8 +34,13 @@ import {
   updateNoteSettings,
   type NoteDetailsInput,
 } from "@/app/app/[orgSlug]/notes/actions";
+import {
+  sendMeetingSummaryAction,
+  turnTodosIntoTasksAction,
+} from "@/app/app/[orgSlug]/notes/ambient-actions";
 import type { VersionListItem } from "@/app/app/[orgSlug]/notes/version-actions";
-import { restoreNoteVersion } from "@/app/app/[orgSlug]/notes/version-actions";
+import { getNoteVersion, restoreNoteVersion } from "@/app/app/[orgSlug]/notes/version-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { ActionItemsImport } from "@/components/ai/action-items-import";
 import { ItemMenu } from "@/components/item-menu";
 import { PresenceBar } from "@/components/notes/collab/presence-bar";
@@ -146,6 +152,18 @@ export interface NoteEditorShellProps {
    * Plus, which has AI; Personal Free doesn't.
    */
   canMakeTasks?: boolean;
+  /**
+   * The note's ambient buttons, as the page found them (src/lib/ambient/files.ts):
+   * to-dos to turn into tasks, a summary to send, changes since a pinned visit.
+   */
+  ambient?: NoteAmbient;
+}
+
+export interface NoteAmbient {
+  todos?: { count: number; reason: string } | null;
+  summary?: { reason: string } | null;
+  /** The version from before the viewer's last visit, to compare with now. */
+  changes?: { versionId: string; reason: string } | null;
 }
 
 const EMPTY_WORKSPACE: NoteWorkspace = {
@@ -192,6 +210,7 @@ export function NoteEditorShell({
   personal = false,
   canMakeTasks = true,
   linked = null,
+  ambient = {},
 }: NoteEditorShellProps) {
   const router = useRouter();
   const [title, setTitle] = useState(note.title);
@@ -724,6 +743,58 @@ export function NoteEditorShell({
           ) : (
             <Badge variant="secondary">View only</Badge>
           )}
+          <AmbientActions
+            why
+            actions={[
+              ambient.todos && {
+                key: "todos",
+                label:
+                  ambient.todos.count === 1
+                    ? "Turn 1 to-do into a task"
+                    : `Turn ${ambient.todos.count} to-dos into tasks`,
+                icon: ListChecks,
+                reason: ambient.todos.reason,
+                tone: "spark",
+                run: async () => {
+                  // The to-dos are read as saved: save what's typed first.
+                  if (!live) await flush();
+                  return turnTodosIntoTasksAction(orgId, note.id);
+                },
+                done: "Made the tasks. They're linked below.",
+              },
+              ambient.summary && {
+                key: "summary",
+                label: "Send the summary",
+                icon: Send,
+                reason: ambient.summary.reason,
+                run: async () => {
+                  if (!live) await flush();
+                  return sendMeetingSummaryAction(orgId, note.id);
+                },
+                done: "Sent to everyone who went",
+              },
+              ambient.changes && {
+                key: "changes",
+                label: "See what changed",
+                icon: History,
+                reason: ambient.changes.reason,
+                run: async () => {
+                  const id = ambient.changes!.versionId;
+                  const result = await getNoteVersion(orgId, note.id, id);
+                  if (result.error) return { error: result.error };
+                  const v = versions.find((x) => x.id === id);
+                  setPreview({
+                    id,
+                    name: v?.name ?? null,
+                    createdAt: v?.createdAt ?? new Date().toISOString(),
+                    author: v?.createdBy?.name ?? null,
+                    contentJson: result.contentJson,
+                  });
+                  return {};
+                },
+              },
+            ]}
+          />
           {!personal && (
             <ShareNoteDialog
               orgId={orgId}

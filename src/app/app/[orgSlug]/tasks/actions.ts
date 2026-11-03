@@ -71,6 +71,7 @@ const selfAssignTx = withEnv(svc.selfAssign);
 const acknowledgeTx = withEnv(svc.acknowledgeFlag);
 const deleteTx = withEnv(svc.deleteTask);
 const restoreTx = withEnv(svc.restoreTask);
+const keepTx = withEnv(svc.keepTask);
 const reorderTx = withEnv(svc.reorderTask);
 const bulkStatusTx = withEnv(svc.bulkUpdateStatus);
 const bulkAssignTx = withEnv(svc.bulkAssign);
@@ -162,6 +163,11 @@ export async function deleteTask(orgId: string, taskId: string) {
 
 export async function restoreTask(orgId: string, taskId: string) {
   return run(() => restoreTx(orgId, taskId));
+}
+
+/** "Still needed?" > Keep: marks a quiet task as looked at today. */
+export async function keepTask(orgId: string, taskId: string) {
+  return run(() => keepTx(orgId, taskId));
 }
 
 export async function reorderTask(orgId: string, input: svc.ReorderInput) {
