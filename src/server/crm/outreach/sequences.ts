@@ -1,5 +1,6 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
 import { renderMerge } from "@/lib/crm/outreach/merge";
+import { readExtras, withExtras } from "@/lib/crm/outreach/plans";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
 import { localDateKey } from "@/lib/tasks/dates";
 import { withSystemOrgTx, type SystemContext, type TxClient } from "@/server/db/context";
@@ -81,7 +82,7 @@ export async function createSequence(actor: CrmActor, name: string): Promise<{ i
 
 export async function saveSequence(actor: CrmActor, sequenceId: string, input: SequenceInput): Promise<void> {
   const { db, organizationId } = actor;
-  const seq = await db.crmSequence.findFirst({ where: { id: sequenceId, organizationId }, select: { id: true } });
+  const seq = await db.crmSequence.findFirst({ where: { id: sequenceId, organizationId }, select: { id: true, sendWindow: true } });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
   const data: Prisma.CrmSequenceUpdateInput = {};
   if (input.name !== undefined) {
@@ -91,7 +92,10 @@ export async function saveSequence(actor: CrmActor, sequenceId: string, input: S
   }
   if (input.stopOnReply !== undefined) data.stopOnReply = input.stopOnReply;
   if (input.stopOnBooking !== undefined) data.stopOnBooking = input.stopOnBooking;
-  if (input.sendWindow) data.sendWindow = readWindow(input.sendWindow) as unknown as Prisma.InputJsonObject;
+  // A plan's own settings (who, sender, daily cap) ride along under `plan`: keep them.
+  if (input.sendWindow) {
+    data.sendWindow = withExtras(readWindow(input.sendWindow), readExtras(seq.sendWindow)) as Prisma.InputJsonObject;
+  }
   await db.crmSequence.update({ where: { id: seq.id }, data });
   if (input.steps) {
     if (input.steps.length === 0) throw new CrmError("A sequence needs at least one step.");
@@ -156,6 +160,26 @@ export async function archiveSequence(actor: CrmActor, sequenceId: string): Prom
   await db.crmEnrollment.updateMany({
     where: { organizationId, id: { in: active.map((a) => a.id) } },
     data: { status: "STOPPED", stopReason: "the sequence was archived", finishedAt: new Date(), nextRunAt: null },
+  });
+}
+
+/** Emails this sequence has sent (or queued) today, for its own daily cap. */
+export async function planSentToday(db: TxClient, organizationId: string, sequenceId: string, now: Date): Promise<number> {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  const enrollments = await db.crmEnrollment.findMany({
+    where: { organizationId, sequenceId },
+    select: { id: true },
+    take: 10_000,
+  });
+  if (enrollments.length === 0) return 0;
+  return db.crmEmailMessage.count({
+    where: {
+      organizationId,
+      enrollmentId: { in: enrollments.map((e) => e.id) },
+      status: { in: ["QUEUED", "SENT"] },
+      createdAt: { gte: start },
+    },
   });
 }
 
@@ -345,6 +369,11 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
   if (step.kind === "EMAIL") {
     const cap = (await db.crmSettings.findUnique({ where: { organizationId }, select: { dailySendCap: true } }))?.dailySendCap ?? 150;
     if ((await sentToday(db, organizationId, e.senderId, now)) >= cap) {
+      return reschedule(nextInWindow(new Date(now.getTime() + 86_400_000 - (now.getTime() % 86_400_000)), window, tz));
+    }
+    // The plan's own cap, across everyone sending it.
+    const planCap = readExtras(e.sequence.sendWindow).dailyCap;
+    if (planCap !== null && (await planSentToday(db, organizationId, e.sequence.id, now)) >= planCap) {
       return reschedule(nextInWindow(new Date(now.getTime() + 86_400_000 - (now.getTime() % 86_400_000)), window, tz));
     }
     const template = step.templateId

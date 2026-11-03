@@ -56,9 +56,24 @@ describe("the ?open= contract", () => {
       "goal",
       "goal:g2",
       "merge:a1,b2",
+      "plan:sequence:s1",
+      "plan:campaign:c_2",
+      "plan:email",
+      "plan:split",
     ]) {
       expect(formatOpen(parseOpen(v)!)).toBe(v);
     }
+  });
+
+  it("reads an outreach plan, and nothing it doesn't know", () => {
+    expect(parseOpen("plan:sequence:s1")).toEqual({ kind: "plan", type: "sequence", id: "s1" });
+    expect(parseOpen("plan:email")).toEqual({ kind: "plan", type: "email", id: null });
+    expect(parseOpen("plan")).toBeNull();
+    expect(parseOpen("plan:sequence")).toBeNull();
+    expect(parseOpen("plan:sequence:")).toBeNull();
+    expect(parseOpen("plan:list:l1")).toBeNull();
+    expect(parseOpen("plan:campaign:a b")).toBeNull();
+    expect(parseOpen("plan:email:x")).toBeNull();
   });
 
   it("sets and removes open, keeping the rest of the URL", () => {

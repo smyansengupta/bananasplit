@@ -1,3 +1,4 @@
+import { peopleQueryOf } from "@/lib/crm/ask-intent";
 import { AskAnswerOutput, AskPlanOutput, cleanDay, cleanText, type AskPlan, type AskQuery } from "@/lib/crm/ai-outputs";
 import type { TargetKind } from "@/lib/crm/suggestions";
 import { safeTimeZone, zonedDateKey } from "@/lib/calendar/dates";
@@ -36,7 +37,10 @@ export interface AskResponse {
   cites: string[];
   query: AskQuery;
   readBy: string;
+  /** People's own filters that show the same people, when there are (the Ask card's "Open these people"). */
+  peopleQuery: Record<string, string> | null;
 }
+
 
 const MAX_QUESTION = 500;
 
@@ -209,8 +213,9 @@ export async function askCrm(who: AiWho, question: string): Promise<AskResponse>
       select: { name: true, stages: { orderBy: { sortOrder: "asc" }, select: { name: true } } },
     });
     const settings = await actor.db.crmSettings.findUnique({ where: { organizationId: who.organizationId }, select: { relationshipTypes: true } });
-    const types = (Array.isArray(settings?.relationshipTypes) ? settings.relationshipTypes : []) as { label?: string }[];
+    const types = (Array.isArray(settings?.relationshipTypes) ? settings.relationshipTypes : []) as { id?: string; label?: string }[];
     return {
+      types,
       today: zonedDateKey(new Date(), safeTimeZone(org?.timezone)),
       pipelines: pipelines.map((p) => `- ${p.name}: ${p.stages.map((s) => s.name).join(", ")}`).join("\n"),
       relationships: types.map((t) => t.label).filter(Boolean).join(", "),
@@ -256,5 +261,6 @@ export async function askCrm(who: AiWho, question: string): Promise<AskResponse>
     cites: answer.data.cites.filter((c) => known.has(c)),
     query: plan.data.query,
     readBy: answer.label,
+    peopleQuery: ran.rows.some((r) => r.kind === "person") ? peopleQueryOf(plan.data, env.types) : null,
   };
 }

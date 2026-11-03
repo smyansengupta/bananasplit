@@ -1857,10 +1857,13 @@ named by one search param (`src/lib/crm/overlay.ts`):
 | `person:<id>`, `company:<id>`, `deal:<id>` | the record |
 | `power` | Power hour |
 | `log` | Done on its own |
-| `ask` | Ask (not built yet) |
+| `ask` | Ask |
 | `new:person`, `new:company`, `new:deal` | New |
 | `goal`, `goal:<id>` | a goal (not built yet) |
 | `merge:<idA>,<idB>` | Merge two people (or two companies) |
+
+| `plan:sequence:<id>`, `plan:campaign:<id>` | an outreach plan |
+| `plan:email`, `plan:split` | a new one-email or split-a-list plan |
 
 - **Opening and closing.** `useCrmOpen()` (client) gives the open card,
   `hrefFor(open)`, `setOpen(open)` (a push, so Back closes it) and
@@ -2062,3 +2065,53 @@ one person: people, companies, deals and outreach, nobody else sees it.
   `src/lib/crm/setup-owners.ts`, which also sets the routing for new
   people; not in a Personal space), 3 Connect, if you like (opens AI or
   Phone after setup). The summary pill sits next to Set up the CRM.
+
+- **Outreach** (`/crm/outreach`; `src/server/crm/outreach/plans.ts`,
+  `src/lib/crm/outreach/plans.ts`, `src/components/crm/outreach/plans-view.tsx`):
+  one grid of plans, whatever each is underneath: a sequence (steps over
+  days), a campaign that splits a list among members, or a bulk send (one
+  email to a list, a one-step plan). Each plan shows its first steps on a
+  coloured band, its status, who it's for, where it stands and at most two
+  ambient buttons (Start it, See the replies, Do my N). Filters picks a
+  status; search matches names and who. The header's create is New plan
+  (a draft sequence, opened as its card), with One email to a list and
+  Split a list among members in its menu. Templates and Your mail are the
+  bar's other round buttons (`?view=templates`, `?view=mail`); your
+  booking link closes the grid. `/crm/campaigns(/[id])`,
+  `/crm/outreach/sequences(/[id])`, `/crm/outreach/bulk` and
+  `/crm/outreach/mail` redirect there, with the plan's card open where
+  there's an id. Booking pages stay at `/crm/outreach/booking` until they
+  move into Settings.
+- **Plan card** (`src/components/crm/cards/plan-card.tsx`,
+  `overlays/plan.tsx`): Steps (Email, Wait, Text, Task, Call, edited in
+  place, waits drawn as their own steps and folded into the next step's
+  delay on save; Shorten on a text over 160 characters; a note and "Take
+  out the dashes" when an email trips `emailTells`), Who (plain-language
+  chips with "+" offers, how many match today, who's in it, who's left out
+  and why: asked not to be contacted, unsubscribed, bounced, no address,
+  already in another plan, with Include anyway for the last), Results
+  (sent, opened, replied as bars; who replied, with Reply when nobody
+  answered) and Settings (name, send from their owner or you, most sent a
+  day, stop when they reply, the send window). The foot says where it
+  stands, with Pause or Start; Start switches it on and puts in everyone
+  the audience picks out. A sequence's audience, sender, daily cap and
+  let-in-anyway list are kept under `plan` in its `sendWindow` JSON (no new
+  columns); the step job honours the plan's cap. A campaign's card shows
+  its steps as set, its list, each member's share (Write to my N or Start
+  for my N, Add the N new, Skip), results and Mark done or Run again.
+- **Ask** (`src/components/crm/cards/ask-card.tsx`; `src/server/crm/tell.ts`,
+  `src/lib/crm/ask-intent.ts`): one box, "Ask or tell the CRM". A question
+  goes to `askCrm` and comes back with a small table and, when People's
+  own filters show the same people, Open these N people. A change ("Move
+  Harbor Light to Committed and give it to Kristine") is read by
+  `tellCrm` into a stage, an owner, an amount, a next step or a follow-up
+  date, queued as review-queue suggestions and shown as before and after;
+  Apply accepts them, Cancel rejects them, Undo undoes and drops them; a
+  preview left undecided is dropped when the card closes. A pasted chat
+  goes to `readConversation` and its suggestions come back as checkboxes
+  with Add N people. Enter on a question, a change or a sentence in any
+  tab's search pill (or Ctrl/Cmd+Enter on anything) opens Ask with it.
+- **Public booking page** (`/book/<slug>`): the organization's name and
+  logo, then one card with who you're meeting and how long, a month
+  calendar of open days, that day's times, a short form, Book, and a
+  booked state with Pick again.

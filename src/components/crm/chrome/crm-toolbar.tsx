@@ -4,6 +4,7 @@ import { Check, ChevronDown, Search, type IconComponent } from "@/components/ico
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
+import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
 import { SearchField } from "@/components/ui/search-field";
 import { chipClass } from "@/components/ui/segmented";
 import { ExpandChip, FiltersMenu } from "@/components/ui/toolbar-chips";
+import { ASK_DRAFT_KEY, looksLikeAsk } from "@/lib/crm/ask-intent";
 import type { ResolvedCrmTab } from "@/lib/crm/nav";
 import { isTypingTarget } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -157,9 +159,23 @@ export function CrmFilterPick({
 /**
  * Search as a pill: 180px to 340px of whatever room the bar has left; on a
  * narrow bar just the magnifier, which opens the box. `/` focuses it.
+ * It is also Ask: Enter on a question, a change or a sentence (or
+ * Ctrl/Cmd+Enter on anything) opens the Ask card with it (?open=ask).
  */
 function CrmSearch({ placeholder, param }: { placeholder: string; param: string }) {
   const { params, set } = useParamSetter();
+  const { setOpen } = useCrmOpen();
+  const asking = useRef(false);
+  const ask = (text: string) => {
+    asking.current = true;
+    try {
+      sessionStorage.setItem(ASK_DRAFT_KEY, text);
+    } catch {
+      // No storage: Ask opens empty.
+    }
+    setDraft(committed);
+    setOpen("ask");
+  };
   const committed = params.get(param) ?? "";
   const [draft, setDraft] = useState(committed);
   const [wide, setWide] = useState(false);
@@ -216,12 +232,19 @@ function CrmSearch({ placeholder, param }: { placeholder: string; param: string 
           value={draft}
           onValueChange={setDraft}
           onClear={() => commit("")}
-          hint="/"
+          hint={looksLikeAsk(draft) ? "Enter asks" : "/"}
           placeholder={placeholder}
           aria-label={placeholder}
           className="w-full sm:w-full"
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit(draft.trim());
+            if (e.key === "Enter") {
+              const text = draft.trim();
+              if (text && (e.metaKey || e.ctrlKey || looksLikeAsk(text))) {
+                e.preventDefault();
+                ask(text);
+                e.currentTarget.blur();
+              } else commit(text);
+            }
             if (e.key === "Escape") {
               setDraft("");
               commit("");
@@ -230,6 +253,10 @@ function CrmSearch({ placeholder, param }: { placeholder: string; param: string 
             }
           }}
           onBlur={() => {
+            if (asking.current) {
+              asking.current = false;
+              return;
+            }
             commit(draft.trim());
             if (!draft.trim()) setWide(false);
           }}

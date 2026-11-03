@@ -2,7 +2,7 @@
 
 import { Building2, Columns3, FileSpreadsheet, Settings, UserPlus } from "@/components/icons";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { PHONE_SMALL_CREATE } from "@/components/page-header";
@@ -32,9 +32,10 @@ export function CrmHeader({
   toolbar?: ReactNode;
   /**
    * What the create button makes in one click (People's Companies view: a
-   * company); false hides it on pages that make nothing (CRM settings).
+   * company), a tab's own create in its place (Outreach's New plan), or
+   * false on pages that make nothing (CRM settings).
    */
-  create?: "person" | "company" | false;
+  create?: "person" | "company" | false | ReactElement;
 }) {
   const { setOpen } = useCrmOpen();
   const base = `/app/${orgSlug}/crm`;
@@ -43,7 +44,9 @@ export function CrmHeader({
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
         <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
         <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
-          {create && (
+          {isValidElement(create) ? (
+            create
+          ) : create ? (
             <CreateSplitButton
               label={create === "company" ? "New company" : "New person"}
               title={create === "company" ? "New company" : "New person"}
@@ -74,7 +77,7 @@ export function CrmHeader({
                 </Link>
               </DropdownMenuItem>
             </CreateSplitButton>
-          )}
+          ) : null}
           {settings && (
             <Link
               href={`${base}/settings`}

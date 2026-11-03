@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { normalizeEmail } from "@/lib/crm/dedupe";
 import { splitName } from "@/lib/crm/fields";
+import { orgLogoUrl } from "@/lib/org-logo";
 import {
   bookingSlots,
   bookingSlug,
@@ -117,6 +118,8 @@ export interface PublicBooking {
   organizationId: string;
   pageId: string;
   orgName: string;
+  /** The organization's logo, or null for its initials. */
+  logoUrl: string | null;
   title: string;
   description: string | null;
   durationMin: number;
@@ -175,7 +178,7 @@ export async function loadBooking(slug: string, now: Date = new Date()): Promise
   return withSystemOrgTx(target.organizationId, async ({ db }) => {
     const page = await db.crmBookingPage.findFirst({ where: { id: target.id, organizationId: target.organizationId, active: true } });
     if (!page) return null;
-    const org = await db.organization.findUnique({ where: { id: target.organizationId }, select: { name: true, timezone: true } });
+    const org = await db.organization.findUnique({ where: { id: target.organizationId }, select: { name: true, timezone: true, logo: true } });
     const members = await db.membership.findMany({
       where: { organizationId: target.organizationId, userId: { in: page.hostIds } },
       select: { userId: true, user: { select: { name: true } } },
@@ -185,6 +188,7 @@ export async function loadBooking(slug: string, now: Date = new Date()): Promise
       organizationId: target.organizationId,
       pageId: page.id,
       orgName: org?.name ?? "",
+      logoUrl: orgLogoUrl(org?.logo, 128),
       title: page.title,
       description: page.description,
       durationMin: page.durationMin,

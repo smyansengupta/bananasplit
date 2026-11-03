@@ -10,6 +10,8 @@
  *   ?open=new:person     ?open=new:company     ?open=new:deal
  *   ?open=goal           ?open=goal:<id>
  *   ?open=merge:<idA>,<idB>   (two people, or two companies)
+ *   ?open=plan:sequence:<id>    ?open=plan:campaign:<id>   (an outreach plan)
+ *   ?open=plan:email     ?open=plan:split   (a new one-email or split-a-list plan)
  *
  * Pure, so the server (CrmOverlays) and the client (useCrmOpen) read and
  * write it the same way.
@@ -18,6 +20,14 @@
 export const OPEN_PARAM = "open";
 
 export type CrmNewKind = "person" | "company" | "deal";
+
+/**
+ * An outreach plan (docs/features/crm.md, "Redesign", Outreach): a
+ * sequence (timed steps) or a campaign (a list split among members, or one
+ * email to everyone on it). `email` and `split` are new ones, not saved yet.
+ */
+export type CrmPlanType = "sequence" | "campaign";
+export type CrmNewPlan = "email" | "split";
 
 export type CrmOpen =
   | { kind: "person"; id: string }
@@ -28,7 +38,9 @@ export type CrmOpen =
   | { kind: "ask" }
   | { kind: "new"; what: CrmNewKind }
   | { kind: "goal"; id: string | null }
-  | { kind: "merge"; ids: [string, string] };
+  | { kind: "merge"; ids: [string, string] }
+  | { kind: "plan"; type: CrmPlanType; id: string }
+  | { kind: "plan"; type: CrmNewPlan; id: null };
 
 export type CrmOpenKind = CrmOpen["kind"];
 
@@ -36,6 +48,20 @@ export type CrmOpenKind = CrmOpen["kind"];
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 const NEW_KINDS: readonly CrmNewKind[] = ["person", "company", "deal"];
+const PLAN_TYPES: readonly CrmPlanType[] = ["sequence", "campaign"];
+const NEW_PLANS: readonly CrmNewPlan[] = ["email", "split"];
+
+function parsePlan(rest: string | null): CrmOpen | null {
+  if (!rest) return null;
+  if ((NEW_PLANS as readonly string[]).includes(rest))
+    return { kind: "plan", type: rest as CrmNewPlan, id: null };
+  const colon = rest.indexOf(":");
+  if (colon === -1) return null;
+  const type = rest.slice(0, colon);
+  const id = rest.slice(colon + 1);
+  if (!(PLAN_TYPES as readonly string[]).includes(type) || !ID.test(id)) return null;
+  return { kind: "plan", type: type as CrmPlanType, id };
+}
 
 /** `?open=` as a CrmOpen, or null when it's missing or names nothing we draw. */
 export function parseOpen(raw: string | readonly string[] | null | undefined): CrmOpen | null {
@@ -68,6 +94,8 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
       const [a, b] = ids as [string, string];
       return ID.test(a) && ID.test(b) && a !== b ? { kind: "merge", ids: [a, b] } : null;
     }
+    case "plan":
+      return parsePlan(rest);
     default:
       return null;
   }
@@ -86,6 +114,8 @@ export function formatOpen(open: CrmOpen): string {
       return open.id ? `goal:${open.id}` : "goal";
     case "merge":
       return `merge:${open.ids[0]},${open.ids[1]}`;
+    case "plan":
+      return open.id ? `plan:${open.type}:${open.id}` : `plan:${open.type}`;
     default:
       return open.kind;
   }

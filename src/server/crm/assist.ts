@@ -605,6 +605,8 @@ export interface ConversationResult {
   reading: ConversationData;
   matched: { id: string; name: string } | null;
   queued: number;
+  /** The suggestions it queued (the Ask card shows them with checkboxes). */
+  ids: string[];
 }
 
 /** A pasted chat (text or a screenshot) into the review queue: who it is, what was said, what's next. */
@@ -650,9 +652,10 @@ export async function readConversation(
       direction: reading.lastFrom === "them" ? ("INBOUND" as const) : reading.lastFrom === "us" ? ("OUTBOUND" as const) : null,
     };
     let queued = 0;
+    const ids: string[] = [];
     if (matched) {
       const target: TargetRef = { kind: "person", id: matched.id };
-      await proposeChange(db, {
+      const logged = await proposeChange(db, {
         organizationId: who.organizationId,
         kind: "LOG_ACTIVITY",
         source: "AI",
@@ -665,14 +668,19 @@ export async function readConversation(
         assigneeId: who.userId,
       });
       queued++;
+      ids.push(logged.id);
       for (const p of [...(reading.nextStep ? [reading.nextStep] : []), ...reading.promises].slice(0, 6)) {
-        if (await proposePromise(db, { organizationId: who.organizationId, userId: who.userId, target, targetName: matched.name, promise: p, today: env.today, citation })) queued++;
+        const id = await proposePromise(db, { organizationId: who.organizationId, userId: who.userId, target, targetName: matched.name, promise: p, today: env.today, citation });
+        if (id) {
+          queued++;
+          ids.push(id);
+        }
       }
     } else {
       const name = cleanText(reading.person.name, 200) ?? cleanText(reading.person.handle, 200);
       if (!name) throw new CrmError("Couldn't tell who the conversation is with. Pick the person, or include their name.");
       const next = reading.nextStep;
-      await proposeChange(db, {
+      const made = await proposeChange(db, {
         organizationId: who.organizationId,
         kind: "CREATE_PERSON",
         source: "AI",
@@ -702,8 +710,9 @@ export async function readConversation(
         assigneeId: who.userId,
       });
       queued++;
+      ids.push(made.id);
     }
-    return { reading, matched: matched ?? null, queued };
+    return { reading, matched: matched ?? null, queued, ids };
   });
 }
 
