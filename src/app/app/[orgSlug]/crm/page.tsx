@@ -1,9 +1,9 @@
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
+import { TodayGoals } from "@/components/crm/today/today-goals";
 import { TodayList } from "@/components/crm/today/today-list";
 import { TodayToolbar } from "@/components/crm/today/today-toolbar";
-import { formatMoney } from "@/lib/crm/fields";
 import { hrefWithOpen } from "@/lib/crm/overlay";
 import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/power-hour";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
@@ -119,39 +119,20 @@ export default async function CrmTodayPage({
           }}
         />
         <aside className="flex min-w-0 flex-col gap-4">
-          {data.goals.length > 0 && (
-            <section className="bg-card ring-foreground/6 space-y-4 rounded-[22px] p-5 ring-1">
-              <h2 className="heading text-base">Goals this quarter</h2>
-              {data.goals.map((g) => {
-                const fmt = (n: number) =>
-                  g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US");
-                const who = g.ownerId ? (names.get(g.ownerId) ?? "A member") : null;
-                return (
-                  <div key={g.id} className="space-y-1.5">
-                    <div className="flex items-baseline gap-2 text-sm">
-                      <span className="min-w-0 flex-1 truncate font-semibold">
-                        {g.name || g.metricLabel}
-                        {who && <span className="text-muted-foreground font-normal">, {who}</span>}
-                      </span>
-                      <span className="text-muted-foreground shrink-0 tabular-nums">
-                        {fmt(g.attainment.actual)} of {fmt(g.target)}
-                      </span>
-                    </div>
-                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-                      <div
-                        className={
-                          g.attainment.onTrack
-                            ? "bg-foreground h-full rounded-full"
-                            : "h-full rounded-full bg-(--attention)"
-                        }
-                        style={{ width: `${Math.min(100, Math.round(g.attainment.share * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-          )}
+          <TodayGoals
+            canEdit={shell.access.manager}
+            goals={data.goals.map((g) => ({
+              id: g.id,
+              name: g.name,
+              metric: g.metric,
+              metricLabel: g.metricLabel,
+              who: g.ownerId ? (names.get(g.ownerId) ?? "A member") : null,
+              actual: g.attainment.actual,
+              target: g.target,
+              share: g.attainment.share,
+              onTrack: g.attainment.onTrack,
+            }))}
+          />
           {data.upcoming.length > 0 && (
             <section className="bg-card ring-foreground/6 space-y-4 rounded-[22px] p-5 ring-1">
               <h2 className="heading flex items-baseline gap-2 text-base">

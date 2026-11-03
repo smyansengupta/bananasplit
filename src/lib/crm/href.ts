@@ -25,7 +25,7 @@ export function crmRecordHref(orgSlug: string, kind: CrmTargetKind, id: string):
   return hrefWithOpen(`${base}/deals`, "", { kind: "deal", id });
 }
 
-/** A pipeline's board (or table with ?view=table). */
+/** A pipeline: Deals as a board, filtered to it. */
 export function crmPipelineHref(orgSlug: string, pipelineId: string): string {
-  return `${crmBase(orgSlug)}/pipelines/${pipelineId}`;
+  return `${crmBase(orgSlug)}/deals?pipeline=${encodeURIComponent(pipelineId)}&view=board`;
 }
