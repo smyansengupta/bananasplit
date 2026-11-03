@@ -55,7 +55,7 @@ export function Deadlines({ data, orgId }: { data: DeadlinesData; orgId?: string
               </span>
             </Link>
             {/* Ambient: due within two days and nobody has started it. */}
-            {orgId && row.kind === "task" && row.notStarted && row.tone === "close" && (
+            {orgId && row.kind === "task" && row.notStarted && row.soon && (
               <StartItButton
                 orgId={orgId}
                 taskId={row.key.slice("task:".length)}
