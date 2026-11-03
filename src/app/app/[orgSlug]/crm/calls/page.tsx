@@ -6,7 +6,7 @@ import type { PhoneCaps } from "@/components/crm/phone/softphone";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { chipClass } from "@/components/ui/segmented";
+import { serverChipClass as chipClass } from "@/components/crm/chip-class";
 import { crmRecordHref } from "@/lib/crm/href";
 import { formatDuration, formatNumber, outcomeLabel } from "@/lib/crm/phone";
 import { cn } from "@/lib/utils";
@@ -75,7 +75,10 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
   };
   const base = `/app/${orgSlug}/crm/calls`;
   const lists = [{ id: "due", name: "Follow-ups due", href: base, active: !data.picked }].concat(
-    data.views.map((v) => ({ id: v.id, name: v.name, href: `${base}?list=view:${v.id}`, active: data.picked === v.id })),
+    data.views
+      // The ready-made "Follow-ups due" view is the first list already.
+      .filter((v) => v.name !== "Follow-ups due")
+      .map((v) => ({ id: v.id, name: v.name, href: `${base}?list=view:${v.id}`, active: data.picked === v.id })),
   );
   return (
     <div className="space-y-6">

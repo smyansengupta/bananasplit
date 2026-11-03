@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { KeyRound, Phone, Plug } from "@/components/icons";
-import { chipClass } from "@/components/ui/segmented";
+import { serverChipClass as chipClass } from "@/components/crm/chip-class";
 import { cn } from "@/lib/utils";
 
 /**
