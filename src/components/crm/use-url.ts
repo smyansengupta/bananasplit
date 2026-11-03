@@ -30,7 +30,11 @@ export function useUrlState() {
   const set = useCallback(
     (patch: Record<string, string | undefined | null>, options: { replace?: boolean } = {}) => {
       const href = hrefWith(patch);
-      start(() => (options.replace ? router.replace(href, { scroll: false }) : router.push(href, { scroll: false })));
+      start(() =>
+        options.replace
+          ? router.replace(href, { scroll: false })
+          : router.push(href, { scroll: false }),
+      );
     },
     [hrefWith, router],
   );

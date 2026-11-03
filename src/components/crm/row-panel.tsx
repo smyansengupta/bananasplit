@@ -30,7 +30,14 @@ export function CrmRowPanel({
           <ArrowUpRight className="size-3.5" aria-hidden="true" />
         </Link>
       </Button>
-      <RecordFields orgId={orgId} orgSlug={orgSlug} kind={panel.kind} id={panel.id} fields={panel.fields} compact />
+      <RecordFields
+        orgId={orgId}
+        orgSlug={orgSlug}
+        kind={panel.kind}
+        id={panel.id}
+        fields={panel.fields}
+        compact
+      />
     </div>
   );
 }

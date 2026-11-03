@@ -8,7 +8,14 @@ import { useEffect, useState, useTransition } from "react";
 import { saveRecordAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FieldSelect } from "@/components/ui/field-select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -53,7 +60,9 @@ export function RecordFields({
   const router = useRouter();
   const [state, setState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [showMore, setShowMore] = useState(false);
-  const [needs, setNeeds] = useState<{ stageId: string; keys: string[]; labels: string[] } | null>(null);
+  const [needs, setNeeds] = useState<{ stageId: string; keys: string[]; labels: string[] } | null>(
+    null,
+  );
   const [, start] = useTransition();
 
   const save: Saver = async (key, value) => {
@@ -80,16 +89,46 @@ export function RecordFields({
 
   return (
     <div className="space-y-4">
-      <div className="text-muted-foreground flex h-4 items-center justify-end text-xs" aria-live="polite">
-        {state === "saving" ? "Saving…" : state === "saved" ? "All changes saved" : state === "failed" ? "Last change not saved" : ""}
+      <div
+        className="text-muted-foreground flex h-4 items-center justify-end text-xs"
+        aria-live="polite"
+      >
+        {state === "saving"
+          ? "Saving…"
+          : state === "saved"
+            ? "All changes saved"
+            : state === "failed"
+              ? "Last change not saved"
+              : ""}
       </div>
-      <dl className={cn("grid gap-x-4 gap-y-3", compact ? "grid-cols-1" : "sm:grid-cols-[9rem_minmax(0,1fr)]")}>
+      <dl
+        className={cn(
+          "grid gap-x-4 gap-y-3",
+          compact ? "grid-cols-1" : "sm:grid-cols-[9rem_minmax(0,1fr)]",
+        )}
+      >
         {[...main, ...custom].map((f) => (
-          <FieldRow key={f.key} f={f} orgId={orgId} orgSlug={orgSlug} save={save} readOnly={readOnly} compact={compact} />
+          <FieldRow
+            key={f.key}
+            f={f}
+            orgId={orgId}
+            orgSlug={orgSlug}
+            save={save}
+            readOnly={readOnly}
+            compact={compact}
+          />
         ))}
         {showMore &&
           more.map((f) => (
-            <FieldRow key={f.key} f={f} orgId={orgId} orgSlug={orgSlug} save={save} readOnly={readOnly} compact={compact} />
+            <FieldRow
+              key={f.key}
+              f={f}
+              orgId={orgId}
+              orgSlug={orgSlug}
+              save={save}
+              readOnly={readOnly}
+              compact={compact}
+            />
           ))}
       </dl>
       {more.length > 0 && (
@@ -98,7 +137,10 @@ export function RecordFields({
           onClick={() => setShowMore((v) => !v)}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
         >
-          <ChevronDown className={cn("size-4 transition-transform", showMore && "rotate-180")} aria-hidden="true" />
+          <ChevronDown
+            className={cn("size-4 transition-transform", showMore && "rotate-180")}
+            aria-hidden="true"
+          />
           {showMore ? "Fewer fields" : `${more.length} more fields`}
         </button>
       )}
@@ -111,7 +153,10 @@ export function RecordFields({
           onCancel={() => setNeeds(null)}
           onSubmit={async (fill) => {
             setState("saving");
-            const r = await saveRecordAction(orgId, kind, id, { ...fill, stage: needs.stageId }).catch(() => null);
+            const r = await saveRecordAction(orgId, kind, id, {
+              ...fill,
+              stage: needs.stageId,
+            }).catch(() => null);
             if (!r || !r.ok) {
               setState("failed");
               toast({ title: r && !r.ok ? r.error : "That didn't save.", tone: "error" });
@@ -159,7 +204,13 @@ function FieldRow({
         )}
       </dt>
       <dd className="min-w-0">
-        <FieldEditor f={f} orgId={orgId} orgSlug={orgSlug} save={save} readOnly={readOnly || Boolean(f.readOnly)} />
+        <FieldEditor
+          f={f}
+          orgId={orgId}
+          orgSlug={orgSlug}
+          save={save}
+          readOnly={readOnly || Boolean(f.readOnly)}
+        />
       </dd>
     </>
   );
@@ -205,7 +256,11 @@ export function FieldEditor({
   };
 
   if (readOnly) {
-    return <p className="py-2 text-sm">{readValue(f, value, display) || <span className="text-muted-foreground">Empty</span>}</p>;
+    return (
+      <p className="py-2 text-sm">
+        {readValue(f, value, display) || <span className="text-muted-foreground">Empty</span>}
+      </p>
+    );
   }
 
   const fieldType = f.kind === "CUSTOM" ? f.field!.type : f.kind;
@@ -247,7 +302,9 @@ export function FieldEditor({
           }}
           aria-label={f.label}
         >
-          {f.kind !== "STAGE" && <option value="">{f.kind === "OWNER" ? "Nobody" : "Not set"}</option>}
+          {f.kind !== "STAGE" && (
+            <option value="">{f.kind === "OWNER" ? "Nobody" : "Not set"}</option>
+          )}
           {options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -269,13 +326,17 @@ export function FieldEditor({
                 type="button"
                 aria-pressed={on}
                 onClick={() => {
-                  const next = choices.filter((x) => (x.id === c.id ? !on : picked.has(x.id))).map((x) => x.id);
+                  const next = choices
+                    .filter((x) => (x.id === c.id ? !on : picked.has(x.id)))
+                    .map((x) => x.id);
                   set(next);
                   void commit(next.length ? next : null);
                 }}
                 className={cn(
                   "h-8 rounded-full border px-3 text-[13px]",
-                  on ? "bg-primary text-primary-foreground border-transparent" : "border-input hover:bg-muted",
+                  on
+                    ? "bg-primary text-primary-foreground border-transparent"
+                    : "border-input hover:bg-muted",
                 )}
               >
                 {c.label}
@@ -323,7 +384,11 @@ export function FieldEditor({
       const target = f.field!.options.target?.kind ?? "person";
       const refs = readRelation(value);
       if (target === "record") {
-        return <p className="text-muted-foreground py-2 text-sm">{refs.length ? `${refs.length} linked` : "Link rows from the database"}</p>;
+        return (
+          <p className="text-muted-foreground py-2 text-sm">
+            {refs.length ? `${refs.length} linked` : "Link rows from the database"}
+          </p>
+        );
       }
       return (
         <RelationEditor
@@ -387,7 +452,15 @@ export function FieldEditor({
     default:
       return (
         <Input
-          type={fieldType === "EMAIL" ? "email" : fieldType === "URL" ? "url" : fieldType === "PHONE" ? "tel" : "text"}
+          type={
+            fieldType === "EMAIL"
+              ? "email"
+              : fieldType === "URL"
+                ? "url"
+                : fieldType === "PHONE"
+                  ? "tel"
+                  : "text"
+          }
           value={String(value ?? "")}
           onChange={(e) => set(e.target.value)}
           onBlur={() => commit(value)}
@@ -405,7 +478,10 @@ function readValue(f: EditField, value: unknown, display?: string | null): strin
   if (f.options) return f.options.find((o) => o.value === value)?.label ?? String(value);
   if (f.kind === "CUSTOM" && f.field?.options.choices) {
     const ids = Array.isArray(value) ? value : [value];
-    return ids.map((i) => f.field!.options.choices!.find((c) => c.id === i)?.label ?? "").filter(Boolean).join(", ");
+    return ids
+      .map((i) => f.field!.options.choices!.find((c) => c.id === i)?.label ?? "")
+      .filter(Boolean)
+      .join(", ");
   }
   return typeof value === "object" ? "" : String(value);
 }
@@ -432,7 +508,10 @@ function RelationEditor({
     <div className="flex flex-wrap items-center gap-1.5 py-1">
       {refs.map((r) => (
         <Badge key={r.id} variant="secondary" className="gap-1 pe-1">
-          <Link href={crmRecordHref(orgSlug, r.kind as "person" | "company" | "deal", r.id)} className="hover:underline">
+          <Link
+            href={crmRecordHref(orgSlug, r.kind as "person" | "company" | "deal", r.id)}
+            className="hover:underline"
+          >
             {names[`${r.kind}:${r.id}`] ?? "Linked"}
           </Link>
           <button
@@ -488,7 +567,10 @@ export function NeedsDialog({
 }) {
   const [fill, setFill] = useState<Record<string, unknown>>({});
   const [pending, setPending] = useState(false);
-  const keys = reasonPrompt && !needs.keys.includes("closeReason") ? ["closeReason", ...needs.keys] : needs.keys;
+  const keys =
+    reasonPrompt && !needs.keys.includes("closeReason")
+      ? ["closeReason", ...needs.keys]
+      : needs.keys;
   const labelOf = (k: string, i: number) =>
     k === "closeReason" ? "Reason" : (needs.labels[needs.keys.indexOf(k)] ?? needs.labels[i] ?? k);
   return (
@@ -497,7 +579,8 @@ export function NeedsDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {reasonPrompt ?? (needs.labels.length === 1 ? `Add ${needs.labels[0]} first.` : `Add these first.`)}
+            {reasonPrompt ??
+              (needs.labels.length === 1 ? `Add ${needs.labels[0]} first.` : `Add these first.`)}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -512,7 +595,12 @@ export function NeedsDialog({
           {keys.map((k, i) => {
             const known =
               fields.find((f) => f.key === k || f.key === `custom.${k}`) ??
-              ({ key: k, label: labelOf(k, i), kind: k === "closeReason" ? "LONG_TEXT" : "TEXT", value: null } as EditField);
+              ({
+                key: k,
+                label: labelOf(k, i),
+                kind: k === "closeReason" ? "LONG_TEXT" : "TEXT",
+                value: null,
+              } as EditField);
             const key = known.key;
             return (
               <label key={key} className="grid gap-1.5 text-sm">

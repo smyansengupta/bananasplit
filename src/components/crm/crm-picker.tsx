@@ -70,13 +70,18 @@ export function CrmPicker({
           )}
         >
           <Icon className="size-4 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 truncate">{value ? (display ?? "Picked") : (placeholder ?? "Pick")}</span>
+          <span className="min-w-0 truncate">
+            {value ? (display ?? "Picked") : (placeholder ?? "Pick")}
+          </span>
           <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-1.5">
         <div className="relative mb-1">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" aria-hidden="true" />
+          <Search
+            className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            aria-hidden="true"
+          />
           <input
             autoFocus
             value={q}
@@ -93,13 +98,21 @@ export function CrmPicker({
                 pick(hits[active]!);
               }
             }}
-            placeholder={kind === "person" ? "Search people" : kind === "company" ? "Search companies" : "Search items"}
+            placeholder={
+              kind === "person"
+                ? "Search people"
+                : kind === "company"
+                  ? "Search companies"
+                  : "Search items"
+            }
             aria-label="Search"
             className="bg-muted/60 h-9 w-full rounded-full ps-9 pe-3 text-sm outline-none"
           />
         </div>
         <div role="listbox" className="flex max-h-64 flex-col gap-px overflow-y-auto">
-          {hits.length === 0 && <p className="text-muted-foreground px-3 py-2 text-sm">Nothing found.</p>}
+          {hits.length === 0 && (
+            <p className="text-muted-foreground px-3 py-2 text-sm">Nothing found.</p>
+          )}
           {hits.map((h, i) => (
             <button
               key={h.id}
@@ -115,7 +128,9 @@ export function CrmPicker({
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{h.label}</span>
-                {h.sub && <span className="text-muted-foreground block truncate text-xs">{h.sub}</span>}
+                {h.sub && (
+                  <span className="text-muted-foreground block truncate text-xs">{h.sub}</span>
+                )}
               </span>
               {h.id === value && <Check className="size-3.5" aria-hidden="true" />}
             </button>
