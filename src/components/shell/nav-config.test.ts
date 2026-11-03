@@ -218,11 +218,12 @@ const club = (plan: "TRIAL" | "CLUB" | "SOCIETY", trialEndsAt: Date | null = nul
 });
 
 describe("the sidebar in each space", () => {
-  const nav = (space: Space, showLocked = false) =>
-    navSections("me", visibleSidebar(null), { space, showLocked }).flatMap((s) => s.items);
+  const nav = (space: Space, showLocked = false, addOns?: string[]) =>
+    navSections("me", visibleSidebar(null, addOns), { space, showLocked }).flatMap((s) => s.items);
+  const PLUS: Space = { ...PERSONAL, plan: "PERSONAL_PLUS" };
 
-  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Files and Databases", () => {
-    const items = nav(PERSONAL, true);
+  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Files, Databases and Integrations", () => {
+    const items = nav(PLUS, true, []);
     expect(items.map((i) => i.label)).toEqual([
       "Home",
       "Inbox",
@@ -231,6 +232,7 @@ describe("the sidebar in each space", () => {
       "Meetings",
       "Files",
       "Databases",
+      "Integrations",
     ]);
     expect(items.map((i) => i.href)).toEqual([
       "/app/me",
@@ -240,6 +242,7 @@ describe("the sidebar in each space", () => {
       "/app/me/meetings",
       "/app/me/notes",
       "/app/me/databases",
+      "/app/me/integrations",
     ]);
     expect(items.some((i) => i.locked)).toBe(false);
     const all = items;
@@ -254,6 +257,20 @@ describe("the sidebar in each space", () => {
     expect(is("Calendar", "/app/me/calendar/rsvp/e1")).toBe(false);
     expect(is("Meetings", "/app/me/calendar/find-a-time/p1")).toBe(true);
     expect(is("Home", "/app/me/tasks")).toBe(false);
+  });
+
+  it("adds the CRM under Integrations once it's added, and locks both on Personal Free", () => {
+    expect(
+      nav(PLUS, true, ["crm"])
+        .map((i) => i.label)
+        .slice(-2),
+    ).toEqual(["Integrations", "CRM"]);
+    expect(nav(PLUS, true, ["crm"]).at(-1)?.href).toBe("/app/me/crm");
+    // Forms and Finance are an organization's: added or not, Personal doesn't show them.
+    expect(nav(PLUS, true, ["forms", "finance"]).map((i) => i.label)).not.toContain("Forms");
+    const free = nav(PERSONAL, true, ["crm"]);
+    expect(free.filter((i) => i.locked).map((i) => i.label)).toEqual(["Integrations", "CRM"]);
+    expect(nav(PERSONAL, false, ["crm"]).map((i) => i.label)).not.toContain("Integrations");
   });
 
   it("puts Personal's notes and uploads under one Files", () => {

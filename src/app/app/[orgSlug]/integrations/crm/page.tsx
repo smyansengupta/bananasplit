@@ -19,7 +19,7 @@ import { readAddOns } from "@/lib/addons";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
 import { IMPORT_SOURCE_LABELS, IMPORT_SOURCES } from "@/lib/crm/mapping";
-import { PIPELINE_TEMPLATES, SETUP_KIND_INFO, SETUP_KINDS } from "@/lib/crm/templates";
+import { PIPELINE_TEMPLATES, setupKindInfo, setupKindsFor } from "@/lib/crm/templates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 export const metadata = { title: "CRM" };
@@ -42,7 +42,8 @@ const BOARD = [
  * The CRM add-on (docs/features/crm.md): what it does, in exact rows, with
  * a preview of each part, and Add or Turn off for owners and admins. Add
  * goes straight to the one-step setup; an organization that already set it
- * up goes to the CRM.
+ * up goes to the CRM. In a Personal space (Personal Plus) it reads as one
+ * person's CRM: its own setup answers, and no team rows or roles table.
  */
 export default async function CrmAddOnPage({
   params,
@@ -56,8 +57,25 @@ export default async function CrmAddOnPage({
   const { organization: org, role, settings } = await getOrgContextBySlug(orgSlug);
   const added = readAddOns(settings?.addOns).includes("crm");
   const canManage = can({ role }, "settings.general.write");
-  const onPlan = org.kind !== "PERSONAL" && spaceIncludes(org, "crm");
+  const personal = org.kind === "PERSONAL";
+  const onPlan = spaceIncludes(org, "crm");
   const base = `/app/${orgSlug}`;
+  const kinds = setupKindsFor(personal);
+  const label = (k: (typeof kinds)[number]) => setupKindInfo(k, personal).label;
+  // The pipeline the preview shows: an organization's New members, your Clients.
+  const example = personal
+    ? {
+        label: PIPELINE_TEMPLATES.clients?.name ?? "Clients",
+        steps: (PIPELINE_TEMPLATES.clients?.stages ?? []).map((st) => ({
+          name: st.name,
+          tint: (st.kind === "WON" ? "success" : st.kind === "LOST" ? "danger" : "info") as
+            | "success"
+            | "danger"
+            | "info",
+          ...(st.kind === "LOST" ? { then: false } : {}),
+        })),
+      }
+    : null;
 
   if (added && onPlan && sp.setup === "1") {
     const done = await withOrgTx(org.id, ({ db }) =>
@@ -127,11 +145,14 @@ export default async function CrmAddOnPage({
         glance={
           <Glance
             rows={[
-              ["Adds to the sidebar", "CRM, under Integrations and apps"],
+              ["Adds to the sidebar", personal ? "CRM, under Integrations" : "CRM, under Integrations and apps"],
               ["Adds to New", "New person, New company, New item"],
-              ["Who works it", "Every member; owners, admins and CRM managers set it up"],
+              [
+                "Who works it",
+                personal ? "Just you. Nobody else sees it" : "Every member; owners, admins and CRM managers set it up",
+              ],
               ["In Databases", "People, Companies and each pipeline, with filters and export"],
-              ["Plan", "Team Advanced, for the whole organization, no seats"],
+              ["Plan", personal ? "Personal Plus" : "Team Advanced, for the whole organization, no seats"],
               ["Turning it off", "Hides it; every person and item is kept"],
             ]}
           />
@@ -141,20 +162,29 @@ export default async function CrmAddOnPage({
       <FeatureCard
         id="c-setup"
         title="Set up in one step"
-        lead="Say what you mostly reach out to. The pipelines, relationship types and saved lists are made for you, and Finance's deals move in on their own."
+        lead={
+          personal
+            ? "Say what you mostly reach out to. The pipelines, relationship types and saved lists are made for you."
+            : "Say what you mostly reach out to. The pipelines, relationship types and saved lists are made for you, and Finance's deals move in on their own."
+        }
         details={[
-          ["You pick", SETUP_KINDS.map((k) => SETUP_KIND_INFO[k].label).join(", ")],
+          ["You pick", kinds.map(label).join(", ")],
           ["You get", `${Object.keys(PIPELINE_TEMPLATES).length} ready-made pipelines, each renameable, with their own words`],
-          ["Bring in", "Members, people who checked in or signed up, and form respondents, in one click each"],
+          [
+            "Bring in",
+            personal
+              ? "People who RSVP'd to your events in one click, or a spreadsheet"
+              : "Members, people who checked in or signed up, and form respondents, in one click each",
+          ],
         ]}
         panel="tile"
         preview={
           <Mini className="gap-3 p-5">
             <b className="text-[15px]">What do you mostly reach out to?</b>
             <span className="flex flex-wrap gap-1.5">
-              {SETUP_KINDS.slice(0, 6).map((k, i) => (
+              {kinds.slice(0, 6).map((k, i) => (
                 <Pill key={k} tint={i < 3 ? "info" : "muted"}>
-                  {SETUP_KIND_INFO[k].label}
+                  {label(k)}
                 </Pill>
               ))}
             </span>
@@ -168,8 +198,8 @@ export default async function CrmAddOnPage({
         lead="Each pipeline names what it tracks, so a card is an applicant, a donation or a deal, and closing reads Joined or Didn't join."
         extra={
           <Steps
-            label="New members"
-            steps={[
+            label={example?.label ?? "New members"}
+            steps={example?.steps ?? [
               { name: "Interested", tint: "muted" },
               { name: "Reached out", tint: "info" },
               { name: "Talked", tint: "info" },
@@ -206,8 +236,15 @@ export default async function CrmAddOnPage({
         details={[
           ["Log by hand", "A note, a call, an email or a meeting, in one step"],
           ["Strength", "How warm each relationship is, from every touchpoint"],
-          ["Knows them best", "Who in your organization has the most to do with them"],
-          ["Owned by a role", "Give a partner to the Partnerships lead; when the person in that role changes, the relationship follows"],
+          ...(personal
+            ? []
+            : ([
+                ["Knows them best", "Who in your organization has the most to do with them"],
+                [
+                  "Owned by a role",
+                  "Give a partner to the Partnerships lead; when the person in that role changes, the relationship follows",
+                ],
+              ] as [string, string][])),
         ]}
         panel="info"
         preview={
@@ -296,6 +333,7 @@ export default async function CrmAddOnPage({
         }
       />
 
+      {!personal && (
       <section
         aria-labelledby="c-roles"
         className="bg-card text-card-foreground ring-foreground/6 rounded-card edge flex flex-col gap-4 p-6 ring-1 sm:p-8"
@@ -341,6 +379,7 @@ export default async function CrmAddOnPage({
           </table>
         </div>
       </section>
+      )}
     </div>
   );
 }

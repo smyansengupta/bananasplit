@@ -118,6 +118,8 @@ export function AddOnCards({
   added,
   canManage,
   locked,
+  only,
+  personal = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -125,10 +127,15 @@ export function AddOnCards({
   canManage: boolean;
   /** Add-ons the plan doesn't include: offered as an upgrade, not an Add. */
   locked: readonly AddOnId[];
+  /** The add-ons this space is offered (a Personal space: the CRM); every one when left out. */
+  only?: readonly AddOnId[];
+  /** A Personal space: each card's one-person summary and who. */
+  personal?: boolean;
 }) {
   const base = `/app/${orgSlug}`;
   const card = (id: AddOnId, preview: ReactNode) => {
-    const info = ADD_ON_INFO[id];
+    const plain = ADD_ON_INFO[id];
+    const info = personal && plain.personal ? { ...plain, ...plain.personal } : plain;
     const on = added.includes(id);
     const page = `${base}/integrations/${id}`;
     return (
@@ -176,9 +183,15 @@ export function AddOnCards({
   };
   return (
     <ul className="grid gap-[18px] md:grid-cols-2 xl:grid-cols-3">
-      {card("forms", FORMS_PREVIEW)}
-      {card("finance", FINANCE_PREVIEW)}
-      {card("crm", CRM_PREVIEW)}
+      {(
+        [
+          ["forms", FORMS_PREVIEW],
+          ["finance", FINANCE_PREVIEW],
+          ["crm", CRM_PREVIEW],
+        ] as const
+      )
+        .filter(([id]) => !only || only.includes(id))
+        .map(([id, preview]) => card(id, preview))}
     </ul>
   );
 }

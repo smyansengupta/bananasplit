@@ -3,13 +3,13 @@ import {
   ALUMNI_KEEP_IN_TOUCH_DAYS,
   pipelinesFor,
   relationshipTypesFor,
-  SETUP_KINDS,
+  setupKindsFor,
   viewsFor,
   type SetupKind,
 } from "@/lib/crm/templates";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
-import { crmAccess, CrmError, type CrmActor } from "./access";
+import { CrmError, requireCrm, type CrmActor } from "./access";
 import { ensureCrmDatabases } from "./databases";
 import { createPipelineFrom } from "./pipelines";
 import { moveSponsorsIn, type SponsorsMoveResult } from "./sponsors";
@@ -23,7 +23,9 @@ import { ensurePipelineViews, ensureStarterReports } from "./starter";
  * database too), the saved views, and, when Finance has deals' partners,
  * the Deals pipeline with every partner and deal moved in. Run
  * again with more answers, it adds what's missing and changes nothing else.
- * Owners and admins only (RLS: CrmSettings is theirs to create).
+ * Owners and admins only (RLS: CrmSettings is theirs to create). A
+ * Personal space is offered its own few answers (PERSONAL_SETUP_KINDS) and
+ * gets no Member relationship type.
  */
 
 export interface SetupResult {
@@ -32,19 +34,20 @@ export interface SetupResult {
 }
 
 export async function runSetup(actor: CrmActor, kindsInput: readonly string[]): Promise<SetupResult> {
-  const access = await crmAccess(actor);
-  if (!access.onPlan) throw new CrmError("The CRM comes with Team Advanced.");
-  if (!access.added) throw new CrmError("Add the CRM on Integrations and apps first.");
+  const access = await requireCrm(actor);
   if (!access.admin) throw new CrmError("Ask an owner or admin to set up the CRM.");
   const { db, organizationId, userId } = actor;
-  const picked = SETUP_KINDS.filter((k) => kindsInput.includes(k));
+  const picked = setupKindsFor(access.personal).filter((k) => kindsInput.includes(k));
   const hasSponsors = (await db.sponsor.count({ where: { organizationId } })) > 0;
   // Finance's partners and deals come along whether or not they were picked.
   const kinds: SetupKind[] = hasSponsors && !picked.includes("sponsors") ? [...picked, "sponsors"] : picked;
   if (kinds.length === 0) throw new CrmError("Pick at least one.");
 
   const existing = access.settings;
-  const types = relationshipTypesFor([...new Set([...(existing?.setupKinds ?? []), ...kinds])] as SetupKind[]);
+  const types = relationshipTypesFor(
+    [...new Set([...(existing?.setupKinds ?? []), ...kinds])] as SetupKind[],
+    { personal: access.personal },
+  );
   const mergedTypes = [
     ...(existing?.relationshipTypes ?? []),
     ...types.filter((t) => !(existing?.relationshipTypes ?? []).some((e) => e.id === t.id)),

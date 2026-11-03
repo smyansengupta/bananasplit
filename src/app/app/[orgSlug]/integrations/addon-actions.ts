@@ -1,7 +1,7 @@
 "use server";
 
 import { can } from "@/lib/auth/permissions";
-import { isAddOn } from "@/lib/addons";
+import { isAddOn, personalAddOns } from "@/lib/addons";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgAction } from "@/server/db/context";
@@ -11,7 +11,8 @@ import { withOrgAction } from "@/server/db/context";
  * as for the sidebar (RLS lets only them update OrgSettings). Turning one off
  * changes only OrgSettings.addOns; nothing it made is touched. Each change
  * is one statement, so two admins adding different add-ons at once both
- * stick, and a change that changes nothing writes no audit row.
+ * stick, and a change that changes nothing writes no audit row. A Personal
+ * space adds only the ones made for one person (the CRM).
  */
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -28,6 +29,15 @@ async function setAddOn(
     return { ok: false, error: "Only owners and admins can add or turn off add-ons." };
   }
   if (!isAddOn(id)) return { ok: false, error: "That add-on doesn't exist." };
+  if (on && !personalAddOns().includes(id)) {
+    const space = await ctx.db.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { kind: true },
+    });
+    if (space?.kind === "PERSONAL") {
+      return { ok: false, error: "That add-on is for organizations." };
+    }
+  }
   const hit = await checkRateLimit(
     rateLimitKey("addons", ctx.organizationId, ctx.userId),
     CHANGES_PER_HOUR,

@@ -1,7 +1,7 @@
 import type { Role } from "@/generated/prisma/client";
 import { readAddOns } from "@/lib/addons";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import { featureRefusal, spaceIncludes } from "@/lib/billing/space";
 import type { RelationshipType } from "@/lib/crm/templates";
 import type { TxClient } from "@/server/db/context";
 
@@ -10,9 +10,13 @@ import type { TxClient } from "@/server/db/context";
  * policies in 20261105090000_crm are the real gate, this gives friendly
  * errors and hides controls):
  *
- * - The CRM is there when the organization has added it (OrgSettings.addOns)
- *   and its plan has it (Team Advanced, or a trial). Every page and action
+ * - The CRM is there when the space has added it (OrgSettings.addOns) and
+ *   its plan has it (Team Advanced or an organization's trial; Personal Plus
+ *   or a new account's trial in a Personal space). Every page and action
  *   asks requireCrm first.
+ * - In a Personal space the owner is the only member, so they are admin and
+ *   manager, and the team parts (who sees what, CRM managers, lead routing,
+ *   handover) don't show (`personal`).
  * - Every member adds and edits people, companies and items, logs activity
  *   and works the lists. With memberAccess OWN they see only what they own
  *   or made (the database decides that).
@@ -57,8 +61,10 @@ export interface CrmSettingsView {
 }
 
 export interface CrmAccess {
-  /** The organization added the CRM. */
+  /** The space added the CRM. */
   added: boolean;
+  /** A Personal space: one person's CRM, no team settings. */
+  personal: boolean;
   /** Its plan (or trial) includes it. */
   onPlan: boolean;
   /** Owner or admin. */
@@ -110,7 +116,8 @@ export async function crmAccess(actor: CrmActor): Promise<CrmAccess> {
   const admin = can(actor, "settings.general.write");
   return {
     added: readAddOns(orgSettings?.addOns).includes("crm"),
-    onPlan: Boolean(org && org.kind !== "PERSONAL" && spaceIncludes(org, "crm")),
+    personal: org?.kind === "PERSONAL",
+    onPlan: Boolean(org && spaceIncludes(org, "crm")),
     admin,
     manager: admin || Boolean(settings?.managerIds.includes(actor.userId)),
     settings,
@@ -120,7 +127,9 @@ export async function crmAccess(actor: CrmActor): Promise<CrmAccess> {
 /** The CRM's gate for every page and action: added, and on the plan. */
 export async function requireCrm(actor: CrmActor): Promise<CrmAccess> {
   const access = await crmAccess(actor);
-  if (!access.onPlan) throw new CrmError("The CRM comes with Team Advanced.");
+  if (!access.onPlan) {
+    throw new CrmError(featureRefusal({ kind: access.personal ? "PERSONAL" : "CLUB" }, "crm"));
+  }
   if (!access.added) throw new CrmError("Add the CRM on Integrations and apps first.");
   return access;
 }

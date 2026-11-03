@@ -70,13 +70,13 @@ export const apiKeyStore = {
   },
 };
 
-/** The CRM is added and the plan has it (what every API call needs). */
+/** The CRM is added and the plan has it (what every API call needs; Personal Plus counts). */
 export async function crmOpen(db: TxClient, organizationId: string): Promise<boolean> {
   const org = await db.organization.findUnique({
     where: { id: organizationId },
     select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true, deletedAt: true },
   });
-  if (!org || org.deletedAt || org.kind === "PERSONAL" || !spaceIncludes(org, "crm")) return false;
+  if (!org || org.deletedAt || !spaceIncludes(org, "crm")) return false;
   const settings = await db.orgSettings.findUnique({ where: { organizationId }, select: { addOns: true } });
   return readAddOns(settings?.addOns).includes("crm");
 }
@@ -88,7 +88,7 @@ export async function verifyApiKey(header: string | null): Promise<KeyCheck> {
   if (!parsed) return { ok: false, status: 401, code: "unauthorized", message: "That API key isn't valid." };
   const row = await apiKeyStore.find(parsed.organizationId, hashApiKey(key));
   if (!row) return { ok: false, status: 401, code: "unauthorized", message: "That API key isn't valid or was revoked." };
-  if (!row.crm) return { ok: false, status: 403, code: "crm_off", message: "The CRM isn't on for this organization." };
+  if (!row.crm) return { ok: false, status: 403, code: "crm_off", message: "The CRM isn't on in this space." };
   const scopes = row.scopes.filter((s): s is ApiScope => s === "read" || s === "write");
   return {
     ok: true,

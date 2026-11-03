@@ -28,6 +28,8 @@ const FIELDS: { value: RoutingRule["field"]; label: string }[] = [
  * Outreach settings on the CRM's Settings: who new people from forms go
  * to (nobody, in turn, or by rules then in turn), and the daily cap on
  * sequence and campaign mail per mailbox. Handover lives on its own page.
+ * A Personal space (`personal`) has only the cap: there's nobody to route
+ * people to or hand them over to.
  */
 export function OutreachSettings({
   orgId,
@@ -35,12 +37,14 @@ export function OutreachSettings({
   routing: initial,
   members,
   dailySendCap,
+  personal = false,
 }: {
   orgId: string;
   orgSlug: string;
   routing: Routing;
   members: { id: string; name: string }[];
   dailySendCap: number;
+  personal?: boolean;
 }) {
   const router = useRouter();
   const [routing, setRouting] = useState(initial);
@@ -53,6 +57,35 @@ export function OutreachSettings({
     router.refresh();
   };
   const setRule = (i: number, patch: Partial<RoutingRule>) => setRouting({ ...routing, rules: routing.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const dailyCap = (
+    <>
+      <span className="text-muted-foreground">Most sequence and campaign emails one mailbox sends a day</span>
+      <div className="flex items-center gap-2">
+        <Input type="number" min={10} max={2000} value={cap} onChange={(e) => setCap(e.target.value)} className="h-9 w-28" />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            const r = await runAction(() => saveDailyCapAction(orgId, Number(cap)));
+            if (!r) return;
+            if (!r.ok) return toast({ title: r.error, tone: "error" });
+            toast({ title: "Saved", tone: "success" });
+          }}
+        >
+          Save
+        </Button>
+      </div>
+    </>
+  );
+  if (personal) {
+    return (
+      <section className="bg-card ring-foreground/6 rounded-card grid gap-1.5 p-5 text-sm ring-1">
+        <h2 className="heading text-base">Sending</h2>
+        {dailyCap}
+        <p className="text-muted-foreground text-xs">Past it, the rest wait for tomorrow.</p>
+      </section>
+    );
+  }
   return (
     <section className="bg-card ring-foreground/6 rounded-card space-y-4 p-5 ring-1">
       <div>
@@ -131,22 +164,7 @@ export function OutreachSettings({
       )}
       <Button onClick={save}>Save</Button>
       <div className="grid gap-1.5 border-t pt-4 text-sm">
-        <span className="text-muted-foreground">Most sequence and campaign emails one mailbox sends a day</span>
-        <div className="flex items-center gap-2">
-          <Input type="number" min={10} max={2000} value={cap} onChange={(e) => setCap(e.target.value)} className="h-9 w-28" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              const r = await runAction(() => saveDailyCapAction(orgId, Number(cap)));
-              if (!r) return;
-              if (!r.ok) return toast({ title: r.error, tone: "error" });
-              toast({ title: "Saved", tone: "success" });
-            }}
-          >
-            Save
-          </Button>
-        </div>
+        {dailyCap}
         <p className="text-muted-foreground text-xs">
           Past it, the rest wait for tomorrow. Handing someone&apos;s relationships over is on{" "}
           <Link href={`/app/${orgSlug}/crm/handover`} className="underline underline-offset-4">

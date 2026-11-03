@@ -64,6 +64,35 @@ export const SETUP_KIND_INFO: Record<SetupKind, SetupKindInfo> = {
   grants: { id: "grants", label: "Grants", hint: "Applications and awards", icon: "PiggyBank" },
 };
 
+/**
+ * A Personal space's answers (one person's CRM): no members or alumni to
+ * keep, so those two don't show, and clients come first.
+ */
+export const PERSONAL_SETUP_KINDS = [
+  "clients",
+  "sponsors",
+  "speakers",
+  "vendors",
+  "grants",
+  "donors",
+] as const satisfies readonly SetupKind[];
+
+/** The setup answers a space is offered: a Personal space's few, or all of them. */
+export function setupKindsFor(personal: boolean): readonly SetupKind[] {
+  return personal ? PERSONAL_SETUP_KINDS : SETUP_KINDS;
+}
+
+/** How an answer reads in a Personal space, where it differs. */
+const PERSONAL_KIND_INFO: Partial<Record<SetupKind, Partial<SetupKindInfo>>> = {
+  speakers: { label: "Mentors and guests", hint: "Mentors, speakers, people you invite" },
+  clients: { hint: "Leads, proposals and paid work" },
+};
+
+/** An answer's label and hint for this space. */
+export function setupKindInfo(kind: SetupKind, personal: boolean): SetupKindInfo {
+  return personal ? { ...SETUP_KIND_INFO[kind], ...PERSONAL_KIND_INFO[kind] } : SETUP_KIND_INFO[kind];
+}
+
 export interface StageTemplate {
   key: string;
   name: string;
@@ -284,9 +313,15 @@ export const RELATIONSHIP_TYPES: Record<SetupKind, RelationshipType[]> = {
 /** Members of the organization, when brought in from Bananasplit. */
 export const MEMBER_RELATIONSHIP: RelationshipType = { id: "member", label: "Member", color: "blue" };
 
-/** The relationship types for a set of answers, each once, in setup order. */
-export function relationshipTypesFor(kinds: readonly SetupKind[]): RelationshipType[] {
-  const out: RelationshipType[] = [MEMBER_RELATIONSHIP];
+/**
+ * The relationship types for a set of answers, each once, in setup order.
+ * An organization's start with Member; a Personal space has no members.
+ */
+export function relationshipTypesFor(
+  kinds: readonly SetupKind[],
+  options: { personal?: boolean } = {},
+): RelationshipType[] {
+  const out: RelationshipType[] = options.personal ? [] : [MEMBER_RELATIONSHIP];
   const seen = new Set(out.map((t) => t.id));
   for (const k of SETUP_KINDS) {
     if (!kinds.includes(k)) continue;

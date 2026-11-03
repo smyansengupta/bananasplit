@@ -23,7 +23,7 @@ import { bringInAction, runSetupAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "@/components/ui/toaster";
-import { SETUP_KIND_INFO, SETUP_KINDS, type SetupKind } from "@/lib/crm/templates";
+import { setupKindInfo, setupKindsFor, type SetupKind } from "@/lib/crm/templates";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, IconComponent> = {
@@ -42,7 +42,9 @@ type Counts = { members: number; contacts: number; forms: number; sponsors: numb
 /**
  * "What do you mostly reach out to?": big buttons, pick any, one Set up.
  * Then the people Bananasplit already knows, each brought in with one click,
- * and a spreadsheet for everyone else.
+ * and a spreadsheet for everyone else. In a Personal space (`personal`):
+ * its own few answers, and only the people who RSVP'd to your events (there
+ * are no members or forms to bring in).
  */
 export function CrmSetup({
   orgId,
@@ -51,9 +53,11 @@ export function CrmSetup({
   picked,
   counts,
   pipelines,
+  personal = false,
 }: {
   orgId: string;
   orgSlug: string;
+  personal?: boolean;
   done: boolean;
   picked: string[];
   counts: Counts;
@@ -64,7 +68,8 @@ export function CrmSetup({
   const [pending, start] = useTransition();
   const [bringing, setBringing] = useState<string | null>(null);
   const base = `/app/${orgSlug}/crm`;
-  const fresh = SETUP_KINDS.filter((k) => kinds.has(k) && !picked.includes(k));
+  const offered = setupKindsFor(personal);
+  const fresh = offered.filter((k) => kinds.has(k) && !picked.includes(k));
 
   const toggle = (k: SetupKind) =>
     setKinds((cur) => {
@@ -82,8 +87,8 @@ export function CrmSetup({
         </h2>
         <p className="text-muted-foreground text-[15px]">Pick any. You can add more later.</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {SETUP_KINDS.map((k) => {
-            const info = SETUP_KIND_INFO[k];
+          {offered.map((k) => {
+            const info = setupKindInfo(k, personal);
             const Icon = ICONS[info.icon] ?? Users;
             const on = kinds.has(k);
             const locked = picked.includes(k);
@@ -148,12 +153,13 @@ export function CrmSetup({
             Bring in the people you already know
           </h2>
           <Card className="divide-border divide-y p-0">
-            {(
-              [
-                ["members", "Your organization's members", counts.members],
-                ["contacts", "People who checked in or signed up", counts.contacts],
-                ["forms", "People who answered a form", counts.forms],
-              ] as const
+            {(personal
+              ? ([["contacts", "People who RSVP'd to your events", counts.contacts]] as const)
+              : ([
+                  ["members", "Your organization's members", counts.members],
+                  ["contacts", "People who checked in or signed up", counts.contacts],
+                  ["forms", "People who answered a form", counts.forms],
+                ] as const)
             ).map(([source, label, n]) => (
               <div key={source} className="flex flex-wrap items-center gap-3 px-5 py-4">
                 <span className="min-w-0 flex-1">

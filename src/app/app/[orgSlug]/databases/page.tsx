@@ -89,8 +89,9 @@ const VISIBILITY_COPY: Record<string, string> = {
 
 /**
  * The Databases index: the databases this viewer may open (Settings > Privacy
- * decides). In Personal, only the ones its owner makes: no built-in club
- * data, data source or reports.
+ * decides). In Personal, only the ones its owner makes and the CRM's
+ * People, Companies and pipelines once it's added: no built-in club data,
+ * data source or reports.
  */
 export default async function DatabasesPage({
   params,
@@ -108,8 +109,9 @@ export default async function DatabasesPage({
   // outside the page's transaction.
   const websiteSync = !personal && (await websiteSyncConnected(organization.id, user.id));
   const isAdmin = can({ role }, "databases.write");
-  // A data source fills a club's built-in databases; Personal Plus's data
-  // connection is for calendar sync.
+  // A data source (the website's Supabase export) fills a club's built-in
+  // databases, which Personal doesn't list; Personal's databases are fed by
+  // the CRM's (email, calls and meetings) and by imports.
   const connections = !personal && spaceIncludes(organization, "integrations");
   const canConnect = connections && can({ role }, "integrations.write");
   const showReports =

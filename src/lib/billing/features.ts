@@ -13,8 +13,9 @@ import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
  *                  availability polls, notes and files, databases it makes
  *                  itself, and its own settings.
  *   PERSONAL_PLUS  Personal Plus: Personal Free plus themes, integrations
- *                  (data connections: Google Calendar and the rest) and AI imports,
- *                  with more storage, bigger files and longer note history.
+ *                  (data connections: Google Calendar and the rest), AI imports
+ *                  and the CRM for one person, with more storage, bigger files
+ *                  and longer note history.
  *   TEAM_FREE      Team Free: an organization, free, up to 10 members.
  *                  Everything Personal Free has, plus the overview, weekly
  *                  updates, tags, the member directory, the sidebar and
@@ -120,13 +121,15 @@ export type PlanFeature = keyof typeof PLAN_FEATURES;
 
 /**
  * What Personal Plus adds to Personal Free: themes, integrations (Google
- * Calendar and the other data connections) and AI imports. Nothing else of
- * a club's.
+ * Calendar and the other data connections), AI imports and the CRM (your
+ * own people, companies, deals and outreach; docs/features/crm.md,
+ * "Personal CRM"). Nothing else of a club's.
  */
 export const PERSONAL_PLUS_EXTRAS = [
   "themes",
   "integrations",
   "ai",
+  "crm",
 ] as const satisfies readonly PlanFeature[];
 
 // ---------------------------------------------------------------- Limits

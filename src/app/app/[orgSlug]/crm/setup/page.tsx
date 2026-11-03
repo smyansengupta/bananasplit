@@ -11,9 +11,9 @@ import { crmShell } from "../shell";
 export const metadata = { title: "Set up the CRM" };
 
 /**
- * The one-step setup (docs/features/crm.md): what the organization mostly
- * reaches out to, then the people Bananasplit already knows. Owners and
- * admins only; run again later to add more pipelines.
+ * The one-step setup (docs/features/crm.md): what the space mostly reaches
+ * out to, then the people Bananasplit already knows. Owners and admins only
+ * (in a Personal space, its owner); run again later to add more pipelines.
  */
 export default async function CrmSetupPage({ params }: PageProps<"/app/[orgSlug]/crm/setup">) {
   const { orgSlug } = await params;
@@ -39,6 +39,7 @@ export default async function CrmSetupPage({ params }: PageProps<"/app/[orgSlug]
       <CrmSetup
         orgId={shell.org.id}
         orgSlug={orgSlug}
+        personal={shell.access.personal}
         done={Boolean(shell.access.settings)}
         picked={shell.access.settings?.setupKinds ?? []}
         counts={counts}

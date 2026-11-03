@@ -10,7 +10,7 @@ import { OutreachSettingsSection } from "@/components/crm/outreach/settings-sect
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { COMPANY_FIELDS, PERSON_FIELDS } from "@/lib/crm/fields";
-import { PIPELINE_TEMPLATES, SETUP_KINDS } from "@/lib/crm/templates";
+import { PIPELINE_TEMPLATES, setupKindsFor } from "@/lib/crm/templates";
 import { loadFields } from "@/server/databases/custom";
 import { crmDatabaseIds, requiredKeys } from "@/server/crm/databases";
 import { withOrgTx } from "@/server/db/context";
@@ -19,7 +19,10 @@ import { crmShell } from "../shell";
 
 export const metadata = { title: "CRM settings" };
 
-/** How the CRM is set up: access, managers, relationship types, pipelines and stages, fields. */
+/**
+ * How the CRM is set up: access, managers, relationship types, pipelines and
+ * stages, fields. A Personal space skips access, managers and lead routing.
+ */
 export default async function CrmSettingsPage({ params }: PageProps<"/app/[orgSlug]/crm/settings">) {
   const { orgSlug } = await params;
   const { gate, shell } = await crmShell(orgSlug);
@@ -116,10 +119,16 @@ export default async function CrmSettingsPage({ params }: PageProps<"/app/[orgSl
         relationshipTypes={shell.access.settings?.relationshipTypes ?? []}
         pipelines={data.pipelines}
         groups={data.groups}
-        templates={SETUP_KINDS.filter((k) => PIPELINE_TEMPLATES[k] && !used.has(k))}
+        templates={setupKindsFor(shell.access.personal).filter((k) => PIPELINE_TEMPLATES[k] && !used.has(k))}
+        personal={shell.access.personal}
       />
       <AiSettingsSection orgId={orgId} orgSlug={orgSlug} admin={shell.access.admin} />
-      <OutreachSettingsSection orgId={orgId} orgSlug={orgSlug} members={shell.members} />
+      <OutreachSettingsSection
+        orgId={orgId}
+        orgSlug={orgSlug}
+        members={shell.members}
+        personal={shell.access.personal}
+      />
     </div>
   );
 }

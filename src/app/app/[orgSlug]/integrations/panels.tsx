@@ -55,6 +55,20 @@ export const PANEL_APPS = [
 ] as const;
 export type PanelApp = (typeof PANEL_APPS)[number];
 
+/**
+ * Apps a Personal space doesn't offer: team chat, the website's build hook
+ * and its Supabase export (which fills an organization's built-in check-in,
+ * sign-up and ballot databases, which Personal doesn't have). The page
+ * leaves their tiles out and doesn't open their windows.
+ */
+export const ORG_ONLY_APPS: readonly string[] = [
+  "slack",
+  "discord",
+  "groupme",
+  "website",
+  "data-source",
+];
+
 export function isPanelApp(app: unknown): app is PanelApp {
   return typeof app === "string" && (PANEL_APPS as readonly string[]).includes(app);
 }
@@ -147,6 +161,7 @@ export async function loadPanel(
         "Google Calendar",
         async (p) => {
           const { organization, dto, canWrite, canRemove } = p;
+          const personal = organization.kind === "PERSONAL";
           const code = typeof sp.google === "string" ? sp.google : null;
           const notice = code
             ? (GOOGLE_NOTICES[code] ??
@@ -160,8 +175,9 @@ export async function loadPanel(
           return (
             <>
               <p className="text-muted-foreground text-sm">
-                Events are mirrored to your Google calendars, so members can subscribe in their own
-                calendar apps.
+                {personal
+                  ? "Your events are mirrored to your Google calendars, and you choose which ones."
+                  : "Events are mirrored to your Google calendars, so members can subscribe in their own calendar apps."}
               </p>
               {notice && (
                 <p
@@ -244,11 +260,12 @@ export async function loadPanel(
     case "ai-model":
       return withIntegration(orgSlug, "OPENAI_COMPATIBLE", "ai", "Other AI models", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;
+        const personal = organization.kind === "PERSONAL";
         return (
           <>
             <p className="text-muted-foreground text-sm">
-              Optional. The AI imports use whichever model you connect: this one, or Claude. Members
-              pick between them when both are set up.
+              Optional. The AI imports use whichever model you connect: this one, or Claude.
+              {personal ? " You pick" : " Members pick"} between them when both are set up.
             </p>
             <StatusPanel dto={dto} secretLabel="API key" />
             <AiModelForm orgId={organization.id} dto={dto} canWrite={canWrite} />

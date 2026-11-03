@@ -69,7 +69,7 @@ export function DataConnectors({
         <h2 id="int-data" className="heading text-[20px]">
           Research and enrichment
         </h2>
-        <span className="text-muted-foreground text-[13.5px]">For the CRM, on your organization&apos;s own keys. Bananasplit never charges per lookup.</span>
+        <span className="text-muted-foreground text-[13.5px]">For the CRM, on your own keys. Bananasplit never charges per lookup.</span>
       </div>
       <ul className="bg-card text-card-foreground ring-foreground/6 rounded-card edge divide-border divide-y px-[22px] py-1.5 ring-1">
         {connections.map((c) => (

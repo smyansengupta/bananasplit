@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { HandOverCard, Unowned } from "@/components/crm/outreach/handover";
@@ -20,13 +21,15 @@ function daysAgo(n: number): Date {
  * managers, members who left (or anyone) and the people they looked after,
  * handed over in one step, and everyone left with no owner; for anyone,
  * the brief on each person they've taken over (?for=me) or that their
- * position looks after (?role=).
+ * position looks after (?role=). A Personal space has nobody to hand over
+ * to, so it goes to People.
  */
 export default async function HandoverPage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/handover">) {
   const { orgSlug } = await params;
   const sp = (await searchParams) as Record<string, string | undefined>;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
+  if (shell.access.personal) redirect(`/app/${orgSlug}/crm/people`);
   const orgId = shell.org.id;
   const userId = shell.user.id;
   const manager = shell.access.manager;

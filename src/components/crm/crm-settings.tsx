@@ -120,10 +120,13 @@ export function CrmSettings({
   pipelines,
   groups,
   templates,
+  personal = false,
 }: {
   orgId: string;
   orgSlug: string;
   admin: boolean;
+  /** A Personal space: one person, so no "who sees what" and no CRM managers. */
+  personal?: boolean;
   access: "ALL" | "OWN";
   managerIds: string[];
   members: { id: string; name: string }[];
@@ -141,7 +144,7 @@ export function CrmSettings({
   return (
     <RelationProvider orgId={orgId} orgSlug={orgSlug} labels={{}} search={search} databases={databases}>
       <div className="space-y-6">
-        {admin && (
+        {admin && !personal && (
           <Panel title="Who sees what" lead="Owners, admins and CRM managers always see everything.">
             <Segmented
               label="Who sees what"
@@ -154,7 +157,7 @@ export function CrmSettings({
             />
           </Panel>
         )}
-        {admin && (
+        {admin && !personal && (
           <Panel title="CRM managers" lead="They set up pipelines, stages and fields without being admins.">
             <div className="flex flex-wrap gap-1.5">
               {members.map((m) => {

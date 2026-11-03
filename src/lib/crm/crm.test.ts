@@ -22,7 +22,15 @@ import { planMerge, pickKeeper } from "./merge";
 import { crmTabActive, resolveCrmTabs } from "./nav";
 import { decodeOwner, encodeOwner } from "./record-form";
 import { isGoingCold, knowsBest, strengthBand, strengthOf, touchValue } from "./strength";
-import { PIPELINE_TEMPLATES, pipelinesFor, relationshipTypesFor, SETUP_KINDS, viewsFor } from "./templates";
+import {
+  PIPELINE_TEMPLATES,
+  pipelinesFor,
+  relationshipTypesFor,
+  SETUP_KINDS,
+  setupKindInfo,
+  setupKindsFor,
+  viewsFor,
+} from "./templates";
 import { checkShapes, CrmValidationError, isUrl, missingMessage, missingRequired, normalizeUrl } from "./validate";
 
 const NOW = new Date("2026-11-02T12:00:00Z");
@@ -318,6 +326,16 @@ describe("setup templates", () => {
     expect(types.map((t) => t.id)).toEqual(["member", "donor", "partner"]);
     expect(viewsFor(["alumni"]).some((v) => v.name === "Alumni")).toBe(true);
     expect(viewsFor([]).some((v) => v.name === "Alumni")).toBe(false);
+  });
+
+  it("offers a Personal space its own answers, with no members, alumni or Member type", () => {
+    expect(setupKindsFor(false)).toEqual(SETUP_KINDS);
+    expect(setupKindsFor(true)).not.toContain("members");
+    expect(setupKindsFor(true)).not.toContain("alumni");
+    expect(setupKindsFor(true)[0]).toBe("clients");
+    expect(setupKindInfo("speakers", true).label).toBe("Mentors and guests");
+    expect(setupKindInfo("speakers", false).label).toBe("Speakers and guests");
+    expect(relationshipTypesFor(["clients"], { personal: true }).map((t) => t.id)).toEqual(["client"]);
   });
 });
 

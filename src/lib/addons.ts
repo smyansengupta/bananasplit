@@ -31,6 +31,8 @@ export interface AddOnInfo {
   summary: string;
   /** Under its name on its card: who uses it. */
   who: string;
+  /** In a Personal space, when it can be added there (the CRM): its summary and who, for one person. */
+  personal?: { summary: string; who: string };
   /** The page under /app/{slug} it opens. */
   path: string;
 }
@@ -61,6 +63,16 @@ export const ADD_ON_INFO: Record<AddOnId, AddOnInfo> = {
     summary:
       "The people and companies you reach out to: members, donors, partners, speakers and clients, with deals in pipelines and a timeline that fills itself.",
     who: "Every member works the CRM; owners, admins and CRM managers set it up",
+    personal: {
+      summary:
+        "The people and companies you reach out to: clients, partners and mentors, with deals in pipelines and a timeline that fills itself.",
+      who: "Just you, on Personal Plus",
+    },
     path: "/crm",
   },
 };
+
+/** The add-ons a Personal space can add: those with a `personal` reading (the CRM). */
+export function personalAddOns(): AddOnId[] {
+  return ADD_ONS.filter((id) => ADD_ON_INFO[id].personal);
+}
