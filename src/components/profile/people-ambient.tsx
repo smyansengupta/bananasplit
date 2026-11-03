@@ -20,6 +20,8 @@ export interface Newcomer {
   /** "Joined 2 days ago, no team yet". */
   reason: string;
   hasTeam: boolean;
+  /** The viewer already said hi. */
+  saidHi?: boolean;
 }
 
 export interface WaitingInvite {
@@ -59,7 +61,7 @@ export function PeopleAmbient({
             <AmbientActions
               why
               actions={[
-                {
+                !p.saidHi && {
                   key: "hi",
                   label: "Say hi",
                   reason: p.reason,

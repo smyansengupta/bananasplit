@@ -51,6 +51,7 @@ vi.mock("@/app/app/[orgSlug]/people/actions", () => ({
 vi.mock("@/server/profiles/directory", () => ({
   getPersonSheet: getPersonSheetMock,
   loadDirectory: loadDirectoryMock,
+  saidHiTo: async () => new Set(),
 }));
 
 const { notFound } = await import("next/navigation");
@@ -121,6 +122,7 @@ function sheet() {
     tasks: [{ id: "t1", title: "Exec sync agenda", dueKey: "2026-10-20" }],
     taskCount: 1,
     todayKey: "2026-10-19",
+    sent: { hi: false, checkIn: false },
   };
 }
 

@@ -55,6 +55,16 @@ describe("eventAmbient", () => {
     expect(kinds(event({}, { enabled: false }))).toEqual([]);
   });
 
+  it("says when it starts in plain words: minutes, today or tomorrow", () => {
+    const why = (at: Date) =>
+      eventAmbient(event({ startsAt: at, endsAt: new Date(at.getTime() + 3_600_000) }), now).find(
+        (a) => a.kind === "share-rsvp",
+      )?.reason;
+    expect(why(new Date(now.getTime() + 30 * 60_000))).toBe("Starts in 30 min, 3 signed up");
+    expect(why(h(4))).toBe("Starts today, 3 signed up");
+    expect(why(h(20))).toBe("Starts tomorrow, 3 signed up");
+  });
+
   it("opens a waitlist or adds seats when full", () => {
     expect(kinds(event({}, { capacity: 25, going: 25, waitlistOn: false }))).toEqual([
       "open-waitlist",

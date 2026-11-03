@@ -97,7 +97,17 @@ export function eventAmbient(e: EventAmbientInput, now: Date): EventAmbient[] {
     start - t <= 2 * DAY_MS &&
     fewSignups(rsvp.going, rsvp.capacity)
   ) {
-    const reason = `Starts in ${start - t <= DAY_MS ? "a day" : "2 days"}, ${rsvp.going} signed up`;
+    const mins = Math.ceil((start - t) / 60_000);
+    const day = dayKey(e.startsAt, e.timeZone);
+    const when =
+      start - t < HOUR_MS
+        ? `Starts in ${mins} min`
+        : day === dayKey(now, e.timeZone)
+          ? "Starts today"
+          : day === dayKey(new Date(t + DAY_MS), e.timeZone)
+            ? "Starts tomorrow"
+            : "Starts in 2 days";
+    const reason = `${when}, ${rsvp.going} signed up`;
     if (rsvp.url) out.push({ kind: "share-rsvp", reason });
     if (!e.remindedAt) out.push({ kind: "remind-members", reason });
   }

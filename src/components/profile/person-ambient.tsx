@@ -53,23 +53,25 @@ export function PersonAmbient({
 
   if (!isSelf && joinedThisWeek(person.joinedAt, now)) {
     const reason = newcomerReason(person.joinedAt, Boolean(person.team), now);
-    shown.push({
-      key: "hi",
-      reason,
-      node: (
-        <AmbientButton
-          action={{
-            key: "hi",
-            label: "Say hi",
-            reason,
-            tone: "solid",
-            ariaLabel: `Say hi to ${first}`,
-            run: () => sendMemberNoteAction(orgId, person.id, "hi"),
-            done: `Said hi to ${first}`,
-          }}
-        />
-      ),
-    });
+    // Said hi already: Add to a team may still be left.
+    if (!person.sent.hi)
+      shown.push({
+        key: "hi",
+        reason,
+        node: (
+          <AmbientButton
+            action={{
+              key: "hi",
+              label: "Say hi",
+              reason,
+              tone: "solid",
+              ariaLabel: `Say hi to ${first}`,
+              run: () => sendMemberNoteAction(orgId, person.id, "hi"),
+              done: `Said hi to ${first}`,
+            }}
+          />
+        ),
+      });
     if (!person.team) {
       shown.push({
         key: "team",
@@ -89,7 +91,7 @@ export function PersonAmbient({
     }
   }
 
-  const away = isSelf ? null : awayDays(activity, now);
+  const away = isSelf || person.sent.checkIn ? null : awayDays(activity, now);
   if (away !== null) {
     const reason = `Not around for ${away} days`;
     shown.push({

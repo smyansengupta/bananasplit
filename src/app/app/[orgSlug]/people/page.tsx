@@ -21,7 +21,7 @@ import { INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
-import { getPersonSheet, loadDirectory } from "@/server/profiles/directory";
+import { getPersonSheet, loadDirectory, saidHiTo } from "@/server/profiles/directory";
 import { planGate } from "@/server/billing/plan-gate";
 import type { DirectoryPerson } from "@/server/profiles/directory";
 
@@ -120,7 +120,19 @@ export default async function PeoplePage({
   const initial = initialSheet || !query.person ? query : { ...query, person: null };
 
   const { total, teams, people } = directory;
-  const ambient = ambientRows(people, invites, user.id);
+  const rows = ambientRows(people, invites, user.id);
+  // Said hi already, and on a team: nothing left to do for them.
+  const greeted = await saidHiTo(
+    organization.id,
+    user.id,
+    rows.newcomers.map((n) => n.id),
+  );
+  const ambient = {
+    ...rows,
+    newcomers: rows.newcomers
+      .map((n) => ({ ...n, saidHi: greeted.has(n.id) }))
+      .filter((n) => !n.saidHi || !n.hasTeam),
+  };
   const link = joinCode
     ? {
         code: joinCode.code,
