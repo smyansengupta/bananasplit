@@ -13,6 +13,7 @@ import { crmAccess, CrmError, type CrmActor } from "./access";
 import { ensureCrmDatabases } from "./databases";
 import { createPipelineFrom } from "./pipelines";
 import { moveSponsorsIn, type SponsorsMoveResult } from "./sponsors";
+import { ensurePipelineViews, ensureStarterReports } from "./starter";
 
 /**
  * The CRM's one-step setup (docs/features/crm.md, "Organization setup in one
@@ -100,6 +101,10 @@ export async function runSetup(actor: CrmActor, kindsInput: readonly string[]): 
       },
     });
   }
+
+  // Each pipeline's saved views and starter report, and the Outreach report on People.
+  await ensurePipelineViews(actor);
+  await ensureStarterReports(actor);
 
   const sponsors = hasSponsors ? await moveSponsorsIn(actor) : null;
   // The timeline fills from the workspace in the background.

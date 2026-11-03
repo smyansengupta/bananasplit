@@ -2,6 +2,7 @@ import { AlarmClock, Flag, Hourglass, Sparkles, Trophy, Users, type IconComponen
 import Link from "next/link";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { GoalList } from "@/components/crm/forecast";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
@@ -10,6 +11,9 @@ import { Card } from "@/components/ui/card";
 import { crmRecordHref } from "@/lib/crm/href";
 import { formatMoney } from "@/lib/crm/fields";
 import { todayList, type TodayItem } from "@/server/crm/queries";
+import { listGoals } from "@/server/crm/goals";
+import { safeTimeZone } from "@/lib/calendar/dates";
+import { localDateKey } from "@/lib/tasks/dates";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "./shell";
@@ -61,7 +65,9 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         closedAt: { gte: since },
       },
     });
-    return { lists, showingMine: !everyone && anyMine, people, open, won };
+    // This quarter's and year's goals, with how far along each is (set on the Forecast tab).
+    const goals = await listGoals(db, orgId, localDateKey(new Date(), safeTimeZone(shell.org.timezone ?? "UTC")), { current: true, take: 6 });
+    return { lists, showingMine: !everyone && anyMine, people, open, won, goals };
   });
   const base = `/app/${orgSlug}/crm`;
   const order = GROUPS.flatMap((g) => data.lists[g.kind].map((i) => i));
@@ -97,6 +103,39 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
       </dl>
       {(data.open._sum.amountCents ?? 0) > 0 && (
         <p className="text-muted-foreground text-sm">{formatMoney(data.open._sum.amountCents)} in open items.</p>
+      )}
+      {data.goals.length > 0 && (
+        <Card className="gap-3 p-5">
+          <h2 className="heading flex items-center gap-2 text-base">
+            <Trophy className="text-muted-foreground size-4" aria-hidden="true" />
+            Goals
+            <Link href={`${base}/forecast`} className="text-muted-foreground ms-auto text-xs font-normal hover:underline">
+              Forecast
+            </Link>
+          </h2>
+          <GoalList
+            orgId={orgId}
+            manager={false}
+            members={[]}
+            pipelineId={null}
+            periods={[]}
+            goals={data.goals.map((g) => {
+              const fmt = (n: number) => (g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US"));
+              const who = g.ownerId ? (shell.members.find((m) => m.id === g.ownerId)?.name ?? "a member") : "the team";
+              return {
+                id: g.id,
+                label: `${g.metricLabel}, ${who}`,
+                metric: g.metric,
+                period: g.periodLabel,
+                actual: fmt(g.attainment.actual),
+                target: fmt(g.target),
+                share: g.attainment.share,
+                pace: g.attainment.pace,
+                onTrack: g.attainment.onTrack,
+              };
+            })}
+          />
+        </Card>
       )}
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
       <div className="grid gap-4 lg:grid-cols-2">

@@ -6,6 +6,7 @@ import { CrmTabs } from "@/components/crm/crm-tabs";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, StrengthBadge, when } from "@/components/crm/record-page";
+import { ScoreReasons } from "@/components/crm/score";
 import { Timeline } from "@/components/crm/timeline";
 import { LinkedFrom } from "@/components/databases/linked-from";
 import { LinkedSection } from "@/components/links/linked-section";
@@ -18,6 +19,7 @@ import { formContext, personForm, withRelationLabels } from "@/server/crm/forms"
 import { ownerLabel } from "@/server/crm/owners";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { loadPerson } from "@/server/crm/records";
+import { scoreReasons } from "@/server/crm/scoring";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "../../shell";
@@ -42,7 +44,8 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
       : null;
     const fctx = await formContext(db, orgId, shell.roles);
     const form = await withRelationLabels(db, orgId, personForm(loaded.person, loaded.fields, fctx, def?.columns));
-    return { ...loaded, form, timelineItems: await presentTimeline(db, orgId, loaded.timeline) };
+    const score = await scoreReasons(db, orgId, "person", loaded.person.id);
+    return { ...loaded, form, score, timelineItems: await presentTimeline(db, orgId, loaded.timeline) };
   });
   if (!data) notFound();
   const { person } = data;
@@ -195,6 +198,11 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
             </Section>
           )}
           {data.linkedFrom.length > 0 && <LinkedFrom groups={data.linkedFrom} />}
+          {(person.score > 0 || data.score.by !== "none") && (
+            <Section title="Score">
+              <ScoreReasons score={person.score} {...data.score} />
+            </Section>
+          )}
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-person", id: person.id }} title="Linked" />
         </>
       }
