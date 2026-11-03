@@ -17,6 +17,9 @@ import { formatDuration } from "@/lib/crm/phone";
 
 const MAX_SECONDS = 600;
 
+/** The clock, outside the component (reading it is not part of rendering). */
+const clock = () => Date.now();
+
 export function VoiceNoteButton({
   orgId,
   targets,
@@ -43,7 +46,7 @@ export function VoiceNoteButton({
   useEffect(() => {
     if (state !== "recording") return;
     const t = setInterval(() => {
-      const s = Math.round((Date.now() - started.current) / 1000);
+      const s = Math.round((clock() - started.current) / 1000);
       setSeconds(s);
       if (s >= MAX_SECONDS) recorder.current?.stop();
     }, 500);
@@ -70,10 +73,10 @@ export function VoiceNoteButton({
     };
     rec.onstop = () => {
       stream.getTracks().forEach((t) => t.stop());
-      void upload(new Blob(chunks.current, { type: rec.mimeType || "audio/webm" }), Math.round((Date.now() - started.current) / 1000));
+      void upload(new Blob(chunks.current, { type: rec.mimeType || "audio/webm" }), Math.round((clock() - started.current) / 1000));
     };
     recorder.current = rec;
-    started.current = Date.now();
+    started.current = clock();
     setSeconds(0);
     rec.start(1000);
     setState("recording");

@@ -11,6 +11,7 @@ import { SetupHelp } from "./integration-header";
 import { StatusPanel, TestAndRemove } from "./integration-ui";
 import { loadIntegrationPage } from "./load";
 import { CopyUrl, DeepgramForm, NumberPicker, TelnyxForm, TwilioForm } from "./phone-forms";
+import { PHONE_MARKS } from "./phone-marks";
 import { integrationSummary } from "./status-copy";
 
 /**
@@ -27,21 +28,6 @@ const PROVIDER: Record<PhoneApp, "TELNYX" | "TWILIO" | "DEEPGRAM"> = {
   telnyx: "TELNYX",
   twilio: "TWILIO",
   deepgram: "DEEPGRAM",
-};
-
-const mark = (name: string, slug: string, color: string, ink: string, letters: string): Brand => ({
-  name,
-  slug,
-  group: "inbox",
-  color,
-  ink,
-  mark: letters,
-});
-
-export const PHONE_MARKS: Record<PhoneApp, Brand> = {
-  telnyx: mark("Telnyx", "telnyx", "#00E3AA", "#0B1F1A", "Tx"),
-  twilio: mark("Twilio", "twilio", "#F22F46", "#FFFFFF", "Tw"),
-  deepgram: mark("Deepgram", "deepgram", "#13EF93", "#101014", "Dg"),
 };
 
 const COPY: Record<PhoneApp, { name: string; body: string }> = {
