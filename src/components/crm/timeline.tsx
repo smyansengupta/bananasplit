@@ -197,8 +197,9 @@ export function Timeline({
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <b className="text-sm">{it.subject ?? WORDS[it.kind] ?? "Activity"}</b>
                     <span className="text-muted-foreground text-xs">
-                      {WORDS[it.kind] ?? ""}
-                      {it.actorId && members[it.actorId] ? `, ${members[it.actorId]}` : ""}
+                      {[it.subject ? WORDS[it.kind] : null, it.actorId ? members[it.actorId] : null]
+                        .filter(Boolean)
+                        .join(", ")}
                     </span>
                     <span className="text-muted-foreground ms-auto text-xs tabular-nums">{when(it.occurredAt)}</span>
                   </div>

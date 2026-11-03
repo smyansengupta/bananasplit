@@ -7,7 +7,6 @@ import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Stat, StatStrip } from "@/components/ui/stat";
 import { crmRecordHref } from "@/lib/crm/href";
 import { formatMoney } from "@/lib/crm/fields";
 import { todayList, type TodayItem } from "@/server/crm/queries";
@@ -78,12 +77,24 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         }
         tabs={<CrmTabs tabs={shell.tabs} />}
       />
-      <StatStrip>
-        <Stat icon={Users} value={data.people} label="People" />
-        <Stat icon={Flag} value={data.open._count._all} label="Open items" />
-        <Stat icon={AlarmClock} value={data.lists.followup.length} label="Follow-ups due" />
-        <Stat icon={Trophy} value={data.won} label="Closed won, last 90 days" />
-      </StatStrip>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {(
+          [
+            [Users, data.people, "People"],
+            [Flag, data.open._count._all, "Open items"],
+            [AlarmClock, data.lists.followup.length, "Follow-ups due"],
+            [Trophy, data.won, "Won, last 90 days"],
+          ] as const
+        ).map(([Icon, value, label]) => (
+          <div key={label} className="bg-card ring-foreground/6 flex items-center gap-3 rounded-2xl px-4 py-3 ring-1">
+            <Icon className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
+            <div>
+              <dd className="numeral text-[26px] tabular-nums">{value.toLocaleString()}</dd>
+              <dt className="text-muted-foreground text-xs">{label}</dt>
+            </div>
+          </div>
+        ))}
+      </dl>
       {(data.open._sum.amountCents ?? 0) > 0 && (
         <p className="text-muted-foreground text-sm">{formatMoney(data.open._sum.amountCents)} in open items.</p>
       )}

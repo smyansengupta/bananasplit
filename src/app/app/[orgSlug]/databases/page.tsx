@@ -150,6 +150,18 @@ export default async function DatabasesPage({
           counts[d.key] = await db.databaseRecord.count({
             where: { organizationId: organization.id, databaseId: d.id, deletedAt: null },
           });
+        } else if (d.kind === "CRM_PEOPLE") {
+          counts[d.key] = await db.crmPerson.count({
+            where: { organizationId: organization.id, deletedAt: null },
+          });
+        } else if (d.kind === "CRM_COMPANIES") {
+          counts[d.key] = await db.crmCompany.count({
+            where: { organizationId: organization.id, deletedAt: null },
+          });
+        } else if (d.kind === "CRM_PIPELINE") {
+          counts[d.key] = await db.crmDeal.count({
+            where: { organizationId: organization.id, deletedAt: null, pipeline: { databaseId: d.id } },
+          });
         }
       }
       const sync = isAdmin && connections ? await loadSyncStatus(db, organization.id) : null;
@@ -322,7 +334,8 @@ export default async function DatabasesPage({
         ]
       : []),
     ...[...withData, ...(showAll ? empty : [])].map((d) => {
-      const source = BUILT_IN_SOURCE[d.kind] ?? null;
+      // The CRM's databases report like any database (src/server/crm/reports.ts).
+      const source = d.kind.startsWith("CRM_") ? `custom:${d.id}` : (BUILT_IN_SOURCE[d.kind] ?? null);
       const n = counts[d.key] ?? 0;
       return {
         key: d.key,

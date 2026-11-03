@@ -237,6 +237,7 @@ export function PipelineView(props: PipelineProps) {
   };
 
   const totalAmount = cards.filter((c) => !c.closed).reduce((n, c) => n + (c.amountCents ?? 0), 0);
+  const openCount = cards.filter((c) => !c.closed).length;
   const filterCount = (owner && owner !== "me" ? 1 : 0) + (url.get("sort") ? 1 : 0);
 
   return (
@@ -245,7 +246,7 @@ export function PipelineView(props: PipelineProps) {
         <div className="mr-auto min-w-0">
           <h1 className="page-title">{pipeline.name}</h1>
           <p className="text-muted-foreground mt-2 text-[15px] tabular-nums max-md:hidden">
-            {cards.filter((c) => !c.closed).length} open {pipeline.itemNounPlural}
+            {openCount} open {openCount === 1 ? pipeline.itemNoun : pipeline.itemNounPlural}
             {pipeline.hasAmount && totalAmount > 0 ? `, ${formatMoney(totalAmount)} in play` : ""}
           </p>
         </div>
