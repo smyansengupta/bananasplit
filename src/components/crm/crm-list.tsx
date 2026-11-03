@@ -49,7 +49,7 @@ import { SearchField } from "@/components/ui/search-field";
 import { chipClass, Segmented } from "@/components/ui/segmented";
 import { ExpandChip, FilterPill, FiltersMenu } from "@/components/ui/toolbar-chips";
 import { toast } from "@/components/ui/toaster";
-import { crmRecordHref } from "@/lib/crm/href";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { initials, STATUS_LABELS } from "@/lib/crm/fields";
 import { strengthBand, STRENGTH_LABELS } from "@/lib/crm/strength";
 import { hasModifier, isTypingTarget, overlayOpen } from "@/lib/shortcuts";
@@ -120,6 +120,7 @@ function relative(iso: string | null): string {
 export function CrmList(props: ListProps) {
   const { orgId, orgSlug, kind, rows, total, counts } = props;
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   const url = useUrlState();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -151,8 +152,8 @@ export function CrmList(props: ListProps) {
   }
 
   const open = useCallback(
-    (id: string) => router.push(crmRecordHref(orgSlug, kind, id)),
-    [router, orgSlug, kind],
+    (id: string) => router.push(recordHref(kind, id), { scroll: false }),
+    [router, recordHref, kind],
   );
 
   useEffect(() => {
@@ -616,7 +617,7 @@ export function CrmList(props: ListProps) {
                     </td>
                     <td className="px-2 py-2">
                       <Link
-                        href={crmRecordHref(orgSlug, kind, r.id)}
+                        href={recordHref(kind, r.id)}
                         className="flex min-w-0 items-center gap-2.5"
                       >
                         <span className="bg-tint-info text-tint-info-foreground grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-bold">
@@ -713,7 +714,7 @@ export function CrmList(props: ListProps) {
           kind={kind}
           relationshipTypes={props.relationshipTypes}
           onClose={() => setCreating(false)}
-          onCreated={(id) => router.push(crmRecordHref(orgSlug, kind, id))}
+          onCreated={(id) => router.push(recordHref(kind, id))}
         />
       )}
     </div>

@@ -19,7 +19,7 @@ import {
 import { initials, personName, splitName } from "./fields";
 import { activityKindOf, detectSource, mapRow, mappingSignature, parseLooseDate, parseVcards, suggestMapping } from "./mapping";
 import { planMerge, pickKeeper } from "./merge";
-import { resolveCrmTabs } from "./nav";
+import { crmTabActive, resolveCrmTabs } from "./nav";
 import { decodeOwner, encodeOwner } from "./record-form";
 import { isGoingCold, knowsBest, strengthBand, strengthOf, touchValue } from "./strength";
 import { PIPELINE_TEMPLATES, pipelinesFor, relationshipTypesFor, SETUP_KINDS, viewsFor } from "./templates";
@@ -336,10 +336,16 @@ describe("small helpers", () => {
     expect(decodeOwner("")).toEqual({ ownerId: null, ownerRoleKey: null });
   });
 
-  it("puts each pipeline in the tab list where pipelines go, settings for managers only", () => {
-    const tabs = resolveCrmTabs("o", [{ id: "p1", name: "Donations" }], { manager: false, counts: { review: 3 } });
-    expect(tabs.map((t) => t.label)).toEqual(["Today", "People", "Companies", "Donations", "Outreach", "Campaigns", "Review", "Forecast", "Calls", "Quotes", "Duplicates"]);
-    expect(tabs.find((t) => t.id === "review")?.count).toBe(3);
-    expect(resolveCrmTabs("o", [], { manager: true }).map((t) => t.id)).toEqual(expect.arrayContaining(["settings", "automations"]));
+  it("has four tabs, each lit on the older pages it holds", () => {
+    const tabs = resolveCrmTabs("o", [{ id: "p1", name: "Donations" }], { manager: false, counts: { today: 3 } });
+    expect(tabs.map((t) => t.label)).toEqual(["Today", "People", "Deals", "Outreach"]);
+    expect(tabs.find((t) => t.id === "today")?.count).toBe(3);
+    const lit = (path: string) => tabs.filter((t) => crmTabActive(t, path)).map((t) => t.id);
+    expect(lit("/app/o/crm")).toEqual(["today"]);
+    expect(lit("/app/o/crm/queue")).toEqual(["today"]);
+    expect(lit("/app/o/crm/companies")).toEqual(["people"]);
+    expect(lit("/app/o/crm/pipelines/p1")).toEqual(["deals"]);
+    expect(lit("/app/o/crm/campaigns/c1")).toEqual(["outreach"]);
+    expect(lit("/app/o/crm/settings")).toEqual([]);
   });
 });

@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
-import { crmRecordHref } from "@/lib/crm/href";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { cn } from "@/lib/utils";
 
 /**
@@ -100,6 +100,8 @@ export function Timeline({
   members,
   /** Also log it on these (the item's company and people). */
   alsoOn = [],
+  /** The log form on top (a CRM card has its own composer instead). */
+  logForm = true,
 }: {
   orgId: string;
   orgSlug: string;
@@ -107,8 +109,10 @@ export function Timeline({
   initial: TimelineItem[];
   members: Record<string, string>;
   alsoOn?: { kind: "person" | "company" | "deal"; id: string }[];
+  logForm?: boolean;
 }) {
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   const [items, setItems] = useState(initial);
   const [kind, setKind] = useState<(typeof LOG_KINDS)[number]>("NOTE");
   const [subject, setSubject] = useState("");
@@ -127,59 +131,61 @@ export function Timeline({
 
   return (
     <div className="space-y-4">
-      <form
-        className="bg-card ring-foreground/6 rounded-card space-y-2.5 p-4 ring-1"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setPending(true);
-          const r = await logActivityAction(orgId, {
-            kind,
-            subject: subject || undefined,
-            body: body || undefined,
-            targets: [target, ...alsoOn],
-          }).catch(() => null);
-          setPending(false);
-          if (!r || !r.ok) {
-            toast({ title: r && !r.ok ? r.error : "That didn't save.", tone: "error" });
-            return;
-          }
-          setItems((cur) => [
-            {
-              id: r.id,
+      {logForm && (
+        <form
+          className="bg-card ring-foreground/6 rounded-card space-y-2.5 p-4 ring-1"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setPending(true);
+            const r = await logActivityAction(orgId, {
               kind,
-              subject: subject || null,
-              body: body || null,
-              occurredAt: new Date().toISOString(),
-              actorId: null,
-              sourceKind: null,
-              targets: [],
-            },
-            ...cur,
-          ]);
-          setSubject("");
-          setBody("");
-          router.refresh();
-        }}
-      >
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="What happened">
-          {LOG_KINDS.map((k) => {
-            const Icon = ICONS[k]!;
-            return (
-              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={cn(chipClass(kind === k), "h-8 px-3 text-[13px]")}>
-                <Icon className="size-3.5" aria-hidden="true" />
-                {WORDS[k]}
-              </button>
-            );
-          })}
-        </div>
-        <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={kind === "NOTE" ? "Title (optional)" : "What it was about"} aria-label="Subject" />
-        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="What was said, what's next" aria-label="Details" />
-        <div className="flex justify-end">
-          <Button type="submit" size="sm" disabled={pending || (!subject.trim() && !body.trim())}>
-            {pending ? "Saving…" : `Log ${WORDS[kind]!.toLowerCase()}`}
-          </Button>
-        </div>
-      </form>
+              subject: subject || undefined,
+              body: body || undefined,
+              targets: [target, ...alsoOn],
+            }).catch(() => null);
+            setPending(false);
+            if (!r || !r.ok) {
+              toast({ title: r && !r.ok ? r.error : "That didn't save.", tone: "error" });
+              return;
+            }
+            setItems((cur) => [
+              {
+                id: r.id,
+                kind,
+                subject: subject || null,
+                body: body || null,
+                occurredAt: new Date().toISOString(),
+                actorId: null,
+                sourceKind: null,
+                targets: [],
+              },
+              ...cur,
+            ]);
+            setSubject("");
+            setBody("");
+            router.refresh();
+          }}
+        >
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="What happened">
+            {LOG_KINDS.map((k) => {
+              const Icon = ICONS[k]!;
+              return (
+                <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={cn(chipClass(kind === k), "h-8 px-3 text-[13px]")}>
+                  <Icon className="size-3.5" aria-hidden="true" />
+                  {WORDS[k]}
+                </button>
+              );
+            })}
+          </div>
+          <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={kind === "NOTE" ? "Title (optional)" : "What it was about"} aria-label="Subject" />
+          <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="What was said, what's next" aria-label="Details" />
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" disabled={pending || (!subject.trim() && !body.trim())}>
+              {pending ? "Saving…" : `Log ${WORDS[kind]!.toLowerCase()}`}
+            </Button>
+          </div>
+        </form>
+      )}
 
       {items.length === 0 ? (
         <p className="text-muted-foreground px-1 text-sm">
@@ -218,7 +224,7 @@ export function Timeline({
                     <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
                       {it.targets.slice(0, 4).map((t) =>
                         t.label ? (
-                          <Link key={`${t.kind}:${t.id}`} href={crmRecordHref(orgSlug, t.kind, t.id)} className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                          <Link key={`${t.kind}:${t.id}`} href={recordHref(t.kind, t.id)} className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
                             {t.label}
                           </Link>
                         ) : null,

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { addDealPersonAction, removeDealPersonAction } from "@/app/app/[orgSlug]/crm/actions";
 import { toast } from "@/components/ui/toaster";
-import { crmRecordHref } from "@/lib/crm/href";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 
 import { CrmPicker } from "./crm-picker";
 
@@ -23,13 +23,14 @@ export function DealPeople({
   people: { id: string; name: string; role: string | null; sub: string | null }[];
 }) {
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   return (
     <div className="space-y-2">
       {people.length === 0 && <p className="text-muted-foreground text-sm">Nobody on it yet.</p>}
       <ul className="space-y-1.5 text-sm">
         {people.map((p) => (
           <li key={p.id} className="flex items-center gap-2">
-            <Link href={crmRecordHref(orgSlug, "person", p.id)} className="font-semibold hover:underline">
+            <Link href={recordHref("person", p.id)} className="font-semibold hover:underline">
               {p.name}
             </Link>
             <span className="text-muted-foreground min-w-0 flex-1 truncate">{p.role ?? p.sub}</span>

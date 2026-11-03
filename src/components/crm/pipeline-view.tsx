@@ -42,7 +42,7 @@ import { SearchField } from "@/components/ui/search-field";
 import { chipClass, Segmented } from "@/components/ui/segmented";
 import { ExpandChip, FilterPill, FiltersMenu } from "@/components/ui/toolbar-chips";
 import { toast } from "@/components/ui/toaster";
-import { crmRecordHref } from "@/lib/crm/href";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { formatMoney, formatMoneyShort } from "@/lib/crm/fields";
 import type { EditField } from "@/lib/crm/record-form";
 import { hasModifier, isTypingTarget, overlayOpen } from "@/lib/shortcuts";
@@ -112,6 +112,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export function PipelineView(props: PipelineProps) {
   const { orgId, orgSlug, pipeline, stages } = props;
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   const url = useUrlState();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -390,7 +391,7 @@ export function PipelineView(props: PipelineProps) {
               {cards.map((c) => (
                 <tr key={c.id} className={cn("border-border/60 border-b last:border-0", c.stuck && TINT.amber)}>
                   <td className="px-3 py-2">
-                    <Link href={crmRecordHref(orgSlug, "deal", c.id)} className="font-semibold hover:underline">
+                    <Link href={recordHref("deal", c.id)} className="font-semibold hover:underline">
                       {c.title}
                     </Link>
                   </td>
@@ -524,6 +525,7 @@ function Column({
 }
 
 function Card({ card, orgSlug }: { card: CardView; orgSlug: string }) {
+  const recordHref = useCrmRecordHref(orgSlug);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: card.id });
   const { setNodeRef: dropRef } = useDroppable({ id: card.id });
   return (
@@ -541,7 +543,7 @@ function Card({ card, orgSlug }: { card: CardView; orgSlug: string }) {
         isDragging && "z-10 opacity-80 shadow-lg",
       )}
     >
-      <Link href={crmRecordHref(orgSlug, "deal", card.id)} className="block font-semibold hover:underline" onPointerDown={(e) => e.stopPropagation()}>
+      <Link href={recordHref("deal", card.id)} className="block font-semibold hover:underline" onPointerDown={(e) => e.stopPropagation()}>
         {card.title}
       </Link>
       {(card.companyName || card.personName) && (

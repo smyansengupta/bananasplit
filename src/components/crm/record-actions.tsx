@@ -1,12 +1,13 @@
 "use client";
 
-import { History, Merge, RotateCcw, Trash2, Undo2 } from "@/components/icons";
+import { History, Merge, MoreHorizontal, RotateCcw, Trash2, Undo2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { mergeAction, restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { crmBase } from "@/lib/crm/href";
@@ -17,6 +18,9 @@ import { CrmPicker } from "./crm-picker";
  * A record's own actions, as buttons: merge a duplicate into it, its field
  * history (and putting it back to any point in it), and the trash (with
  * Undo). Restoring a trashed one is one click too.
+ *
+ * `menu` draws them as one round "…" instead (a CRM card's header), and
+ * `onTrashed` replaces going back to the list once it's in the trash.
  */
 
 export interface HistoryItem {
@@ -40,6 +44,8 @@ export function RecordActions({
   history,
   canMerge = true,
   canTrash = true,
+  menu = false,
+  onTrashed,
 }: {
   orgId: string;
   orgSlug: string;
@@ -50,6 +56,8 @@ export function RecordActions({
   history: HistoryItem[];
   canMerge?: boolean;
   canTrash?: boolean;
+  menu?: boolean;
+  onTrashed?: () => void;
 }) {
   const router = useRouter();
   const [merging, setMerging] = useState(false);
@@ -74,44 +82,77 @@ export function RecordActions({
     );
   }
 
+  const trash = async () => {
+    const r = await trashAction(orgId, kind, [id]).catch(() => null);
+    if (!r || !r.ok) {
+      toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
+      return;
+    }
+    toast({
+      title: `${name} is in the trash.`,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const u = await undoAction(orgId, r.batchId).catch(() => null);
+          router.refresh();
+          return u && !u.ok ? u.error : undefined;
+        },
+      },
+    });
+    if (onTrashed) onTrashed();
+    else router.push(list ? `${crmBase(orgSlug)}/${list}` : crmBase(orgSlug));
+  };
+
   return (
     <>
-      <Button variant="outline" size="icon" title="History" aria-label="History" onClick={() => setShowHistory(true)}>
-        <History className="size-4" aria-hidden="true" />
-      </Button>
-      {canMerge && kind !== "deal" && (
-        <Button variant="outline" size="icon" title="Merge a duplicate into this one" aria-label="Merge a duplicate" onClick={() => setMerging(true)}>
-          <Merge className="size-4" aria-hidden="true" />
-        </Button>
-      )}
-      {canTrash && (
-        <Button
-          variant="outline"
-          size="icon"
-          title="Move to the trash"
-          aria-label="Move to the trash"
-          onClick={async () => {
-            const r = await trashAction(orgId, kind, [id]).catch(() => null);
-            if (!r || !r.ok) {
-              toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
-              return;
-            }
-            toast({
-              title: `${name} is in the trash.`,
-              action: {
-                label: "Undo",
-                run: async () => {
-                  const u = await undoAction(orgId, r.batchId).catch(() => null);
-                  router.refresh();
-                  return u && !u.ok ? u.error : undefined;
-                },
-              },
-            });
-            router.push(list ? `${crmBase(orgSlug)}/${list}` : crmBase(orgSlug));
-          }}
-        >
-          <Trash2 className="size-4" aria-hidden="true" />
-        </Button>
+      {menu ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" title="History, merge, trash" aria-label="More: history, merge, trash">
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onSelect={() => setShowHistory(true)}>
+              <History className="size-4" aria-hidden="true" />
+              History
+            </DropdownMenuItem>
+            {canMerge && kind !== "deal" && (
+              <DropdownMenuItem onSelect={() => setMerging(true)}>
+                <Merge className="size-4" aria-hidden="true" />
+                Merge a duplicate
+              </DropdownMenuItem>
+            )}
+            {canTrash && (
+              <DropdownMenuItem variant="destructive" onSelect={() => void trash()}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Move to the trash
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <>
+          <Button variant="outline" size="icon" title="History" aria-label="History" onClick={() => setShowHistory(true)}>
+            <History className="size-4" aria-hidden="true" />
+          </Button>
+          {canMerge && kind !== "deal" && (
+            <Button variant="outline" size="icon" title="Merge a duplicate into this one" aria-label="Merge a duplicate" onClick={() => setMerging(true)}>
+              <Merge className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+          {canTrash && (
+            <Button
+              variant="outline"
+              size="icon"
+              title="Move to the trash"
+              aria-label="Move to the trash"
+              onClick={trash}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+        </>
       )}
 
       {merging && (

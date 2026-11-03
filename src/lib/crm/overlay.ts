@@ -1,0 +1,127 @@
+/**
+ * The CRM's overlay contract (docs/features/crm.md, "Redesign"): whatever
+ * opens over a CRM page (a person, a company, a deal, Power hour, Done on
+ * its own, Ask, New, a goal) is named by one search param, `?open=`, and
+ * drawn as one kind of centered card. The page underneath keeps the rest of
+ * its URL, so closing the card is removing `open`.
+ *
+ *   ?open=person:<id>    ?open=company:<id>    ?open=deal:<id>
+ *   ?open=power          ?open=log             ?open=ask
+ *   ?open=new:person     ?open=new:company     ?open=new:deal
+ *   ?open=goal           ?open=goal:<id>
+ *
+ * Pure, so the server (CrmOverlays) and the client (useCrmOpen) read and
+ * write it the same way.
+ */
+
+export const OPEN_PARAM = "open";
+
+export type CrmNewKind = "person" | "company" | "deal";
+
+export type CrmOpen =
+  | { kind: "person"; id: string }
+  | { kind: "company"; id: string }
+  | { kind: "deal"; id: string }
+  | { kind: "power" }
+  | { kind: "log" }
+  | { kind: "ask" }
+  | { kind: "new"; what: CrmNewKind }
+  | { kind: "goal"; id: string | null };
+
+export type CrmOpenKind = CrmOpen["kind"];
+
+/** Record ids are cuids; anything else (a typo, a stray quote) opens nothing. */
+const ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+const NEW_KINDS: readonly CrmNewKind[] = ["person", "company", "deal"];
+
+/** `?open=` as a CrmOpen, or null when it's missing or names nothing we draw. */
+export function parseOpen(raw: string | readonly string[] | null | undefined): CrmOpen | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text) return null;
+  const colon = text.indexOf(":");
+  const head = colon === -1 ? text : text.slice(0, colon);
+  const rest = colon === -1 ? null : text.slice(colon + 1);
+  switch (head) {
+    case "person":
+    case "company":
+    case "deal":
+      return rest && ID.test(rest) ? { kind: head, id: rest } : null;
+    case "power":
+    case "log":
+    case "ask":
+      return rest === null ? { kind: head } : null;
+    case "new":
+      return rest && (NEW_KINDS as readonly string[]).includes(rest)
+        ? { kind: "new", what: rest as CrmNewKind }
+        : null;
+    case "goal":
+      if (rest === null) return { kind: "goal", id: null };
+      return ID.test(rest) ? { kind: "goal", id: rest } : null;
+    default:
+      return null;
+  }
+}
+
+/** A CrmOpen as the `?open=` value. */
+export function formatOpen(open: CrmOpen): string {
+  switch (open.kind) {
+    case "person":
+    case "company":
+    case "deal":
+      return `${open.kind}:${open.id}`;
+    case "new":
+      return `new:${open.what}`;
+    case "goal":
+      return open.id ? `goal:${open.id}` : "goal";
+    default:
+      return open.kind;
+  }
+}
+
+type SearchLike =
+  URLSearchParams | string | Readonly<Record<string, string | readonly string[] | undefined>>;
+
+function toParams(search: SearchLike): URLSearchParams {
+  if (typeof search === "string")
+    return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  if (search instanceof URLSearchParams) return new URLSearchParams(search.toString());
+  const out = new URLSearchParams();
+  for (const [k, v] of Object.entries(search)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) for (const one of v) out.append(k, one);
+    else out.set(k, v as string);
+  }
+  return out;
+}
+
+/**
+ * The same page with `open` set to `open` (or removed, with null), every
+ * other param kept as it was: a row click opens its card over the page
+ * you're on, and closing it gives you back exactly the list you had.
+ */
+export function hrefWithOpen(
+  pathname: string,
+  search: SearchLike,
+  open: CrmOpen | string | null,
+): string {
+  const params = toParams(search);
+  params.delete(OPEN_PARAM);
+  if (open) params.set(OPEN_PARAM, typeof open === "string" ? open : formatOpen(open));
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+/**
+ * The CRM pages that render CrmOverlays, so a record link there just sets
+ * `open` on the page you're on. Anywhere else a record link goes to its
+ * list (crmRecordHref). Add a page here when it starts rendering overlays.
+ */
+const OVERLAY_PAGES =
+  /^\/app\/[^/]+\/crm(?:\/(?:people|companies|deals|outreach|pipelines\/[^/]+))?\/?$/;
+
+export function rendersOverlays(pathname: string): boolean {
+  return OVERLAY_PAGES.test(pathname);
+}

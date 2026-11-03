@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { readRelation, type RelationRef } from "@/lib/databases/fields";
-import { crmRecordHref } from "@/lib/crm/href";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import type { EditField } from "@/lib/crm/record-form";
 import { cn } from "@/lib/utils";
 
@@ -530,13 +530,14 @@ function RelationEditor({
   labels: Record<string, string>;
   onChange: (refs: RelationRef[]) => void;
 }) {
+  const recordHref = useCrmRecordHref(orgSlug);
   const [names, setNames] = useState(labels);
   return (
     <div className="flex flex-wrap items-center gap-1.5 py-1">
       {refs.map((r) => (
         <Badge key={r.id} variant="secondary" className="gap-1 pe-1">
           <Link
-            href={crmRecordHref(orgSlug, r.kind as "person" | "company" | "deal", r.id)}
+            href={recordHref(r.kind as "person" | "company" | "deal", r.id)}
             className="hover:underline"
           >
             {names[`${r.kind}:${r.id}`] ?? "Linked"}

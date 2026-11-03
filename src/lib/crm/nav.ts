@@ -1,8 +1,9 @@
 /**
- * The CRM's tabs, in one list, so later phases add a tab by adding an
- * entry (Phase 2: Outreach and Campaigns; Phase 3: Automations and
- * Forecast; Phase 4: Review for AI changes). `pipelines` stands for one tab
- * per pipeline, in the pipelines' own order.
+ * The CRM's tabs (docs/features/crm.md, "Redesign"): four, in one list.
+ * Everything else lives under one of them (People | Companies is a switch
+ * on People; pipelines, forecast and quotes are Deals; campaigns are
+ * Outreach) or behind the settings button in the header. A tab stays lit
+ * on the older pages it now holds, through `also`, until they move.
  */
 
 export interface CrmTab {
@@ -12,30 +13,36 @@ export interface CrmTab {
   icon: string;
   /** Path under /app/{slug}/crm ("" is the CRM's home). */
   path: string;
-  /** Only owners, admins and CRM managers see it. */
-  managersOnly?: boolean;
-  /** Active only on its own URL. */
+  /** Active only on its own URL (besides `also`). */
   exact?: boolean;
+  /** Other paths under /app/{slug}/crm this tab is lit on. */
+  also?: readonly string[];
 }
 
-export type CrmTabEntry = CrmTab | { id: "pipelines" };
-
-export const CRM_TABS: readonly CrmTabEntry[] = [
-  { id: "today", label: "Today", icon: "Sunrise", path: "", exact: true },
-  { id: "people", label: "People", icon: "Users", path: "/people" },
-  { id: "companies", label: "Companies", icon: "Building2", path: "/companies" },
-  { id: "pipelines" },
-  // Phase 2, reaching out: templates, sequences, booking pages and bulk email; lists and campaigns.
-  { id: "outreach", label: "Outreach", icon: "Send", path: "/outreach" },
-  { id: "campaigns", label: "Campaigns", icon: "Megaphone", path: "/campaigns" },
-  { id: "queue", label: "Review", icon: "Inbox", path: "/queue" },
-  { id: "forecast", label: "Forecast", icon: "ChartLine", path: "/forecast" },
-  { id: "automations", label: "Automations", icon: "Zap", path: "/automations", managersOnly: true },
-  // Phase 5: calls (the dialer) and quotes.
-  { id: "calls", label: "Calls", icon: "Phone", path: "/calls" },
-  { id: "quotes", label: "Quotes", icon: "ReceiptText", path: "/quotes" },
-  { id: "review", label: "Duplicates", icon: "Merge", path: "/review" },
-  { id: "settings", label: "Settings", icon: "Settings", path: "/settings", managersOnly: true },
+export const CRM_TABS: readonly CrmTab[] = [
+  {
+    id: "today",
+    label: "Today",
+    icon: "Sunrise",
+    path: "",
+    exact: true,
+    also: ["/queue", "/review", "/calls", "/scan"],
+  },
+  {
+    id: "people",
+    label: "People",
+    icon: "Users",
+    path: "/people",
+    also: ["/companies", "/import", "/handover"],
+  },
+  {
+    id: "deals",
+    label: "Deals",
+    icon: "Columns3",
+    path: "/deals",
+    also: ["/pipelines", "/items", "/forecast", "/quotes"],
+  },
+  { id: "outreach", label: "Outreach", icon: "Send", path: "/outreach", also: ["/campaigns"] },
 ];
 
 export interface ResolvedCrmTab {
@@ -44,38 +51,39 @@ export interface ResolvedCrmTab {
   icon: string;
   href: string;
   exact?: boolean;
+  /** Full paths (under the CRM) this tab is also lit on. */
+  also?: string[];
   count?: number;
 }
 
-/** The tabs a viewer sees, with each pipeline in place of `pipelines`. */
+/**
+ * The tabs a viewer sees. `pipelines` and `manager` are kept for the
+ * callers that pass them; the four tabs are the same for everyone.
+ */
 export function resolveCrmTabs(
   orgSlug: string,
-  pipelines: readonly { id: string; name: string; icon?: string | null }[],
-  options: { manager: boolean; counts?: Record<string, number> },
+  _pipelines: readonly { id: string; name: string; icon?: string | null }[] = [],
+  options: { manager?: boolean; counts?: Record<string, number> } = {},
 ): ResolvedCrmTab[] {
   const base = `/app/${orgSlug}/crm`;
-  const out: ResolvedCrmTab[] = [];
-  for (const entry of CRM_TABS) {
-    if (!("label" in entry)) {
-      for (const p of pipelines) {
-        out.push({
-          id: `pipeline:${p.id}`,
-          label: p.name,
-          icon: p.icon || "Columns3",
-          href: `${base}/pipelines/${p.id}`,
-        });
-      }
-      continue;
-    }
-    if (entry.managersOnly && !options.manager) continue;
-    out.push({
-      id: entry.id,
-      label: entry.label,
-      icon: entry.icon,
-      href: `${base}${entry.path}`,
-      exact: entry.exact,
-      count: options.counts?.[entry.id],
-    });
-  }
-  return out;
+  return CRM_TABS.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    icon: entry.icon,
+    href: `${base}${entry.path}`,
+    exact: entry.exact,
+    also: entry.also?.map((p) => `${base}${p}`),
+    count: options.counts?.[entry.id],
+  }));
+}
+
+/** Whether `pathname` is on this tab: its own URL, below it (unless exact), or one of the pages it holds. */
+export function crmTabActive(
+  tab: Pick<ResolvedCrmTab, "href" | "exact" | "also">,
+  pathname: string,
+): boolean {
+  const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  if (pathname === tab.href) return true;
+  if (!tab.exact && under(tab.href)) return true;
+  return (tab.also ?? []).some(under);
 }
