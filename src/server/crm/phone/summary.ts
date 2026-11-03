@@ -34,7 +34,7 @@ const SYSTEM = [
 
 /** The local stand-in (AI_STANDIN=1): the first sentences, and lines that sound like a promise. */
 export function standinSummary(transcript: string): TranscriptSummary {
-  const text = transcript.replace(/^Speaker \d+:\s*/gm, "").replace(/\s+/g, " ").trim();
+  const text = transcript.replace(/\bSpeaker \d+:\s*/g, "").replace(/\s+/g, " ").trim();
   const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
   const next = sentences
     .filter((s) => /\b(will|next|follow up|send|call back|by (monday|tuesday|wednesday|thursday|friday)|tomorrow)\b/i.test(s))
