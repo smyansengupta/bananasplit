@@ -1,6 +1,8 @@
 import { formatMoney } from "@/lib/crm/fields";
 import { normalizeEmail } from "@/lib/crm/dedupe";
 import { renderMerge, sinceWords, textToHtml, type MergeValues } from "@/lib/crm/outreach/merge";
+import { nextInWindow } from "@/lib/crm/outreach/schedule";
+import { readSending, sendingIsSet, sendingWindow, unsubscribeFooter } from "@/lib/crm/settings-prefs";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
@@ -608,8 +610,18 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
     m.bodyText = renderMerge(m.bodyText ?? "", values).text;
   }
   const purpose = purposeOf(m, bulk);
+  const settings =
+    purpose === "one-to-one"
+      ? null
+      : await db.crmSettings.findUnique({ where: { organizationId }, select: { dailySendCap: true, sending: true } });
+  // CRM settings > Sending: group mail waits for the organization's hours
+  // (and for Monday, with weekends off). Untouched settings change nothing.
+  if (settings && sendingIsSet(settings.sending)) {
+    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+    const at = nextInWindow(now, sendingWindow(readSending(settings.sending)), org?.timezone ?? "UTC");
+    if (at.getTime() > now.getTime() + 60_000) return { later: at };
+  }
   if (purpose === "sequence" && m.mailboxUserId) {
-    const settings = await db.crmSettings.findUnique({ where: { organizationId }, select: { dailySendCap: true } });
     const cap = settings?.dailySendCap ?? 150;
     if ((await sentToday(db, organizationId, m.mailboxUserId, now)) >= cap) {
       const tomorrow = startOfUtcDay(new Date(now.getTime() + 86_400_000));
@@ -642,8 +654,9 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
     const unsub = unsubscribeUrl(organizationId, person.id);
     headers["List-Unsubscribe"] = `<${oneClickUrl(organizationId, person.id)}>`;
     headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
-    text = `${text}\n\n--\nDon't want these emails? Unsubscribe: ${unsub}`;
-    footerHtml = `<p style="margin:24px 0 0;font-size:12px;color:#777">Don't want these emails? <a href="${unsub}">Unsubscribe</a>.</p>`;
+    const footer = unsubscribeFooter(readSending(settings?.sending).unsubscribeLine, unsub);
+    text = `${text}\n\n--\n${footer.text}`;
+    footerHtml = `<p style="margin:24px 0 0;font-size:12px;color:#777">${footer.html}</p>`;
   }
   const bodyForHtml = marketing ? text.slice(0, text.lastIndexOf("\n\n--\n")) : text;
   let html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f1f1f">${textToHtml(

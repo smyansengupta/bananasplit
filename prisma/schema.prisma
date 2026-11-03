@@ -3404,6 +3404,13 @@ model CrmSettings {
   enrichmentOrder   String[]  @default([])
   /// Most emails one member's mailbox sends a day from sequences and campaigns.
   dailySendCap      Int       @default(150)
+  /// CRM settings > Sending: {startHour, endHour, weekends, unsubscribeLine}.
+  /// Sequence, campaign and automation mail waits for the window
+  /// (readSending in src/lib/crm/settings-prefs.ts).
+  sending           Json      @default("{}")
+  /// CRM settings > Automations, how much it may do alone:
+  /// {emails, merges, signatures, stages}, each "suggest" | "tell" | "auto".
+  autonomy          Json      @default("{}")
   /// Calls and texts (Phase 5): {provider, recording: "ask"|"never",
   /// notice, quietStart, quietEnd, callStart, callEnd, voicemailKey}.
   /// Owners and admins set it (src/server/crm/phone/settings.ts).
