@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { DealPeople } from "@/components/crm/deal-people";
 import { RecordActions } from "@/components/crm/record-actions";
@@ -107,6 +108,7 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
       }
       side={
         <>
+          <RecordAi orgId={orgId} orgSlug={orgSlug} kind="deal" id={deal.id} name={deal.title} readOnly={Boolean(deal.deletedAt)} />
           <Section title="Details">
             <RecordFields orgId={orgId} orgSlug={orgSlug} kind="deal" id={deal.id} fields={data.form} readOnly={Boolean(deal.deletedAt)} />
             {deal.sponsorshipId && (

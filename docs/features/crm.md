@@ -1,7 +1,7 @@
 # CRM add-on: plan
 
-Status: Phase 1 built on `claude/crm` (see "Phase 1 as built" at the
-end); phases 2 to 6 are plan. Source material: the CRM teardown PDF (seven
+Status: Phase 1 built on `claude/crm` and Phase 4 on `claude/crm-p4` (see "Phase 1 as built" and "Phase 4 as built" at the
+end); phases 2, 3, 5 and 6 are plan. Source material: the CRM teardown PDF (seven
 CRMs, 12 modules, rebuild costs), read against this repo on `claude/fc-all`,
 plus three research passes on 2026-11-02: user complaints (about 80
 sources), 53 newer CRMs and tools, and the facts on self-hosted models,
@@ -915,3 +915,146 @@ Keys: j and k, Enter, x, n, /.
   as in Finance; its stage moves only through Finance's rules.
 - The intake forms and starter report from setup come with Forms to CRM
   (Phase 2) and the CRM's own widgets (Phase 3).
+
+## Phase 4 as built
+
+AI, on `claude/crm-p4`. Every CRM AI call runs on the organization's own
+key (or the local stand-in), checks the hard monthly cap, writes `AiUsage`,
+and ends as a suggestion a person accepts; nothing is sent, and nothing a
+person typed is overwritten, by AI.
+
+### The review queue (`src/server/crm/review.ts`, `src/lib/crm/suggestions.ts`)
+
+- Every AI change, automation proposal, connected-app write and
+  email-sourced suggestion is a `CrmSuggestion`: kind, payload (zod per
+  kind), the record it's about, a citation (meeting, email, form, file,
+  transcript, conversation, card, web page, connected app, agent) and an
+  assignee. Duplicates (`MERGE`) keep their own tab.
+- The Review tab (`/crm/queue`, `CRM_TABS` entry `queue`, a count badge from
+  `queueCount`): Waiting and Done, "For me", kind chips, a before and after
+  per suggestion, Accept, Reject, Edit (drafts and tasks) and Accept all;
+  Undo on anything accepted. An assignee gets a `CRM_REVIEW` notification
+  (their Inbox).
+- A suggestion about a record the viewer can't see (OWN access) is hidden
+  from them; accepting runs as the reviewer under RLS, so it can never do
+  more than they could by hand.
+
+| For other phases | Call |
+|---|---|
+| Queue a change (any transaction, member or service path) | `proposeChange(db, { organizationId, kind, source, title, summary?, payload, target?, citation?, assigneeId?, proposedById? })`; an identical waiting one is returned instead |
+| Apply one (history source `ai`, `connector`, `automation`...) | `acceptSuggestion(ctx, id, edits?)` |
+| Say no | `rejectSuggestion(ctx, id)` |
+| Accept several, one savepoint each | `acceptSuggestions(ctx, ids)` |
+| Take one back (it waits again; only whoever accepted it) | `undoSuggestion(ctx, id)` |
+| Read the queue as a viewer | `listQueue(db, orgId, viewerId, query)`, `queueCount` |
+| Where every AI email goes (Phase 2's compose replaces its body) | `deliverDraft(db, input)` in `drafts.ts` |
+| A promise as a task suggestion | `proposePromise(db, ...)` in `assist.ts` |
+
+Accepting: `CREATE_PERSON` (with an optional timeline entry and next-step
+task) and `CREATE_COMPANY` through `createPerson` and `createCompany`;
+`UPDATE_FIELD` through `updatePerson`, `updateCompany` or `updateDeal` (an
+allowlist of fields, custom ones as `custom.<id>`), recording the citation
+in the record's enrichment; `MOVE_STAGE` through `moveDeal` (a stage that
+needs fields says so); `LOG_ACTIVITY` through `logActivity`; `DRAFT_EMAIL`
+as a DRAFT `CrmEmailMessage`; `CREATE_TASK` through the task service,
+linked to the record by `ItemLink` (a follow-up also sets the record's next
+follow-up). Undo: the batch Undo, the trash, the task deleted, the draft
+removed.
+
+### Metered calls (`src/server/crm/ai.ts`)
+
+- `runCrmAi({ organizationId, userId, feature, request })`: the connection
+  (`crmCredentials`: the org's Claude key, else its other model API, else
+  Bananasplit AI when `BANANASPLIT_AI=1`, else the stand-in), 60 AI requests
+  an hour per member and 400 per organization, the cap (`assertUnderCap`,
+  on the service path so it counts everyone's spend), the call with no
+  transaction open, one `AiUsage` row.
+- `CRM_AI_JOBS`: each job's model size in one place (a small fast Claude for
+  summaries, readings, Ask and AI fields; the org's chosen model for drafts,
+  briefs and research). Prices come from the model list; the Batch API is
+  half price.
+- `claudeWebResearch` (Claude's own web search, schema-bound), and
+  `createClaudeBatch` and `readClaudeBatch` for the Message Batches API.
+- Prompts wrap everything members and contacts wrote as data (`dataRule`,
+  `fenced`); no tools beyond web search for research.
+
+### Features
+
+| What | Where |
+|---|---|
+| "Where we stand" (kept on the record), Draft a follow-up, Brief me, Meeting notes, Paste a chat, Enrich, Research, where values came from | `RecordAi` on every record page (`src/components/crm/ai/record-ai*.tsx`); `assist.ts` |
+| Meeting and call notes: pasted, or a `.txt`, `.vtt`, `.srt` or `.md` transcript from Zoom, Meet, Teams or Granola; summary, objections, competitors, sentiment, facts, and promises as tasks | `readTranscript` |
+| Paste any conversation (text or a screenshot): finds the person (email, phone, exact name) or suggests a new one, logs it, the next step as a task | `readConversation`, `PasteConversation`, `POST /api/orgs/{orgId}/crm/ai/image` |
+| Card and badge scanning: a phone-first capture page | `/crm/scan`, `scanCard` (an email already in the CRM gets field changes instead) |
+| Ask box (Today and Review): the model picks one allowlisted query, it runs as the member, the model answers from the numbered results, shown as links | `ask.ts`, `lookups.ts`, `CrmAiBar` |
+| AI fields: Fill on a record, Fill empty and Refill all for a column, `options.auto` (when asked, new rows, every day, every week); citations in enrichment under `custom.<fieldId>`; a typed value gets a suggestion instead | `ai-fields.ts`, `AiFillButton`, CRM settings |
+| Enrichment waterfall (`CrmSettings.enrichmentOrder`; by default Hunter, Prospeo, Tavily, Claude web search): empty fields filled with source and time, different values queued | `enrich.ts` |
+| Research agent (Tavily, else Claude web search, else it stops and says why) and follow-up agent (drafts for people going cold, skipping anyone with a draft waiting), each with a run log | `agents.ts`; CRM settings, Agents |
+| Data connectors: Tavily, Hunter and Prospeo cards (key as `OrgSecret`, test, credits used this month, remove) | `data-connectors.ts`; `DataConnectorsSection` on Integrations and apps |
+| This month's use by feature and member, the hard cap (owners and admins), the waterfall's order, agents, AI fields, and a "Bananasplit AI (coming later)" note | `AiSettingsSection` on CRM settings; `usage.ts` |
+
+Settings that needed no schema: agent switches are a CrmView row
+(`objectKind` `ai-settings`), runs are CrmView rows (`agent-run`), Message
+Batches in flight are CrmView rows (`ai-batch`), and a pipeline item's
+enrichment (it has no column) is a CrmView row (`deal-enrichment`, one per
+writer, merged on read).
+
+### Your own Claude (MCP)
+
+`src/server/connectors/tools/crm.ts` and `crm-writes.ts`, next to the
+database tools, as the member under RLS, in a space that added the CRM:
+
+- Read: `crm_search`, `crm_timeline`, `crm_not_contacted`,
+  `crm_changes_since`, `crm_pipelines`; `fetch` opens CRM records (ids
+  `crmperson:`, `crmcompany:`, `crmitem:`).
+- Write (WRITE grants, 120 an hour per grant, audited, never delete or
+  send): `crm_log_activity` and `crm_add_note` apply at once (low risk);
+  `crm_create_person`, `crm_create_company`, `crm_update_record`,
+  `crm_move_stage` and `crm_draft_email` wait in Review with the app as
+  their source; `crm_build_list` saves a personal list.
+- `list_databases` and `query_database` read the CRM's databases (built
+  per definition with `loadSourceFor`); `add_database_record` points CRM
+  databases at the CRM tools.
+
+### Jobs
+
+`crm-ai` (registry; handler `src/server/crm/ai-jobs.ts`): a column fill a
+few rows a turn, a Message Batch poll every ten minutes, research on a new
+record, the follow-up agent per owner, and the daily sweep
+(`scheduleCrmAi`, from `/api/cron/task-digest`). A new person's
+`crm-refresh` queues its automatic AI work (`queueNewRecordAi`). A job acts
+as a member (`jobTx`) and stops if they've left; out of budget or with no
+connection it stops quietly.
+
+### Migration
+
+`20261105130000_crm_ai`: `ItemLink_kinds_known` now names `crm-person`,
+`crm-company` and `crm-deal`. Phase 1 added the kinds to `src/lib/links.ts`
+but not to the constraint, so linking a task to a CRM record failed. No
+tables, policies, grants or manifest entries.
+
+### Tests
+
+`src/server/crm/ai.test.ts` (prices and the batch discount, the model tier,
+Claude faked through `aiClients`, the Batch API call, payloads and diffs,
+the connector rule, the stand-in readers, AI field values, the waterfall,
+Tavily and Hunter through `dataClients`), `src/server/crm/review.db.test.ts`
+(accept and undo with history sources, a connected app's new person, the
+assignee's notification, reject, a batch with one refused, OWN access, the
+stand-in summary and transcript, the cap) and
+`src/server/connectors/tools/crm.db.test.ts` (the tools against real roles
+and through the MCP server).
+
+### Not done, or not checked
+
+- Real models, Tavily, Hunter and Prospeo were not called (no keys here):
+  the stand-in and fakes cover the flows; Hunter's and Prospeo's response
+  shapes are read defensively from their documentation.
+- Granola, Zoom and Meet transcripts come in as uploaded files; pulling
+  them from those apps waits on their integrations. Audio is Phase 5's.
+- Suggestions reach the Inbox as `CRM_REVIEW` notifications to their
+  assignee; a "To review" count in the Inbox itself is left to Phase 3's
+  signals.
+- AI fields fill on the CRM's databases only; organization-made databases
+  keep the field type with Fill off.
+- Credits used this month are read when a key is saved or tested.

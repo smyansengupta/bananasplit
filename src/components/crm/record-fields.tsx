@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Sparkles, X } from "@/components/icons";
+import { ChevronDown, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -21,11 +21,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
-import { AI_FILL_PENDING, readRelation, type RelationRef } from "@/lib/databases/fields";
+import { readRelation, type RelationRef } from "@/lib/databases/fields";
 import { crmRecordHref } from "@/lib/crm/href";
 import type { EditField } from "@/lib/crm/record-form";
 import { cn } from "@/lib/utils";
 
+import { AiFillButton, AiRecordContext } from "./ai/ai-fill";
 import { CrmPicker } from "./crm-picker";
 
 /**
@@ -88,6 +89,7 @@ export function RecordFields({
   const custom = fields.filter((f) => f.kind === "CUSTOM");
 
   return (
+    <AiRecordContext.Provider value={{ kind, id }}>
     <div className="space-y-4">
       <div
         className="text-muted-foreground flex h-4 items-center justify-end text-xs"
@@ -174,6 +176,7 @@ export function RecordFields({
         />
       )}
     </div>
+    </AiRecordContext.Provider>
   );
 }
 
@@ -410,22 +413,41 @@ export function FieldEditor({
         />
       );
     }
-    case "AI":
+    case "AI": {
+      // Shown and edited as its output type; Fill asks the organization's AI.
+      const options = f.field!.options;
       return (
         <div className="flex items-center gap-2">
-          <Input
-            value={String(value ?? "")}
-            onChange={(e) => set(e.target.value)}
-            onBlur={() => commit(value)}
-            aria-label={f.label}
-            className="min-w-0 flex-1"
-          />
-          <Button type="button" variant="outline" size="sm" disabled title={AI_FILL_PENDING}>
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            Fill
-          </Button>
+          {options.output === "SELECT" ? (
+            <FieldSelect
+              value={String(value ?? "")}
+              onChange={(e) => {
+                set(e.target.value);
+                void commit(e.target.value || null);
+              }}
+              aria-label={f.label}
+              className="min-w-0 flex-1"
+            >
+              <option value="">Empty</option>
+              {(options.choices ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </FieldSelect>
+          ) : (
+            <Input
+              value={String(value ?? "")}
+              onChange={(e) => set(e.target.value)}
+              onBlur={() => commit(value === "" ? null : value)}
+              aria-label={f.label}
+              className="min-w-0 flex-1"
+            />
+          )}
+          <AiFillButton orgId={orgId} fieldId={f.field!.id} hasPrompt={Boolean(options.prompt?.trim())} />
         </div>
       );
+    }
     case "NUMBER":
     case "CURRENCY":
       return (

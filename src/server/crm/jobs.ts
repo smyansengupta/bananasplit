@@ -4,6 +4,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 
 import type { CrmActor } from "./access";
+import { queueNewRecordAi } from "./ai-jobs";
 import { bringIn, type BringInSource } from "./bring-in";
 import { scanDuplicates } from "./dedupe";
 import { runImportTurn } from "./import";
@@ -32,6 +33,7 @@ export const crmRefreshJob: JobHandler<RefreshPayload> = async (run) => {
       if (result.more && result.written > 0) continue;
       if (personId) {
         await withSystemOrgTx(orgId, ({ db }) => recomputeStrength(db, orgId));
+        await withSystemOrgTx(orgId, ({ db }) => queueNewRecordAi(db, orgId, { personId }));
         return;
       }
       step = "strength";
