@@ -3,8 +3,10 @@ import { RECIPES, recipeById, refsIn, resolveRefs, type Recipe, type RecipeRef }
 import { starterFor } from "@/lib/crm/outreach/starters";
 import { PIPELINE_TEMPLATES, SETUP_KIND_INFO, type SetupKind } from "@/lib/crm/templates";
 import {
+  actionToMergeSyntax,
   describeWorkflow,
   readWorkflow,
+  unknownMergeFields,
   workflowInputSchema,
   type RunLogEntry,
   type WorkflowInput,
@@ -182,7 +184,11 @@ export function parseWorkflowInput(raw: unknown): WorkflowInput {
     const issue = parsed.error.issues[0];
     throw new CrmError(issue?.message && !issue.message.startsWith("Invalid") ? issue.message : "Something in the automation isn't filled in right.");
   }
-  return parsed.data;
+  // Text is saved in the emails' merge-field style ({{name}}); an old {name} is turned into it.
+  const actions = parsed.data.actions.map(actionToMergeSyntax);
+  const unknown = unknownMergeFields(actions);
+  if (unknown.length) throw new CrmError(`There's no field called ${unknown.map((u) => `{{${u}}}`).join(", ")}.`);
+  return { ...parsed.data, actions };
 }
 
 /** Saves a workflow (a new one starts off, unless `status` says otherwise). */

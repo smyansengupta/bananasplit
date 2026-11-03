@@ -22,7 +22,7 @@ const NEW: BuilderDraft = {
   name: "",
   trigger: { type: "record.created", params: { object: "person" } },
   conditions: [],
-  actions: [{ type: "task.create", params: { title: "Say hello to {name}", dueInDays: 2, assignTo: "owner" } }],
+  actions: [{ type: "task.create", params: { title: "Say hello to {{name}}", dueInDays: 2, assignTo: "owner" } }],
 };
 
 const STATUS_WORD = { RUNNING: "Running", DONE: "Done", FAILED: "Failed", SKIPPED: "Skipped" } as const;

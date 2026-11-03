@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   ACTION_TYPES,
+  actionToMergeSyntax,
   ASSIGN_MODES,
   CONDITION_OPS,
   TRIGGER_TYPES,
@@ -151,7 +152,7 @@ export function mapDescribed(
         actions.push({
           type: a.type,
           params: {
-            title: a.title?.trim() || "Follow up with {name}",
+            title: a.title?.trim() || "Follow up with {{name}}",
             ...(a.dueInDays !== null ? { dueInDays: Math.max(0, Math.min(365, a.dueInDays)) } : {}),
             assignTo: m ? "member" : "owner",
             ...(m ? { userId: m.id } : {}),
@@ -224,7 +225,7 @@ export function mapDescribed(
         const m = member(a.member);
         actions.push({
           type: a.type,
-          params: { to: m ? "member" : "owner", ...(m ? { userId: m.id } : {}), message: a.message?.trim() || "{name} needs a look." },
+          params: { to: m ? "member" : "owner", ...(m ? { userId: m.id } : {}), message: a.message?.trim() || "{{name}} needs a look." },
         });
         break;
       }
@@ -237,13 +238,13 @@ export function mapDescribed(
           break;
         }
         if (a.type === "webhook.call") actions.push({ type: a.type, params: { url } });
-        else actions.push({ type: a.type, params: { url, message: a.message?.trim() || "{name}: {link}" } });
+        else actions.push({ type: a.type, params: { url, message: a.message?.trim() || "{{name}}: {{link}}" } });
         break;
       }
       case "finance.create":
         actions.push({
           type: a.type,
-          params: { direction: a.direction ?? "IN", description: a.title?.trim() || "{title}", amountFrom: "item" },
+          params: { direction: a.direction ?? "IN", description: a.title?.trim() || "{{title}}", amountFrom: "item" },
         });
         break;
       case "project.start": {
@@ -251,7 +252,7 @@ export function mapDescribed(
         actions.push({
           type: a.type,
           params: {
-            name: a.title?.trim() || "{title}",
+            name: a.title?.trim() || "{{title}}",
             tasks: (a.tasks ?? []).filter((x) => x.trim()).slice(0, 30),
             ownerFrom: m ? "member" : "owner",
             ...(m ? { userId: m.id } : {}),
@@ -263,7 +264,8 @@ export function mapDescribed(
     }
   }
   if (d.unclear) notes.push(d.unclear);
-  return { draft: { name: d.name.trim() || "New automation", trigger, conditions, actions }, notes };
+  // A model that writes {name} gets the merge fields' {{name}}.
+  return { draft: { name: d.name.trim() || "New automation", trigger, conditions, actions: actions.map(actionToMergeSyntax) }, notes };
 }
 
 const NUMBERS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10, fourteen: 14, thirty: 30 };
@@ -319,12 +321,12 @@ export function standinDescribe(text: string, ctx: DescribeContext): Described {
   else if (/round.?robin|take turns/.test(t)) actions.push({ ...blank, type: "owner.assign", assignMode: "round_robin" });
   if (/welcome|send (?:the|a|them)/.test(t)) actions.push({ ...blank, type: "template.send", template: /welcome/.test(t) ? "Welcome" : null });
   if (/remind|follow up|task/.test(t)) {
-    actions.push({ ...blank, type: "task.create", title: "Follow up with {name}", dueInDays: daysIn(t) ?? 3 });
+    actions.push({ ...blank, type: "task.create", title: "Follow up with {{name}}", dueInDays: daysIn(t) ?? 3 });
   }
-  if (/project/.test(t)) actions.push({ ...blank, type: "project.start", title: "{title}", tasks: ["Kickoff", "Plan the work"] });
-  if (/notify|tell|let .* know|nudge/.test(t)) actions.push({ ...blank, type: "notify", message: "{name} needs a look." });
-  if (/slack/.test(t)) actions.push({ ...blank, type: "slack.post", message: "{name}: {link}" });
-  if (actions.length === 0) actions.push({ ...blank, type: "task.create", title: "Look at {name}", dueInDays: 1 });
+  if (/project/.test(t)) actions.push({ ...blank, type: "project.start", title: "{{title}}", tasks: ["Kickoff", "Plan the work"] });
+  if (/notify|tell|let .* know|nudge/.test(t)) actions.push({ ...blank, type: "notify", message: "{{name}} needs a look." });
+  if (/slack/.test(t)) actions.push({ ...blank, type: "slack.post", message: "{{name}}: {{link}}" });
+  if (actions.length === 0) actions.push({ ...blank, type: "task.create", title: "Look at {{name}}", dueInDays: 1 });
   return {
     name: text.replace(/\s+/g, " ").trim().slice(0, 60) || "New automation",
     trigger,

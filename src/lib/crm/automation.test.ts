@@ -25,6 +25,7 @@ import {
   type ScoreRule,
 } from "./scoring";
 import {
+  actionToMergeSyntax,
   conditionHolds,
   conditionsHold,
   describeWorkflow,
@@ -37,8 +38,11 @@ import {
   resolveValue,
   roundRobinPick,
   RUN_CAP_PER_TARGET_PER_HOUR,
+  toMergeSyntax,
   triggerMatches,
   underRunCap,
+  unknownMergeFields,
+  WORKFLOW_MERGE_FIELDS,
   workflowInputSchema,
   type Trigger,
 } from "./workflows";
@@ -156,9 +160,54 @@ describe("workflow helpers", () => {
     expect(fewestPick(["a", "b"], new Map([["a", 3], ["b", 1]]))).toBe("b");
   });
 
-  it("fills merge fields and leaves unknown ones alone", () => {
-    expect(renderMessage("Hi {name}, about {title}{x}", { name: "Ada", title: "Gala" })).toBe("Hi Ada, about Gala{x}");
-    expect(renderMessage("{company} paid", { company: null })).toBe(" paid");
+  it("fills merge fields the way emails do, {{name}} with an optional fallback", () => {
+    expect(renderMessage("Hi {{name}}, about {{title}}", { name: "Ada", title: "Gala" })).toBe("Hi Ada, about Gala");
+    expect(renderMessage("{{company}} paid", { company: null })).toBe(" paid");
+    expect(renderMessage("For {{owner|the team}}", { owner: null })).toBe("For the team");
+    expect(renderMessage("{{days}} days in {{stage}}", { days: 12, stage: "Committed" })).toBe("12 days in Committed");
+    // An email-only field isn't a workflow's; a typo renders as nothing (saving refuses it).
+    expect(renderMessage("Hi {{first_name|there}}", { name: "Ada" })).toBe("Hi there");
+  });
+
+  it("still reads the old {name} style, and leaves other braces alone", () => {
+    expect(renderMessage("Hi {name}, about {Title}{x}", { name: "Ada", title: "Gala" })).toBe("Hi Ada, about Gala{x}");
+    expect(toMergeSyntax("{name} is in {stage} for {days} days: {link}")).toBe("{{name}} is in {{stage}} for {{days}} days: {{link}}");
+    expect(toMergeSyntax("{{name}} and {{owner|the team}}")).toBe("{{name}} and {{owner|the team}}");
+    expect(toMergeSyntax(toMergeSyntax("Thank {name}"))).toBe("Thank {{name}}");
+    expect(toMergeSyntax("Keep {draft} and {first_name} as written")).toBe("Keep {draft} and {first_name} as written");
+    expect(WORKFLOW_MERGE_FIELDS.map((f) => f.key)).toEqual(["name", "title", "company", "stage", "pipeline", "amount", "owner", "days", "link", "workflow"]);
+  });
+
+  it("translates a saved workflow's old tokens when it's read, in every text a step has", () => {
+    const parsed = readWorkflow({
+      trigger: { type: "record.created", params: { object: "person" } },
+      conditions: [],
+      actions: [
+        { type: "task.create", params: { title: "Follow up with {name}", assignTo: "owner" } },
+        { type: "notify", params: { to: "owner", message: "{title} sat in {stage} for {days} days" } },
+        { type: "slack.post", params: { url: "https://hooks.slack.com/x", message: "{name}: {link}" } },
+        { type: "finance.create", params: { direction: "IN", description: "{title}", amountFrom: "item" } },
+        { type: "project.start", params: { name: "{title} deliverables", tasks: ["Thank {company}"] } },
+      ],
+    });
+    expect(parsed.actions.map((a) => JSON.stringify(a.params))).toEqual([
+      expect.stringContaining('"title":"Follow up with {{name}}"'),
+      expect.stringContaining('"message":"{{title}} sat in {{stage}} for {{days}} days"'),
+      expect.stringContaining('"message":"{{name}}: {{link}}"'),
+      expect.stringContaining('"description":"{{title}}"'),
+      expect.stringContaining('"name":"{{title}} deliverables","tasks":["Thank {{company}}"]'),
+    ]);
+    expect(actionToMergeSyntax({ type: "stage.move", params: { stageId: "s1" } })).toEqual({ type: "stage.move", params: { stageId: "s1" } });
+  });
+
+  it("names the fields a workflow's text uses that don't exist", () => {
+    expect(
+      unknownMergeFields([
+        { type: "task.create", params: { title: "Call {{name}} and {{nmae}}", assignTo: "owner" } },
+        { type: "notify", params: { to: "owner", message: "{{first_name}} {{nmae}}" } },
+      ]),
+    ).toEqual(["nmae", "first_name"]);
+    expect(unknownMergeFields(RECIPES.flatMap((r) => r.actions))).toEqual([]);
   });
 
   it("reads stored JSON leniently and describes it", () => {
@@ -423,7 +472,8 @@ describe("describe it in words", () => {
     );
     expect(draft.trigger).toEqual({ type: "stage.changed", params: { pipelineId: "p1", toStageId: "s2" } });
     expect(draft.conditions).toEqual([{ field: "owner", op: "is", value: "u1" }]);
-    expect(draft.actions).toEqual([{ type: "notify", params: { to: "member", userId: "u1", message: "{name} joined" } }]);
+    // A model's {name} comes back in the merge fields' style.
+    expect(draft.actions).toEqual([{ type: "notify", params: { to: "member", userId: "u1", message: "{{name}} joined" } }]);
     expect(notes.length).toBe(3);
   });
 });

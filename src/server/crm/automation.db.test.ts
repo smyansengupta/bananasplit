@@ -203,6 +203,9 @@ describe("CRM automation and numbers against the local database", () => {
         },
       }),
     );
+    // Saved in the emails' merge-field style.
+    const saved = await ownerDb.crmWorkflow.findUniqueOrThrow({ where: { id: wf.id } });
+    expect(JSON.stringify(saved.actions)).toContain('"title":"Say hello to {{name}}"');
     const tasksBefore = await ownerDb.task.count({ where: { organizationId: org } });
     const r = await as(owner, (ctx) => dryRunWorkflow(ctx, wf.id, { kind: "person", id: person.id }));
     expect(r.conditionsMet).toBe(true);
@@ -214,6 +217,38 @@ describe("CRM automation and numbers against the local database", () => {
     expect(runs.map((x) => x.dryRun)).toEqual([true]);
     // Members don't shape automations.
     await expect(as(member, (ctx) => saveWorkflow(ctx, { workflow: { name: "x", trigger: { type: "deal.stuck", params: {} }, actions: [{ type: "notify", params: { to: "owner", message: "x" } }] } }))).rejects.toThrow();
+  });
+
+  it("runs a workflow saved with the old {name} tokens, and refuses a field that doesn't exist", async () => {
+    if (!reachable) return;
+    const person = await as(member, (ctx) => createPerson(ctx, { name: "Mary Jackson", title: "Engineer" }));
+    // As it was stored before workflows used the emails' merge fields.
+    const legacy = await ownerDb.crmWorkflow.create({
+      data: {
+        organizationId: org,
+        name: "Old style",
+        status: "OFF",
+        trigger: { type: "record.created", params: { object: "person" } },
+        actions: [
+          { type: "task.create", params: { title: "Call {name}, {title}", dueInDays: 1, assignTo: "owner" } },
+          { type: "notify", params: { to: "owner", message: "{name} is new: {link}" } },
+        ],
+      },
+    });
+    const r = await as(owner, (ctx) => dryRunWorkflow(ctx, legacy.id, { kind: "person", id: person.id }));
+    expect(r.log[0]!.detail).toMatch(/Would create "Call Mary Jackson, Engineer"/);
+    expect(r.log[1]!.detail).not.toContain("{");
+    await expect(
+      as(owner, (ctx) =>
+        saveWorkflow(ctx, {
+          workflow: {
+            name: "Typo",
+            trigger: { type: "record.created", params: { object: "person" } },
+            actions: [{ type: "task.create", params: { title: "Call {{nmae}}", assignTo: "owner" } }],
+          },
+        }),
+      ),
+    ).rejects.toThrow(/no field called \{\{nmae\}\}/);
   });
 
   it("scores people by rules, raises signals once, snapshots the forecast and computes a widget", async () => {

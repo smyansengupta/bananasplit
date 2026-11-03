@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { mergeKeys, renderMerge } from "./outreach/merge";
+
 /**
  * Workflows (docs/features/crm.md, module 6): When / If / Then, as data.
  * Pure and client-safe: the builder draws from it, the server validates
@@ -377,7 +379,8 @@ export function readWorkflow(row: { trigger: unknown; conditions: unknown; actio
   const actions = Array.isArray(row.actions)
     ? row.actions.flatMap((a) => {
         const p = actionSchema.safeParse(a);
-        return p.success ? [p.data] : [];
+        // Saved before workflows used the emails' merge fields: {name} reads as {{name}}.
+        return p.success ? [actionToMergeSyntax(p.data)] : [];
       })
     : [];
   return { trigger: t.success ? t.data : null, conditions, actions };
@@ -571,15 +574,96 @@ export function fewestPick(candidates: readonly string[], openCounts: ReadonlyMa
   return best;
 }
 
-/** Merge fields in a message: {name}, {title}, {stage}, {company}, {owner}, {amount}, {pipeline}, {link}, {days}. */
-export function renderMessage(template: string, values: Record<string, string | number | null | undefined>): string {
-  return template.replace(/\{([a-z_]+)\}/gi, (whole, key: string) => {
-    const v = values[key.toLowerCase()];
-    return v === undefined || v === null ? (key.toLowerCase() in values ? "" : whole) : String(v);
-  });
+// ---- Merge fields --------------------------------------------------------------------
+
+/**
+ * The fields a workflow's task titles, notices, Slack and Discord messages,
+ * Finance descriptions and project names can use. Written like an email's
+ * merge fields, {{name}} or with a fallback {{owner|the team}}, and rendered
+ * by the same renderer (outreach's renderMerge); these read the record the
+ * workflow runs on, which an email's person fields don't have.
+ */
+export const WORKFLOW_MERGE_FIELDS = [
+  { key: "name", label: "Name", example: "Ada Lovelace", hint: "the person or company; for an item, its main person" },
+  { key: "title", label: "Title", example: "Spring sponsorship", hint: "an item's title; a person's job title" },
+  { key: "company", label: "Company", example: "Harbor Light", hint: "" },
+  { key: "stage", label: "Stage", example: "Committed", hint: "" },
+  { key: "pipeline", label: "Pipeline", example: "Sponsorships", hint: "" },
+  { key: "amount", label: "Amount", example: "$2,500.00", hint: "" },
+  { key: "owner", label: "Owner", example: "Sam Rivera", hint: "" },
+  { key: "days", label: "Days in stage", example: "12", hint: "" },
+  { key: "link", label: "Link to the record", example: "https://bananasplit.app/...", hint: "" },
+  { key: "workflow", label: "Automation's name", example: "Welcome new volunteers", hint: "Slack and Discord only" },
+] as const;
+
+export type WorkflowMergeKey = (typeof WORKFLOW_MERGE_FIELDS)[number]["key"];
+export const MERGE_FIELDS: readonly WorkflowMergeKey[] = WORKFLOW_MERGE_FIELDS.map((f) => f.key);
+const WORKFLOW_KEYS: ReadonlySet<string> = new Set(MERGE_FIELDS);
+
+/** A single-brace token the old renderer read ({name}, {Stage}), not part of a {{...}} field. */
+const LEGACY_TOKEN = /(?<!\{)\{([A-Za-z_]+)\}(?!\})/g;
+
+/**
+ * Workflows saved before they shared the emails' merge fields wrote {name};
+ * this reads them as {{name}}. Only the workflow's own fields change, so a
+ * literal brace in a message ("{draft}") stays as it was. Idempotent.
+ */
+export function toMergeSyntax(text: string): string {
+  return text.replace(LEGACY_TOKEN, (whole, key: string) => (WORKFLOW_KEYS.has(key.toLowerCase()) ? `{{${key.toLowerCase()}}}` : whole));
 }
 
-export const MERGE_FIELDS = ["name", "title", "stage", "company", "owner", "amount", "pipeline", "link", "days"] as const;
+/** Every piece of a step's text that merge fields fill. */
+function mapActionText(action: WorkflowAction, fn: (text: string) => string): WorkflowAction {
+  switch (action.type) {
+    case "task.create":
+      return { ...action, params: { ...action.params, title: fn(action.params.title) } };
+    case "deal.create":
+      return action.params.title === undefined ? action : { ...action, params: { ...action.params, title: fn(action.params.title) } };
+    case "notify":
+    case "slack.post":
+    case "discord.post":
+      return { ...action, params: { ...action.params, message: fn(action.params.message) } } as WorkflowAction;
+    case "finance.create":
+      return { ...action, params: { ...action.params, description: fn(action.params.description) } };
+    case "project.start":
+      return { ...action, params: { ...action.params, name: fn(action.params.name), tasks: action.params.tasks.map(fn) } };
+    default:
+      return action;
+  }
+}
+
+/** A step with its text in {{...}} merge fields (old {name}-style tokens translated). */
+export function actionToMergeSyntax(action: WorkflowAction): WorkflowAction {
+  return mapActionText(action, toMergeSyntax);
+}
+
+/** The {{...}} fields the steps use that aren't workflow fields (a typo), once each. */
+export function unknownMergeFields(actions: readonly WorkflowAction[]): string[] {
+  const out: string[] = [];
+  for (const a of actions) {
+    mapActionText(a, (t) => {
+      for (const k of mergeKeys(t)) if (!WORKFLOW_KEYS.has(k) && !out.includes(k)) out.push(k);
+      return t;
+    });
+  }
+  return out;
+}
+
+/**
+ * Fills a workflow text's merge fields with the record's values, through
+ * the emails' renderer. Old {name}-style tokens still read. A field with
+ * no value and no fallback is left out.
+ */
+export function renderMessage(template: string, values: Record<string, string | number | null | undefined>): string {
+  const strings: Record<string, string | null | undefined> = {};
+  for (const [k, v] of Object.entries(values)) strings[k] = typeof v === "number" ? String(v) : v;
+  return renderMerge(toMergeSyntax(template), strings, WORKFLOW_KEYS).text;
+}
+
+/** Example values, for the builder's preview. */
+export function workflowExampleValues(): Record<string, string> {
+  return Object.fromEntries(WORKFLOW_MERGE_FIELDS.map((f) => [f.key, f.example]));
+}
 
 /** One line describing a workflow, for lists: "When an item moves stage: create a task, notify someone". */
 export function describeWorkflow(input: { trigger: Trigger | null; actions: readonly WorkflowAction[] }): string {

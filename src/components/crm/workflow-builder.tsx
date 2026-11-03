@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Eye, Plus, Sparkles, Trash2, X } from "@/components/icons";
+import { ArrowDown, ArrowUp, Code, Eye, Plus, Sparkles, Trash2, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldSelect } from "@/components/ui/field-select";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
@@ -28,6 +29,7 @@ import {
   TRIGGER_TYPES,
   VALUELESS_OPS,
   WORKFLOW_FIELDS,
+  WORKFLOW_MERGE_FIELDS,
   triggerObject,
   type ActionType,
   type Condition,
@@ -128,7 +130,7 @@ function defaultTrigger(type: TriggerType, prev: Trigger): Trigger {
 function defaultAction(type: ActionType, ctx: BuilderContext): WorkflowAction {
   switch (type) {
     case "task.create":
-      return { type, params: { title: "Follow up with {name}", dueInDays: 3, assignTo: "owner" } };
+      return { type, params: { title: "Follow up with {{name}}", dueInDays: 3, assignTo: "owner" } };
     case "field.set":
       return { type, params: { field: "nextFollowUpAt", value: "+7d" } };
     case "stage.move":
@@ -144,17 +146,17 @@ function defaultAction(type: ActionType, ctx: BuilderContext): WorkflowAction {
     case "event.invite":
       return { type, params: { eventId: ctx.events[0]?.id ?? "" } };
     case "notify":
-      return { type, params: { to: "owner", message: "{name} needs a look." } };
+      return { type, params: { to: "owner", message: "{{name}} needs a look." } };
     case "slack.post":
-      return { type, params: { url: "", message: "{name}: {link}" } };
+      return { type, params: { url: "", message: "{{name}}: {{link}}" } };
     case "discord.post":
-      return { type, params: { url: "", message: "{name}: {link}" } };
+      return { type, params: { url: "", message: "{{name}}: {{link}}" } };
     case "webhook.call":
       return { type, params: { url: "" } };
     case "finance.create":
-      return { type, params: { direction: "IN", description: "{title}", amountFrom: "item" } };
+      return { type, params: { direction: "IN", description: "{{title}}", amountFrom: "item" } };
     case "project.start":
-      return { type, params: { name: "{title}", tasks: ["Kickoff meeting", "Plan the work"], ownerFrom: "owner", linkFiles: true } };
+      return { type, params: { name: "{{title}}", tasks: ["Kickoff meeting", "Plan the work"], ownerFrom: "owner", linkFiles: true } };
   }
 }
 
@@ -400,6 +402,64 @@ function MemberChips({ ctx, value, onChange }: { ctx: BuilderContext; value: str
   );
 }
 
+/** Insert a merge field into a step's text: the record's fields, written {{key}} as in emails. */
+function FieldMenu({ onPick, slackOnly }: { onPick: (key: string) => void; slackOnly?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const fields = WORKFLOW_MERGE_FIELDS.filter((f) => slackOnly || f.key !== "workflow");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" className="shrink-0">
+          <Code className="size-4" aria-hidden="true" />
+          Add a field
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-72 flex-wrap gap-1 p-3">
+        {fields.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className="bg-muted hover:bg-muted-strong rounded-full px-2.5 py-1 text-xs"
+            title={`{{${f.key}}}, e.g. ${f.example}${f.hint ? ` (${f.hint})` : ""}`}
+            onClick={() => {
+              onPick(f.key);
+              setOpen(false);
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A step's text with merge fields: the input and its Add a field menu. */
+function MergeInput({
+  value,
+  onChange,
+  label: aria,
+  slackOnly,
+  max = 200,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  slackOnly?: boolean;
+  max?: number;
+}) {
+  const add = (key: string) => {
+    const sep = value && !/\s$/.test(value) ? " " : "";
+    onChange(`${value}${sep}{{${key}}}`.slice(0, max));
+  };
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <Input value={value} onChange={(e) => onChange(e.target.value)} aria-label={aria} maxLength={max} className="min-w-0 flex-1" />
+      <FieldMenu onPick={add} slackOnly={slackOnly} />
+    </div>
+  );
+}
+
 function ActionEditor({
   action,
   onChange,
@@ -434,7 +494,7 @@ function ActionEditor({
       const p = action.params;
       return (
         <div className="space-y-3">
-          <Input value={p.title} onChange={(e) => onChange({ ...action, params: { ...p, title: e.target.value } })} aria-label="Task title" />
+          <MergeInput value={p.title} onChange={(title) => onChange({ ...action, params: { ...p, title } })} label="Task title" />
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-muted-foreground text-sm">Due in</span>
             <Input type="number" className="w-20" value={p.dueInDays ?? ""} onChange={(e) => onChange({ ...action, params: { ...p, dueInDays: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) } })} aria-label="Due in days" />
@@ -562,7 +622,7 @@ function ActionEditor({
             onPick={(to) => onChange({ ...action, params: { ...p, to } })}
           />
           {p.to === "member" && memberSelect(p.userId, (id) => onChange({ ...action, params: { ...p, userId: id || undefined } }))}
-          <Input value={p.message} onChange={(e) => onChange({ ...action, params: { ...p, message: e.target.value } })} aria-label="Message" />
+          <MergeInput value={p.message} onChange={(message) => onChange({ ...action, params: { ...p, message } })} label="Message" max={300} />
         </div>
       );
     }
@@ -577,7 +637,7 @@ function ActionEditor({
             placeholder={action.type === "slack.post" ? "https://hooks.slack.com/services/..." : "https://discord.com/api/webhooks/..."}
             aria-label="Webhook address"
           />
-          <Input value={p.message} onChange={(e) => onChange({ ...action, params: { ...p, message: e.target.value } })} aria-label="Message" />
+          <MergeInput value={p.message} onChange={(message) => onChange({ ...action, params: { ...p, message } })} label="Message" max={1000} slackOnly />
         </div>
       );
     }
@@ -601,7 +661,7 @@ function ActionEditor({
             value={p.direction}
             onPick={(direction) => onChange({ ...action, params: { ...p, direction } })}
           />
-          <Input value={p.description} onChange={(e) => onChange({ ...action, params: { ...p, description: e.target.value } })} aria-label="Description" />
+          <MergeInput value={p.description} onChange={(description) => onChange({ ...action, params: { ...p, description } })} label="Description" />
           <div className="flex flex-wrap items-center gap-3">
             <Chips
               label="Amount"
@@ -623,9 +683,9 @@ function ActionEditor({
       const p = action.params;
       return (
         <div className="space-y-3">
-          <Input value={p.name} onChange={(e) => onChange({ ...action, params: { ...p, name: e.target.value } })} aria-label="Project name" />
+          <MergeInput value={p.name} onChange={(name) => onChange({ ...action, params: { ...p, name } })} label="Project name" />
           <div>
-            <span className={label}>Tasks, one a line</span>
+            <span className={label}>Tasks, one a line. Fields like {"{{company}}"} work here too.</span>
             <Textarea
               rows={4}
               value={p.tasks.join("\n")}
@@ -822,7 +882,7 @@ export function WorkflowBuilder({
         <ConditionsEditor conditions={draft.conditions} onChange={(conditions) => setDraft({ ...draft, conditions })} object={object} ctx={ctx} pipelineId={pipelineId} />
       </Section>
 
-      <Section title="Then" hint="In this order. Use {name}, {title}, {stage}, {company}, {owner}, {amount} or {link} in any text.">
+      <Section title="Then" hint="In this order. Add a field to any text, like {{name}} or {{stage}}, the same way as in emails.">
         <ol className="space-y-3">
           {draft.actions.map((a, i) => (
             <li key={i} className="bg-muted/40 rounded-tile space-y-3 p-4">

@@ -25,7 +25,7 @@ export interface WorkflowTarget {
   pipelineId: string | null;
   stageName: string | null;
   amountCents: number | null;
-  /** For messages: {name}, {stage}, {company}, {amount}, {pipeline}. */
+  /** For workflow text's merge fields: {{name}}, {{stage}}, {{company}}, {{amount}}, {{pipeline}} (WORKFLOW_MERGE_FIELDS). */
   merge: Record<string, string | number | null>;
 }
 

@@ -47,12 +47,16 @@ export interface Rendered {
   unknown: string[];
 }
 
-/** Fills every merge field; one without a value uses its fallback or nothing. */
-export function renderMerge(text: string, values: MergeValues): Rendered {
+/**
+ * Fills every merge field; one without a value uses its fallback or nothing.
+ * `fields` names the keys that exist (default: an email's, MERGE_FIELDS);
+ * workflows pass their own record fields (src/lib/crm/workflows.ts).
+ */
+export function renderMerge(text: string, values: MergeValues, fields: ReadonlySet<string> = KNOWN): Rendered {
   const missing = new Set<string>();
   const unknown = new Set<string>();
   const out = text.replace(TOKEN, (_all, key: string, fallback: string | undefined) => {
-    if (!KNOWN.has(key)) {
+    if (!fields.has(key)) {
       unknown.add(key);
       return fallback ?? "";
     }

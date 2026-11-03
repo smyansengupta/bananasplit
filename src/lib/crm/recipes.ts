@@ -43,7 +43,7 @@ export const RECIPES: readonly Recipe[] = [
       { type: "owner.assign", params: { mode: "fewest", userIds: [] } },
       { type: "template.send", params: { templateId: "@template:welcome" } },
       { type: "field.set", params: { field: "nextFollowUpAt", value: "+3d" } },
-      { type: "task.create", params: { title: "Follow up with {name}", dueInDays: 3, assignTo: "owner" } },
+      { type: "task.create", params: { title: "Follow up with {{name}}", dueInDays: 3, assignTo: "owner" } },
     ],
   },
   {
@@ -55,7 +55,7 @@ export const RECIPES: readonly Recipe[] = [
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:donors", toStageId: "@stage:donors:RECEIVED" } },
     conditions: [],
     actions: [
-      { type: "task.create", params: { title: "Thank {name} for their gift", dueInDays: 2, assignTo: "owner", priority: "HIGH" } },
+      { type: "task.create", params: { title: "Thank {{name}} for their gift", dueInDays: 2, assignTo: "owner", priority: "HIGH" } },
       { type: "template.send", params: { templateId: "@template:receipt" } },
       { type: "stage.move", params: { stageId: "@stage:donors:THANKED" } },
     ],
@@ -72,14 +72,14 @@ export const RECIPES: readonly Recipe[] = [
       {
         type: "project.start",
         params: {
-          name: "{title}",
-          tasks: ["Kickoff meeting with {company}", "Agree the scope and dates", "Send the first invoice", "Share the files with the team"],
+          name: "{{title}}",
+          tasks: ["Kickoff meeting with {{company}}", "Agree the scope and dates", "Send the first invoice", "Share the files with the team"],
           ownerFrom: "owner",
           dueInDays: 14,
           linkFiles: true,
         },
       },
-      { type: "notify", params: { to: "owner", message: "{title} is won: the project is in Tasks." } },
+      { type: "notify", params: { to: "owner", message: "{{title}} is won: the project is in Tasks." } },
     ],
   },
   {
@@ -89,7 +89,7 @@ export const RECIPES: readonly Recipe[] = [
     icon: "Hourglass",
     trigger: { type: "deal.stuck", params: {} },
     conditions: [],
-    actions: [{ type: "notify", params: { to: "owner", message: "{title} has sat in {stage} for {days} days. What's next?" } }],
+    actions: [{ type: "notify", params: { to: "owner", message: "{{title}} has sat in {{stage}} for {{days}} days. What's next?" } }],
   },
   {
     id: "new-sponsor",
@@ -103,8 +103,8 @@ export const RECIPES: readonly Recipe[] = [
       {
         type: "project.start",
         params: {
-          name: "{title} deliverables",
-          tasks: ["Put {company}'s logo on the website", "Post a thank-you to {company}", "Send {company} the recap after the event"],
+          name: "{{title}} deliverables",
+          tasks: ["Put {{company}}'s logo on the website", "Post a thank-you to {{company}}", "Send {{company}} the recap after the event"],
           ownerFrom: "owner",
           dueInDays: 30,
           linkFiles: true,
@@ -121,8 +121,8 @@ export const RECIPES: readonly Recipe[] = [
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:speakers", toStageId: "@stage:speakers:CONFIRMED" } },
     conditions: [],
     actions: [
-      { type: "task.create", params: { title: "Brief {name}: time, place, audience", dueInDays: 7, assignTo: "owner" } },
-      { type: "notify", params: { to: "owner", message: "{name} confirmed. The briefing task is yours." } },
+      { type: "task.create", params: { title: "Brief {{name}}: time, place, audience", dueInDays: 7, assignTo: "owner" } },
+      { type: "notify", params: { to: "owner", message: "{{name}} confirmed. The briefing task is yours." } },
     ],
   },
   {
@@ -147,8 +147,8 @@ export const RECIPES: readonly Recipe[] = [
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:members", toKind: "WON" } },
     conditions: [],
     actions: [
-      { type: "task.create", params: { title: "Welcome {name} at the next meeting", dueInDays: 7, assignTo: "owner" } },
-      { type: "notify", params: { to: "owner", message: "{name} joined." } },
+      { type: "task.create", params: { title: "Welcome {{name}} at the next meeting", dueInDays: 7, assignTo: "owner" } },
+      { type: "notify", params: { to: "owner", message: "{{name}} joined." } },
     ],
   },
   {
@@ -172,7 +172,7 @@ export const RECIPES: readonly Recipe[] = [
     needs: "vendors",
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:vendors", toKind: "WON" } },
     conditions: [{ field: "amount", op: "gt", value: 0 }],
-    actions: [{ type: "finance.create", params: { direction: "OUT", description: "{title}", amountFrom: "item" } }],
+    actions: [{ type: "finance.create", params: { direction: "OUT", description: "{{title}}", amountFrom: "item" } }],
   },
   {
     id: "quiet-donor",
@@ -182,7 +182,7 @@ export const RECIPES: readonly Recipe[] = [
     needs: "donors",
     trigger: { type: "no.activity", params: { object: "person", days: 60 } },
     conditions: [{ field: "relationship", op: "is", value: "donor" }],
-    actions: [{ type: "task.create", params: { title: "Check in with {name}", dueInDays: 3, assignTo: "owner" } }],
+    actions: [{ type: "task.create", params: { title: "Check in with {{name}}", dueInDays: 3, assignTo: "owner" } }],
   },
   {
     id: "follow-up-due",
@@ -191,7 +191,7 @@ export const RECIPES: readonly Recipe[] = [
     icon: "AlarmClock",
     trigger: { type: "date.reached", params: { object: "person", field: "nextFollowUpAt", offsetDays: 0 } },
     conditions: [],
-    actions: [{ type: "task.create", params: { title: "Follow up with {name}", dueInDays: 0, assignTo: "owner" } }],
+    actions: [{ type: "task.create", params: { title: "Follow up with {{name}}", dueInDays: 0, assignTo: "owner" } }],
   },
 ];
 
