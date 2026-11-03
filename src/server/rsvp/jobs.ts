@@ -10,6 +10,7 @@ import { getOrgMailer, platformFallbackMailer } from "@/server/email/mailer";
 import { PermanentJobError, type JobHandler, type JobOutcome } from "@/server/jobs/types";
 import { notifyUsers } from "@/server/notifications";
 import { sendSms, SmsSendError, smsDelivery } from "@/server/sms";
+import { selfUpdateLinkFor } from "@/server/crm/outreach/self-update";
 
 import { guestPlace, rsvpEmail, rsvpText } from "./email";
 import {
@@ -418,7 +419,9 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
       if (claimed.count === 0) return null;
     }
     const { going } = await registrationCounts(db, orgId, reg.eventId);
-    return { ...reg, going };
+    // In the organization's CRM? The confirmation offers to keep their details current.
+    const detailsUrl = template === "registered" || template === "promoted" ? await selfUpdateLinkFor(db, orgId, reg.email) : null;
+    return { ...reg, going, detailsUrl };
   });
   if (!loaded) return { status: "DONE" };
 
@@ -445,6 +448,7 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
     ),
     pageUrl: appUrl(`/e/${e.rsvpSlug}/manage?key=${encodeURIComponent(rsvpManageKey(loaded.id))}`),
     calendarUrl: appUrl(`/e/${e.rsvpSlug}/calendar.ics`),
+    detailsUrl: loaded.detailsUrl,
     ...guestLinks(loaded, e.rsvpSlug!, template),
   };
 

@@ -3,6 +3,7 @@ import { withSystemOrgTx } from "@/server/db/context";
 import { getOrgMailer } from "@/server/email/mailer";
 import { escapeHtml } from "@/server/email/escape";
 import { layout, paragraph } from "@/server/email/templates";
+import { selfUpdateLinkFor } from "@/server/crm/outreach/self-update";
 
 import type { FormTarget } from "./public";
 
@@ -29,6 +30,8 @@ export async function sendFormReceipt(target: FormTarget, responseId: string): P
       select: { name: true },
     });
     return {
+      // The CRM's "keep your details current" link, when they're in it.
+      detailsUrl: await selfUpdateLinkFor(db, target.organizationId, response.email).catch(() => null),
       title: form.title,
       email: response.email,
       orgName: org?.name ?? "",
@@ -57,8 +60,12 @@ export async function sendFormReceipt(target: FormTarget, responseId: string): P
     ...layout({
       subject,
       eyebrow: data.orgName,
-      bodyHtml: `<p style="margin:0 0 14px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(data.title)}</p>${html}`,
-      bodyText: `${data.title}\n\n${text}`,
+      bodyHtml: `<p style="margin:0 0 14px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(data.title)}</p>${html}${
+        data.detailsUrl
+          ? `<p style="margin:18px 0 0;font-size:13px;color:#6b6b6b">Moved or changed jobs? <a href="${escapeHtml(data.detailsUrl)}">Update your details</a>.</p>`
+          : ""
+      }`,
+      bodyText: `${data.title}\n\n${text}${data.detailsUrl ? `\n\nMoved or changed jobs? Update your details: ${data.detailsUrl}` : ""}`,
       footer: "You asked for a copy when you answered this form.",
     }),
     to: data.email,
