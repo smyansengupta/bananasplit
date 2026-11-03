@@ -81,7 +81,7 @@ export function WorkflowList({ orgId, orgSlug, rows }: { orgId: string; orgSlug:
           <Link href={`${base}/${r.id}`} className="group min-w-0 flex-[1_1_16rem]">
             <b className="block text-[15px] font-semibold group-hover:underline">{r.name}</b>
             <span className="text-muted-foreground block text-sm">
-              {r.summary}
+              {/[.!?]$/.test(r.summary.trim()) ? r.summary : `${r.summary.trim()}.`}
               {r.runCount > 0 && r.lastRun ? ` Last ran ${when(r.lastRun)}.` : ""}
             </span>
           </Link>

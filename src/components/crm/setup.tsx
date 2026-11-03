@@ -147,7 +147,10 @@ export function CrmSetup({
     sources.filter((s) => on.has(s.id)).reduce((n, s) => n + s.n, 0) +
     (sheet?.total ?? 0) +
     (done ? 0 : counts.sponsors);
-  const summary = setupSummary(people, personal ? null : owner);
+  const summary =
+    done && people === 0
+      ? "Everyone you know is in. Drop a spreadsheet for more."
+      : setupSummary(people, personal ? null : owner);
   const flip = <T,>(set: Set<T>, v: T) => {
     const next = new Set(set);
     if (next.has(v)) next.delete(v);
