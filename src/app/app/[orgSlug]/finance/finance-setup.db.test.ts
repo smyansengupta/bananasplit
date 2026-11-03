@@ -99,7 +99,8 @@ describe("finance with nothing set up", () => {
     const periods = await withOrgTx(orgId, ({ db }) => db.budgetPeriod.findMany({ where: { organizationId: orgId } }));
     expect(periods).toHaveLength(1);
     expect(periods[0].isActive).toBe(true);
-    expect(periods[0].label).toMatch(/^\d{4}–\d{2}$/);
+    // This calendar year (src/lib/finance/periods.ts).
+    expect(periods[0].label).toBe(String(new Date().getFullYear()));
     const starter = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.count({ where: { organizationId: orgId, budgetPeriodId: periods[0].id } }),
     );
