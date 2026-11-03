@@ -50,9 +50,6 @@ function firstName(name: string | null | undefined): string {
   return name?.trim().split(/\s+/)[0] || "them";
 }
 
-/** The kinds the board's cards offer: just who takes it. */
-export const BOARD_KINDS: readonly TaskAmbientKind[] = ["take", "assign"];
-
 export function TaskAmbientActions({
   task,
   page = false,
@@ -64,7 +61,7 @@ export function TaskAmbientActions({
   task: TaskItem;
   /** The task page (Follow up shows there). */
   page?: boolean;
-  /** Just these kinds (the board shows Take it and Assign only). */
+  /** Just these kinds. */
   only?: readonly TaskAmbientKind[];
   why?: boolean;
   className?: string;

@@ -33,6 +33,7 @@ import {
 } from "@/app/app/[orgSlug]/inbox/actions";
 import { addTaskComment, setTaskStatus, updateTask } from "@/app/app/[orgSlug]/tasks/actions";
 import {
+  AMBIENT_BUTTON,
   AmbientActions,
   AmbientButton,
   AmbientWhy,
@@ -636,6 +637,7 @@ export function InboxView({
               return (
                 <Row
                   key={row.key}
+                  orgId={orgId}
                   row={row}
                   view={view}
                   active={i === active}
@@ -707,6 +709,7 @@ export function InboxView({
 }
 
 function Row({
+  orgId,
   row,
   view,
   active,
@@ -726,6 +729,7 @@ function Row({
   onReply,
   onSnoozeMonday,
 }: {
+  orgId: string;
   row: InboxRow;
   view: InboxView;
   active: boolean;
@@ -788,6 +792,28 @@ function Row({
       ariaLabel: `Reply to ${row.title}`,
       // Opens the reply box: no result, so the button stays until it's sent.
       run: async () => onReply(),
+    });
+  }
+  // A task of yours: Push back once it's late (a menu, below), Start it when
+  // it's due within two days and nobody has.
+  const taskLate =
+    !snoozed && row.kind === "task" && row.task ? row.task.dueKey < todayKey() : false;
+  if (
+    !snoozed &&
+    row.kind === "task" &&
+    row.task &&
+    !taskLate &&
+    row.task.status === "NOT_STARTED" &&
+    row.task.dueKey <= addDaysToKey(todayKey(), 2)
+  ) {
+    ambient.push({
+      key: "start",
+      label: "Start it",
+      reason: "Due soon, not started",
+      tone: "solid",
+      ariaLabel: `Start ${row.title}`,
+      run: () => setTaskStatus(orgId, row.id, "IN_PROGRESS"),
+      done: `${row.title} is in progress`,
     });
   }
   const requestRow = !snoozed && row.kind === "request";
@@ -874,7 +900,9 @@ function Row({
                 Maybe
               </Button>
             )}
-            {row.kind === "task" && row.task && <MoveMenu row={row} onMove={onMove} />}
+            {row.kind === "task" && row.task && (
+              <MoveMenu row={row} onMove={onMove} late={taskLate} />
+            )}
             {requestRow && (
               <span className="inline-flex flex-col items-end gap-1">
                 <span className="inline-flex items-center gap-1.5">
@@ -1012,9 +1040,12 @@ function SnoozeMenu({
 function MoveMenu({
   row,
   onMove,
+  late = false,
 }: {
   row: InboxRow;
   onMove: (dueKey: string, label: string) => void;
+  /** Late: it's an ambient button, Push back, instead of the quiet icon. */
+  late?: boolean;
 }) {
   const today = todayKey();
   const friday = addDaysToKey(mondayOfKey(today), 4);
@@ -1026,15 +1057,27 @@ function MoveMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className={cn(QUIET, "data-[state=open]:opacity-100")}
-          title="Move the date"
-          aria-label={`Move the date of ${row.title}`}
-        >
-          <CalendarClock className="size-4" aria-hidden="true" />
-        </Button>
+        {late ? (
+          <button
+            type="button"
+            title="Late: give it a new date"
+            aria-label={`Push back ${row.title}`}
+            className={cn(AMBIENT_BUTTON, "bg-foreground text-background hover:bg-foreground/90")}
+          >
+            <CalendarClock aria-hidden="true" />
+            Push back
+          </button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(QUIET, "data-[state=open]:opacity-100")}
+            title="Move the date"
+            aria-label={`Move the date of ${row.title}`}
+          >
+            <CalendarClock className="size-4" aria-hidden="true" />
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {choices.map((c) => (

@@ -99,12 +99,7 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
-import {
-  BAND_COLUMNS,
-  ambientLayout,
-  type AmbientItem,
-  type AmbientRow,
-} from "@/lib/overview/ambient";
+import { BAND_COLUMNS, ambientLayout } from "@/lib/overview/ambient";
 import type { WidgetScore } from "@/lib/overview/priority";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -157,11 +152,10 @@ const SPAN: Record<number, string> = {
 };
 
 /**
- * Ambient bands are eight columns on a wide screen, two on a tablet, one on
- * a phone. Now's widgets are small, so that band stays two across until the
- * widest screens. On two columns a full-size widget takes both; Now's pair
- * up, and a lone one (or the last of an odd count) takes both, so no band
- * leaves a hole.
+ * Ambient is one grid, eight columns on a wide screen, two on a tablet, one
+ * on a phone. Now's widgets are small, so they sit two across (four columns
+ * each) until the widest screens. On two columns a full-size widget takes
+ * both; Now's pair up, and a lone one (or the last of an odd count) takes both.
  */
 const BAND_SPAN_LG: Record<number, string> = {
   1: "lg:col-span-1",
@@ -186,12 +180,54 @@ const BAND_SPAN_XL: Record<number, string> = {
 function bandSpan(band: { span: number; square: boolean; full: boolean }): string {
   const two = band.full ? "sm:col-span-2" : "sm:col-span-1";
   return band.square
-    ? cn("col-span-1", two, band.full ? "lg:col-span-2" : "lg:col-span-1", BAND_SPAN_XL[band.span])
+    ? cn("col-span-1", two, band.full ? "lg:col-span-8" : "lg:col-span-4", BAND_SPAN_XL[band.span])
     : cn("col-span-1", two, BAND_SPAN_LG[band.span]);
 }
-/** One band: widgets in it share its height, so their bottoms line up. --board-row as GRID has it. */
-const BAND_GRID =
-  "grid grid-cols-1 items-stretch gap-4.5 sm:grid-cols-2 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+
+/** Packed rows are this many pixels; a widget spans as many as it is tall, plus the gap. */
+const PACK_ROW = 2;
+const PACK_GAP = 18;
+/**
+ * Ambient's grid, packed: every widget is as tall as what's in it and sits
+ * straight under the one above it, so a short one beside a tall one leaves
+ * no hole (a masonry grid). Until the widgets are measured it's an ordinary
+ * grid; then each spans its height in PACK_ROW rows and the gaps go dense.
+ */
+const PACKED_GRID =
+  "grid grid-cols-1 items-start gap-x-4.5 gap-y-4.5 [grid-auto-flow:row_dense] sm:grid-cols-2 lg:grid-cols-8 data-[packed]:gap-y-0 data-[packed]:[grid-auto-rows:2px] sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+
+/** Sizes each packed widget's rows to its height, and again whenever it changes. */
+function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const items = () =>
+      Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      for (const item of items()) {
+        const h = item.getBoundingClientRect().height;
+        item.style.setProperty(
+          "grid-row-end",
+          h > 0 ? `span ${Math.ceil((h + PACK_GAP) / PACK_ROW)}` : "auto",
+        );
+      }
+      el.setAttribute("data-packed", "");
+    };
+    fit();
+    const watch = new ResizeObserver(() => {
+      if (!frame) frame = requestAnimationFrame(fit);
+    });
+    for (const item of items()) watch.observe(item);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      watch.disconnect();
+      el.removeAttribute("data-packed");
+      for (const item of items()) item.style.removeProperty("grid-row-end");
+    };
+  }, [grid, key]);
+}
 
 /** Home's two layouts: Ambient arranges itself, Custom is the member's own. */
 export type BoardMode = "ambient" | "custom";
@@ -418,6 +454,7 @@ export function WidgetBoard({
     return () => document.removeEventListener("visibilitychange", back);
   }, []);
   const grid = useRef<HTMLDivElement>(null);
+  const packed = useRef<HTMLDivElement>(null);
   const beforeDrag = useRef<BoardWidget[] | null>(null);
   const lastSwap = useRef<string | null>(null);
   const meta = new Map(types.map((t) => [t.type, t]));
@@ -644,6 +681,14 @@ export function WidgetBoard({
         )
       : null;
 
+  // Ambient packs its widgets (no holes); measured again whenever the arrangement changes.
+  usePacked(
+    packed,
+    bands
+      ? bands.rows.map((r) => r.items.map((i) => `${i.widget.id}:${i.span}`).join()).join("|")
+      : null,
+  );
+
   const body = (w: BoardWidget) =>
     (bodies ? (bodies[w.id] ?? bodies[w.type]) : renderBody?.(w.type)) ?? null;
   const dragged = dragId ? layout.find((w) => w.id === dragId) : undefined;
@@ -765,12 +810,10 @@ export function WidgetBoard({
           <SortableContext items={layout.map((w) => w.id)} strategy={() => null}>
             <div className="@container">
               {bands ? (
-                <div ref={grid} className="relative flex flex-col gap-4.5">
-                  {bands.rows.map((row, i) => (
-                    <AmbientBand
-                      key={`${row.band}-${i}`}
-                      row={row}
-                      render={(item, index) => {
+                <div className="flex flex-col gap-4.5">
+                  <div ref={packed} className={cn(PACKED_GRID, "relative")}>
+                    {bands.rows.flatMap((row) =>
+                      row.items.map((item, index) => {
                         const m = meta.get(item.widget.type);
                         const n = row.items.length;
                         if (!m) return null;
@@ -792,6 +835,7 @@ export function WidgetBoard({
                             onNudge={() => {}}
                             onRemove={() => remove(item.widget.id)}
                             band={{
+                              name: row.band,
                               span: item.span,
                               square: row.band === "now",
                               compact: item.compact,
@@ -803,9 +847,9 @@ export function WidgetBoard({
                             {body(item.widget)}
                           </BoardItem>
                         );
-                      }}
-                    />
-                  ))}
+                      }),
+                    )}
+                  </div>
                   {/* Only what's on their board: an extra Home added isn't theirs to miss. */}
                   {bands.resting.some((w) => layout.some((l) => l.id === w.id)) && (
                     <RestingLine
@@ -967,7 +1011,15 @@ function BoardItem({
    * across until the widest screens), and whether it takes both columns on
    * a tablet.
    */
-  band?: { span: number; square: boolean; compact: boolean; full: boolean; lead?: string };
+  band?: {
+    /** Which band it's in ("you", "now"...), on the element as data-band. */
+    name: string;
+    span: number;
+    square: boolean;
+    compact: boolean;
+    full: boolean;
+    lead?: string;
+  };
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
@@ -1035,6 +1087,7 @@ function BoardItem({
       id={`w-${w.id}`}
       aria-label={m.title}
       data-widget-id={w.id}
+      data-band={band?.name}
       data-frame={bare ? "bare" : "card"}
       onPointerDown={coarse ? undefined : drag}
       style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
@@ -1057,9 +1110,6 @@ function BoardItem({
         editing && resizing && "outline-foreground outline-solid",
         dragging && "bg-muted/50 outline-foreground opacity-50",
         fresh && "ring-foreground/40 ring-2",
-        // Leading (Ambient): a banana edge, and why in the header.
-        band?.lead &&
-          "outline-[1.5px] -outline-offset-[1.5px] outline-[color-mix(in_oklab,var(--attention)_60%,transparent)] outline-solid",
       )}
     >
       {!editing && !readOnly && (
@@ -1172,30 +1222,6 @@ function BoardItem({
         </span>
       )}
     </section>
-  );
-}
-
-/** One Ambient band: a row of widgets that share its height. */
-function AmbientBand({
-  row,
-  render,
-}: {
-  row: AmbientRow;
-  render: (item: AmbientItem, index: number) => ReactNode;
-}) {
-  return (
-    <div
-      data-band={row.band}
-      className={cn(
-        BAND_GRID,
-        // Now's widgets are small: each is as tall as what's in it, not the tallest.
-        row.band === "now" ? "items-start lg:grid-cols-2 xl:grid-cols-8" : "lg:grid-cols-8",
-        // The lead and what sits beside it are different things: each its own height.
-        row.band === "lead" && "items-start",
-      )}
-    >
-      {row.items.map(render)}
-    </div>
   );
 }
 

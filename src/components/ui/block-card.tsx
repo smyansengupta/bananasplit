@@ -137,7 +137,6 @@ export function BlockCard({
         // An accented card paints itself from the style above; it still
         // wants the quiet tone's inset ring.
         accented ? "ring-1 ring-black/10 ring-inset dark:ring-white/10" : TONES[tone],
-        live && "outline-2 outline-offset-[3px] outline-(--ring-bg) outline-solid",
         className,
       )}
     >

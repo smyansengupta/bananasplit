@@ -6,7 +6,7 @@ import { useOptimistic, useTransition } from "react";
 
 import { useCompleteTask } from "@/components/tasks/quick-controls";
 import { TaskCard } from "@/components/tasks/task-card";
-import { BOARD_KINDS, TaskAmbientActions } from "@/components/tasks/task-ambient";
+import { TaskAmbientActions } from "@/components/tasks/task-ambient";
 import { TaskCheck } from "@/components/tasks/task-check";
 import { TaskItemMenu } from "@/components/tasks/task-item-menu";
 import { accessSubjectOf, useTasks } from "@/components/tasks/tasks-context";
@@ -68,7 +68,7 @@ export function SortableTaskCard({
             task={{ ...task, status }}
             todayKey={todayKey}
             showEpic={showEpic}
-            ambient={<TaskAmbientActions task={task} only={BOARD_KINDS} align="start" why />}
+            ambient={<TaskAmbientActions task={task} align="start" why />}
             check={
               done ? (
                 <TaskCheck
