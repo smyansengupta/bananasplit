@@ -18,10 +18,13 @@ export async function AiSettingsSection({
   orgId,
   orgSlug,
   admin,
+  showCap = true,
 }: {
   orgId: string;
   orgSlug: string;
   admin: boolean;
+  /** Off in CRM settings > AI, where the organization's keys card has the cap. */
+  showCap?: boolean;
 }) {
   const [data, connection, connectors] = await Promise.all([
     withOrgTx(orgId, async ({ db }) => {
@@ -51,6 +54,7 @@ export async function AiSettingsSection({
       orgId={orgId}
       orgSlug={orgSlug}
       admin={admin}
+      showCap={showCap}
       connection={connection?.label ?? null}
       usage={{
         total: data.usage.totalMicros,

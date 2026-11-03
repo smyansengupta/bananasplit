@@ -2,7 +2,7 @@
 
 import { ArrowDown, ArrowUp, Code, Eye, Plus, Sparkles, Trash2, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import {
   deleteWorkflowAction,
@@ -744,6 +744,7 @@ export function WorkflowBuilder({
   status,
   ctx,
   describeFirst,
+  describeText,
 }: {
   orgId: string;
   orgSlug: string;
@@ -752,10 +753,12 @@ export function WorkflowBuilder({
   status: "DRAFT" | "ON" | "OFF";
   ctx: BuilderContext;
   describeFirst?: boolean;
+  /** A sentence typed in CRM settings' describe box: turned into steps once, on arrival. */
+  describeText?: string;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<BuilderDraft>(initial);
-  const [described, setDescribed] = useState<string>("");
+  const [described, setDescribed] = useState<string>(describeText ?? "");
   const [notes, setNotes] = useState<string[]>([]);
   const [noAi, setNoAi] = useState<string | null>(null);
   const [dry, setDry] = useState<{ target: string | null; log: RunLogEntry[] } | null>(null);
@@ -763,7 +766,7 @@ export function WorkflowBuilder({
   const [adding, setAdding] = useState(false);
   const object = triggerObject(draft.trigger);
   const pipelineId = draft.trigger.params.pipelineId ?? null;
-  const base = `/app/${orgSlug}/crm/automations`;
+  const base = `/app/${orgSlug}/crm/settings/automations`;
 
   const save = (next?: "ON" | "OFF") =>
     start(async () => {
@@ -815,6 +818,15 @@ export function WorkflowBuilder({
       setNotes(r.notes);
       toast({ title: `Filled in by ${r.model}. Look it over, then save.` });
     });
+
+  // Arriving from the describe box: fill the steps in from that sentence, once.
+  const describedOnce = useRef(false);
+  useEffect(() => {
+    if (describedOnce.current || workflowId || (describeText ?? "").trim().length < 8) return;
+    describedOnce.current = true;
+    describe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
 
   const remove = () =>
     start(async () => {

@@ -43,7 +43,7 @@ export function BookingList({ orgId, orgSlug, pages }: { orgId: string; orgSlug:
     const r = await runAction(() => createBookingPageAction(orgId, title));
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
-    router.push(`/app/${orgSlug}/crm/outreach/booking/${r.id}`);
+    router.push(`/app/${orgSlug}/crm/settings/booking/${r.id}`);
   };
   return (
     <div className="space-y-4">
@@ -60,7 +60,7 @@ export function BookingList({ orgId, orgSlug, pages }: { orgId: string; orgSlug:
           {pages.map((p) => (
             <li key={p.id} className="bg-card ring-foreground/6 rounded-card flex flex-col gap-2 p-4 ring-1">
               <div className="flex items-center gap-2">
-                <Link href={`/app/${orgSlug}/crm/outreach/booking/${p.id}`} className="heading min-w-0 flex-1 truncate text-[15px] hover:underline">
+                <Link href={`/app/${orgSlug}/crm/settings/booking/${p.id}`} className="heading min-w-0 flex-1 truncate text-[15px] hover:underline">
                   {p.title}
                 </Link>
                 <Badge variant={p.active ? "success" : "secondary"}>{p.active ? "Open" : "Off"}</Badge>
