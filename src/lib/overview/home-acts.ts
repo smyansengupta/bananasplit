@@ -7,15 +7,7 @@
  */
 
 export type HomeActKind =
-  | "join"
-  | "check-in"
-  | "draft-agenda"
-  | "add-notes"
-  | "thank-you"
-  | "review-late"
-  | "approvals"
-  | "post-recap"
-  | "join-them";
+  "join" | "check-in" | "draft-agenda" | "add-notes" | "thank-you" | "post-recap" | "join-them";
 
 export interface HomeAct {
   kind: HomeActKind;

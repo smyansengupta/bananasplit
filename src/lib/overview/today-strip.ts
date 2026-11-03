@@ -1,7 +1,6 @@
 import { daysBetweenKeys, localDateKey } from "@/lib/tasks/dates";
 
 import { dayWordOfKey, timeWord } from "./format";
-import type { HomeAct } from "./home-acts";
 import { plural } from "./text";
 
 /**
@@ -20,8 +19,6 @@ export interface TodayCell {
   href: string;
   /** A short chip beside the number ("3 days late", "All clear"), or none. */
   chip?: { text: string; tone: "destructive" | "success" | "secondary" };
-  /** Its ambient button: Review late while anything is, Review approvals while they wait. */
-  act?: HomeAct;
 }
 
 /** What the Inbox's Needs you is made of (sidebarCounts' needsYou). */
@@ -87,15 +84,6 @@ export function todayStrip(input: {
         overdue.count > 0
           ? { text: `${plural(late, "day")} late`, tone: "destructive" }
           : { text: "All clear", tone: "success" },
-      ...(overdue.count > 0
-        ? {
-            act: {
-              kind: "review-late" as const,
-              href: `${tasksHref}&overdue=1`,
-              reason: `${plural(overdue.count, "task")} ${overdue.count === 1 ? "is" : "are"} late`,
-            },
-          }
-        : {}),
     },
     {
       key: "waiting",
@@ -111,15 +99,6 @@ export function todayStrip(input: {
         waiting && waiting.count > 0 && needsYouLine(waiting.parts)
           ? { text: needsYouLine(waiting.parts).split(", ")[0]!, tone: "secondary" }
           : undefined,
-      ...(waiting && waiting.parts.requests > 0
-        ? {
-            act: {
-              kind: "approvals" as const,
-              href: `${base}/inbox`,
-              reason: `${plural(waiting.parts.requests, "approval")} waiting`,
-            },
-          }
-        : {}),
     },
     {
       key: "due",

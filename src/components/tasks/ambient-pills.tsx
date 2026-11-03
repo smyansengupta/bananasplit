@@ -10,6 +10,7 @@ import {
   MAX_AMBIENT,
   type AmbientAction,
 } from "@/components/ambient/ambient-button";
+import type { IconComponent } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -86,13 +87,20 @@ function useJob() {
 
 interface PillBase {
   label: string;
+  /** A symbol before the label (Nudge's bell, Push back's calendar). */
+  icon?: IconComponent;
   reason: string;
   ariaLabel?: string;
+}
+
+function PillIcon({ icon: Icon }: { icon?: IconComponent }) {
+  return Icon ? <Icon aria-hidden="true" /> : null;
 }
 
 /** A popover with a message already written, sent as is or edited. */
 export function AmbientMessage({
   label,
+  icon,
   reason,
   ariaLabel,
   hint,
@@ -118,6 +126,7 @@ export function AmbientMessage({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button type="button" title={reason} aria-label={ariaLabel} className={PILL}>
+            <PillIcon icon={icon} />
             {label}
           </button>
         </PopoverTrigger>
@@ -164,6 +173,7 @@ export function AmbientMessage({
 /** A pill that opens a short menu of ways to do the job. */
 export function AmbientMenu({
   label,
+  icon,
   reason,
   ariaLabel,
   choices,
@@ -184,6 +194,7 @@ export function AmbientMenu({
             disabled={pending}
             className={PILL}
           >
+            <PillIcon icon={icon} />
             {label}
           </button>
         </DropdownMenuTrigger>

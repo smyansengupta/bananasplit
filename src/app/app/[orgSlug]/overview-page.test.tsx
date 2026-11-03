@@ -642,7 +642,7 @@ describe("org overview", () => {
     // This week: deadlines beside the events, the late one on today.
     expect(html).toContain("Due: Order pizza");
     expect(html).toContain("Book the room, overdue");
-    expect(html).toContain("free evenings");
+    expect(html).toMatch(/free days?/);
   });
 
   it("no longer offers People, notes, uploads or the next sign-up on Home", async () => {

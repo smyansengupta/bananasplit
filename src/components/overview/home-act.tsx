@@ -2,8 +2,6 @@
 
 import {
   DoorOpen,
-  Inbox,
-  ListTodo,
   Megaphone,
   NotebookPen,
   Send,
@@ -25,8 +23,6 @@ const LOOK: Record<HomeActKind, { label: string; icon: IconComponent }> = {
   "draft-agenda": { label: "Draft agenda", icon: NotebookPen },
   "add-notes": { label: "Add notes", icon: NotebookPen },
   "thank-you": { label: "Send a thank-you", icon: Send },
-  "review-late": { label: "Review late", icon: ListTodo },
-  approvals: { label: "Review approvals", icon: Inbox },
   "post-recap": { label: "Post the recap", icon: Megaphone },
   "join-them": { label: "Join them", icon: Users },
 };

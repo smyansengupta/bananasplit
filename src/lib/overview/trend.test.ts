@@ -9,12 +9,18 @@ describe("trendLine", () => {
     for (let i = 1; i < trend.length; i++)
       expect(trend[i]).toBeGreaterThanOrEqual(trend[i - 1] - 1e-9);
     expect(trend[3]).toBeGreaterThan(0);
-    expect(trend[6]).toBeLessThan(2.2);
+    // Never above the highest week: it follows the bars, not past them.
+    expect(Math.max(...trend)).toBeLessThanOrEqual(2);
+  });
+
+  it("carries on flat into the week under way", () => {
+    const trend = trendLine([0, 1, 2, 2], 1);
+    expect(trend[4]).toBe(trend[3]);
   });
 
   it("bends a little for one odd week instead of spiking to it", () => {
     const trend = trendLine([4, 4, 4, 12, 4, 4, 4]);
-    expect(trend[3]).toBeLessThan(8);
+    expect(trend[3]).toBeLessThanOrEqual(8);
     expect(trend[3]).toBeGreaterThan(4);
   });
 

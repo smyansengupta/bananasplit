@@ -1,48 +1,31 @@
 /**
- * The weekly pulse's trend: where the weeks are heading, not a line joining
- * their tops. Each point is a local linear fit of the weeks around it,
- * weighted by distance (a Gaussian kernel), so one odd week bends the line
- * a little instead of making a corner. Pure, so the shape is unit-tested.
+ * The weekly pulse's trend: each week evened out with the weeks either side
+ * of it (weighted one, two, one), so one odd week bends the line a little
+ * instead of making a spike, and the line stays with the bars instead of
+ * running ahead of them. Pure, so the shape is unit-tested.
  */
 
-/** How far each fit looks, in weeks: wider for more weeks, never under one and a half. */
-export function trendBandwidth(n: number): number {
-  return Math.max(1.5, n / 4);
-}
-
-/** The local linear fit of `values` (at x = 0..n-1) evaluated at `x`. */
-function fitAt(values: readonly number[], x: number, bandwidth: number): number {
-  let sw = 0;
-  let sx = 0;
-  let sy = 0;
-  let sxx = 0;
-  let sxy = 0;
-  values.forEach((y, i) => {
-    const w = Math.exp(-((i - x) ** 2) / (2 * bandwidth ** 2));
-    sw += w;
-    sx += w * i;
-    sy += w * y;
-    sxx += w * i * i;
-    sxy += w * i * y;
-  });
-  if (sw === 0) return 0;
-  const mx = sx / sw;
-  const my = sy / sw;
-  const vx = sxx / sw - mx * mx;
-  const slope = vx > 1e-9 ? (sxy / sw - mx * my) / vx : 0;
-  return my + slope * (x - mx);
+/** Week `i` evened out with its neighbours; an end week leans on the one beside it. */
+function evenedAt(values: readonly number[], i: number): number {
+  let sum = 2 * values[i]!;
+  let weight = 2;
+  for (const j of [i - 1, i + 1]) {
+    if (j < 0 || j >= values.length) continue;
+    sum += values[j]!;
+    weight += 1;
+  }
+  return sum / weight;
 }
 
 /**
  * The trend through `values`, one point per week, never below zero. With
- * `ahead`, that many more points carry it on past the last value (the week
- * under way, whose own count isn't in yet).
+ * `ahead`, that many more points carry the last one on, flat (the week
+ * under way, whose own count isn't in yet, is on the same pace).
  */
 export function trendLine(values: readonly number[], ahead = 0): number[] {
   if (values.length === 0) return [];
-  if (values.length === 1) return Array(1 + ahead).fill(Math.max(0, values[0]));
-  const bw = trendBandwidth(values.length);
-  return Array.from({ length: values.length + ahead }, (_, x) => Math.max(0, fitAt(values, x, bw)));
+  const line = values.map((_, i) => Math.max(0, evenedAt(values, i)));
+  return [...line, ...Array<number>(ahead).fill(line[line.length - 1]!)];
 }
 
 /**

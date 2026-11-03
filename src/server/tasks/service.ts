@@ -595,6 +595,8 @@ async function syncMentions(
   task: { id: string; title: string } & TaskVisibilitySubject,
   sourceKey: string,
   markdown: string | null,
+  /** The notice's words when the comment is an ambient ask (Nudge, Ask to unblock, Follow up). */
+  ask?: TaskAsk,
 ): Promise<MentionSync> {
   const { db, organizationId } = env.ctx;
   const audience = mentionAudience(env, task);
@@ -632,7 +634,7 @@ async function syncMentions(
       : null;
     await notifyUsers(db, organizationId, notify, {
       type: NotificationType.TASK_MENTIONED,
-      title: `${actorName(env)} mentioned you on ${quoted(task.title)}`,
+      title: `${actorName(env)} ${ask ? ASK_WORDS[ask] : "mentioned you on"} ${quoted(task.title)}`,
       body: excerpt,
       linkUrl: taskPath(env.org.slug, task.id),
       taskId: task.id,
@@ -1498,11 +1500,25 @@ export interface CommentResult {
 }
 
 /** Any member may comment on a task they can see. Mentions notify; the owner and collaborators get a comment notice. */
+/**
+ * What an ambient ask on a task is (src/components/tasks/task-ambient.tsx):
+ * the person mentioned gets it in their Inbox in these words.
+ */
+export type TaskAsk = "nudge" | "unblock" | "follow-up";
+const ASK_WORDS: Record<TaskAsk, string> = {
+  nudge: "nudged you on",
+  unblock: "asked what would unblock",
+  "follow-up": "followed up on",
+};
+const askSchema = z.enum(["nudge", "unblock", "follow-up"]).optional();
+
 export async function addComment(
   env: TaskEnv,
   taskId: string,
   rawBody: unknown,
+  rawAsk?: unknown,
 ): Promise<CommentResult> {
+  const ask = parse(askSchema, rawAsk);
   const body = parse(commentBodySchema, rawBody);
   const s = await loadSubject(env, taskId);
   const { db, organizationId } = env.ctx;
@@ -1511,7 +1527,7 @@ export async function addComment(
     select: { id: true },
   });
   await writeActivity(env, s.id, [{ type: "COMMENTED", diffJson: { commentId: comment.id } }]);
-  const mentions = await syncMentions(env, { ...s, ...visibilityOf(s) }, comment.id, body);
+  const mentions = await syncMentions(env, { ...s, ...visibilityOf(s) }, comment.id, body, ask);
   // The owner and the collaborators are inside a private task's audience by
   // definition, so this notice never needs its own filter.
   const watchers = uniq([

@@ -14,7 +14,6 @@ import { Stat, StatStrip } from "@/components/ui/stat";
 import type { TodayCell } from "@/lib/overview/today-strip";
 
 import { TickNumber } from "./fresh";
-import { HomeActButton } from "./home-act";
 
 const ICONS: Record<TodayCell["key"], IconComponent> = {
   overdue: CircleAlert,
@@ -67,7 +66,6 @@ export function TodayStrip({
                 chip={c.chip ? <Badge variant={c.chip.tone}>{c.chip.text}</Badge> : undefined}
               />
             </Link>
-            {c.act && <HomeActButton act={c.act} />}
           </div>
         ))}
       </StatStrip>

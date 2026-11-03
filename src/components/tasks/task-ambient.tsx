@@ -12,6 +12,16 @@ import {
   setTaskStatus,
   updateTask,
 } from "@/app/app/[orgSlug]/tasks/actions";
+import {
+  Bell,
+  CalendarClock,
+  CircleCheck,
+  CircleQuestionMark,
+  LockOpen,
+  MessageCircle,
+  UserPlus,
+  Users,
+} from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
@@ -96,9 +106,16 @@ export function useTaskAmbientItems(
   return found.map((a) => itemFor(a, task, org.id, org.todayKey, nameOf(a.personId)));
 }
 
-function comment(orgId: string, taskId: string, personId: string, name: string | null) {
+/** The ask as a comment that mentions them: it lands in their Inbox, saying what it is. */
+function comment(
+  orgId: string,
+  taskId: string,
+  personId: string,
+  name: string | null,
+  ask: "nudge" | "unblock" | "follow-up",
+) {
   return (body: string) =>
-    addTaskComment(orgId, taskId, `${mentionToken(name ?? "member", personId)} ${body}`);
+    addTaskComment(orgId, taskId, `${mentionToken(name ?? "member", personId)} ${body}`, ask);
 }
 
 function itemFor(
@@ -118,6 +135,7 @@ function itemFor(
         action: {
           key: a.kind,
           label: a.kind === "close-epic" ? "Close the epic" : "Mark done",
+          icon: CircleCheck,
           reason: a.reason,
           tone: "solid",
           ariaLabel: `${a.kind === "close-epic" ? "Close" : "Mark done"} ${task.title}`,
@@ -134,6 +152,7 @@ function itemFor(
         node: (
           <AmbientMenu
             label="Push back"
+            icon={CalendarClock}
             reason={a.reason}
             ariaLabel={`Push back ${task.title}`}
             choices={[
@@ -171,7 +190,8 @@ function itemFor(
             ariaLabel={`${label}: ${task.title}`}
             hint={`Comments on the task and mentions ${who}.`}
             text={text}
-            send={comment(orgId, task.id, a.personId!, personName)}
+            icon={a.kind === "nudge" ? Bell : a.kind === "follow-up" ? MessageCircle : LockOpen}
+            send={comment(orgId, task.id, a.personId!, personName, a.kind)}
             done={a.kind === "follow-up" ? `Followed up with ${who}` : `Asked ${who}`}
           />
         ),
@@ -183,6 +203,7 @@ function itemFor(
         action: {
           key: "take",
           label: "Take it",
+          icon: UserPlus,
           reason: a.reason,
           ariaLabel: `Take ${task.title}`,
           run: () => selfAssignTask(orgId, task.id, "claim"),
@@ -197,6 +218,7 @@ function itemFor(
         node: (
           <AmbientMenu
             label="Still needed?"
+            icon={CircleQuestionMark}
             reason={a.reason}
             ariaLabel={`Is ${task.title} still needed?`}
             choices={[
@@ -274,6 +296,7 @@ function AssignPill({ task, reason }: { task: TaskItem; reason: string }) {
               "text-foreground bg-transparent shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-current/8",
             )}
           >
+            <Users aria-hidden="true" />
             Assign
           </button>
         </PopoverTrigger>

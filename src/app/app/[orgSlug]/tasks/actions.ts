@@ -216,8 +216,14 @@ export async function bulkDelete(orgId: string, taskIds: string[]) {
   return run(() => bulkDeleteTx(orgId, taskIds));
 }
 
-export async function addTaskComment(orgId: string, taskId: string, body: string) {
-  return run(() => addCommentTx(orgId, taskId, body));
+export async function addTaskComment(
+  orgId: string,
+  taskId: string,
+  body: string,
+  /** An ambient ask (Nudge, Ask to unblock, Follow up): the Inbox notice says so. */
+  ask?: svc.TaskAsk,
+) {
+  return run(() => addCommentTx(orgId, taskId, body, ask));
 }
 
 export async function editTaskComment(orgId: string, commentId: string, body: string) {

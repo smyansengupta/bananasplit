@@ -64,6 +64,7 @@ export function NudgeButton({
           orgId,
           taskId,
           `${mentionToken(person.name ?? "member", person.id)} ${body}`,
+          label === "Nudge" ? "nudge" : "follow-up",
         ),
       );
       if (result === undefined) return;

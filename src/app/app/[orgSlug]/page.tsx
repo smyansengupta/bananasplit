@@ -523,15 +523,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       })),
       deadlines,
       busy: load.clash !== null || load.crowded,
-      // Today's now line sits after what has started (all-day ones first).
-      ...(i === 0
-        ? {
-            now: {
-              label: timeWord(now, timeZone),
-              before: dayEvents.filter((e) => e.allDay || e.startsAt <= now).length,
-            },
-          }
-        : {}),
     };
     return { day, load, name: i === 0 ? "Today" : weekdayLong.format(date) };
   });
@@ -547,7 +538,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const weekCounts = {
     events: week.reduce((n, d) => n + d.events.length, 0),
     due: dueThisWeek.length,
-    free: weekDays.filter((d) => d.load.freeEvening).length,
+    // A free day has nothing on at all: no events, nothing due.
+    free: week.filter((d) => d.events.length === 0 && d.deadlines.length === 0).length,
   };
 
   // The Today strip: overdue, waiting on you, due this week, events ahead.
@@ -1054,7 +1046,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             {[
               `${weekCounts.events} ${weekCounts.events === 1 ? "event" : "events"}`,
               `${weekCounts.due} ${weekCounts.due === 1 ? "task" : "tasks"} due`,
-              `${weekCounts.free} free ${weekCounts.free === 1 ? "evening" : "evenings"}`,
+              `${weekCounts.free} free ${weekCounts.free === 1 ? "day" : "days"}`,
             ].join(", ")}
           </span>
         }
