@@ -12,8 +12,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * record goes back, the suggestion waits again), rejected, accepted in a
  * batch with one refused, and hidden from a member who can't see the record
  * (OWN access). Also the CRM's AI through the local stand-in: a summary kept
- * on the record, a transcript's promises as task suggestions, AiUsage rows,
- * and the hard monthly cap. Skipped when the database is not reachable.
+ * on the record, a transcript's promises as task suggestions, a follow-up
+ * draft under the email rules, AiUsage rows, and the hard monthly cap. Skipped when the database is not reachable.
  */
 
 const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
@@ -21,6 +21,7 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock, getSession:
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 vi.mock("@/server/org-chart/queries", () => ({ getPublishedOrgChart: vi.fn(async () => null) }));
 
+import { emailTells } from "@/lib/crm/email-style";
 import { authDb, disconnectAll } from "@/server/db/clients";
 import { withOrgTx, type OrgContext } from "@/server/db/context";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
@@ -28,7 +29,7 @@ import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { CrmError } from "./access";
 import { AiCapError } from "./ai";
 import { jobWho } from "./ai-tx";
-import { readTranscript, summarizeRecord } from "./assist";
+import { draftFollowUp, readTranscript, summarizeRecord } from "./assist";
 import { readEnrichment } from "./enrichment-store";
 import { createPerson } from "./people";
 import { acceptSuggestion, acceptSuggestions, listQueue, proposeChange, queueCount, rejectSuggestion, undoSuggestion } from "./review";
@@ -287,6 +288,18 @@ describe("the CRM's AI on the local stand-in", () => {
     expect(person.nextFollowUpAt?.toISOString().slice(0, 10)).toBe((theirs.payload as { dueDate: string }).dueDate);
     const link = await ownerDb.itemLink.findFirst({ where: { organizationId: orgA, toKind: "crm-person", toId: id, fromKind: "task" } });
     expect(link).not.toBeNull();
+  });
+
+  it("drafts a follow-up under the email rules: one metered call when it passes the check", async () => {
+    if (!reachable || !standin) return;
+    const { id } = await as(owner, orgA, (ctx) => createPerson(ctx, { name: "Mara Ortiz", primaryEmail: `mara-${tag}@example.org` }));
+    const before = await ownerDb.aiUsage.count({ where: { organizationId: orgA, feature: "crm.draft", provider: "standin" } });
+    const r = await draftFollowUp(jobWho(orgA, owner.id), { kind: "person", id }, "Thank them for the tour");
+    expect(emailTells(`${r.subject}\n${r.body}`)).toEqual([]);
+    expect(r.body.startsWith("Hi Mara,")).toBe(true);
+    expect(r.notes.some((n) => /machine-written/.test(n))).toBe(false);
+    expect(r.draftId).toBeTruthy();
+    expect(await ownerDb.aiUsage.count({ where: { organizationId: orgA, feature: "crm.draft", provider: "standin" } })).toBe(before + 1);
   });
 
   it("stops at the monthly cap", async () => {

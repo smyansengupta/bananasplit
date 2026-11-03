@@ -108,8 +108,10 @@ describe("the CRM tools", () => {
     expect((await ownerDb.crmPerson.findUniqueOrThrow({ where: { id: personId } })).title).toBe("Head of partnerships");
     await expect(crmUpdateRecordTool(session, { id, changes: { strength: "100" } })).rejects.toThrow(/can't be changed here/);
 
-    const draft = await crmDraftEmailTool(session, { id, subject: "Spring", body: "Hi Mara, ..." });
+    const draft = await crmDraftEmailTool(session, { id, subject: "Spring", body: "Hi Mara, I hope this email finds you well. ..." });
     expect(draft.status).toBe("queued");
+    // The email rules' post-check: the app hears which phrases to fix.
+    expect(draft.message).toContain('machine-written in places ("this email finds you well")');
     // Nothing sent: an unsent draft waits in compose (and in Review).
     const mail = await ownerDb.crmEmailMessage.findMany({ where: { organizationId: club.id }, select: { status: true, personId: true } });
     expect(mail).toEqual([{ status: "DRAFT", personId }]);

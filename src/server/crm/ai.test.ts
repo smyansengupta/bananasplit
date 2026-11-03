@@ -11,12 +11,21 @@ vi.mock("@/server/secrets", () => ({ getSecret: vi.fn(), setSecret: vi.fn(), tes
 import { AskPlanOutput, cleanDay, ConversationOutput, SummaryOutput, TranscriptOutput } from "@/lib/crm/ai-outputs";
 import { connectorAppliesDirectly, diffRows, historySourceOf, parsePayload } from "@/lib/crm/suggestions";
 import type { AiCredentials } from "@/server/ai/connections";
-import { aiClients } from "@/server/ai/generate";
+import { aiClients, AiImportError } from "@/server/ai/generate";
+import { emailTells, EMAIL_STYLE_RULES } from "@/lib/crm/email-style";
 
 import { createClaudeBatch, crmGenerate, dataRule, estimateCostMicros, fenced, withTier } from "./ai";
 import { storedValue } from "./ai-fields";
 import { standinPlan } from "./ask";
-import { standinConversation, standinTranscript, summarySystemPrompt, transcriptText } from "./assist";
+import {
+  draftSystemPrompt,
+  standinConversation,
+  standinDraft,
+  standinTranscript,
+  styleCheckedDraft,
+  summarySystemPrompt,
+  transcriptText,
+} from "./assist";
 import { dataClients, hunterPerson, tavilySearch } from "./data-connectors";
 import { waterfallOrder } from "./enrich";
 import { patchOf } from "./review";
@@ -227,5 +236,60 @@ describe("data connectors", () => {
     });
     vi.spyOn(dataClients, "fetch").mockResolvedValueOnce(new Response("no", { status: 401 }));
     await expect(hunterPerson("k".repeat(40), "a@b.org")).rejects.toThrow(/rejected the API key/);
+  });
+});
+
+describe("email drafts follow the email rules", () => {
+  const draft = (body: string, subject = "Workshop room") => ({ data: { subject, body, notes: [] as string[] } });
+  const plain = draft("Hi Mara,\n\nCould you confirm the room by Friday?\n\nJack");
+  const tells = draft("Hi Mara,\n\nI hope this email finds you well. Could you confirm the room by Friday?\n\nJack");
+
+  it("puts the rules in the drafting prompt", () => {
+    const prompt = draftSystemPrompt({ today: "2026-11-03", from: "Jack Lam", org: "Robotics" });
+    for (const rule of EMAIL_STYLE_RULES) expect(prompt).toContain(rule);
+    expect(prompt).toContain('Sign off "Jack"');
+    expect(prompt).toContain("<previous_draft>");
+  });
+
+  it("asks once when the draft is clean", async () => {
+    const ask = vi.fn().mockResolvedValue(plain);
+    const r = await styleCheckedDraft(ask);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(r).toEqual({ result: plain, tells: [], retried: false });
+  });
+
+  it("asks again once, naming the tells, and keeps the cleaner draft", async () => {
+    const ask = vi.fn().mockResolvedValueOnce(tells).mockResolvedValueOnce(plain);
+    const r = await styleCheckedDraft(ask);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(ask.mock.calls[0]![0]).toBeNull();
+    expect(ask.mock.calls[1]![0]).toContain('"this email finds you well"');
+    expect(r).toEqual({ result: plain, tells: [], retried: true });
+  });
+
+  it("keeps the first when the second is worse, or fails on the cap or the model", async () => {
+    const worse = draft("Hi Mara,\n\nI hope this email finds you well — don't hesitate to confirm.\n\nJack");
+    const r = await styleCheckedDraft(vi.fn().mockResolvedValueOnce(tells).mockResolvedValueOnce(worse));
+    expect(r.result).toBe(tells);
+    expect(r.tells).toEqual(['"this email finds you well"']);
+    const capped = await styleCheckedDraft(vi.fn().mockResolvedValueOnce(tells).mockRejectedValueOnce(new AiImportError("cap", 429)));
+    expect(capped).toEqual({ result: tells, tells: ['"this email finds you well"'], retried: false });
+    await expect(styleCheckedDraft(vi.fn().mockResolvedValueOnce(tells).mockRejectedValueOnce(new Error("db down")))).rejects.toThrow("db down");
+  });
+
+  it("has the stand-in write drafts that pass the check", () => {
+    const facts = { lastContactedAt: null, nextFollowUpAt: null, entries: 0, lastEntry: null, openItems: [], tasks: [], upcoming: [] };
+    const fresh = standinDraft({ name: "Mara Ortiz", companyName: "Acme", timezone: "America/New_York", facts }, "Jack Lam");
+    const met = standinDraft(
+      { name: "Mara Ortiz", companyName: null, timezone: "America/New_York", facts: { ...facts, lastContactedAt: new Date("2026-10-12T16:00:00Z") } },
+      "Jack Lam",
+    );
+    for (const d of [fresh, met]) {
+      expect(emailTells(`${d.subject}\n${d.body}`)).toEqual([]);
+      expect(d.body.startsWith("Hi Mara,")).toBe(true);
+      expect(d.body.endsWith("\n\nJack")).toBe(true);
+    }
+    expect(met.body).toContain("October 12");
+    expect(fresh.subject).toBe("Next steps with Acme");
   });
 });

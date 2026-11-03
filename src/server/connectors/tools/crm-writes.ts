@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { NotFoundError } from "@/lib/auth/errors";
 import { normalizeEmail } from "@/lib/crm/dedupe";
+import { emailTells, withEmailStyle } from "@/lib/crm/email-style";
 import { connectorAppliesDirectly, type Citation, type TargetRef } from "@/lib/crm/suggestions";
 import { CrmError, requireCrm } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
@@ -373,8 +374,13 @@ export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<
       assigneeId: ctx.userId,
     });
     const suggestionId = delivered.suggestionId ?? "";
+    // The email rules' post-check: the connected app wrote it, so it hears what to fix (no second call here).
+    const tells = emailTells(`${args.subject}\n${args.body}`);
+    const check = tells.length
+      ? ` It reads as machine-written in places (${tells.join(", ")}); the member should edit those before sending.`
+      : "";
     return {
-      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, "The draft waits in the CRM's Review tab and in compose on their page. Nothing was sent."),
+      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, `The draft waits in the CRM's Review tab and in compose on their page. Nothing was sent.${check}`),
       target: { type: "CrmSuggestion", id: suggestionId },
     };
   });
@@ -513,7 +519,9 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_draft_email",
     {
       title: "Draft a CRM email",
-      description: "Drafts an email to a CRM person for the member to read, edit and send themselves. It is saved in the Review tab and never sent.",
+      description: withEmailStyle(
+        "Drafts an email to a CRM person for the member to read, edit and send themselves. It is saved in the Review tab and never sent. Read their timeline (crm_timeline) first and write the subject and body as the member, under these rules.",
+      ),
       inputSchema: draftInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
