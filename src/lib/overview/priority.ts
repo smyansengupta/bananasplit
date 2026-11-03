@@ -57,6 +57,8 @@ export interface HomeSignals {
   othersOnline: number;
   /** The next seven days. */
   week: { events: number; due: number; meetings: number };
+  /** Tomorrow's first meeting or event, for late at night ("Workshop 8, 6 PM"). */
+  tomorrowFirst?: { widget: "meetings" | "events"; label: string } | null;
 }
 
 export const USUAL = 10;
@@ -96,7 +98,7 @@ export function scoreHome(s: HomeSignals): Map<string, WidgetScore> {
     set("meetings", 100, m.underWay ? `${m.title} is on now` : soonWord(m.startsInMin));
   } else if (s.meetingJustEnded) {
     set("meetings", 70, `${s.meetingJustEnded.title} just ended: add the notes`);
-  } else if (s.week.meetings > 0) {
+  } else if (s.week.meetings > 0 && !isNight(s.hour)) {
     set("meetings", 30, `${plural(s.week.meetings, "meeting")} this week`);
   }
   const e = s.event;
@@ -108,8 +110,12 @@ export function scoreHome(s: HomeSignals): Map<string, WidgetScore> {
     );
   } else if (e && e.startsInMin <= 15) {
     set("events", 90, soonWord(e.startsInMin));
-  } else if (s.week.events > 0) {
+  } else if (s.week.events > 0 && !isNight(s.hour)) {
     set("events", 30, `${plural(s.week.events, "event")} this week`);
+  }
+  // Late at night: tomorrow's first thing, and nothing else that's merely coming up.
+  if (isNight(s.hour) && s.tomorrowFirst) {
+    set(s.tomorrowFirst.widget, 40, `Tomorrow first: ${s.tomorrowFirst.label}`);
   }
   const live = (m && (m.underWay || m.startsInMin <= 15)) || e?.underWay;
   if (live && s.othersOnline >= 2) {

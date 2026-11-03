@@ -833,6 +833,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const nextMeeting = nextMeetings.find((m) => !m.allDay) ?? null;
   const nextEvent = data.events.find((e) => !e.allDay) ?? null;
   const tomorrowKey = addDaysToKey(todayKey, 1);
+  const firstTomorrow = data.weekEvents.find((e) => !e.allDay && dayKeyOf(e) === tomorrowKey);
   const clock = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     hourCycle: "h23",
@@ -880,6 +881,12 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     changes: w.since?.rows.length ?? 0,
     daysAway: data.since ? Math.floor((now.getTime() - data.since.getTime()) / DAY_MS) : 0,
     othersOnline: online ? Math.max(0, online.count - 1) : 0,
+    tomorrowFirst: firstTomorrow
+      ? {
+          widget: nextMeetings.some((m) => m.id === firstTomorrow.id) ? "meetings" : "events",
+          label: `${firstTomorrow.title}, ${timeWord(firstTomorrow.startsAt, timeZone).replace(":00", "")}`,
+        }
+      : null,
     week: {
       events: weekCounts.events,
       due: weekCounts.due,

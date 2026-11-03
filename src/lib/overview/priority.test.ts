@@ -109,7 +109,19 @@ describe("Ambient Home, twelve states", () => {
     expect(quiet.resting.map((w) => w.type)).toEqual(["since-you-were-here", "meetings", "votes"]);
   });
 
-  it("late at night: only what matters stays, the rest rests until morning", () => {
+  it("late at night: tomorrow's first thing leads, and the rest rests until morning", () => {
+    const night = board({
+      hour: 23,
+      week: { events: 3, due: 0, meetings: 1 },
+      tomorrowFirst: { widget: "events", label: "Workshop 8, 6 PM" },
+    });
+    expect(night.rows.map((r) => r.items.map((i) => `${i.widget.type}:${i.span}`))).toEqual([
+      ["events:8"],
+    ]);
+    expect(night.rows[0].items[0].lead).toBe("Tomorrow first: Workshop 8, 6 PM");
+  });
+
+  it("late at night, something late still stays", () => {
     const night = board({ hour: 23, overdue: 1 });
     const shown = night.rows.flatMap((r) => r.items.map((i) => i.widget.type));
     expect(shown).toEqual(["my-tasks"]);
