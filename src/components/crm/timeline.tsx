@@ -43,6 +43,8 @@ export interface TimelineItem {
   body: string | null;
   occurredAt: string;
   actorId: string | null;
+  /** An email, call or text that came in (from them) or went out. */
+  direction?: "INBOUND" | "OUTBOUND" | null;
   sourceKind: string | null;
   targets: { kind: "person" | "company" | "deal"; id: string; label?: string }[];
 }
@@ -197,7 +199,11 @@ export function Timeline({
                   <div className="flex flex-wrap items-baseline gap-x-2">
                     <b className="text-sm">{it.subject ?? WORDS[it.kind] ?? "Activity"}</b>
                     <span className="text-muted-foreground text-xs">
-                      {[it.subject ? WORDS[it.kind] : null, it.actorId ? members[it.actorId] : null]
+                      {[
+                        it.subject ? (it.direction === "INBOUND" ? `${WORDS[it.kind] ?? "Message"} in` : WORDS[it.kind]) : null,
+                        // Something that came in names who it reached: "to Ada".
+                        it.actorId && members[it.actorId] ? (it.direction === "INBOUND" ? `to ${members[it.actorId]}` : members[it.actorId]) : null,
+                      ]
                         .filter(Boolean)
                         .join(", ")}
                     </span>
@@ -242,6 +248,7 @@ export function Timeline({
                 body: e.body,
                 occurredAt: new Date(e.occurredAt).toISOString(),
                 actorId: e.actorId,
+                direction: e.direction,
                 sourceKind: e.sourceKind,
                 targets: e.targets,
               })),

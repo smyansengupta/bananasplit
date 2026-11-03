@@ -473,6 +473,9 @@ export async function runAction(ctx: ActionContext, action: WorkflowAction): Pro
       if (ctx.target.ownerId === pick && !ctx.target.ownerRoleKey) return ok(action, `Already owned by ${name}.`);
       if (ctx.dryRun) return ok(action, `Would assign it to ${name}.`);
       await setField(ctx, "owner", pick);
+      // The steps after this one (a task for the owner, an email from them) see the new owner.
+      ctx.target.ownerId = pick;
+      ctx.target.ownerRoleKey = null;
       if (pick !== ctx.actor.userId) {
         await notifyUsers(db, organizationId, [pick], {
           type: "CRM_ASSIGNED",

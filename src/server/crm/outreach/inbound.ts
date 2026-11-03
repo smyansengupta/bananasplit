@@ -343,6 +343,8 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
           direction,
           status: direction === "INBOUND" ? "RECEIVED" : "SENT",
           mailbox: MAILBOX[source.kind],
+          // Who it is from or to, when it is one person the CRM knows.
+          personId: peopleIds.length === 1 ? peopleIds[0] : null,
           mailboxUserId,
           messageIdHeader: m.messageId,
           inReplyTo: m.inReplyTo,

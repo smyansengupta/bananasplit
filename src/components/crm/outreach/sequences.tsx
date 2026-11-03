@@ -97,7 +97,19 @@ export function SequencesList({ orgId, orgSlug, sequences }: { orgId: string; or
             <DialogTitle>New sequence</DialogTitle>
             <DialogDescription>It starts with two emails three days apart. Change anything after.</DialogDescription>
           </DialogHeader>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alumni catch-up" autoFocus maxLength={120} />
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && name.trim()) {
+                e.preventDefault();
+                void create();
+              }
+            }}
+            placeholder="Alumni catch-up"
+            autoFocus
+            maxLength={120}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)}>
               Cancel

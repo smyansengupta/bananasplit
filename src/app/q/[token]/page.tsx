@@ -39,18 +39,13 @@ export default async function PublicQuotePage({ params }: PageProps<"/q/[token]"
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 space-y-6 px-4 py-8">
       <header className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
+        <h1 className="page-title">{q.title}</h1>
+        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <Badge variant={q.status === "ACCEPTED" || q.status === "PAID" ? "success" : q.status === "SENT" ? "info" : "outline"}>
             {STATUS_WORD[q.status]}
           </Badge>
-          <span className="text-muted-foreground text-sm">
-            {word.title} {q.number}
-          </span>
-        </div>
-        <h1 className="page-title">{q.title}</h1>
-        <p className="text-muted-foreground text-sm">
           {[
-            q.forName ? `For ${q.forName}` : null,
+            `${word.title} ${q.number}${q.forName ? ` for ${q.forName}` : ""}`,
             q.sentAt ? `Sent ${day(q.sentAt)}` : null,
             q.validUntil ? `${q.kind === "invoice" ? "Due" : "Valid until"} ${day(q.validUntil)}` : null,
           ]

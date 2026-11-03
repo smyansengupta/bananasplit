@@ -134,6 +134,7 @@ export async function presentTimeline(
     body: e.body,
     occurredAt: e.occurredAt.toISOString(),
     actorId: e.actorId,
+    direction: e.direction,
     sourceKind: e.sourceKind,
     targets: e.targets.map((t) => ({ ...t, label: labels.get(`${t.kind}:${t.id}`) })),
   }));

@@ -14,6 +14,7 @@ import {
 } from "@/app/app/[orgSlug]/crm/quote-actions";
 import { Copy, Download, Plus, Send, Trophy, X } from "@/components/icons";
 import { CrmPicker } from "@/components/crm/crm-picker";
+import { ComposeButton } from "@/components/crm/outreach/compose";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -408,9 +409,17 @@ export function QuoteEditor({
           <code className="bg-muted block rounded-md p-2 text-[12.5px] break-all">{link}</code>
           <DialogFooter>
             {quote.person?.email && link && (
-              <Button asChild variant="outline">
-                <a href={`mailto:${quote.person.email}?subject=${encodeURIComponent(`${word.title} ${quote.number}: ${title}`)}&body=${encodeURIComponent(link)}`}>Email it</a>
-              </Button>
+              // Through the CRM's own compose: previewed, tracked and on their timeline.
+              <ComposeButton
+                orgId={orgId}
+                people={[{ id: quote.person.id, name: quote.person.name, email: quote.person.email }]}
+                templates={[]}
+                dealId={quote.deal?.id}
+                label="Email it"
+                icon={false}
+                subject={`${word.title} ${quote.number}: ${title}`}
+                body={`Hi {{first_name|there}},\n\nHere's ${word.title.toLowerCase()} ${quote.number}: ${link}\n\n{{my_first_name}}`}
+              />
             )}
             <Button
               onClick={() => {

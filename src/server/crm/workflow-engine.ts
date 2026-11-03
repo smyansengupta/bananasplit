@@ -286,8 +286,10 @@ async function runSteps(
 }
 
 function failedEntry(action: RunLogEntry["action"], error: unknown): RunLogEntry {
-  const message = error instanceof Error && error.name === "CrmError" ? error.message : "Something went wrong.";
-  if (!(error instanceof Error && error.name === "CrmError")) {
+  // The CRM's and the Tasks service's own refusals are written for people ("Every task needs an owner.").
+  const said = error instanceof Error && (error.name === "CrmError" || error.name === "TaskError");
+  const message = said ? (error as Error).message : "Something went wrong.";
+  if (!said) {
     console.error("[crm] workflow step failed", error instanceof Error ? error.message : error);
   }
   return { action, ok: false, detail: `Failed: ${message}` };
