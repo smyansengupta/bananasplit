@@ -82,7 +82,7 @@ describe("finance board: the runway widget", () => {
 
   it("shows what committed sponsorships would change", () => {
     const html = render(dashboard({ expectedIncomeCents: 1_000_000 }));
-    expect(html).toContain("With $10,000.00 in committed sponsorships: lasts past Jun 30, 2027.");
+    expect(html).toContain("With $10,000.00 in committed deals: lasts past Jun 30, 2027.");
   });
 
   it("says so when nothing has been spent recently instead of projecting", () => {

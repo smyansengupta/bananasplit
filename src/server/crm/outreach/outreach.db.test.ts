@@ -270,7 +270,7 @@ describe("reaching out against the local database", () => {
 
     // Guest link: the partner sees their item and what we owe them.
     const pipeline = await ownerDb.crmPipeline.findFirstOrThrow({ where: { organizationId: org } });
-    // A Sponsorships item is a Finance sponsorship too: it needs its company and an amount.
+    // A Deals item is a Finance deal too: it needs its company and an amount.
     const harbor = await as(owner, async (ctx) => (await import("../companies")).createCompany(ctx, { name: "Harbor Light" }));
     const deal = await as(owner, async (ctx) =>
       (await import("../deals")).createDeal(ctx, { pipelineId: pipeline.id, title: "Harbor sponsorship", companyId: harbor.id, amount: 500 }),

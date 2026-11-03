@@ -6,8 +6,8 @@ import type { CrmStageKind } from "@/generated/prisma/enums";
  * each answer makes. Pure and client-safe: the setup screen shows it, the
  * server builds from it.
  *
- * Every pipeline names what it tracks (an applicant, a donation, a
- * sponsorship) and its closing labels (Joined / Didn't join). Stage keys
+ * Every pipeline names what it tracks (an applicant, a donation, a deal)
+ * and its closing labels (Joined / Didn't join). Stage keys
  * are stable, so a renamed stage still means the same thing to Finance and
  * to later phases.
  */
@@ -43,7 +43,7 @@ export const SETUP_KIND_INFO: Record<SetupKind, SetupKindInfo> = {
   donors: { id: "donors", label: "Donors", hint: "Asks, pledges and thank-yous", icon: "HandCoins" },
   sponsors: {
     id: "sponsors",
-    label: "Sponsors and partners",
+    label: "Partners and deals",
     hint: "From first ask to money received",
     icon: "Handshake",
   },
@@ -139,15 +139,16 @@ export const PIPELINE_TEMPLATES: Partial<Record<SetupKind, PipelineTemplate>> = 
   },
   sponsors: {
     template: "sponsors",
-    name: "Sponsorships",
-    itemNoun: "sponsorship",
-    itemNounPlural: "sponsorships",
+    name: "Deals",
+    itemNoun: "deal",
+    itemNounPlural: "deals",
     icon: "Handshake",
     color: "yellow",
     hasAmount: true,
     wonLabel: "Received",
     lostLabel: "Declined",
-    // The keys are SponsorshipStatus values: Finance's own stages.
+    // The keys are SponsorshipStatus values: Finance's own stages (Finance › Deals).
+    // The template id "sponsors" is stored (CrmPipeline.template), so it keeps its name.
     stages: [
       { key: "PROSPECT", name: "Prospect", kind: "OPEN", probability: 10, stuckAfterDays: 21 },
       { key: "COMMITTED", name: "Committed", kind: "OPEN", probability: 70, stuckAfterDays: 30 },
@@ -266,10 +267,7 @@ export const RELATIONSHIP_TYPES: Record<SetupKind, RelationshipType[]> = {
     { id: "volunteer", label: "Volunteer", color: "teal" },
   ],
   donors: [{ id: "donor", label: "Donor", color: "pink" }],
-  sponsors: [
-    { id: "sponsor", label: "Sponsor contact", color: "yellow" },
-    { id: "partner", label: "Partner", color: "orange" },
-  ],
+  sponsors: [{ id: "partner", label: "Partner", color: "orange" }],
   speakers: [
     { id: "speaker", label: "Speaker", color: "purple" },
     { id: "mentor", label: "Mentor", color: "purple" },

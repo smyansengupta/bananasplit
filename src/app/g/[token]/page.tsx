@@ -14,7 +14,7 @@ function day(d: Date): string {
 }
 
 /**
- * A sponsor's or partner's private page (/g/{token}): their agreement,
+ * A partner's or client's private page (/g/{token}): their agreement,
  * what we promised and how it's going, and a recap from real event and
  * attendance numbers. Nothing else in the CRM is reachable from it.
  */

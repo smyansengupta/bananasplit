@@ -69,7 +69,7 @@ const CRM_PREVIEW = (
     {(
       [
         ["Northbank Credit Union", "Follow up", "amber"],
-        ["Harbor Light Coffee", "Sponsor", "success"],
+        ["Harbor Light Coffee", "Partner", "success"],
         ["Alder Robotics", "Talked once", "muted"],
       ] as const
     ).map(([name, tag, tint]) => (

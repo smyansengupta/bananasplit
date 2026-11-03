@@ -283,7 +283,7 @@ export async function mergeCompanies(
   const drop = await db.crmCompany.findFirst({ where: { id: dropId, organizationId, deletedAt: null } });
   if (!keep || !drop) throw new CrmError("One of them isn't in the CRM any more.");
   if (keep.sponsorId && drop.sponsorId) {
-    throw new CrmError("Both are Finance sponsors. Merge the sponsors in Finance first.");
+    throw new CrmError("Both are Finance partners. Merge them under Finance's Deals first.");
   }
   const plan = planMerge(
     { fields: pick(keep, COMPANY_MERGE_FIELDS), custom: (keep.custom ?? {}) as Record<string, unknown> },
@@ -308,7 +308,7 @@ export async function mergeCompanies(
     where: { organizationId, targetKind: "company", targetId: dropId },
   });
   moved.links = await repointRelations(db, organizationId, "company", dropId, keepId);
-  // The sponsor link is unique: free it on the duplicate before the keeper takes it.
+  // The Finance partner link is unique: free it on the duplicate before the keeper takes it.
   await db.crmCompany.update({
     where: { id: dropId },
     data: { deletedAt: new Date(), sponsorId: null, domain: null, updatedById: userId },

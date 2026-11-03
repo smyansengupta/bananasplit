@@ -12,7 +12,7 @@ import { importRow } from "./import";
 /**
  * Turn a database into CRM records (docs/features/crm.md, "How it fits into
  * Databases"): pick one of the organization's own databases (an old
- * sponsor spreadsheet, form responses, an alumni list), match its fields to
+ * partner spreadsheet, form responses, an alumni list), match its fields to
  * the CRM's (suggested from their names), and each row becomes a person or
  * a company, deduped on email and domain the way imports are. The database
  * stays, with a Relation column pointing at the record each row made, so

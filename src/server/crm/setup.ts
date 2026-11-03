@@ -20,8 +20,8 @@ import { ensurePipelineViews, ensureStarterReports } from "./starter";
  * step"). "What do you mostly reach out to?" makes, in one transaction:
  * CrmSettings with the relationship types those answers use, People and
  * Companies in Databases, a ready-made pipeline per answer (each one a
- * database too), the saved views, and, when Finance has sponsors, the
- * Sponsorships pipeline with every sponsor and sponsorship moved in. Run
+ * database too), the saved views, and, when Finance has deals' partners,
+ * the Deals pipeline with every partner and deal moved in. Run
  * again with more answers, it adds what's missing and changes nothing else.
  * Owners and admins only (RLS: CrmSettings is theirs to create).
  */
@@ -39,7 +39,7 @@ export async function runSetup(actor: CrmActor, kindsInput: readonly string[]): 
   const { db, organizationId, userId } = actor;
   const picked = SETUP_KINDS.filter((k) => kindsInput.includes(k));
   const hasSponsors = (await db.sponsor.count({ where: { organizationId } })) > 0;
-  // Sponsors in Finance come along whether or not they were picked.
+  // Finance's partners and deals come along whether or not they were picked.
   const kinds: SetupKind[] = hasSponsors && !picked.includes("sponsors") ? [...picked, "sponsors"] : picked;
   if (kinds.length === 0) throw new CrmError("Pick at least one.");
 

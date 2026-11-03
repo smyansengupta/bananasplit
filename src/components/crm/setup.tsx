@@ -129,7 +129,7 @@ export function CrmSetup({
               const moved = r.result.sponsors;
               toast({
                 title: moved
-                  ? `Set up. ${moved.items} sponsorships moved into the Sponsorships pipeline.`
+                  ? `Set up. ${moved.items} deals moved into the Deals pipeline.`
                   : r.result.pipelines > 0
                     ? `Set up, with ${r.result.pipelines} pipelines.`
                     : "Set up.",
@@ -203,7 +203,7 @@ export function CrmSetup({
           </Card>
           {counts.sponsors > 0 && (
             <p className="text-muted-foreground text-sm">
-              {counts.sponsors} Finance sponsors aren&apos;t companies yet. Press Add these above to
+              {counts.sponsors} Finance partners aren&apos;t companies yet. Press Add these above to
               move them in.
             </p>
           )}

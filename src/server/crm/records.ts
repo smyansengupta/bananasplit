@@ -112,7 +112,7 @@ export async function loadCompany(db: TxClient, organizationId: string, orgSlug:
       pipeline: { select: { id: true, name: true, itemNoun: true } },
     },
   });
-  // Finance on the company: what its sponsorships pledged and paid.
+  // Finance on the company: what its deals pledged and paid.
   const finance = company.sponsorId
     ? await db.sponsorship
         .findMany({

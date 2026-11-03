@@ -8,7 +8,7 @@ import { logActivity, type ActivityTarget } from "./activity";
  * The timeline fills itself from the workspace (docs/features/crm.md,
  * module 3 and "What makes ours better" 1): meetings and events a person
  * attends, RSVPs, check-ins, form responses, tasks, notes and meetings
- * linked to a record, and Finance payments from a sponsor. Each source row
+ * linked to a record, and Finance payments from a partner's deal. Each source row
  * becomes one CrmActivity keyed by sourceKind/sourceId (unique per
  * organization), so mirroring again only adds what's new: a second run
  * over the same rows writes nothing but the targets it didn't have.
@@ -316,7 +316,7 @@ async function mirrorLinks(db: TxClient, organizationId: string, since: Date): P
   return written;
 }
 
-/** Sponsorship payments in Finance, on the sponsor's company (and the item). */
+/** Deal payments in Finance (Sponsorship rows), on the partner's company (and the item). */
 async function mirrorPayments(db: TxClient, organizationId: string, since: Date): Promise<number> {
   const rows = await db.sponsorship.findMany({
     where: { organizationId, transactionId: { not: null }, transaction: { voidedAt: null, occurredAt: { gte: since } } },

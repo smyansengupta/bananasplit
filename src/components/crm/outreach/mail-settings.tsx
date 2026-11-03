@@ -103,7 +103,7 @@ export function MailSettings({
       <section className="bg-card ring-foreground/6 rounded-card space-y-3 p-5 ring-1">
         <h2 className="heading text-base">Your signature</h2>
         <p className="text-muted-foreground text-sm">Added under everything you send from the CRM.</p>
-        <Textarea value={signature} onChange={(e) => setSignature(e.target.value)} rows={5} placeholder={"Ada Lovelace\nSponsorship lead, Harbor Robotics"} />
+        <Textarea value={signature} onChange={(e) => setSignature(e.target.value)} rows={5} placeholder={"Ada Lovelace\nPartnerships lead, Harbor Robotics"} />
         <Button variant="outline" disabled={pending} onClick={() => save({ signature })}>
           Save
         </Button>

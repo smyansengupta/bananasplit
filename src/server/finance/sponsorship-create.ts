@@ -5,8 +5,8 @@ import { syncDealFromSponsorship } from "@/server/crm/sponsor-sync";
 import { setSponsorshipStatus, type SponsorshipActor } from "./sponsorship-status";
 
 /**
- * Making a sponsorship (Finance's one way to do it, shared by Finance's own
- * action and an item added straight to the CRM's Sponsorships pipeline), so
+ * Making a deal, a Sponsorship row (Finance's one way to do it, shared by
+ * Finance's own action and an item added straight to the CRM's Deals pipeline), so
  * both stay in step: the row and its audit entry, then the move to where it
  * starts through setSponsorshipStatus (a start at Received books the money
  * the same way a move there does). Unless it came from the CRM, the CRM item
@@ -59,7 +59,7 @@ export async function createSponsorshipRecord(
     const moved = await setSponsorshipStatus(ctx, created.id, input.status, options);
     if (moved.error) return moved;
   } else if (!options.fromCrm) {
-    // The CRM's Sponsorships pipeline shows it too (when the CRM has one).
+    // The CRM's Deals pipeline shows it too (when the CRM has one).
     await syncDealFromSponsorship(db, organizationId, ctx.userId, created.id);
   }
   return { sponsorshipId: created.id };

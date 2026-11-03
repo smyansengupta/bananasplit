@@ -222,12 +222,12 @@ const PAGES: readonly PageDef[] = [
     keywords: ["categories", "allocation", "spending", "money"],
   },
   {
-    path: "/finance/sponsorships",
-    title: "Sponsorships",
+    path: "/finance/deals",
+    title: "Deals",
     section: "finance",
     permission: "finance.manage",
     icon: "Handshake",
-    keywords: ["sponsors", "partners", "funding"],
+    keywords: ["deals", "partners", "pipeline", "funding", "sponsorships"],
   },
   {
     path: "/finance/my-reimbursements",

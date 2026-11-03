@@ -221,7 +221,7 @@ function CategorySelect({
   );
 }
 
-/** The kinds a new record can be, by direction. Sponsorships are recorded on Sponsorships. */
+/** The kinds a new record can be, by direction. Deals (SPONSORSHIP) are recorded on Deals. */
 const KINDS_BY_DIRECTION: Record<TransactionDirection, TransactionKind[]> = {
   OUT: [TransactionKind.EXPENSE, TransactionKind.ALLOCATION, TransactionKind.ADJUSTMENT],
   IN: [TransactionKind.OTHER_INCOME, TransactionKind.ALLOCATION, TransactionKind.ADJUSTMENT],

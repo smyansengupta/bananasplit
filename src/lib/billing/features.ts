@@ -22,7 +22,7 @@ import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
  *   CLUB           Team: Team Free plus finance, the org chart and every
  *                  integration (data connections).
  *   SOCIETY        Team Advanced: everything, plus reports, themes, AI,
- *                  sponsorships, website sync and the audit log. An
+ *                  deals, website sync and the audit log. An
  *                  organization's 14-day trial (TRIAL) is Team Advanced,
  *                  limits included; an ended one is Team Free.
  *
@@ -106,7 +106,7 @@ export const PLAN_FEATURES = {
   themes: "SOCIETY",
   /** Claude and other AI models: tasks and events from text, sorting data. */
   ai: "SOCIETY",
-  /** Sponsorship tracking and runway. */
+  /** Deals (Finance's pipeline of committed money) and runway. The key keeps its old name. */
   sponsorships: "SOCIETY",
   /** The CRM add-on: people, companies, pipelines and their timeline (docs/features/crm.md). */
   crm: "SOCIETY",
@@ -308,7 +308,7 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   privacy: "Privacy settings",
   themes: "Custom themes",
   ai: "AI",
-  sponsorships: "Sponsorship tracking",
+  sponsorships: "Deals",
   crm: "The CRM",
   websiteSync: "Website sync",
   auditLog: "The audit log",
@@ -349,7 +349,7 @@ export const FEATURE_PITCH: Record<PlanFeature, string> = {
   privacy: "Ballot privacy, who sees member emails, and the public events feed.",
   themes: "Your colors and logo across the app.",
   ai: "Turn notes into tasks and events, and let AI sort your data.",
-  sponsorships: "Track sponsors, what they promised and your runway.",
+  sponsorships: "Track deals, what partners committed and your runway.",
   crm: "Everyone you reach out to, your pipelines, and a timeline that fills itself from your workspace.",
   websiteSync: "Publish events and sign-ups to your website.",
   auditLog: "Every settings change: who made it and when.",

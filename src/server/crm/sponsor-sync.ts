@@ -5,9 +5,10 @@ import type { TxClient } from "@/server/db/context";
 import { writeHistory } from "./history";
 
 /**
- * Keeping Finance and the CRM's Sponsorships pipeline the same (docs/
- * features/crm.md, "Moving Sponsors in"). A Sponsor is a CrmCompany
- * (sponsorId), its contact a CrmPerson, and each Sponsorship a CrmDeal
+ * Keeping Finance › Deals and the CRM's Deals pipeline the same (docs/
+ * features/crm.md, "Moving Finance deals in"). A Sponsor (a partner on
+ * screen) is a CrmCompany (sponsorId), its contact a CrmPerson, and each
+ * Sponsorship (a deal on screen) a CrmDeal
  * (sponsorshipId) in the pipeline made from the "sponsors" template, at the
  * stage whose key is the sponsorship's status.
  *
@@ -75,7 +76,7 @@ export async function companyForSponsor(
     select: { id: true },
   });
   if (!company) {
-    // A company of the same name already in the CRM is the same sponsor.
+    // A company of the same name already in the CRM is the same partner.
     const sameName = await db.crmCompany.findFirst({
       where: {
         organizationId,
@@ -146,9 +147,9 @@ export async function companyForSponsor(
         lastName: parts.lastName,
         primaryEmail: email,
         companyId: company.id,
-        relationship: "sponsor",
+        relationship: "partner",
         source: "finance",
-        sourceDetail: "A Finance sponsor's contact",
+        sourceDetail: "A Finance partner's contact",
         ownerId: userId,
         createdById: userId,
         updatedById: userId,
@@ -170,7 +171,7 @@ export async function companyForSponsor(
 
 /**
  * Makes or updates the CRM item for one sponsorship: its stage (by key),
- * amount, expected date and owner. A no-op without a Sponsorships pipeline.
+ * amount, expected date and owner. A no-op without a Deals pipeline.
  */
 export async function syncDealFromSponsorship(
   db: TxClient,
@@ -266,7 +267,7 @@ export async function syncDealFromSponsorship(
   });
 }
 
-/** A sponsorship deleted in Finance: its CRM item goes to the trash, unlinked. */
+/** A deal deleted in Finance: its CRM item goes to the trash, unlinked. */
 export async function dropDealForSponsorship(
   db: TxClient,
   organizationId: string,

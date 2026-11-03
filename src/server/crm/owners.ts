@@ -6,7 +6,7 @@ import { getPublishedOrgChart } from "@/server/org-chart/queries";
  * org-chart position (ownerRoleKey = OrgChartPosition.key) as well as a
  * member. The holder is read from the published org chart each time, so
  * when the member in that position changes the relationships follow the
- * position and the timeline stays. Shown as "Sponsorship lead (Ada)".
+ * position and the timeline stays. Shown as "Partnerships lead (Ada)".
  *
  * AUTHORIZE FIRST: the published chart is a cached service read; call this
  * only for an organization the viewer is a member of (every CRM page and
@@ -41,7 +41,7 @@ export async function rolePositions(organizationId: string): Promise<Map<string,
   return out;
 }
 
-/** "Sponsorship lead (Ada)", "Sponsorship lead (open)", "Ada", or null. */
+/** "Partnerships lead (Ada)", "Partnerships lead (open)", "Ada", or null. */
 export function ownerLabel(
   record: OwnerLabelInput,
   roles: ReadonlyMap<string, RoleOwner>,

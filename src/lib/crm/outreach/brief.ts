@@ -1,7 +1,7 @@
 /**
  * Words written for people from real records: the handover brief a new
  * owner reads for each contact (docs/features/crm.md, "What makes ours
- * better" 5), and the recap a sponsor or partner sees on their guest page
+ * better" 5), and the recap a partner or client sees on their guest page
  * (4). Pure.
  */
 

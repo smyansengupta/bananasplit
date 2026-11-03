@@ -179,7 +179,7 @@ describe("finance with nothing set up", () => {
     expect(active?.id).toBe(period.id);
   });
 
-  it("sponsorships and sponsors can be deleted (a sponsor only once it has none)", async () => {
+  it("deals and partners can be deleted (a partner only once it has no deals)", async () => {
     if (!reachable) return;
     as(people.treasurer);
     const sponsor = await createSponsor(orgId, { name: `Acme ${stamp}` });
@@ -194,7 +194,7 @@ describe("finance with nothing set up", () => {
       ownerId: people.treasurer.id,
     });
     expect(deal.error).toBeUndefined();
-    expect((await deleteSponsor(orgId, sponsor.sponsorId!)).error).toMatch(/still has 1 sponsorship/);
+    expect((await deleteSponsor(orgId, sponsor.sponsorId!)).error).toMatch(/still has 1 deal[.]/);
     expect(await deleteSponsorship(orgId, deal.sponsorshipId!)).toEqual({});
     expect(await deleteSponsor(orgId, sponsor.sponsorId!)).toEqual({});
   });

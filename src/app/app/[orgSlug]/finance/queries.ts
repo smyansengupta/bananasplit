@@ -270,11 +270,11 @@ export interface DashboardData {
   totalAllocatedCents: number;
   categories: { id: string; name: string; allocatedCents: number; spentCents: number }[];
   outstandingReimbursementsCents: number;
-  /** Cash sponsorships, committed or invoiced and still to come. */
+  /** Cash deals, committed or invoiced and still to come. */
   sponsorshipCommittedCents: number;
-  /** Cash sponsorships received (already ledger income). */
+  /** Cash deals received (already ledger income). */
   sponsorshipReceivedCents: number;
-  /** The value of credit sponsorships committed, invoiced or received: never on the ledger. */
+  /** The value of credit deals committed, invoiced or received: never on the ledger. */
   sponsorshipCreditsCents: number;
   /**
    * Money in and out per month. `pendingCents` is the part of `outCents`
@@ -522,7 +522,7 @@ export async function getDashboardData(
       period,
       balanceCents,
       spending,
-      // Received sponsorships are ledger income already; these are still to come.
+      // Received deals are ledger income already; these are still to come.
       expectedIncomeCents: sponsorshipCommittedCents,
       meetingStarts: meetings.map((m) => m.startsAt),
       now,

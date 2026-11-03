@@ -66,7 +66,7 @@ export const KIND_WORDS: Record<string, string> = {
   position: "Position",
   database: "Database",
   transaction: "Finance",
-  sponsor: "Sponsor",
+  sponsor: "Partner",
 };
 
 /** The keys that make a poll or a task from the typed text without leaving the box. */

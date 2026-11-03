@@ -141,7 +141,7 @@ export default async function CrmAddOnPage({
       <FeatureCard
         id="c-setup"
         title="Set up in one step"
-        lead="Say what you mostly reach out to. The pipelines, relationship types and saved lists are made for you, and Finance sponsors move in on their own."
+        lead="Say what you mostly reach out to. The pipelines, relationship types and saved lists are made for you, and Finance's deals move in on their own."
         details={[
           ["You pick", SETUP_KINDS.map((k) => SETUP_KIND_INFO[k].label).join(", ")],
           ["You get", `${Object.keys(PIPELINE_TEMPLATES).length} ready-made pipelines, each renameable, with their own words`],
@@ -165,7 +165,7 @@ export default async function CrmAddOnPage({
       <FeatureCard
         id="c-pipelines"
         title="A pipeline for every kind of relationship"
-        lead="Each pipeline names what it tracks, so a card is an applicant, a donation or a sponsorship, and closing reads Joined or Didn't join."
+        lead="Each pipeline names what it tracks, so a card is an applicant, a donation or a deal, and closing reads Joined or Didn't join."
         extra={
           <Steps
             label="New members"
@@ -207,7 +207,7 @@ export default async function CrmAddOnPage({
           ["Log by hand", "A note, a call, an email or a meeting, in one step"],
           ["Strength", "How warm each relationship is, from every touchpoint"],
           ["Knows them best", "Who in your organization has the most to do with them"],
-          ["Owned by a role", "Give a sponsor to the Sponsorship lead; when the person in that role changes, the relationship follows"],
+          ["Owned by a role", "Give a partner to the Partnerships lead; when the person in that role changes, the relationship follows"],
         ]}
         panel="info"
         preview={
@@ -326,7 +326,7 @@ export default async function CrmAddOnPage({
                   ["See everyone", <Yes key="a" />, "Unless set to their own"],
                   ["Move things to the trash", <Yes key="a" />, <Yes key="b" />],
                   ["Pipelines, stages and fields", <Yes key="a" />, <No key="b" />],
-                  ["Move a Finance sponsorship", "Owners, admins and treasurers", <No key="b" />],
+                  ["Move a Finance deal", "Owners, admins and treasurers", <No key="b" />],
                 ] as const
               ).map(([k, a, b]) => (
                 <tr key={k} className="border-border border-t">

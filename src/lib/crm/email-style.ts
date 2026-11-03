@@ -25,7 +25,7 @@ export const EMAIL_STYLE_RULES: readonly string[] = [
   // Whose voice
   "Sound like the sender writing to someone they know, not like the organization's marketing.",
   "When the timeline has emails the sender wrote, match their greeting, length, sign-off, contractions and formality. Keep habits they actually use.",
-  "Fit the relationship: a long-time donor and a first-time sponsor contact read differently. Don't overshoot into forced casualness or slang.",
+  "Fit the relationship: a long-time donor and a first-time partner contact read differently. Don't overshoot into forced casualness or slang.",
   "First person (\"I\", \"we\") and contractions where the sender would use them.",
   "Sign off with the sender's first name, unless their own emails sign off another way.",
   // Openings and closings

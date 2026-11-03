@@ -28,7 +28,7 @@ export const STARTER_TEMPLATES: readonly StarterTemplate[] = [
     body: "Hi {{first_name|there}},\n\nThank you for coming to {{last_event|our event}}. It was good to see you there.\n\nWe'd love to have you at the next one.\n\n{{my_first_name}}\n{{organization}}",
   },
   {
-    name: "Sponsorship ask",
+    name: "Partnership ask",
     category: "invite",
     subject: "{{organization}} and {{company|you}}",
     body: "Hi {{first_name|there}},\n\nI'm {{my_first_name}} from {{organization}}. We're planning our next events and would love {{company|your team}} to be part of them.\n\nWould you have 20 minutes to talk this month?\n\n{{my_first_name}}",

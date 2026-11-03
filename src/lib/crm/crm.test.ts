@@ -315,7 +315,7 @@ describe("setup templates", () => {
 
   it("collects relationship types and views once each", () => {
     const types = relationshipTypesFor(["donors", "sponsors", "donors"]);
-    expect(types.map((t) => t.id)).toEqual(["member", "donor", "sponsor", "partner"]);
+    expect(types.map((t) => t.id)).toEqual(["member", "donor", "partner"]);
     expect(viewsFor(["alumni"]).some((v) => v.name === "Alumni")).toBe(true);
     expect(viewsFor([]).some((v) => v.name === "Alumni")).toBe(false);
   });

@@ -392,7 +392,7 @@ const listInput = z.object({
   space: spaceArg,
   name: text(80).min(1).describe('What to call the list ("Alumni in Boston").'),
   kind: z.enum(["people", "companies"]).default("people"),
-  relationship: text(80).optional().describe("People only: a relationship type's name (donor, sponsor contact, alumni...)."),
+  relationship: text(80).optional().describe("People only: a relationship type's name (donor, partner, alumni...)."),
   status: z.enum(["ACTIVE", "INACTIVE", "ALUMNI"]).optional(),
   mine: z.boolean().default(false).describe("Only the ones the member owns."),
   followUpDue: z.boolean().default(false).describe("Only those with a follow-up due today or earlier."),

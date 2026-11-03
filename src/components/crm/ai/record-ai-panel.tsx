@@ -431,7 +431,7 @@ function MeetingNotes({
               </button>
             ))}
           </div>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional): Sponsorship call" maxLength={150} aria-label="Title" />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional): Partnership call" maxLength={150} aria-label="Title" />
           {file ? (
             <p className="bg-muted/45 rounded-xl px-3 py-2 text-sm">
               {file}{" "}

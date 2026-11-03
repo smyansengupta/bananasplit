@@ -170,7 +170,7 @@ export function openApiDocument(serverUrl: string) {
         },
         Item: {
           type: "object",
-          description: "One thing moving through a pipeline (an application, a donation, a sponsorship).",
+          description: "One thing moving through a pipeline (an application, a donation, a deal).",
           properties: {
             id: str,
             object: { const: "item" },

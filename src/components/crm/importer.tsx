@@ -336,7 +336,7 @@ function ConvertDatabase({
         Turn a database into CRM records
       </h2>
       <p className="text-muted-foreground text-sm">
-        An old sponsor sheet, form answers or an alumni list: each row becomes a person or a company, and the database keeps a link
+        An old partner sheet, form answers or an alumni list: each row becomes a person or a company, and the database keeps a link
         column to the record each row made.
       </p>
       <div className="flex flex-wrap items-center gap-2">

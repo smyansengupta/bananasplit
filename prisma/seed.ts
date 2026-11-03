@@ -323,7 +323,7 @@ async function main() {
   await makeNote(orgA.id, bob, bob, "Showcase robot build log", NoteVisibility.ORGANIZATION);
   await makeNote(orgA.id, carol, carol, "Reimbursement notes to self", NoteVisibility.PRIVATE);
   await makeNote(orgA.id, dave, dave, "Ideas for next semester", NoteVisibility.PRIVATE);
-  await makeNote(orgA.id, bob, alice, "Sponsor outreach script", NoteVisibility.ORGANIZATION);
+  await makeNote(orgA.id, bob, alice, "Partner outreach script", NoteVisibility.ORGANIZATION);
   await makeNote(orgB.id, eve, eve, "Tournament judging rubric", NoteVisibility.ORGANIZATION);
   await makeNote(orgB.id, grace, grace, "Personal debate prep", NoteVisibility.PRIVATE);
   await makeNote(orgB.id, frank, frank, "Recruitment budget thoughts", NoteVisibility.ORGANIZATION);
@@ -379,7 +379,7 @@ async function main() {
   await makeEvent(
     orgA.id,
     alice,
-    "Past sponsor meeting",
+    "Past partner meeting",
     daysFromNow(-10),
     45,
     [alice, bob],
@@ -578,7 +578,7 @@ async function main() {
     });
   }
 
-  // --- Sponsorships (three lifecycle stages, plus credits) ---
+  // --- Finance deals: partners (Sponsor rows) and deals (Sponsorship rows), three lifecycle stages plus credits ---
   const acme = await prisma.sponsor.create({
     data: {
       organizationId: orgA.id,
@@ -619,7 +619,7 @@ async function main() {
       direction: TransactionDirection.IN,
       kind: TransactionKind.SPONSORSHIP,
       amountCents: 250_000,
-      description: "TechCorp sponsorship payment",
+      description: "TechCorp deal payment",
       counterparty: "TechCorp",
       occurredAt: daysFromNow(-20),
       status: TransactionStatus.NOT_APPLICABLE,
@@ -1070,7 +1070,7 @@ async function seedMoonstoneShowcase(
     prisma.label.create({ data: { organizationId, name, color, createdById: members[by] } });
   const venueTag = await tag("Venue", "#0ea5e9", "oliver");
   const showcaseTag = await tag("Showcase", "#f59e0b", "kristine");
-  const sponsorTag = await tag("Sponsor", "#16a34a", "lucas");
+  const sponsorTag = await tag("Partners", "#16a34a", "lucas");
 
   // --- Epics, stories and tasks under the Fall Showcase ---
   // Epics sit on the board with the other top-level tasks: their ranks go
@@ -1197,7 +1197,7 @@ async function seedMoonstoneShowcase(
     },
     {
       type: TaskType.EPIC,
-      title: "Sponsors",
+      title: "Partners",
       color: "#16a34a",
       start: -30,
       owner: "lucas",
@@ -1207,7 +1207,7 @@ async function seedMoonstoneShowcase(
       children: [
         {
           type: TaskType.STORY,
-          title: "Line up two showcase sponsors",
+          title: "Line up two showcase partners",
           owner: "lucas",
           status: TaskStatus.NOT_STARTED,
           due: 14,
@@ -1215,14 +1215,14 @@ async function seedMoonstoneShowcase(
           children: [
             {
               type: TaskType.TASK,
-              title: "Draft the showcase sponsor deck",
+              title: "Draft the showcase partner deck",
               owner: "lucas",
               status: TaskStatus.IN_PROGRESS,
               due: 5,
             },
             {
               type: TaskType.TASK,
-              title: "Email last year's sponsors",
+              title: "Email last year's partners",
               owner: "anthony",
               status: TaskStatus.NOT_STARTED,
               due: 9,
@@ -1232,7 +1232,7 @@ async function seedMoonstoneShowcase(
         // A task can sit straight under an epic, without a story.
         {
           type: TaskType.TASK,
-          title: "Print sponsor logos for the banner",
+          title: "Print partner logos for the banner",
           owner: "kristine",
           status: TaskStatus.NOT_STARTED,
           due: 24,
@@ -1255,7 +1255,7 @@ async function seedMoonstoneShowcase(
   });
   const planBody = [
     "Fall Showcase: Thursday of finals week in the Curry Student Center ballroom. Doors open at 6:30, demos from 7 to 9.",
-    "Every project team gets a table, a power strip and three minutes on stage. Sponsors get the front row of tables.",
+    "Every project team gets a table, a power strip and three minutes on stage. Partners get the front row of tables.",
     "Open questions: catering headcount, whether we stream the stage, and who runs check-in.",
   ];
   const plan = await prisma.note.create({
@@ -1290,7 +1290,7 @@ async function seedMoonstoneShowcase(
     "6:00 setup. 6:30 doors. 7:00 welcome from Jackson. 7:10 demos, three minutes each. 8:45 awards. 9:00 out.",
   ]);
   await subpage("Volunteer roles", "🙋", "kristine", [
-    "Check-in (two people), stage manager, photographer liaison, sponsor host, cleanup crew.",
+    "Check-in (two people), stage manager, photographer liaison, partner host, cleanup crew.",
   ]);
 
   const root = await prisma.noteComment.create({

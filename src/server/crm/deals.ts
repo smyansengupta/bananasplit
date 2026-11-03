@@ -16,9 +16,9 @@ import type { WriteOptions } from "./people";
 
 /**
  * Pipeline items (CrmDeal; on screen, the pipeline's own noun: an
- * applicant, a donation, a sponsorship). A stage move checks the stage's
+ * applicant, a donation, a deal). A stage move checks the stage's
  * required fields (e.g. a reason on Lost) and asks for nothing else; the
- * move lands on the timeline. An item made from a Finance sponsorship moves
+ * move lands on the timeline. An item made from a Finance deal (a Sponsorship row) moves
  * through Finance's own code, so Received books the money exactly as
  * Finance does, and only finance roles can move it.
  */
@@ -185,8 +185,8 @@ export async function createDeal(
   const missing = await stageMissing(db, organizationId, pipeline.id, stage.requiredFields, { ...data, custom });
   if (missing.keys.length > 0) throw new CrmError(missingMessage(missing.labels, stage.name), missing.keys);
   if (data.ownerId === undefined && data.ownerRoleKey === undefined) data.ownerId = userId;
-  // The Sponsorships pipeline is Finance's sponsorships: a new item there is a new
-  // sponsorship too, made through Finance's own code, so the two stay in step.
+  // The Deals pipeline (template "sponsors") is Finance's deals: a new item there is a new
+  // Finance deal too, made through Finance's own code, so the two stay in step.
   const sponsorshipId =
     pipeline.template === "sponsors"
       ? await sponsorshipFor(actor, { ...data, stageKey: stage.key, itemNoun: pipeline.itemNoun })
@@ -229,16 +229,16 @@ export async function createDeal(
   return created;
 }
 
-/** Finance's sponsorship for a new Sponsorships item (and its sponsor, from the company). */
+/** Finance's deal for a new Deals item (and its partner, from the company). */
 async function sponsorshipFor(
   actor: CrmActor,
   data: Record<string, unknown> & { stageKey: string | null; itemNoun: string },
 ): Promise<string> {
   const { db, organizationId, userId } = actor;
   if (!can(actor, "finance.manage")) {
-    throw new CrmError("A new sponsorship goes into Finance's books, so owners and treasurers add them. Ask one, or add it in Finance.");
+    throw new CrmError("A new deal here goes into Finance's books, so owners and treasurers add them. Ask one, or add it in Finance.");
   }
-  if (!data.companyId) throw new CrmError("Pick the company that's sponsoring.", ["companyId"]);
+  if (!data.companyId) throw new CrmError("Pick the company the deal is with.", ["companyId"]);
   const amount = typeof data.amountCents === "number" ? data.amountCents : null;
   if (!amount || amount <= 0) throw new CrmError(`Give the ${data.itemNoun} an amount.`, ["amount"]);
   const company = await db.crmCompany.findFirst({
@@ -285,7 +285,7 @@ async function sponsorshipFor(
     },
     { fromCrm: true },
   );
-  if (made.error || !made.sponsorshipId) throw new CrmError(made.error ?? "Finance couldn't take that sponsorship.");
+  if (made.error || !made.sponsorshipId) throw new CrmError(made.error ?? "Finance couldn't take that deal.");
   return made.sponsorshipId;
 }
 
@@ -314,7 +314,7 @@ export async function updateDeal(
   if (data.title === null) throw new CrmError("Give it a title.", ["title"]);
   if (before.sponsorshipId && (data.amountCents !== undefined || data.expectedOn !== undefined)) {
     if (!can(actor, "finance.manage")) {
-      throw new CrmError("The amount and date of a sponsorship are Finance's: ask a treasurer.");
+      throw new CrmError("The amount and date of a Finance deal are Finance's: ask a treasurer.");
     }
   }
   const fields = await customFieldsFor(db, organizationId, "deal", before.pipelineId);
@@ -429,7 +429,7 @@ export async function moveDeal(
   if (stageChanged && deal.sponsorshipId && stage.key && isSponsorshipStatus(stage.key)) {
     if (!can(actor, "finance.manage")) {
       throw new CrmError(
-        "Moving a sponsorship changes the books, so owners, admins and treasurers move it.",
+        "Moving a Finance deal changes the books, so owners, admins and treasurers move it.",
       );
     }
     const moved = await setSponsorshipStatus(actor, deal.sponsorshipId, stage.key, { fromCrm: true });
@@ -568,7 +568,7 @@ export async function trashDeals(actor: CrmActor, ids: readonly string[], batchI
     select: { id: true, sponsorshipId: true },
   });
   if (rows.some((r) => r.sponsorshipId)) {
-    throw new CrmError("A sponsorship from Finance is deleted in Finance, so the books stay right.");
+    throw new CrmError("A deal from Finance is deleted in Finance, so the books stay right.");
   }
   const now = new Date();
   for (const r of rows) {

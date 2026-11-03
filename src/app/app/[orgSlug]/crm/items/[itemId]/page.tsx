@@ -31,7 +31,7 @@ export const metadata = { title: "Item" };
 /**
  * A pipeline item, called by its pipeline's noun: its stage (moved here or
  * on the board), people with their roles, company, next step, Finance when
- * it's a sponsorship, and its timeline.
+ * it's a Finance deal, and its timeline.
  */
 export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/crm/items/[itemId]">) {
   const { orgSlug, itemId } = await params;
@@ -118,7 +118,7 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
             <RecordFields orgId={orgId} orgSlug={orgSlug} kind="deal" id={deal.id} fields={data.form} readOnly={Boolean(deal.deletedAt)} />
             {deal.sponsorshipId && (
               <p className="text-muted-foreground text-xs">
-                This {noun} is Finance&apos;s sponsorship: moving it to Received books the money, and only owners, admins and
+                This {noun} is a Finance deal: moving it to Received books the money, and only owners, admins and
                 treasurers move it.
               </p>
             )}

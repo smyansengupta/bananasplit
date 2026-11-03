@@ -59,7 +59,7 @@ export const ADD_ON_INFO: Record<AddOnId, AddOnInfo> = {
     feature: "crm",
     name: "CRM",
     summary:
-      "The people and companies you reach out to: members, donors, sponsors, speakers and clients, with pipelines and a timeline that fills itself.",
+      "The people and companies you reach out to: members, donors, partners, speakers and clients, with deals in pipelines and a timeline that fills itself.",
     who: "Every member works the CRM; owners, admins and CRM managers set it up",
     path: "/crm",
   },

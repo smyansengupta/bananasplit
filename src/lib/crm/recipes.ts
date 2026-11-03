@@ -93,8 +93,8 @@ export const RECIPES: readonly Recipe[] = [
   },
   {
     id: "new-sponsor",
-    title: "A new sponsor commits",
-    description: "Make the deliverables tasks: logo, thank-you post, recap, linked to the sponsorship.",
+    title: "A partner commits to a deal",
+    description: "Make tasks for what you promised them: logo, thank-you post, recap, linked to the deal.",
     icon: "Handshake",
     needs: "sponsors",
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:sponsors", toStageId: "@stage:sponsors:COMMITTED" } },

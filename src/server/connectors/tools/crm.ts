@@ -288,7 +288,7 @@ const pipelinesOutput = z.object({
     z.object({
       id: z.string(),
       name: z.string(),
-      itemNoun: z.string().describe('What one item is called ("sponsorship", "applicant").'),
+      itemNoun: z.string().describe('What one item is called ("deal", "applicant").'),
       stages: z.array(z.object({ id: z.string().describe("For crm_move_stage."), name: z.string(), kind: z.enum(["open", "won", "lost"]), items: z.number().int() })),
       url: urlField,
     }),

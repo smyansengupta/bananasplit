@@ -69,7 +69,7 @@ export async function givingFor(
   });
   const gifts: Giving["gifts"] = [
     ...income.map((t) => ({ at: t.occurredAt, amountCents: t.amountCents, what: t.description, source: "finance" as const })),
-    // A sponsorship already in Finance isn't counted twice.
+    // A deal already in Finance (Finance › Deals) isn't counted twice.
     ...won
       .filter((w) => !w.deal.sponsorshipId || income.length === 0)
       .map((w) => ({ at: w.deal.closedAt ?? w.deal.updatedAt, amountCents: w.deal.amountCents!, what: w.deal.title, source: "pipeline" as const })),

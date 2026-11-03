@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { CopyLink } from "./booking";
 
 /**
- * What we owe them, on a sponsorship or partnership: each promise, its
+ * What we owe them (promises, deliverables), on a deal or partnership: each promise, its
  * date, done or not (a linked task counts), and the private guest link
  * where the partner sees exactly this and a recap.
  */

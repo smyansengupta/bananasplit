@@ -2,9 +2,9 @@ import { CrmError, type CrmActor } from "./access";
 import { companyForSponsor, sponsorshipsPipeline, syncDealFromSponsorship } from "./sponsor-sync";
 
 /**
- * Moving Sponsors in (docs/features/crm.md): every Finance Sponsor becomes
- * a CRM company (its contact a person), every Sponsorship an item in the
- * Sponsorships pipeline at the stage of its status. Idempotent: running it
+ * Moving Finance deals in (docs/features/crm.md): every Finance partner (a
+ * Sponsor row) becomes a CRM company (its contact a person), every deal (a
+ * Sponsorship row) an item in the Deals pipeline at the stage of its status. Idempotent: running it
  * again links what's new and moves nothing twice (CrmCompany.sponsorId and
  * CrmDeal.sponsorshipId are unique). Finance keeps working as before; the
  * two stay in step through src/server/crm/sponsor-sync.ts.
@@ -18,7 +18,7 @@ export interface SponsorsMoveResult {
 export async function moveSponsorsIn(actor: CrmActor): Promise<SponsorsMoveResult> {
   const { db, organizationId, userId } = actor;
   const pipeline = await sponsorshipsPipeline(db, organizationId);
-  if (!pipeline) throw new CrmError("Add the Sponsorships pipeline first.");
+  if (!pipeline) throw new CrmError("Add the Deals pipeline first.");
   const sponsors = await db.sponsor.findMany({
     where: { organizationId },
     select: { id: true },

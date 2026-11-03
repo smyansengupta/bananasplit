@@ -255,7 +255,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     expect(await approveExpense(orgId, transactionId!)).toEqual({ transactionId });
   });
 
-  it("sponsorships: RECEIVED books an IN transaction, leaving RECEIVED voids it", async () => {
+  it("deals: RECEIVED books an IN transaction, leaving RECEIVED voids it", async () => {
     as(people.member);
     await expect(createSponsor(orgId, { name: "Acme" })).rejects.toBeInstanceOf(ForbiddenError);
 
@@ -291,7 +291,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     ).toMatch(/member of this organization/);
   });
 
-  it("sponsorships: credits never touch the ledger, even when received", async () => {
+  it("deals: credits never touch the ledger, even when received", async () => {
     as(people.treasurer);
     const { sponsorId } = await createSponsor(orgId, { name: "Cloud Co" });
     const { sponsorshipId, error } = await createSponsorship(orgId, {

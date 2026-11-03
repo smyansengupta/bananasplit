@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * The CRM's core against the real roles and policies on the local database:
  * setup, people (addresses, job history, field history), stage moves with
  * required fields, bulk edits with Undo, duplicates and merging, the
- * timeline (idempotent mirroring), imports, Sponsors moved in and kept in
+ * timeline (idempotent mirroring), imports, Finance deals moved in and kept in
  * step with Finance, and who sees what (another organization, OWN access).
  * Two throwaway organizations are made as the table owner and removed in
  * afterAll. Skipped when the database is not reachable.
@@ -86,7 +86,7 @@ beforeAll(async () => {
         update: { addOns: ["crm", "finance"] },
       });
     }
-    // A Finance sponsor with a sponsorship, to move in at setup.
+    // A Finance partner with a deal, to move in at setup.
     const period = await ownerDb.budgetPeriod.create({
       data: {
         organizationId: orgA,
@@ -126,10 +126,10 @@ afterAll(async () => {
 });
 
 describe("the CRM against the local database", () => {
-  it("sets up in one step, idempotently, with Sponsors moved in", async () => {
+  it("sets up in one step, idempotently, with Finance deals moved in", async () => {
     if (!reachable) return;
     const first = await as(ownerA, orgA, (ctx) => runSetup(ctx, ["members", "donors"]));
-    // Sponsors exist in Finance, so the Sponsorships pipeline comes too.
+    // Deals exist in Finance, so the Deals pipeline comes too.
     expect(first.pipelines).toBe(3);
     expect(first.sponsors).toEqual({ companies: 1, items: 1 });
     const again = await as(ownerA, orgA, (ctx) => runSetup(ctx, ["members"]));
@@ -317,7 +317,7 @@ describe("the CRM against the local database", () => {
     await expect(as(memberA, orgA, (ctx) => addCrmField(ctx, { object: "person" }, { name: "Nope", type: "TEXT" }))).rejects.toThrow(CrmError);
   });
 
-  it("moves a sponsorship through Finance: Received books the money, and Finance moves the item back", async () => {
+  it("moves a Finance deal through Finance: Received books the money, and Finance moves the item back", async () => {
     if (!reachable) return;
     const deal = await ownerDb.crmDeal.findFirstOrThrow({ where: { organizationId: orgA, sponsorshipId: { not: null } } });
     const pipeline = (await as(ownerA, orgA, (ctx) => listPipelines(ctx.db, orgA))).find((p) => p.template === "sponsors")!;

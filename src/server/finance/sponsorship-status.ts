@@ -11,8 +11,8 @@ import { syncDealFromSponsorship } from "@/server/crm/sponsor-sync";
 import type { TxClient } from "@/server/db/context";
 
 /**
- * Moving a sponsorship between stages (Finance's one way to do it, shared
- * by Finance's own actions and the CRM's Sponsorships pipeline, so a move
+ * Moving a deal (a Sponsorship row) between stages (Finance's one way to do
+ * it, shared by Finance's own actions and the CRM's Deals pipeline, so a move
  * to Received books the transaction exactly the same way from either).
  *
  * Reaching RECEIVED generates the corresponding IN transaction; nothing
@@ -23,7 +23,7 @@ import type { TxClient } from "@/server/db/context";
  *
  * The caller has checked finance.manage; RLS allows the writes only to the
  * organization's finance roles. After the move the CRM item made from this
- * sponsorship follows it (unless the move came from the CRM).
+ * deal follows it (unless the move came from the CRM).
  */
 
 export interface SponsorshipActor {
@@ -57,7 +57,7 @@ export async function setSponsorshipStatus(
     where: { id: sponsorshipId, organizationId },
     include: { sponsor: { select: { name: true } } },
   });
-  if (!sponsorship) return { error: "Sponsorship not found." };
+  if (!sponsorship) return { error: "Deal not found." };
 
   const nextStatus = parsedStatus.data;
   if (nextStatus === sponsorship.status) return { sponsorshipId };
@@ -94,8 +94,8 @@ export async function setSponsorshipStatus(
           direction: TransactionDirection.IN,
           kind: TransactionKind.SPONSORSHIP,
           amountCents: sponsorship.amountCents,
-          // Named for the sponsor, so the ledger tells them apart.
-          description: `${sponsorship.sponsor.name} sponsorship`,
+          // Named for the partner, so the ledger tells them apart.
+          description: `${sponsorship.sponsor.name} deal`,
           occurredAt: new Date(),
           submittedById: ctx.userId,
           status: "NOT_APPLICABLE",
@@ -119,7 +119,7 @@ export async function setSponsorshipStatus(
         where: { id: transactionId },
         data: {
           voidedAt: new Date(),
-          voidReason: `Sponsorship moved from RECEIVED to ${nextStatus}`,
+          voidReason: `Deal moved from RECEIVED to ${nextStatus}`,
         },
       });
       await writeFinanceAuditLog(db, {

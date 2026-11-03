@@ -73,7 +73,7 @@ describe("the CRM tools", () => {
     const cold = await crmNotContactedTool(session, { space: club.id, days: 60 });
     expect(cold.results.map((r) => r.name)).toContain("Mara Quinn");
     const pipelines = await crmPipelinesTool(session, { space: club.id });
-    expect(pipelines.pipelines.map((p) => p.name)).toContain("Sponsorships");
+    expect(pipelines.pipelines.map((p) => p.name)).toContain("Deals");
 
     const tl = await crmTimelineTool(session, { id });
     expect(tl.record.name).toBe("Mara Quinn");

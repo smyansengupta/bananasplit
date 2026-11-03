@@ -9,9 +9,9 @@ import { guestUrl, sha256, guestToken } from "./tokens";
 
 /**
  * What we owe them (docs/features/crm.md, "What makes ours better" 4):
- * deliverables on a sponsorship or partnership (logo on the shirts, a talk
+ * deliverables (promises) on a deal or partnership (logo on the shirts, a talk
  * slot, two posts), each optionally tracked by a Task, and a private guest
- * link (/g/{token}) where the sponsor or partner sees only their agreement,
+ * link (/g/{token}) where the partner or client sees only their agreement,
  * what we promised and how it's going, and a recap built from real event
  * and attendance numbers (events linked to the item or its company).
  */
@@ -153,7 +153,7 @@ export interface GuestPage {
   recap: string[];
 }
 
-/** What a sponsor or partner sees, read on the service path in the link's organization. */
+/** What a partner or client sees, read on the service path in the link's organization. */
 export async function loadGuestPage(token: string, now: Date = new Date()): Promise<GuestPage | null> {
   const target = await tokenTarget("guest", token);
   if (!target) return null;

@@ -69,7 +69,7 @@ export default async function CrmCompanyPage({ params }: PageProps<"/app/[orgSlu
             {STATUS_LABELS[company.status as RecordStatus]}
           </Badge>
           <StrengthBadge strength={company.strength} />
-          {company.sponsorId && <Badge variant="info">Finance sponsor</Badge>}
+          {company.sponsorId && <Badge variant="info">Finance partner</Badge>}
         </>
       }
       facts={[

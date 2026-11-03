@@ -44,15 +44,15 @@ import { TransactionStatusBadge } from "./transaction-status-badge";
 
 const KIND_LABEL: Record<string, string> = {
   EXPENSE: "Expenses",
-  SPONSORSHIP: "Sponsorships",
+  SPONSORSHIP: "Deals",
   ALLOCATION: "Allocations",
   OTHER_INCOME: "Other income",
   ADJUSTMENT: "Adjustments",
 };
 
 const INCOME_LABEL: Record<string, string> = {
-  SPONSORSHIP: "Sponsors",
-  ALLOCATION: "School funding",
+  SPONSORSHIP: "Deals",
+  ALLOCATION: "Allocations",
   OTHER_INCOME: "Dues, sales and gifts",
   ADJUSTMENT: "Starting balance and adjustments",
   EXPENSE: "Refunds",

@@ -42,9 +42,10 @@ import { SponsorshipStatus, SponsorshipType } from "@/generated/prisma/enums";
 import { formatCents, parseDollarsToCents } from "@/lib/finance/money";
 
 /**
- * Finance › Sponsorships (Moonstone): the cash pipeline (received solid,
- * pledged but not yet received hatched), every sponsorship in the one table
- * style with its status as a chip you can change, and the sponsors as pills.
+ * Finance › Deals (Moonstone): the cash pipeline (received solid, pledged
+ * but not yet received hatched), every deal in the one table style with its
+ * status as a chip you can change, and the partners as pills. (The models
+ * underneath are still Sponsor and Sponsorship.)
  */
 
 interface Sponsor {
@@ -103,7 +104,7 @@ function sumCents(rows: Sponsorship[], type: SponsorshipType, statuses: Sponsors
     .reduce((sum, s) => sum + s.amountCents, 0);
 }
 
-export function SponsorshipsView({
+export function DealsView({
   orgId,
   sponsors,
   sponsorships,
@@ -117,7 +118,7 @@ export function SponsorshipsView({
   sponsorships: Sponsorship[];
   periodId: string | null;
   members: { userId: string; name: string | null; email: string }[];
-  /** A new sponsorship is yours to look after unless you pick someone else. */
+  /** A new deal is yours to look after unless you pick someone else. */
   currentUserId?: string;
   budgetHref?: string;
 }) {
@@ -129,7 +130,7 @@ export function SponsorshipsView({
   const [sponsorName, setSponsorName] = useState("");
 
   const [showNewSponsorship, setShowNewSponsorship] = useState(false);
-  // Typed: an existing sponsor's name picks it; anything else adds a new one.
+  // Typed: an existing partner's name picks it; anything else adds a new one.
   const [sponsorText, setSponsorText] = useState("");
   const [startStatus, setStartStatus] = useState<SponsorshipStatus>("COMMITTED");
   const [type, setType] = useState<SponsorshipType>(SponsorshipType.CASH);
@@ -217,7 +218,7 @@ export function SponsorshipsView({
 
   async function removeSponsorship(id: string, name: string, received: boolean) {
     const ok = await confirm({
-      title: `Delete the sponsorship from ${name}?`,
+      title: `Delete the deal with ${name}?`,
       description: received ? "The money received stays under Transactions." : undefined,
       confirmLabel: "Delete",
       run: async () => (await deleteSponsorship(orgId, id)).error,
@@ -258,16 +259,16 @@ export function SponsorshipsView({
         </p>
       )}
 
-      <Card aria-labelledby="sponsorships-title" role="region" className="gap-5">
+      <Card aria-labelledby="deals-title" role="region" className="gap-5">
         <div className="flex flex-wrap items-center gap-2.5 px-6">
-          <h2 id="sponsorships-title" className="sr-only">
-            Sponsorships
+          <h2 id="deals-title" className="sr-only">
+            Deals
           </h2>
           <span className="flex-1" />
           {periodId && sponsorships.length > 0 && !showNewSponsorship && (
             <Button variant="outline" size="sm" onClick={openForm}>
               <Plus aria-hidden="true" />
-              New sponsorship
+              New deal
             </Button>
           )}
         </div>
@@ -277,7 +278,7 @@ export function SponsorshipsView({
             <p className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
               <span className="numeral text-[32px]">{formatCents(receivedTotal)}</span>
               <span className="text-muted-foreground figure text-sm">
-                received of {formatCents(cashTotal)} in cash sponsorships
+                received of {formatCents(cashTotal)} in cash deals
               </span>
             </p>
             <MixBar
@@ -317,7 +318,7 @@ export function SponsorshipsView({
 
         {showNewSponsorship && periodId && (
           <form
-            aria-label="New sponsorship"
+            aria-label="New deal"
             className="bg-muted/60 rounded-tile mx-6 space-y-4 p-4"
             onSubmit={(e) => {
               e.preventDefault();
@@ -326,7 +327,7 @@ export function SponsorshipsView({
           >
             <div className="flex flex-wrap items-center gap-3">
               <Segmented
-                label="Type of sponsorship"
+                label="Type of deal"
                 value={type}
                 onSelect={(v) => setType(v as SponsorshipType)}
                 options={TYPE_OPTIONS.map((o) => ({
@@ -347,15 +348,15 @@ export function SponsorshipsView({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="text-muted-foreground block text-[13px] font-medium">Sponsor</span>
+                <span className="text-muted-foreground block text-[13px] font-medium">Partner</span>
                 <Input
-                  list="sponsor-names"
-                  aria-label="Sponsor"
+                  list="partner-names"
+                  aria-label="Partner"
                   value={sponsorText}
                   onChange={(e) => setSponsorText(e.target.value)}
                   autoComplete="off"
                 />
-                <datalist id="sponsor-names">
+                <datalist id="partner-names">
                   {sponsors.map((x) => (
                     <option key={x.id} value={x.name} />
                   ))}
@@ -424,13 +425,13 @@ export function SponsorshipsView({
           !showNewSponsorship && (
             <EmptyState
               icon={Handshake}
-              title="No sponsorships yet"
+              title="No deals yet"
               description={periodId ? undefined : "Needs a budget period first."}
               action={
                 periodId ? (
                   <Button variant="outline" onClick={openForm}>
                     <Plus aria-hidden="true" />
-                    New sponsorship
+                    New deal
                   </Button>
                 ) : budgetHref ? (
                   <Button variant="outline" asChild>
@@ -446,7 +447,7 @@ export function SponsorshipsView({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Sponsor</TableHead>
+                    <TableHead>Partner</TableHead>
                     <TableHead className="max-md:hidden">Owner</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right tabular-nums">Amount</TableHead>
@@ -477,7 +478,7 @@ export function SponsorshipsView({
                         >
                           <SelectTrigger
                             size="sm"
-                            aria-label={`Owner of the sponsorship from ${s.sponsor.name}`}
+                            aria-label={`Owner of the deal with ${s.sponsor.name}`}
                             className="hover:bg-muted -ml-1.5 border-transparent bg-transparent pr-2 pl-1.5"
                           >
                             <SelectValue />
@@ -495,7 +496,7 @@ export function SponsorshipsView({
                         <Select value={s.status} onValueChange={(v) => handleStatusChange(s.id, v)}>
                           <SelectTrigger
                             size="sm"
-                            aria-label={`Status of the sponsorship from ${s.sponsor.name}`}
+                            aria-label={`Status of the deal with ${s.sponsor.name}`}
                             className="hover:bg-muted -ml-1.5 border-transparent bg-transparent pr-2 pl-1"
                           >
                             <SelectValue>
@@ -563,10 +564,10 @@ export function SponsorshipsView({
         )}
       </Card>
 
-      <Card aria-labelledby="sponsors-title" role="region" className="gap-4 px-6">
+      <Card aria-labelledby="partners-title" role="region" className="gap-4 px-6">
         <div className="flex flex-wrap items-center gap-2.5">
-          <h2 id="sponsors-title" className="heading text-[17px]">
-            Sponsors
+          <h2 id="partners-title" className="heading text-[17px]">
+            Partners
           </h2>
           {sponsors.length > 0 && <Badge variant="secondary">{sponsors.length}</Badge>}
           <span className="flex-1" />
@@ -577,7 +578,7 @@ export function SponsorshipsView({
             aria-expanded={showNewSponsor}
           >
             <Plus aria-hidden="true" />
-            New sponsor
+            New partner
           </Button>
         </div>
         {showNewSponsor && (
@@ -591,18 +592,18 @@ export function SponsorshipsView({
             <Input
               autoFocus
               placeholder="Company name"
-              aria-label="Sponsor name"
+              aria-label="Partner name"
               value={sponsorName}
               onChange={(e) => setSponsorName(e.target.value)}
               className="min-w-56 flex-1"
             />
             <Button type="submit" disabled={isPending || !sponsorName.trim()}>
-              Add sponsor
+              Add partner
             </Button>
           </form>
         )}
         {sponsors.length === 0 ? (
-          !showNewSponsor && <p className="text-muted-foreground text-sm">No sponsors yet</p>
+          !showNewSponsor && <p className="text-muted-foreground text-sm">No partners yet</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {sponsors.map((s) => (
