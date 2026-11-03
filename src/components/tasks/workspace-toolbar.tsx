@@ -319,13 +319,15 @@ function MobileToolbar({
     .filter((l) => !PHONE_HIDDEN_LAYOUTS.includes(l.value))
     .sort((a, b) => Number(b.value === "list") - Number(a.value === "list"));
   const current = layouts.find((l) => l.value === ws.query.view);
+  const CurrentIcon = current ? LAYOUT_ICONS[current.value as TaskLayout] : null;
 
   return (
     <>
       <PhoneToolbar
         middle={
           layouts.length > 1 && (
-            // The layouts a phone has, named, filling the room up to Filters.
+            // The layouts a phone has, first on the row and filling the room
+            // up to whose tasks; the name shortens before anything overlaps.
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -333,7 +335,10 @@ function MobileToolbar({
                   className="h-10 w-full min-w-0 justify-between gap-1 rounded-full px-3"
                   aria-label={`Layout: ${current?.label ?? "List"}`}
                 >
-                  <span className="truncate">{current?.label ?? "List"}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    {CurrentIcon && <CurrentIcon className="size-4 shrink-0" aria-hidden="true" />}
+                    <span className="truncate">{current?.label ?? "List"}</span>
+                  </span>
                   <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>

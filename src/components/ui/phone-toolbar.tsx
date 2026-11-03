@@ -20,9 +20,9 @@ import {
  * all work the same way: on the left the page's own switch (whose tasks,
  * grid or list), then Filters with a count (it opens a FilterSheet), and a
  * search icon at the right that turns the row into the search box, with
- * Cancel to put the row back. `middle` (Tasks' layouts) gets the full width
- * of a second row, so a 390px phone never squeezes it into Filters. Shown
- * below md only; the desktop keeps its own bar.
+ * Cancel to put the row back. `middle` (Tasks' layouts) leads the same row
+ * and takes whatever room is left, its label shortening before anything
+ * overlaps. Shown below md only; the desktop keeps its own bar.
  */
 export function PhoneToolbar({
   leading,
@@ -35,7 +35,7 @@ export function PhoneToolbar({
   onCancelSearch,
 }: {
   leading?: ReactNode;
-  /** A full-width second row under the bar (Tasks' layout picker). */
+  /** First in the row, taking the room that's left (Tasks' layout picker). */
   middle?: ReactNode;
   filterCount: number;
   onFilters: () => void;
@@ -69,31 +69,29 @@ export function PhoneToolbar({
   }
 
   return (
-    <div className="flex flex-col gap-2 md:hidden">
-      <div className="flex items-center gap-2">
-        {leading}
-        <span className="flex-1" />
-        <Button
-          variant="outline"
-          className="h-10 shrink-0 gap-1.5 rounded-full px-3"
-          onClick={onFilters}
-          aria-haspopup="dialog"
-        >
-          <SlidersHorizontal className="size-4" aria-hidden="true" />
-          Filters
-          {filterCount > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{filterCount}</Badge>}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="shrink-0"
-          aria-label={searchLabel}
-          onClick={() => setSearching(true)}
-        >
-          <Search className="size-4" aria-hidden="true" />
-        </Button>
-      </div>
-      {middle && <div className="flex min-w-0">{middle}</div>}
+    <div className="flex items-center gap-2 md:hidden">
+      {middle ? <div className="flex min-w-0 flex-1">{middle}</div> : null}
+      {leading}
+      {!middle && <span className="flex-1" />}
+      <Button
+        variant="outline"
+        className="h-10 shrink-0 gap-1.5 rounded-full px-3"
+        onClick={onFilters}
+        aria-haspopup="dialog"
+      >
+        <SlidersHorizontal className="size-4" aria-hidden="true" />
+        Filters
+        {filterCount > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{filterCount}</Badge>}
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        className="shrink-0"
+        aria-label={searchLabel}
+        onClick={() => setSearching(true)}
+      >
+        <Search className="size-4" aria-hidden="true" />
+      </Button>
     </div>
   );
 }
