@@ -83,7 +83,7 @@ export function BookForm({
   const [honey, setHoney] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ when: string; hostName: string } | null>(null);
+  const [done, setDone] = useState<{ when: string; hostName: string; ics: string | null } | null>(null);
 
   const grid = months[month] ? monthGrid(months[month]!) : null;
   const showMonth = (i: number) => {
@@ -119,6 +119,7 @@ export function BookForm({
     setDone({
       when: `${shortDay(day)} at ${time.format(new Date(slot))}`,
       hostName: r.hostName || hostName || "",
+      ics: r.start && r.end ? icsHref(r.title ?? heading, r.start, r.end) : null,
     });
   };
 
@@ -192,7 +193,13 @@ export function BookForm({
             </span>
             <span className="flex items-center gap-2.5">
               <CalendarDays className="size-[18px]" aria-hidden="true" />
-              Move or cancel from the email
+              {done.ics ? (
+                <a href={done.ics} download="meeting.ics" className="font-semibold underline underline-offset-4">
+                  Add it to your calendar
+                </a>
+              ) : (
+                "Move or cancel from the email"
+              )}
             </span>
           </div>
           <span className="text-muted-foreground pt-1.5 text-sm">
@@ -400,4 +407,33 @@ function readBrowserZone(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The booked meeting as a calendar file, made here from what was just
+ * booked (no link back to the booking in it), so the guest has it even when
+ * no email reaches them.
+ */
+function icsHref(title: string, start: string, end: string): string {
+  const CRLF = String.fromCharCode(13, 10);
+  const stamp = (iso: string) => iso.slice(0, 19).replace(/[-:]/g, "") + "Z";
+  // ICS text: a backslash, semicolon or comma is escaped, and line breaks become spaces.
+  const BACKSLASH = String.fromCharCode(92);
+  const text = [...title]
+    .map((c) => (c === BACKSLASH || c === ";" || c === "," ? BACKSLASH + c : c.charCodeAt(0) < 32 ? " " : c))
+    .join("");
+  const body = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Bananasplit//Booking//EN",
+    "BEGIN:VEVENT",
+    `UID:${stamp(start)}-${Math.random().toString(36).slice(2)}@bananasplit`,
+    `DTSTAMP:${stamp(new Date().toISOString())}`,
+    `DTSTART:${stamp(start)}`,
+    `DTEND:${stamp(end)}`,
+    `SUMMARY:${text}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join(CRLF);
+  return `data:text/calendar;charset=utf-8,${encodeURIComponent(body)}`;
 }

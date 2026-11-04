@@ -71,8 +71,14 @@ the person card's `/` menu inserts your link or any organization link.
    follow-ups.
 
 Emails come from the organization's own verified sender when it has one,
-otherwise from Bananasplit's own sender as itself. Never "<Org> via
-Bananasplit" and never the host's name: whoever booked typed the address.
+otherwise from Bananasplit's own transactional sender as itself (the one
+that sends sign-up checks and password resets, `getPlatformMailer`). They
+never go through the CRM's mailbox, never read "<Org> via Bananasplit" and
+never carry the host's name as the sender: whoever booked typed the address.
+So a space with no sender of its own still confirms every booking. The page
+also says "You're booked" with the time and an **Add it to your calendar**
+file made on the spot (no link back to the booking in it), so the guest has
+it even when no email reaches them.
 
 ## Audit: nobody misses an important call
 
@@ -95,7 +101,7 @@ Bananasplit" and never the host's name: whoever booked typed the address.
 | Round-robin fairness | Fewest bookings on the link in 30 days, then whoever was booked longest ago, then link order | `slots.test.ts` "spreads 30 bookings evenly over three free hosts" |
 | A host with no free time | Left out of the slots; others take the bookings; a link nobody can book in the next two weeks says "No open times" in Booking links | `slots.test.ts` "leaves out a host with no free time..." |
 | Reminders before the meeting | The meeting's reminder fan-out (`rsvp-fanout`) reminds the host in-app as for any meeting, and now queues the guest's email; each is sent once per start (claimed in `Booking.remindedOffsets`), released if sending fails, re-armed when it moves | `booking.db.test.ts` "sends each reminder once, releases it when sending fails..." |
-| Email sending fails | The guest email is a job that retries (8 tries); the host's Inbox line and the calendar event are written in the booking transaction, so they're there regardless | `booking.db.test.ts` (same test) |
+| Email sending fails, or the space has no sender of its own | The guest email is a job on the app's own transactional sender (not the CRM mailbox) that retries (8 tries); the guest also sees the booking and gets a calendar file on the page; the host's Inbox line and the calendar event are written in the booking transaction, so they're there regardless | `booking.db.test.ts` (same test) |
 | Spam and abuse on the public page | Honeypot field; 10 bookings per visitor per hour, 3 per guest address per day; per link: 40 in 24 hours, 10 unconfirmed upcoming, 2 upcoming per address; page views and manage links rate-limited; input caps (name 80, answers 1000, ten questions) | `booking.db.test.ts` "refuses links in the name, and caps one address and one link" |
 | The page used to email someone else's words | The name can't hold links, addresses or markup; emails repeat only a first name that looks like one and never the answers; fixed copy | `guest.test.ts`, `emails.test.ts` "never repeats a name that isn't one" |
 | A stranger books with a real contact's address | Nothing in the CRM changes until the guest confirms from the email | `booking.db.test.ts` "waits for the guest to confirm before the CRM matches them..."; `outreach.db.test.ts` |

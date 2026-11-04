@@ -1,5 +1,5 @@
 import { ConferenceProvider, Prisma, type Role } from "@/generated/prisma/client";
-import { checkGuestName, cleanAnswer } from "@/lib/booking/guest";
+import { checkGuestName, cleanAnswer, withHost } from "@/lib/booking/guest";
 import { offeredDurations } from "@/lib/booking/hours";
 import { normalizeEmail } from "@/lib/crm/dedupe";
 import { splitName } from "@/lib/crm/fields";
@@ -132,7 +132,7 @@ export interface BookInput {
 }
 
 export type BookResult =
-  | { ok: true; when: string; hostName: string; email: string }
+  | { ok: true; when: string; hostName: string; email: string; start?: string; end?: string; title?: string }
   | { ok: false; error: string };
 
 const TAKEN = "That time was just taken. Pick another.";
@@ -294,7 +294,16 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
         key: `${id}:booked`,
       });
       await emailGuest(db, orgId, id, "booked", { startsAt: fresh.start });
-      return { ok: true as const, when: whenText(fresh.start, guestTz ?? tz), hostName: host.user.name ?? "your host", email };
+      return {
+        ok: true as const,
+        when: whenText(fresh.start, guestTz ?? tz),
+        hostName: host.user.name ?? "your host",
+        email,
+        // For "Add to calendar" on the page itself, so the guest has it even if no email reaches them.
+        start: fresh.start.toISOString(),
+        end: fresh.end.toISOString(),
+        title: withHost(page.title, host.user.name ?? "your host"),
+      };
     });
   } catch (error) {
     // The unique (host, start) index: someone else got there in the same instant.
