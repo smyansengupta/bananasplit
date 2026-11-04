@@ -5607,7 +5607,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P-CRM-01",
-    "CRM: members add people as themselves and never hard-delete them; pipelines and settings are admins' and CRM managers'; OWN access hides others' records; API keys are admins' alone",
+    "CRM: members add people as themselves and never hard-delete them; pipelines and settings are admins' and CRM managers'; OWN access hides others' records and their addresses; API keys are admins' alone",
     "app_user",
     A("u_memberA"),
     async (q) => {
@@ -5646,11 +5646,20 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
          VALUES ('cp_2','org_A','Grace','u_adminA',now())`,
       );
+      await q(
+        `INSERT INTO "CrmPersonEmail" ("id","organizationId","personId","email","isPrimary")
+         VALUES ('cpe_1','org_A','cp_1','ada@example.org',true),('cpe_2','org_A','cp_2','grace@example.org',true)`,
+      );
       await q(`SELECT app.set_context('u_bothAB','org_A')`);
       s.own_mode_other_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
       s.own_mode_other_edits = await rc(q, `UPDATE "CrmPerson" SET "title" = 'x'`);
+      // A person's addresses follow the person.
+      s.own_mode_other_emails = await count(q, `SELECT count(*) n FROM "CrmPersonEmail"`);
+      s.own_mode_other_email_edits = await rc(q, `UPDATE "CrmPersonEmail" SET "isPrimary" = false`);
+      s.own_mode_other_email_deletes = await rc(q, `DELETE FROM "CrmPersonEmail"`);
       await q(`SELECT app.set_context('u_memberA','org_A')`);
       s.own_mode_maker_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      s.own_mode_maker_emails = await count(q, `SELECT count(*) n FROM "CrmPersonEmail"`);
       await q(`SELECT app.set_context('u_adminA','org_A')`);
       await q(`UPDATE "CrmSettings" SET "managerIds" = ARRAY['u_bothAB'] WHERE "organizationId" = 'org_A'`);
       await q(`SELECT app.set_context('u_bothAB','org_A')`);
@@ -5680,7 +5689,11 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         admin_pipeline: 1,
         own_mode_other_reads: 0,
         own_mode_other_edits: 0,
+        own_mode_other_emails: 0,
+        own_mode_other_email_edits: 0,
+        own_mode_other_email_deletes: 0,
         own_mode_maker_reads: 1,
+        own_mode_maker_emails: 1,
         manager_reads: 2,
         manager_pipeline: 1,
         manager_api_keys: "42501",
