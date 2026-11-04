@@ -4,6 +4,7 @@ import { ReceiptText } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { CrmCard } from "@/components/crm/card/crm-card";
+import { setPendingOpen } from "@/components/crm/card/use-crm-open";
 import { QuoteEditor, type QuoteView } from "@/components/crm/quotes/quote-editor";
 import { EmptyState } from "@/components/empty-state";
 import { hrefWithOpen } from "@/lib/crm/overlay";
@@ -33,6 +34,8 @@ export function QuoteCard({
     const rest = new URLSearchParams(params.toString());
     if (quote?.deal) {
       rest.set("tab", "quote");
+      // Back to the deal: its frame shows while it loads.
+      setPendingOpen(`deal:${quote.deal.id}`);
       router.replace(hrefWithOpen(pathname, rest, { kind: "deal", id: quote.deal.id }), { scroll: false });
     } else {
       rest.delete("tab");

@@ -14,7 +14,11 @@ import { PHONE_FULL_SCREEN } from "@/components/ui/form-dialog";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
-import { useCrmOpen } from "./use-crm-open";
+import { useCrmOpen, usePendingOpen } from "./use-crm-open";
+
+/** The card's frame: Tasks' task dialog at 680px (CrmPendingCard draws the same one while loading). */
+export const CRM_CARD_FRAME =
+  "bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]";
 
 /**
  * The one card everything in the CRM opens as (a person, company, deal,
@@ -81,21 +85,29 @@ export function CrmCard({
   bodyClassName?: string;
   children: ReactNode | ((tab: string) => ReactNode);
 }) {
-  const { close } = useCrmOpen();
+  const { close, raw } = useCrmOpen();
+  // Closing hides the card on the click; the URL catches up after. Another
+  // card on its way (CrmPendingCard) takes this one's place too.
+  const [closing, setClosing] = useState(false);
+  const pending = usePendingOpen();
   const [own, setOwn] = useState(defaultTab ?? tabs?.[0]?.value ?? "");
   const current = tab ?? own;
   const pick = (value: string) => {
     if (tab === undefined) setOwn(value);
     onTab?.(value);
   };
-  const shut = onClose ?? close;
+  const shut = () => {
+    setClosing(true);
+    (onClose ?? close)();
+  };
+  const shown = !closing && !(pending !== null && pending !== raw);
   const plainTitle = typeof title === "string" ? title : "Details";
   return (
-    <Dialog open onOpenChange={(o) => !o && shut()}>
+    <Dialog open={shown} onOpenChange={(o) => !o && shut()}>
       <DialogContent
         showCloseButton={false}
         className={cn(
-          "bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]",
+          CRM_CARD_FRAME,
           // On a phone the card is the whole screen, rounded at the top.
           PHONE_FULL_SCREEN,
         )}
