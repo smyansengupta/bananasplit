@@ -37,6 +37,8 @@ vi.mock("@/server/db/context", () => ({
         eventRegistration: { groupBy: mocks.groupBy },
         itemLink: { findMany: async () => [] },
         task: { findMany: async () => [] },
+        // Who booked it (the page reads it since guest details left the event).
+        booking: { findFirst: async () => null },
       },
     }),
 }));
