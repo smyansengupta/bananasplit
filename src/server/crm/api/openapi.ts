@@ -51,7 +51,7 @@ export function openApiDocument(serverUrl: string) {
       title: "Bananasplit CRM API",
       version: "1.0.0",
       description:
-        "Read and write your organization's CRM: people, companies, pipeline items and their timeline. Authenticate with an API key from CRM settings: `Authorization: Bearer bsk_...`. Lists are newest first with cursor pagination. Nothing is deleted through the API: set `trashed: true` to move a record to the trash, `false` to restore it. Each key may make 300 requests a minute (60 of them writes).",
+        "Read and write your organization's CRM: people, companies, deals (the `/items` paths) and their timeline. Authenticate with an API key from CRM settings: `Authorization: Bearer bsk_...`. Lists are newest first with cursor pagination. Nothing is deleted through the API: set `trashed: true` to move a record to the trash, `false` to restore it. Each key may make 300 requests a minute (60 of them writes).",
     },
     servers: [{ url: serverUrl }],
     security: [{ bearer: [] }],
@@ -201,8 +201,8 @@ export function openApiDocument(serverUrl: string) {
           type: "object",
           additionalProperties: false,
           properties: {
-            pipelineId: { ...str, description: "Required to make one; an item stays in its pipeline." },
-            stageId: { ...str, description: "Changing it moves the item (closing stages may need closeReason)." },
+            pipelineId: { ...str, description: "Required to make one; a deal stays in its pipeline." },
+            stageId: { ...str, description: "Changing it moves the deal (closing stages may need closeReason)." },
             title: strN,
             amountCents: intN,
             expectedOn: dt,
@@ -343,7 +343,7 @@ export function openApiDocument(serverUrl: string) {
       },
       "/items": {
         get: {
-          summary: "List pipeline items",
+          summary: "List deals",
           parameters: [
             ...page,
             { name: "pipelineId", in: "query", schema: str },
@@ -357,11 +357,11 @@ export function openApiDocument(serverUrl: string) {
           ],
           responses: ok("ItemList"),
         },
-        post: { summary: "Add an item", requestBody: body("ItemInput"), responses: ok("Item", "201") },
+        post: { summary: "Add a deal", requestBody: body("ItemInput"), responses: ok("Item", "201") },
       },
       "/items/{id}": {
-        get: { summary: "Get an item", parameters: idPath, responses: ok("Item") },
-        patch: { summary: "Change or move an item", parameters: idPath, requestBody: body("ItemInput"), responses: ok("Item") },
+        get: { summary: "Get a deal", parameters: idPath, responses: ok("Item") },
+        patch: { summary: "Change or move a deal", parameters: idPath, requestBody: body("ItemInput"), responses: ok("Item") },
       },
       "/activities": {
         get: {

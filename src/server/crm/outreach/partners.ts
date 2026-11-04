@@ -28,7 +28,7 @@ async function dealOf(db: TxClient, organizationId: string, dealId: string) {
     where: { id: dealId, organizationId, deletedAt: null },
     select: { id: true, title: true, ownerId: true, companyId: true },
   });
-  if (!d) throw new CrmError("That item isn't here any more.");
+  if (!d) throw new CrmError("That deal isn't here any more.");
   return d;
 }
 

@@ -296,7 +296,7 @@ export function ScoringPanel({ orgId, rules, model }: { orgId: string; rules: Ru
             </div>
             <p className="text-muted-foreground text-sm">
               Points add up to a score from 0 to 100, recomputed every night. Sort People{kind === "deals" ? " and pipelines" : ""} by Score.
-              {kind === "deals" && model.trained && " Open items use the learned model instead."}
+              {kind === "deals" && model.trained && " Open deals use the learned model instead."}
             </p>
             {adding === kind && <RuleForm orgId={orgId} objectKind={kind} onDone={() => setAdding(null)} />}
             {list.length > 0 && (
@@ -321,12 +321,12 @@ export function ScoringPanel({ orgId, rules, model }: { orgId: string; rules: Ru
         );
       })}
       <Card className="gap-3 p-5 sm:p-6">
-        <h2 className="heading text-lg">Learned from your own items</h2>
+        <h2 className="heading text-lg">Learned from your own deals</h2>
         {model.trained ? (
           <>
             <p className="text-sm">
-              Trained on {model.n.toLocaleString("en-US")} closed items{model.trainedAt ? `, ${when(model.trainedAt)}` : ""}.
-              {model.accuracy !== null && ` Right ${Math.round(model.accuracy * 100)}% of the time on items it hadn't seen.`}
+              Trained on {model.n.toLocaleString("en-US")} closed deals{model.trainedAt ? `, ${when(model.trainedAt)}` : ""}.
+              {model.accuracy !== null && ` Right ${Math.round(model.accuracy * 100)}% of the time on deals it hadn't seen.`}
             </p>
             {model.top.length > 0 && (
               <p className="text-muted-foreground text-sm">
@@ -336,7 +336,7 @@ export function ScoringPanel({ orgId, rules, model }: { orgId: string; rules: Ru
           </>
         ) : (
           <p className="text-muted-foreground text-sm">
-            Once {model.needs} items have closed as won or lost ({model.closed} so far), a model learns what your wins have in common, every night, and scores each open item by its chance, with the reasons beside it.
+            Once {model.needs} deals have closed as won or lost ({model.closed} so far), a model learns what your wins have in common, every night, and scores each open deal by its chance, with the reasons beside it.
           </p>
         )}
         <Button variant="outline" size="sm" className="self-start" disabled={pending} onClick={() => act(() => rescoreAction(orgId), "Recomputing every score now")}>

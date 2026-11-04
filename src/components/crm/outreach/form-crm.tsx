@@ -69,7 +69,7 @@ export function FormCrmEditor({
           [
             ["off", "No"],
             ["person", "As a person"],
-            ["deal", "As a person and an item"],
+            ["deal", "As a person and a deal"],
           ] as const
         ).map(([v, l]) => (
           <button key={v} type="button" className={cn(chipClass(object === v), "h-8 px-3")} onClick={() => setObject(v)}>

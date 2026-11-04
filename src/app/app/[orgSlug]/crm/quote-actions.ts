@@ -37,7 +37,7 @@ export const markPaidAction = crmAction(async (ctx, _a, id: string, book: boolea
 export const moveToWonAction = crmAction(async (ctx, _a, id: string) => {
   const q = await ctx.db.crmQuote.findFirst({ where: { id, organizationId: ctx.organizationId }, select: { dealId: true, status: true } });
   if (!q) throw new CrmError("That quote isn't here any more.");
-  if (q.status !== "ACCEPTED" && q.status !== "PAID") throw new CrmError("Only an accepted quote moves its item to won.");
+  if (q.status !== "ACCEPTED" && q.status !== "PAID") throw new CrmError("Only an accepted quote moves its deal to won.");
   const r = await moveToWon(ctx, q);
   if (r.note) throw new CrmError(r.note);
   return { moved: r.moved };
