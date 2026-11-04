@@ -289,6 +289,49 @@ export const updateCategory = financeAction(
 );
 
 /**
+ * Move money (Budget, on a line past 90%): moves `cents` of budget from one
+ * category to another in the same period, both written together and logged
+ * in the finance audit.
+ */
+export const moveBudget = financeAction(
+  async (ctx, fromId: string, toId: string, cents: number): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    if (!Number.isInteger(cents) || cents <= 0 || cents > 1_000_000_000) {
+      return { error: "Pick an amount to move." };
+    }
+    if (fromId === toId) return { error: "Pick two different categories." };
+    const [from, to] = await Promise.all(
+      [fromId, toId].map((id) =>
+        ctx.db.budgetCategory.findFirst({
+          where: { id, organizationId: ctx.organizationId },
+          select: { id: true, name: true, budgetPeriodId: true, allocatedCents: true },
+        }),
+      ),
+    );
+    if (!from || !to) return { error: "Category not found." };
+    if (from.budgetPeriodId !== to.budgetPeriodId) {
+      return { error: "Both categories must be in the same budget period." };
+    }
+    if (from.allocatedCents < cents) return { error: `${from.name} doesn't have that much.` };
+    await ctx.db.budgetCategory.update({
+      where: { id: from.id },
+      data: { allocatedCents: from.allocatedCents - cents },
+    });
+    await ctx.db.budgetCategory.update({
+      where: { id: to.id },
+      data: { allocatedCents: to.allocatedCents + cents },
+    });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "BUDGET_MOVE",
+      before: { [from.id]: from.allocatedCents, [to.id]: to.allocatedCents },
+      after: { [from.id]: from.allocatedCents - cents, [to.id]: to.allocatedCents + cents },
+    });
+    return { periodId: from.budgetPeriodId };
+  },
+);
+
+/**
  * Removes a category. Transactions filed under it become uncategorized (the
  * money stays in every total), each change in the finance audit log; a
  * reconciled transaction is locked, so one of those keeps the category.

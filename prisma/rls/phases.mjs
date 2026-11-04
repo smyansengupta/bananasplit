@@ -568,6 +568,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "CRM_REPLY",
           "CRM_REVIEW",
           "CRM_HANDOVER",
+          // A task nobody owns, posted for anyone to take (20261105090000_task_up_for_grabs).
+          "TASK_UP_FOR_GRABS",
           // The CRM in the Inbox (20261106090000_crm_inbox_kinds).
           "CRM_NEW",
           "CRM_BOOKED",
@@ -6484,6 +6486,42 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         kept: 1,
         admin_turns_off: 1,
         member_off_again: 0,
+      },
+    },
+  );
+
+  await tcase(
+    "P-DBDEL-02",
+    "DatabaseDefinition DELETE (20261104120000): a form in the trash doesn't hold its database; an owner-only database is deleted by owners, never admins",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      const make = (id, key, vis) =>
+        q(`INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind","memberVisibility","memberCanEdit","updatedAt")
+           VALUES ('${id}','org_A','${key}','${key}','CUSTOM','${vis}',false,now())`);
+      await make("dd_trash", "del2-trash", "MEMBERS");
+      await make("dd_owner", "del2-owner", "OWNER");
+      s.form = await tryq(
+        q,
+        `INSERT INTO "Form" ("id","organizationId","databaseId","title","slug","createdById","updatedAt","deletedAt")
+         VALUES ('fm_del2','org_A','dd_trash','Old sign-up','dbdel2-old','u_adminA',now(),now())`,
+      );
+      const del = (id) => rc(q, `DELETE FROM "DatabaseDefinition" WHERE "id" = '${id}'`);
+      s.admin_trashed_form = await del("dd_trash");
+      s.form_went_too = await count(q, `SELECT count(*) n FROM "Form" WHERE "id" = 'fm_del2'`);
+      s.admin_owner_only = await del("dd_owner");
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_owner_only = await del("dd_owner");
+      return s;
+    },
+    {
+      value: {
+        form: 1,
+        admin_trashed_form: 1,
+        form_went_too: 0,
+        admin_owner_only: 0,
+        owner_owner_only: 1,
       },
     },
   );

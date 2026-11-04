@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckSquare,
   Layers,
+  Megaphone,
   Minus,
   PenLine,
   UserPlus,
@@ -13,6 +14,7 @@ import {
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
+import { AmbientButton } from "@/components/ambient/ambient-button";
 import { pollOutcome, pulseProjectLine, type PulseIssueData } from "@/lib/pulse/data";
 import { tagToken, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
@@ -86,6 +88,7 @@ export function WeeklyPulseCard({
   issueHref,
   nextSend,
   draftHref,
+  recap = false,
   insight,
   chips = [],
 }: {
@@ -97,6 +100,8 @@ export function WeeklyPulseCard({
   nextSend: string | null;
   /** Admins: this week's draft, to add a note before it goes out. */
   draftHref: string | null;
+  /** Friday afternoon to Sunday: posting the recap is the main button. */
+  recap?: boolean;
   insight?: ReactNode;
   /** The epics that moved and the events held in the issue's week. */
   chips?: readonly ItemRef[];
@@ -222,15 +227,27 @@ export function WeeklyPulseCard({
             (nextSend
               ? `The first pulse goes out ${nextSend}.`
               : "The weekly pulse is off for this organization.")}
-          {draftHref && (
-            <Link
-              href={draftHref}
-              className="text-foreground inline-flex items-center gap-1.5 font-semibold"
-            >
-              <PenLine className="size-3.5" aria-hidden="true" />
-              Add a note to this week&apos;s pulse
-            </Link>
-          )}
+          {draftHref &&
+            (recap ? (
+              <AmbientButton
+                action={{
+                  key: "post-recap",
+                  label: "Post the recap",
+                  icon: <Megaphone />,
+                  tone: "solid",
+                  reason: "This week's recap isn't out yet",
+                  href: draftHref,
+                }}
+              />
+            ) : (
+              <Link
+                href={draftHref}
+                className="text-foreground inline-flex items-center gap-1.5 font-semibold"
+              >
+                <PenLine className="size-3.5" aria-hidden="true" />
+                Add a note to this week&apos;s pulse
+              </Link>
+            ))}
           {!issue && (
             <Link
               href={archiveHref}

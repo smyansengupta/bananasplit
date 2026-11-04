@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 
+import { AmbientButton } from "@/components/ambient/ambient-button";
+import { MessageCircle } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
@@ -113,6 +115,17 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
                       </span>
                       {row.isNew ? (
                         <Badge variant="info">New</Badge>
+                      ) : row.group === "people" && row.face && row.chips[0] ? (
+                        // Ambient: someone new joined. Say hi on their page.
+                        <AmbientButton
+                          action={{
+                            key: "say-hi",
+                            label: "Say hi",
+                            icon: MessageCircle,
+                            reason: "Joined since you were here",
+                            href: row.chips[0].href,
+                          }}
+                        />
                       ) : (
                         <LinkChips
                           items={row.chips.slice(0, 2)}

@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 
 import { SharedNotice, SharedReportView } from "@/components/reports/shared/shared-report-view";
 import { PublicThemeRoot } from "@/components/theme/public-theme-root";
 import { hashShareToken } from "@/server/reports/share-token";
-import { linkTarget, loadSharedReport, sharedViewLimit } from "@/server/reports/shared-view";
+import {
+  linkTarget,
+  loadSharedReport,
+  sharedViewIpLimit,
+  sharedViewShareLimit,
+} from "@/server/reports/shared-view";
 
 export const metadata: Metadata = { title: "Shared report", robots: { index: false } };
 
@@ -16,18 +20,28 @@ export const metadata: Metadata = { title: "Shared report", robots: { index: fal
  */
 export default async function SharedReportPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  // Keyed on a hash: the limiter never holds the token.
-  const wait = await sharedViewLimit(hashShareToken(token));
-  if (wait) {
+  const busy = (wait: string) => (
+    <PublicThemeRoot>
+      <SharedNotice title="Too many visits" body={`Try again ${wait}.`} />
+    </PublicThemeRoot>
+  );
+  const ipWait = await sharedViewIpLimit();
+  if (ipWait) return busy(ipWait);
+  const target = await linkTarget(token);
+  // Counted per link once it works; keyed on a hash, so the limiter never holds the token.
+  const shareWait = target ? await sharedViewShareLimit(hashShareToken(token)) : null;
+  if (shareWait) return busy(shareWait);
+  const report = target ? await loadSharedReport(target) : null;
+  if (!report) {
     return (
       <PublicThemeRoot>
-        <SharedNotice title="Too many visits" body={`Try again ${wait}.`} />
+        <SharedNotice
+          title="This link doesn't work anymore"
+          body="The report may have been unshared, archived or deleted, or the link was replaced with a new one. Ask whoever sent it for the current link."
+        />
       </PublicThemeRoot>
     );
   }
-  const target = await linkTarget(token);
-  const report = target ? await loadSharedReport(target) : null;
-  if (!report) notFound();
   return (
     <PublicThemeRoot>
       <SharedReportView report={report} />

@@ -362,6 +362,7 @@ export function NewCard({
         value={owner}
         onChange={setOwner}
         members={members}
+        none={{ well: "No owner", option: "No owner" }}
         hint={(m) =>
           m.id === viewerId || m.title ? (
             <small className="text-muted-foreground ms-auto max-w-28 shrink-0 truncate text-xs font-normal">

@@ -451,6 +451,25 @@ export async function updateBallotDefinition(ctx: OrgContext, id: string, patch:
 }
 
 /**
+ * Closes a poll now. Refused for one that's already closed (it never moves
+ * a closing time later) or hasn't opened yet (edit its dates instead).
+ */
+export async function closePoll(ctx: OrgContext, id: string) {
+  await assertCanEdit(ctx, DatabaseKind.BALLOTS);
+  const def = await ctx.db.ballotDefinition.findFirst({
+    where: { id, organizationId: ctx.organizationId },
+    select: { opensAt: true, closesAt: true },
+  });
+  if (!def) throw new NotFoundError();
+  const now = new Date();
+  if (def.closesAt && def.closesAt <= now) throw new DatabaseEditError("This poll is already closed.");
+  if (def.opensAt && def.opensAt > now) {
+    throw new DatabaseEditError("This poll hasn't opened yet. Change its dates instead.");
+  }
+  return updateBallotDefinition(ctx, id, { closesAt: now });
+}
+
+/**
  * Deletes a poll for good: its definition and every ballot cast in it
  * (their BallotChoice rows cascade), website ballots included. Service path
  * (withSystemOrgTx), called only after authorizing an editor of the

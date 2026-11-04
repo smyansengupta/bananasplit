@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Deadlines as DeadlinesData, DeadlineTone } from "@/lib/overview/deadlines-text";
 
 import { Insight } from "./connections";
+import { StartItButton } from "./home-act";
 
 /**
  * Deadlines (one column): the hard dates of the next three weeks from
@@ -22,7 +23,7 @@ const TONE: Record<DeadlineTone, string> = {
   warn: "bg-tint-danger text-tint-danger-foreground",
 };
 
-export function Deadlines({ data }: { data: DeadlinesData }) {
+export function Deadlines({ data, orgId }: { data: DeadlinesData; orgId?: string }) {
   if (data.rows.length === 0) {
     return <p className="text-muted-foreground text-sm">Nothing due in the next three weeks.</p>;
   }
@@ -30,8 +31,11 @@ export function Deadlines({ data }: { data: DeadlinesData }) {
     <div className="space-y-4">
       <ul className="divide-border divide-y">
         {data.rows.map((row) => (
-          <li key={row.key}>
-            <Link href={row.href} className="group/deadline flex items-start gap-3 py-3">
+          <li key={row.key} className="flex items-center gap-3">
+            <Link
+              href={row.href}
+              className="group/deadline flex min-w-0 flex-1 items-start gap-3 py-3"
+            >
               <span
                 style={{ "--k": "var(--attention)" } as CSSProperties}
                 className={cn(
@@ -50,6 +54,14 @@ export function Deadlines({ data }: { data: DeadlinesData }) {
                 </span>
               </span>
             </Link>
+            {/* Ambient: due within two days and nobody has started it. */}
+            {orgId && row.kind === "task" && row.notStarted && row.soon && (
+              <StartItButton
+                orgId={orgId}
+                taskId={row.key.slice("task:".length)}
+                title={row.title}
+              />
+            )}
           </li>
         ))}
       </ul>

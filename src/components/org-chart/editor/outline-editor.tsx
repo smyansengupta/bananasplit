@@ -2,18 +2,15 @@
 
 import type { NamedTeam } from "@/lib/org-chart/teams";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Sparkles, UserPlus, Users } from "@/components/icons";
+import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, UserPlus } from "@/components/icons";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import type { DraftPosition } from "@/lib/org-chart/draft";
 import { normalizeName } from "@/lib/org-chart/match";
 import {
   applyOutline,
-  draftFromMembers,
   membersOffChart,
   outlineOrder,
   parseOutline,
@@ -32,13 +29,12 @@ const ChartCanvas = dynamic(() => import("../chart-canvas"), {
 });
 
 /**
- * The org chart you can type (Moonstone 12.3): a keyboard-first outline
- * beside a live chart. One position per line, "Title — @Name"; Tab
- * indents (reports to the line above), Shift+Tab outdents, Esc then Tab
- * leaves the field; Enter keeps the indent. "@" suggests members; a name
- * that is not a member is flagged with an invite. Members without a
- * position wait in the tray: click one (or drag it into the outline) to
- * add them. Every edit goes through parseOutline/applyOutline, so pasted
+ * The editor's Type it tab: the org chart as an outline, one position per
+ * line ("Title — @Name") with line numbers, and beside it how to write it,
+ * the names that aren't members, the members not on the chart and a small
+ * live chart. Tab indents (reports to the line above), Shift Tab outdents,
+ * Esc then Tab leaves the field; Enter keeps the indent. "@" suggests
+ * members. Every edit goes through parseOutline/applyOutline, so pasted
  * text, typing and the tray follow the same rules, and positions keep
  * their ids, bullets and confirmed links while you type.
  */
@@ -52,9 +48,20 @@ export interface OutlineEditorProps {
   teams?: NamedTeam[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  orgSlug: string;
   canInvite: boolean;
+  /** Opens the invite dialog. */
+  onInvite?: () => void;
+  /** The card's top row (the Chart and Type it tabs, Import a document). */
+  toolbar?: ReactNode;
 }
+
+const KEYS: [string, string][] = [
+  ["Tab", "Reports to the line above"],
+  ["Shift Tab", "Moves back up a level"],
+  ["@name", "Links a member"],
+  ["Open:", "An open role"],
+  ["Advisor:", "Sits beside their manager"],
+];
 
 const PLACEHOLDER = [
   "President — @Maya Patel",
@@ -137,8 +144,9 @@ export function OutlineEditor({
   teams,
   selectedId,
   onSelect,
-  orgSlug,
   canInvite,
+  onInvite,
+  toolbar,
 }: OutlineEditorProps) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => serializeOutline(positions, members));
@@ -148,6 +156,7 @@ export function OutlineEditor({
   );
   const [mention, setMention] = useState<Mention | null>(null);
   const escaped = useRef(false);
+  const [scrollTop, setScrollTop] = useState(0);
 
   const outlineMembers = useMemo(
     () => members.map((m) => ({ id: m.id, name: m.name, title: m.title })),
@@ -161,7 +170,6 @@ export function OutlineEditor({
     [positions, text, outlineMembers],
   );
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-  const open = positions.filter((p) => p.isOpen).length;
   const idLine = useMemo(() => new Map([...lineIds].map(([line, id]) => [id, line])), [lineIds]);
 
   const matches = useMemo(() => {
@@ -320,40 +328,29 @@ export function OutlineEditor({
     el.setSelectionRange(end, end);
   }
 
-  const stats = [
-    `${positions.length} ${positions.length === 1 ? "position" : "positions"}`,
-    open > 0 && `${open} open`,
-    unknown.length > 0 && `${unknown.length} to invite`,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const lineCount = Math.max(1, text.split("\n").length);
+  const allMatched = positions.length > 0 && unknown.length === 0 && unknownAlso.length === 0;
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <label htmlFor="outline-text" className="heading text-[15px]">
-            Outline
-          </label>
-          {members.some((m) => m.title) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const el = ta.current;
-                const drafted = draftFromMembers(outlineMembers);
-                if (!el || !drafted) return;
-                replaceRange(el, 0, el.value.length, drafted);
-              }}
-              title="Replace the outline with positions drafted from members' titles"
-            >
-              <Sparkles aria-hidden="true" />
-              Start from members
-            </Button>
-          )}
-        </div>
-        <div className="relative">
+    <div className="flex min-w-0 flex-wrap items-start gap-5">
+      <section
+        aria-label="Type the chart"
+        className="bg-card edge rounded-card flex min-w-0 flex-[999_1_600px] flex-col gap-3.5 p-4 sm:p-5"
+      >
+        {toolbar}
+        <div className="border-input bg-card rounded-tile focus-within:border-foreground relative flex overflow-hidden border focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)]">
+          <div
+            aria-hidden="true"
+            className="text-muted-foreground/70 pointer-events-none w-10 shrink-0 overflow-hidden py-3 pr-2.5 text-right text-xs tabular-nums select-none"
+          >
+            <div style={{ transform: `translateY(${-scrollTop}px)` }}>
+              {Array.from({ length: lineCount }, (_, i) => (
+                <div key={i} className="h-10 leading-10">
+                  {i + 1}
+                </div>
+              ))}
+            </div>
+          </div>
           <textarea
             id="outline-text"
             ref={ta}
@@ -361,6 +358,7 @@ export function OutlineEditor({
             spellCheck={false}
             autoCapitalize="off"
             autoComplete="off"
+            aria-label="Org chart outline"
             aria-describedby="outline-hint"
             aria-autocomplete="list"
             aria-controls={mention ? "outline-mentions" : undefined}
@@ -377,8 +375,11 @@ export function OutlineEditor({
             }}
             onClick={(e) => syncCaret(e.currentTarget)}
             onBlur={() => window.setTimeout(() => setMention(null), 150)}
-            onScroll={() => setMention(null)}
-            className="border-input bg-card rounded-tile focus-visible:border-foreground min-h-[360px] w-full resize-y overflow-x-auto border px-4 py-3.5 font-mono text-[13px] leading-[1.75] whitespace-pre outline-none focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)]"
+            onScroll={(e) => {
+              setScrollTop(e.currentTarget.scrollTop);
+              setMention(null);
+            }}
+            className="min-h-[400px] w-full min-w-0 flex-1 resize-y overflow-x-auto bg-transparent py-3 pr-4 text-[15px] leading-10 whitespace-pre outline-none"
             style={{ tabSize: 2 }}
           />
           {mention && (
@@ -386,13 +387,13 @@ export function OutlineEditor({
               id="outline-mentions"
               role="listbox"
               aria-label="Members"
-              className="bg-popover text-popover-foreground rounded-tile shadow-e2 border-foreground/8 absolute z-20 w-64 border p-1"
-              style={{ top: mention.top, left: Math.min(mention.left, 9999) }}
+              className="bg-popover text-popover-foreground rounded-tile shadow-e2 border-foreground/8 absolute z-20 w-72 border p-1.5"
+              style={{ top: mention.top, left: Math.min(mention.left + 40, 9999) }}
             >
               {matches.length === 0 ? (
                 <p className="text-muted-foreground px-2.5 py-2 text-sm">
-                  No member called &ldquo;{mention.query.trim()}&rdquo;.
-                  {canInvite && " It stays as a name to invite."}
+                  No member called &ldquo;{mention.query.trim()}&rdquo;. It stays as a name
+                  {canInvite ? " to invite" : ""}.
                 </p>
               ) : (
                 matches.map((m, i) => (
@@ -406,12 +407,12 @@ export function OutlineEditor({
                       accept(m);
                     }}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-sm",
+                      "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13.5px]",
                       i === mention.active ? "bg-muted" : "hover:bg-muted",
                     )}
                   >
                     <UserAvatar user={m} size="sm" />
-                    <span className="min-w-0 flex-1 font-medium break-words">{m.name}</span>
+                    <span className="min-w-0 flex-1 font-semibold break-words">{m.name}</span>
                     {m.title && (
                       <span className="text-muted-foreground text-xs break-words">{m.title}</span>
                     )}
@@ -421,19 +422,46 @@ export function OutlineEditor({
             </div>
           )}
         </div>
-        <p id="outline-hint" className="text-muted-foreground text-[13px]">
-          One position per line: &ldquo;Title — @Name&rdquo;. <kbd className="font-mono">Tab</kbd>{" "}
-          reports to the line above, <kbd className="font-mono">Shift Tab</kbd> goes back up,{" "}
-          <kbd className="font-mono">Esc</kbd> then <kbd className="font-mono">Tab</kbd> leaves the
-          field. &ldquo;Open:&rdquo; marks an open role, &ldquo;Advisor:&rdquo; an advisor,
-          &ldquo;(also reports to Name)&rdquo; a second manager. Paste a list or a drawn tree and it
-          keeps its shape.
+        <p id="outline-hint" className="text-muted-foreground text-[12.5px]">
+          Every change shows on the chart as you type. Esc then Tab leaves the outline.
         </p>
+      </section>
+
+      <aside
+        aria-labelledby="outline-key"
+        className="bg-card edge rounded-card flex min-w-0 flex-[1_1_340px] flex-col gap-3.5 p-5"
+      >
+        <h2 id="outline-key" className="heading text-[15px]">
+          How to write it
+        </h2>
+        <dl className="grid grid-cols-[8.5rem_minmax(0,1fr)] items-center gap-x-3.5 gap-y-1.5 text-[13.5px]">
+          {KEYS.map(([key, what]) => (
+            <Fragment key={key}>
+              <dt>
+                <kbd className="bg-muted rounded-lg px-2 py-1 font-sans text-[13px] font-bold">
+                  {key}
+                </kbd>
+              </dt>
+              <dd>{what}</dd>
+            </Fragment>
+          ))}
+        </dl>
+
+        <div className="border-t" />
+
+        {allMatched && (
+          <p className="bg-tint-success rounded-tile flex items-center gap-2.5 px-3.5 py-3 text-[13.5px]">
+            <span className="bg-card text-tint-success-foreground grid size-6 shrink-0 place-items-center rounded-full">
+              <Check className="size-3.5" aria-hidden="true" />
+            </span>
+            Every name so far matches a member.
+          </p>
+        )}
 
         {unknownAlso.length > 0 && (
           <section
             aria-label="Second managers not found"
-            className="bg-tint-accent/40 rounded-tile flex flex-col gap-1.5 p-3 text-sm"
+            className="bg-tint-accent rounded-tile flex flex-col gap-1.5 px-3.5 py-3 text-[13.5px]"
           >
             <p className="font-semibold">
               {unknownAlso.length === 1
@@ -445,7 +473,6 @@ export function OutlineEditor({
                 <li key={`${u.title}:${u.name}:${i}`}>
                   <b className="font-semibold">{u.name}</b>
                   <span className="text-muted-foreground">
-                    {" "}
                     , for {u.title}. Use a title or a full name from the chart.
                   </span>
                 </li>
@@ -457,21 +484,21 @@ export function OutlineEditor({
         {unknown.length > 0 && (
           <section
             aria-label="Names that aren't members"
-            className="bg-tint-danger/40 rounded-tile flex flex-col gap-1.5 p-3 text-sm"
+            className="bg-tint-danger rounded-tile flex flex-col gap-2 px-3.5 py-3 text-[13.5px]"
           >
             <p className="font-semibold">
               {unknown.length === 1
                 ? "1 name isn't a member yet"
                 : `${unknown.length} names aren't members yet`}
             </p>
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1.5">
               {unknown.map((p) => {
                 const suggestion = p.suggestedUserIds[0]
                   ? memberById.get(p.suggestedUserIds[0])
                   : undefined;
                 return (
                   <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <b className="font-semibold">{p.personName}</b>
                       <span className="text-muted-foreground">, {p.title}</span>
                     </span>
@@ -480,18 +507,15 @@ export function OutlineEditor({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-7"
                         onClick={() => setLinePerson(p.id, suggestion)}
                       >
-                        Link {suggestion.name}
+                        It&apos;s {suggestion.name}
                       </Button>
                     )}
-                    {canInvite && (
-                      <Button asChild variant="ghost" size="sm" className="h-7">
-                        <Link href={`/app/${orgSlug}/people?invite=1`}>
-                          <UserPlus aria-hidden="true" />
-                          Invite
-                        </Link>
+                    {canInvite && onInvite && (
+                      <Button type="button" variant="ghost" size="sm" onClick={onInvite}>
+                        <UserPlus aria-hidden="true" />
+                        Invite
                       </Button>
                     )}
                   </li>
@@ -501,19 +525,15 @@ export function OutlineEditor({
           </section>
         )}
 
-        <section aria-labelledby="tray-title" className="flex flex-col gap-2">
-          <p
-            id="tray-title"
-            className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold"
-          >
-            <Users className="size-4" aria-hidden="true" />
-            Not on the chart yet
-            {tray.length > 0 && <Badge variant="secondary">{tray.length}</Badge>}
-          </p>
-          {tray.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Everyone is on the chart.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
+        {tray.length > 0 && (
+          <section aria-labelledby="tray-title" className="flex flex-col gap-2">
+            <p id="tray-title" className="text-[13px] font-semibold">
+              Not on the chart{" "}
+              <span className="text-muted-foreground font-normal">
+                Click one to add a line, or drag it in.
+              </span>
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
               {tray.map((m) => (
                 <li key={m.id}>
                   <button
@@ -524,33 +544,19 @@ export function OutlineEditor({
                       e.dataTransfer.effectAllowed = "copy";
                     }}
                     onClick={() => addFromTray(m)}
-                    title={`Add ${m.name ?? "this member"} (or drag into the outline)`}
-                    className="border-foreground/25 hover:bg-muted focus-glow inline-flex h-8 items-center gap-2 rounded-full border border-dashed pr-3 pl-1 text-[13px] font-medium outline-none"
+                    className="bg-secondary hover:bg-muted-strong focus-glow inline-flex h-8 max-w-[14rem] items-center gap-2 rounded-full pr-3 pl-1 text-[13px] font-semibold outline-none"
                   >
                     <UserAvatar user={m} size="sm" />
-                    {m.name ?? "Unnamed member"}
+                    <span className="truncate">{m.name ?? "Unnamed member"}</span>
                   </button>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-      </div>
+          </section>
+        )}
 
-      <section
-        aria-label="Live chart"
-        className="bg-card edge rounded-card flex min-w-0 flex-col overflow-hidden"
-      >
-        <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-          <h2 className="heading text-[15px]">Live chart</h2>
-          <span className="text-muted-foreground text-[13px]">{stats}</span>
-        </div>
-        <div className="h-[520px] border-t">
-          {previewNodes.length === 0 ? (
-            <p className="text-muted-foreground p-6 text-sm">
-              Start typing a position, or add someone from the tray.
-            </p>
-          ) : (
+        {previewNodes.length > 0 && (
+          <div className="rounded-tile h-[240px] overflow-hidden border">
             <ChartCanvas
               nodes={previewNodes}
               teams={teams}
@@ -560,12 +566,13 @@ export function OutlineEditor({
                 focusLine(id);
               }}
               refitOnChange
+              collapsible={false}
               flagUnknown
-              ariaLabel="Live preview of the draft chart"
+              ariaLabel="The chart as you type it"
             />
-          )}
-        </div>
-      </section>
+          </div>
+        )}
+      </aside>
     </div>
   );
 }

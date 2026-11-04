@@ -17,6 +17,7 @@ import {
   approveAndPayExpense,
   approveExpense,
   approveExpenses,
+  askForReceipt,
   deleteTransaction,
   payExpenses,
   reconcileTransactions,
@@ -24,6 +25,7 @@ import {
   restoreTransaction,
   type BulkResult,
 } from "@/app/app/[orgSlug]/finance/transactions-actions";
+import { AmbientActions, type AmbientAction } from "@/components/ambient/ambient-button";
 import { TableFrame } from "@/components/databases/table-frame";
 import { EmptyState } from "@/components/empty-state";
 import { lastPayMethod, PayMethodChips, rememberPayMethod } from "@/components/finance/pay-method";
@@ -43,6 +45,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  approvedNotPaid,
+  askLabel,
+  needsReceipt,
+  receiptReason,
+  unpaidReason,
+} from "@/lib/ambient/finance";
 import { formatCents } from "@/lib/finance/money";
 import { formatFinanceDate } from "@/lib/finance/stats";
 import { cn } from "@/lib/utils";
@@ -86,6 +95,8 @@ export function TransactionTable({
   const picked = new Set(transactions.filter((t) => pickedRaw.has(t.id)).map((t) => t.id));
   const [pending, startTransition] = useTransition();
   const selected = transactions.find((t) => t.id === openId) ?? null;
+  // When the table was loaded: the ambient buttons' "3 days ago".
+  const [now] = useState(() => new Date());
 
   // A category keeps its chart slot (its place in its budget) here too.
   const slot = new Map<string, string>();
@@ -203,6 +214,52 @@ export function TransactionTable({
       </span>
     ) : null;
 
+  /**
+   * The row's ambient buttons (src/lib/ambient/finance.ts): Mark paid on an
+   * approved request, Ask for receipt on money out with none attached.
+   */
+  const facts = (t: TransactionWithRelations) => ({
+    ...t,
+    receipts: t.receipts.length,
+    receiptAskedAt: t.auditLogs[0]?.createdAt ?? null,
+  });
+  const markPaid = (t: TransactionWithRelations) => isFinance && approvedNotPaid(facts(t), currentUserId);
+  const ambientFor = (t: TransactionWithRelations): AmbientAction[] => {
+    if (!isFinance) return [];
+    const out: AmbientAction[] = [];
+    if (markPaid(t)) {
+      out.push({
+        key: "paid",
+        label: "Mark paid",
+        icon: Banknote,
+        reason: unpaidReason(t, now),
+        tone: "solid",
+        ariaLabel: `Mark ${t.description} paid`,
+        run: () => reimburseExpense(orgId, t.id, lastPayMethod()),
+        done: "Paid",
+      });
+    }
+    if (t.status !== "SUBMITTED" && needsReceipt(facts(t), currentUserId, now)) {
+      out.push({
+        key: "receipt",
+        label: askLabel(t.submittedBy.name),
+        reason: receiptReason(t, now),
+        ariaLabel: `Ask for the receipt for ${t.description}`,
+        run: () => askForReceipt(orgId, t.id),
+        done: "Asked for the receipt",
+      });
+    }
+    return out;
+  };
+  const ambient = (t: TransactionWithRelations) => {
+    const actions = ambientFor(t);
+    return actions.length > 0 ? (
+      <span className="relative z-10 inline-flex" onClick={(e) => e.stopPropagation()}>
+        <AmbientActions why actions={actions} />
+      </span>
+    ) : null;
+  };
+
   const receiptMark = (t: TransactionWithRelations) =>
     t.receipts[0] ? <ReceiptThumb orgId={orgId} receipt={t.receipts[0]} /> : null;
   const stepButtons = (t: TransactionWithRelations) =>
@@ -214,10 +271,12 @@ export function TransactionTable({
             Approve
           </Button>
         )}
-        <Button size="sm" disabled={pending} onClick={() => step(t, "pay")}>
-          <Banknote aria-hidden="true" />
-          Pay
-        </Button>
+        {!markPaid(t) && (
+          <Button size="sm" disabled={pending} onClick={() => step(t, "pay")}>
+            <Banknote aria-hidden="true" />
+            Pay
+          </Button>
+        )}
       </span>
     ) : null;
 
@@ -291,6 +350,7 @@ export function TransactionTable({
               </span>
             </button>
             {stepButtons(t)}
+            {ambient(t)}
             <ItemMenu label={`Actions for ${t.description}`} items={menuItems(t)} />
           </li>
         ))}
@@ -374,6 +434,7 @@ export function TransactionTable({
                     {status(t)}
                     {reconciled(t)}
                     {stepButtons(t)}
+                    {ambient(t)}
                   </span>
                 </TableCell>
                 <TableCell

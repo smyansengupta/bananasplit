@@ -54,6 +54,8 @@ export const notificationPreferencesSchema = z
 /** Types that stay off until the user turns them on (Tasks). */
 export const DEFAULT_OFF_TYPES: ReadonlySet<NotificationType> = new Set([
   NotificationType.TASK_COMMENTED,
+  // Everyone who can see the task gets it, so it's Inbox-only unless asked for.
+  NotificationType.TASK_UP_FOR_GRABS,
   // Someone new in the CRM comes in bursts (forms, booking pages): the Inbox
   // always has it; it's emailed only when the member turns it on.
   NotificationType.CRM_NEW,
@@ -219,6 +221,7 @@ export const NOTIFICATION_TYPE_META: Record<
   TASK_DUE_TODAY: { label: "One of my tasks is due today", group: "tasks" },
   TASK_OVERDUE: { label: "One of my tasks is overdue", group: "tasks" },
   TASK_DUE_SOON: { label: "One of my tasks is due soon", group: "tasks" },
+  TASK_UP_FOR_GRABS: { label: "A task is up for grabs (nobody owns it)", group: "tasks" },
   TASK_FLAGGED: {
     label: "A task assignment needs my review",
     group: "tasks",
@@ -252,12 +255,16 @@ export const NOTIFICATION_TYPE_META: Record<
   CRM_FOLLOW_UP: { label: "A follow-up in the CRM is due", group: "org" },
   CRM_REPLY: { label: "Someone in the CRM replies to me", group: "org" },
   CRM_REVIEW: {
-    label: "Something in the CRM waits for my OK: a draft to send, paused sending, something held back",
+    label:
+      "Something in the CRM waits for my OK: a draft to send, paused sending, something held back",
     group: "org",
   },
   CRM_HANDOVER: { label: "CRM relationships are handed to me", group: "org" },
   CRM_NEW: { label: "Someone new comes into the CRM for me", group: "org" },
-  CRM_DEAL: { label: "A deal of mine is won or lost, or a quote is opened or accepted", group: "org" },
+  CRM_DEAL: {
+    label: "A deal of mine is won or lost, or a quote is opened or accepted",
+    group: "org",
+  },
 };
 
 export const NOTIFICATION_GROUP_LABELS: Record<NotificationGroup, string> = {

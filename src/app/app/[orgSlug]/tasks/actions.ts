@@ -71,6 +71,7 @@ const selfAssignTx = withEnv(svc.selfAssign);
 const acknowledgeTx = withEnv(svc.acknowledgeFlag);
 const deleteTx = withEnv(svc.deleteTask);
 const restoreTx = withEnv(svc.restoreTask);
+const keepTx = withEnv(svc.keepTask);
 const reorderTx = withEnv(svc.reorderTask);
 const bulkStatusTx = withEnv(svc.bulkUpdateStatus);
 const bulkAssignTx = withEnv(svc.bulkAssign);
@@ -152,6 +153,11 @@ export async function selfAssignTask(orgId: string, taskId: string, action: svc.
   return run(() => selfAssignTx(orgId, taskId, action));
 }
 
+/** Take a task nobody owns (Take it on Home's Up next). */
+export async function takeTask(orgId: string, taskId: string) {
+  return run(() => selfAssignTx(orgId, taskId, "claim"));
+}
+
 export async function acknowledgeTaskFlag(orgId: string, taskId: string, userId: string) {
   return run(() => acknowledgeTx(orgId, taskId, userId));
 }
@@ -162,6 +168,11 @@ export async function deleteTask(orgId: string, taskId: string) {
 
 export async function restoreTask(orgId: string, taskId: string) {
   return run(() => restoreTx(orgId, taskId));
+}
+
+/** "Still needed?" > Keep: marks a quiet task as looked at today. */
+export async function keepTask(orgId: string, taskId: string) {
+  return run(() => keepTx(orgId, taskId));
 }
 
 export async function reorderTask(orgId: string, input: svc.ReorderInput) {
@@ -210,8 +221,14 @@ export async function bulkDelete(orgId: string, taskIds: string[]) {
   return run(() => bulkDeleteTx(orgId, taskIds));
 }
 
-export async function addTaskComment(orgId: string, taskId: string, body: string) {
-  return run(() => addCommentTx(orgId, taskId, body));
+export async function addTaskComment(
+  orgId: string,
+  taskId: string,
+  body: string,
+  /** An ambient ask (Nudge, Ask to unblock, Follow up): the Inbox notice says so. */
+  ask?: svc.TaskAsk,
+) {
+  return run(() => addCommentTx(orgId, taskId, body, ask));
 }
 
 export async function editTaskComment(orgId: string, commentId: string, body: string) {

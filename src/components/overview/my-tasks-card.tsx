@@ -2,7 +2,7 @@ import { CircleCheck } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { dueLabel } from "@/lib/overview/format";
-import { dueDateKey } from "@/lib/tasks/dates";
+import { addDaysToKey, dueDateKey } from "@/lib/tasks/dates";
 import { epicColor, epicOf } from "@/lib/tasks/epic";
 import type { LinkedChip, TaskExtras } from "@/server/overview/queries";
 import type { MyOpenTask } from "@/server/tasks/queries";
@@ -69,6 +69,11 @@ export function MyTasksCard({
       context: task.parentTask ? `Part of ${task.parentTask.title}` : null,
       due: task.dueDate ? dueLabel(dueDateKey(task.dueDate), todayKey) : null,
       late: task.dueDate ? dueDateKey(task.dueDate) < todayKey : false,
+      startable:
+        task.status === "NOT_STARTED" &&
+        task.dueDate !== null &&
+        dueDateKey(task.dueDate) >= todayKey &&
+        dueDateKey(task.dueDate) <= addDaysToKey(todayKey, 2),
       high: extra?.priority === "HIGH",
       chips: (links?.get(`task:${task.id}`) ?? [])
         .filter((c) => !c.done)
@@ -79,7 +84,7 @@ export function MyTasksCard({
   return (
     <div className="space-y-4">
       {insight}
-      <TaskRows orgId={orgId} tasks={rows} />
+      <TaskRows orgId={orgId} tasks={rows} todayKey={todayKey} />
     </div>
   );
 }

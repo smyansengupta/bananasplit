@@ -74,6 +74,7 @@ export function AppsFeed({ data }: { data: AppsFeedData }) {
                   className="bg-foreground text-background focus-glow inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold outline-none"
                 >
                   {row.action.label}
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               ) : (
                 <Link

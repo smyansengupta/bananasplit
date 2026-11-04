@@ -303,7 +303,8 @@ const refKey = (r: LinkRef) => `${r.kind}:${r.id}`;
  * What each of `refs` is linked to (ItemLink, either way round), as chips,
  * keyed "kind:id". Every other end is looked up as the viewer
  * (resolveRefs), so a thing they can't see never becomes a chip; money
- * (transactions, budget lines) is left out. Newest link first.
+ * (transactions, budget lines) is left out. Newest link first, and a
+ * repeating meeting once (two occurrences linked read as one chip).
  */
 export async function loadLinkedChips(
   db: TxClient,
@@ -329,6 +330,13 @@ export async function loadLinkedChips(
     if (!hit) continue;
     const list = out.get(at) ?? [];
     if (list.some((c) => refKey(c.ref) === refKey(other))) continue;
+    // A repeating meeting shows once: the newest link (the one carried over to).
+    if (
+      other.kind === "event" &&
+      list.some((c) => c.ref.kind === "event" && c.label === hit.title)
+    ) {
+      continue;
+    }
     list.push({
       kind: hit.chip,
       label: hit.title,

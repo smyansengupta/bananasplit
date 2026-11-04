@@ -24,7 +24,7 @@ import {
   Trash2,
 } from "@/components/icons";
 import Link from "next/link";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   addChoiceAction,
@@ -247,9 +247,20 @@ interface GridProps {
   timezone: string;
   /** A Personal space: settings don't ask who can see or edit it. */
   personal?: boolean;
+  /** Its ambient buttons (Make a report), from the page. */
+  ambient?: ReactNode;
 }
 
-function Grid({ orgId, orgSlug, database, members, trash, timezone, personal = false }: GridProps) {
+function Grid({
+  orgId,
+  orgSlug,
+  database,
+  members,
+  trash,
+  timezone,
+  personal = false,
+  ambient = null,
+}: GridProps) {
   const [confirmEl, confirm] = useConfirm();
   const [fields, setFields] = useState(database.fields);
   const [records, setRecords] = useState(database.records);
@@ -891,6 +902,7 @@ function Grid({ orgId, orgSlug, database, members, trash, timezone, personal = f
           actions={
             <>
               {!trash && status}
+              {ambient}
               {trash && database.canManage && records.length > 0 && (
                 <Button variant="destructive" onClick={() => void purge("all")}>
                   <Trash2 aria-hidden="true" />

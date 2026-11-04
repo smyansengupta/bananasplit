@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
 import { STATUS_LABELS } from "@/components/tasks/status-select";
@@ -47,12 +48,13 @@ import {
 } from "@/components/ui/table";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskStatus } from "@/generated/prisma/enums";
+import { PUSH_ALL_MIN, lateSelection, nextMondayKey } from "@/lib/ambient/tasks";
 import { canEditTask } from "@/lib/tasks/access";
 import { relationFor } from "@/lib/tasks/assignment";
 import { epicOf } from "@/lib/tasks/epic";
 import { cn } from "@/lib/utils";
 
-import { bulkAssign, bulkDelete, bulkUpdateStatus, restoreTask } from "../actions";
+import { bulkAssign, bulkDelete, bulkUpdate, bulkUpdateStatus, restoreTask } from "../actions";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 
 /**
@@ -227,6 +229,12 @@ export function TaskTable({
     );
   }
 
+  // Several late tasks picked: Push all to Monday, in the bar.
+  const latePicked = lateSelection(tasks, selected, org.todayKey, (t) =>
+    canEditTask(actor, accessSubjectOf(t)),
+  );
+  const monday = nextMondayKey(org.todayKey);
+
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const pageHref = (p: number) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -272,6 +280,27 @@ export function TaskTable({
               ))}
             </SelectContent>
           </Select>
+          {latePicked.length >= PUSH_ALL_MIN && (
+            <AmbientActions
+              actions={[
+                {
+                  key: "push-all",
+                  label: "Push all to Monday",
+                  reason: `${latePicked.length} of them are late`,
+                  tone: "spark",
+                  run: async () => {
+                    const result = await bulkUpdate(
+                      org.id,
+                      latePicked.map((t) => ({ taskId: t.id, input: { dueDate: monday } })),
+                    );
+                    if (!result.error) setSelected(new Set());
+                    return result;
+                  },
+                  done: `${latePicked.length} tasks moved to Monday`,
+                },
+              ]}
+            />
+          )}
           <Button
             size="sm"
             variant="destructive"

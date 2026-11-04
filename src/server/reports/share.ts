@@ -1,15 +1,18 @@
 import { MAX_INVITES, normalizeInviteEmail, readInviteEmails } from "@/lib/reports/share";
+import { writeOrgAuditLog } from "@/server/audit";
 
 import { ReportInputError, editable } from "./saved";
 import { generateShareToken, hashShareToken } from "./share-token";
 import type { SourceViewer } from "./sources";
 
 /**
- * Sharing a report outside the organization, as one of its editors (its
- * maker, or an owner/admin on a shared one): the view-only link and the
- * email invites. RLS (20261103120000_report_sharing) allows the same
- * people; these say no in a sentence first. Only a report the organization
- * sees can be shared outside it.
+ * Sharing a report outside the organization: the view-only link and the
+ * email invites. A shared view runs as the report's maker
+ * (shared-as-maker.ts), so only the maker may open it up: an owner or admin
+ * who can edit someone else's report could otherwise hand outsiders rows
+ * only the maker can see. Any editor may close it again (link off, an
+ * invite removed). Only a live report the organization sees can be shared
+ * outside it. Every change is in the audit log.
  */
 
 export interface ReportSharing {
@@ -19,10 +22,29 @@ export interface ReportSharing {
 
 async function shareable(v: SourceViewer, id: string) {
   const report = await editable(v, id);
+  if (report.createdById !== v.userId) {
+    throw new ReportInputError(
+      "Only whoever made this report can share it outside the organization.",
+    );
+  }
   if (report.access !== "ORGANIZATION") {
     throw new ReportInputError("Share it with the organization first, then outside it.");
   }
+  const live = await v.db.report.count({
+    where: { organizationId: v.organizationId, id, archivedAt: null },
+  });
+  if (live === 0) throw new ReportInputError("Bring the report back before sharing it.");
   return report;
+}
+
+function audit(v: SourceViewer, id: string, action: string, diff: Record<string, unknown> = {}) {
+  return writeOrgAuditLog(v.db, {
+    organizationId: v.organizationId,
+    action,
+    targetType: "Report",
+    targetId: id,
+    diff,
+  });
 }
 
 /** The report's sharing, for its editors. */
@@ -46,8 +68,7 @@ export async function setReportLink(
   id: string,
   on: boolean,
 ): Promise<string | null> {
-  if (on) await shareable(v, id);
-  else await editable(v, id);
+  const report = on ? await shareable(v, id) : await editable(v, id);
   const token = on ? generateShareToken() : null;
   await v.db.report.update({
     where: { id },
@@ -55,6 +76,11 @@ export async function setReportLink(
       ? { linkTokenHash: hashShareToken(token), linkCreatedAt: new Date() }
       : { linkTokenHash: null, linkCreatedAt: null },
   });
+  await audit(
+    v,
+    id,
+    on ? (report.linkOn ? "report.link_renewed" : "report.link_on") : "report.link_off",
+  );
   return token;
 }
 
@@ -81,6 +107,7 @@ export async function addReportInvites(
       data: fresh.map((email) => ({ organizationId: v.organizationId, reportId: id, email })),
       skipDuplicates: true,
     });
+    await audit(v, id, "report.invited", { count: fresh.length });
   }
   return [...have.map((h) => h.email), ...fresh];
 }
@@ -91,7 +118,8 @@ export async function removeReportInvite(
   email: string,
 ): Promise<void> {
   await editable(v, id);
-  await v.db.reportInvite.deleteMany({
+  const done = await v.db.reportInvite.deleteMany({
     where: { organizationId: v.organizationId, reportId: id, email: normalizeInviteEmail(email) },
   });
+  if (done.count > 0) await audit(v, id, "report.invite_removed");
 }

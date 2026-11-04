@@ -31,7 +31,9 @@ import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 
+import { DatabaseAmbient } from "@/components/databases/database-ambient";
 import { DatabasesHome } from "@/components/databases/databases-home";
+import { syncStopped } from "@/lib/ambient/databases";
 import { displayText } from "@/lib/databases/fields";
 import { loadFields } from "@/server/databases/custom";
 import {
@@ -284,6 +286,11 @@ export default async function DatabasesPage({
   );
   const sourceOf = (d: (typeof databases)[number]) =>
     syncedKinds.has(d.kind) ? "Supabase" : "Bananasplit";
+  // The website sync stopped: Reconnect on each database it fills (admins).
+  const stopped = isAdmin ? syncStopped(sync) : null;
+  const stoppedKinds = new Set(
+    stopped && sync ? sync.streams.map((st) => SYNCED_KIND[st.stream]).filter(Boolean) : [],
+  );
 
   const setupRow = "flex flex-wrap items-center gap-x-6 gap-y-3 py-4 first:pt-0 last:pb-0";
 
@@ -350,6 +357,18 @@ export default async function DatabasesPage({
         thisWeek: home.weekly[d.key]?.thisWeek ?? 0,
         report: source ? reportFor(source) : null,
         newReportHref: source ? newReport(source) : null,
+        ambient:
+          stopped && stoppedKinds.has(d.kind) ? (
+            <DatabaseAmbient
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              why={false}
+              reconnect={{
+                href: `/app/${orgSlug}/integrations?app=data-source`,
+                reason: stopped.reason,
+              }}
+            />
+          ) : undefined,
       };
     }),
   ];

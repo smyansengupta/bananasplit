@@ -537,6 +537,8 @@ enum NotificationType {
   FORM_RESPONSE
   // A saved report on its schedule (src/server/reports/jobs.ts)
   REPORT_SENT
+  // A task nobody owns, posted for anyone to take (src/server/tasks/service.ts)
+  TASK_UP_FOR_GRABS
   // CRM (docs/features/crm.md)
   CRM_ASSIGNED
   CRM_FOLLOW_UP

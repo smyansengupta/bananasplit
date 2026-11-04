@@ -7,12 +7,15 @@ import { useState } from "react";
 
 import { trashFormAction } from "@/app/app/[orgSlug]/forms/actions";
 import { deleteQuestionPoll } from "@/app/app/[orgSlug]/calendar/polls/question-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { ItemMenu } from "@/components/item-menu";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toast, undoable } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
+
+import { shareAgainAction, type FormShareAgain } from "./form-ambient";
 
 export interface FormListRow {
   id: string;
@@ -34,6 +37,8 @@ export interface FormListRow {
   toReview: number;
   databaseHref: string | null;
   canTrash: boolean;
+  /** Closing in two days with few answers (src/lib/ambient/forms.ts). */
+  shareAgain?: FormShareAgain | null;
 }
 
 /** Form | Kind | Responses | Status | Saves to, then the row's menu. */
@@ -139,13 +144,20 @@ export function FormList({ orgId, rows }: { orgId: string; rows: FormListRow[] }
                 )}
                 {row.toReview > 0 && <Badge variant="accent">{row.toReview} to review</Badge>}
               </span>
-              <span>
+              <span className="relative z-10 inline-flex flex-col items-start gap-1.5">
                 <Badge
                   variant={row.draft ? "outline" : row.open ? "success" : "secondary"}
                   className="whitespace-nowrap"
                 >
                   {row.status}
                 </Badge>
+                {row.shareAgain && (
+                  <AmbientActions
+                    why
+                    className="items-start"
+                    actions={[shareAgainAction(orgId, row.shareAgain, row.title)]}
+                  />
+                )}
               </span>
               <span className="relative z-10 text-[13px]">
                 {row.databaseHref ? (

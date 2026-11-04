@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 
 import { importGoogleEvents, syncGoogleNow } from "@/app/app/[orgSlug]/calendar/sync/actions";
 import { Badge } from "@/components/ui/badge";
+import { RetrySync } from "./retry-sync";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GoogleSyncStatus } from "@/server/google-calendar/requests";
@@ -195,11 +196,15 @@ export function SyncPanel({
                 {status.failures.length > 0 && (
                   <ul className="space-y-1">
                     {status.failures.map((f) => (
-                      <li key={f.id}>
-                        <Link className="underline" href={`/app/${orgSlug}/meetings/${f.id}`}>
-                          {f.title}
-                        </Link>
-                        {f.error && <span className="text-muted-foreground">: {f.error}</span>}
+                      <li key={f.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="min-w-0 flex-1">
+                          <Link className="underline" href={`/app/${orgSlug}/meetings/${f.id}`}>
+                            {f.title}
+                          </Link>
+                          {f.error && <span className="text-muted-foreground">: {f.error}</span>}
+                        </span>
+                        {/* It didn't reach Google: send just this one again. */}
+                        {canWrite && <RetrySync orgId={orgId} eventId={f.id} />}
                       </li>
                     ))}
                   </ul>

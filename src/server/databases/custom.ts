@@ -693,7 +693,8 @@ async function deleteCheck(
   kind: DatabaseDeleteCheck["kind"] = "CUSTOM",
 ): Promise<DatabaseDeleteCheck> {
   const { db, organizationId } = actor;
-  const forms = await db.form.count({ where: { organizationId, databaseId } });
+  // A form in the trash doesn't hold its database: it goes with it.
+  const forms = await db.form.count({ where: { organizationId, databaseId, deletedAt: null } });
   const settings = await db.orgSettings.findUnique({
     where: { organizationId },
     select: { memberCanDeleteDatabases: true },
@@ -710,6 +711,46 @@ async function deleteCheck(
 /** Built-ins are refused by deleteBlockedReason; a CUSTOM one must be the viewer's to open. */
 async function viewable(db: TxClient, databaseId: string, kind: string): Promise<boolean> {
   return kind !== "CUSTOM" || allowed(db, "can_view_database", databaseId);
+}
+
+/**
+ * Removes the Linked-panel links to a database and its rows before it goes,
+ * so a later database with the same key never inherits them.
+ */
+async function dropLinks(db: TxClient, organizationId: string, def: { id: string; key: string }) {
+  const linked = await db.itemLink.findMany({
+    where: { organizationId, OR: [{ fromKind: "record" }, { toKind: "record" }] },
+    select: { fromKind: true, fromId: true, toKind: true, toId: true },
+  });
+  const ids = [
+    ...new Set(
+      linked.flatMap((l) => [
+        ...(l.fromKind === "record" ? [l.fromId] : []),
+        ...(l.toKind === "record" ? [l.toId] : []),
+      ]),
+    ),
+  ];
+  const mine = ids.length
+    ? (
+        await db.databaseRecord.findMany({
+          where: { organizationId, databaseId: def.id, id: { in: ids } },
+          select: { id: true },
+        })
+      ).map((r) => r.id)
+    : [];
+  const refs = [
+    { kind: "database", ids: [def.key] },
+    ...(mine.length ? [{ kind: "record", ids: mine }] : []),
+  ];
+  await db.itemLink.deleteMany({
+    where: {
+      organizationId,
+      OR: refs.flatMap((r) => [
+        { fromKind: r.kind, fromId: { in: r.ids } },
+        { toKind: r.kind, toId: { in: r.ids } },
+      ]),
+    },
+  });
 }
 
 /** Saved reports (not archived) that read a database, as their source or their join. */
@@ -739,12 +780,12 @@ export async function deleteDatabase(actor: Actor, databaseId: string): Promise<
   const { db, organizationId } = actor;
   const def = await db.databaseDefinition.findFirst({
     where: { id: databaseId, organizationId },
-    select: { id: true, name: true, kind: true, archivedAt: true },
+    select: { id: true, key: true, name: true, kind: true, archivedAt: true },
   });
   if (!def) throw new NotFoundError();
-  // A live one the viewer can't open doesn't exist for them (an archived
-  // one is out of everyone's sight; owners and admins may still delete it).
-  if (!def.archivedAt && !(await viewable(db, def.id, def.kind))) throw new NotFoundError();
+  // One the viewer can't open doesn't exist for them, archived or not (an
+  // admin can't delete an owner-only database by archiving it first).
+  if (!(await viewable(db, def.id, def.kind))) throw new NotFoundError();
   const canEditRows = await allowed(db, "can_edit_database", def.id);
   const check = await deleteCheck(actor, def.id, canEditRows, def.kind);
   const blocked = deleteBlockedReason(check);
@@ -757,6 +798,7 @@ export async function deleteDatabase(actor: Actor, databaseId: string): Promise<
     );
   }
   const rows = await db.databaseRecord.count({ where: { organizationId, databaseId: def.id } });
+  await dropLinks(db, organizationId, def);
   const deleted = await db.databaseDefinition.deleteMany({
     where: { id: def.id, organizationId },
   });

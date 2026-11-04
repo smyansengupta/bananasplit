@@ -56,7 +56,7 @@ const ON_KIND = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
 const ACCENT_STYLE: React.CSSProperties = {
   background: "var(--kind)",
   color: ON_KIND,
-  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 74%, var(--kind))`,
+  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 88%, var(--kind))`,
   ["--ring-bg" as string]: "var(--kind)",
 };
 
@@ -137,7 +137,6 @@ export function BlockCard({
         // An accented card paints itself from the style above; it still
         // wants the quiet tone's inset ring.
         accented ? "ring-1 ring-black/10 ring-inset dark:ring-white/10" : TONES[tone],
-        live && "outline-2 outline-offset-[3px] outline-(--ring-bg) outline-solid",
         className,
       )}
     >
@@ -167,7 +166,7 @@ export function BlockCard({
       )}
       {title && kicker && (
         <p className="flex items-center gap-2 text-[13px] font-medium text-(--meta)">
-          {live && <span aria-hidden="true" className="live-dot" />}
+          {live === "now" && <span aria-hidden="true" className="live-dot" />}
           {kicker}
         </p>
       )}

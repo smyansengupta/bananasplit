@@ -1,21 +1,27 @@
 import { dueLabel, whenWord } from "@/lib/overview/format";
-import { arrangeUpNext, type UpNextSlot } from "@/lib/overview/up-next";
 import type { UpNextBlock } from "@/server/overview/up-next";
 import type { PersonalHomeData } from "@/server/personal/home";
 
 /**
- * The Personal home's Up next, across Personal and your clubs: your tasks
- * due within the week (due today or overdue is an alert), polls waiting on
- * you and RSVPs you haven't answered (answers), and what's on (quiet).
- * Same ordering rules as a club's Overview (src/lib/overview/up-next.ts).
+ * Personal Home's Up next, from your organizations: the cards
+ * personalUpNext makes for every space but `exceptSpaceId` (the Personal
+ * space itself, which Home reads in full), each carrying its organization
+ * so Done, Push back and Going act there. Polls open on their page.
  */
-export function personalUpNext(data: PersonalHomeData, now: Date): UpNextSlot<UpNextBlock>[] {
+export function otherSpacesUpNext(
+  data: PersonalHomeData,
+  now: Date,
+  exceptSpaceId: string,
+): UpNextBlock[] {
   const blocks: UpNextBlock[] = [];
   for (const task of data.dueSoon) {
+    if (task.space.id === exceptSpaceId) continue;
     const due = dueLabel(task.dueKey, data.todayKey);
     blocks.push({
       id: task.id,
+      orgId: task.space.id,
       kind: "task",
+      taskStatus: task.status,
       tone: task.bucket === "soon" ? "quiet" : "alert",
       at: new Date(`${task.dueKey}T12:00:00Z`),
       kicker:
@@ -32,19 +38,20 @@ export function personalUpNext(data: PersonalHomeData, now: Date): UpNextSlot<Up
     });
   }
   for (const event of data.upcoming) {
+    if (event.space.id === exceptSpaceId) continue;
     const waiting = event.rsvp === "PENDING";
-    const when = whenWord(
-      event.startsAt,
-      event.allDay,
-      { viewer: data.timeZone, org: event.space.timeZone },
-      now,
-    );
     blocks.push({
-      id: `${event.space.id}:${event.id}`,
+      id: event.id,
+      orgId: event.space.id,
       kind: waiting ? "rsvp" : "event",
       tone: waiting ? "answer" : "quiet",
       at: event.startsAt,
-      kicker: when,
+      kicker: whenWord(
+        event.startsAt,
+        event.allDay,
+        { viewer: data.timeZone, org: event.space.timeZone },
+        now,
+      ),
       title: event.title,
       subtitle: [event.space.name, event.location].filter(Boolean).join(", "),
       faces: [],
@@ -53,8 +60,10 @@ export function personalUpNext(data: PersonalHomeData, now: Date): UpNextSlot<Up
     });
   }
   for (const poll of data.pollsWaiting) {
+    if (poll.space.id === exceptSpaceId) continue;
     blocks.push({
-      id: `${poll.space.id}:${poll.id}`,
+      id: poll.id,
+      orgId: poll.space.id,
       kind: "poll",
       tone: "answer",
       at: poll.closesAt ?? new Date(now.getTime() + 365 * 24 * 3600 * 1000),
@@ -66,5 +75,5 @@ export function personalUpNext(data: PersonalHomeData, now: Date): UpNextSlot<Up
       href: poll.href,
     });
   }
-  return arrangeUpNext(blocks);
+  return blocks;
 }

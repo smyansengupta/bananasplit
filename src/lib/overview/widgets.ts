@@ -13,7 +13,25 @@ import { parseBoard, type BoardWidget, type WidgetMeta } from "@/lib/boards";
  * The week, recapped: it's in the Inbox's Announcements now).
  */
 
-type OverviewWidgetMeta = WidgetMeta & { admin?: boolean };
+type OverviewWidgetMeta = WidgetMeta & {
+  admin?: boolean;
+  /** Only a Personal space's Home has it. */
+  personalOnly?: boolean;
+};
+
+/**
+ * Widgets about a team, which a Personal space (one person) has no use for:
+ * who's here, who owns what, the team's decisions and pulse, member votes
+ * and what you're waiting on from others.
+ */
+const TEAM_ONLY: ReadonlySet<string> = new Set([
+  "here-now",
+  "decisions",
+  "who-owns-what",
+  "weekly-pulse",
+  "votes",
+  "waiting-on-others",
+]);
 
 export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   {
@@ -170,6 +188,66 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     h: 1,
   },
   {
+    type: "focus-time",
+    title: "Focus time",
+    description: "The free hours in your week across every space, and what's due to fill them.",
+    group: "You",
+    icon: "Timer",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "org-tasks",
+    title: "Your organizations' tasks",
+    description: "Your open tasks in every organization you're in, due soonest. Tick one here.",
+    group: "You",
+    icon: "ListChecks",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "org-inbox",
+    title: "Unread in your organizations",
+    description: "Mentions, comments and assignments you haven't opened, from every organization.",
+    group: "You",
+    icon: "Hash",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "your-answer",
+    title: "Waiting on your answer",
+    description: "Invites, polls and forms in your organizations you haven't answered.",
+    group: "You",
+    icon: "Vote",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "org-grabs",
+    title: "Up for grabs",
+    description: "Open tasks in your organizations that nobody owns yet. Take one here.",
+    group: "You",
+    icon: "Target",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "reimbursements",
+    title: "Reimbursements",
+    description: "Yours that aren't paid back yet, and any waiting on you to approve.",
+    group: "You",
+    icon: "ReceiptText",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
     type: "pinned",
     title: "Pinned",
     description: "Your pinned pages, notes, files and more, with how each is doing.",
@@ -182,14 +260,25 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
 
 export const OVERVIEW_WIDGET_TYPES = OVERVIEW_WIDGETS.map((w) => w.type);
 
+/** Personal Home's widgets about your organizations: Ambient shows them even on a board saved before they existed. */
+export const PERSONAL_EXTRAS: BoardWidget[] = [
+  "org-tasks",
+  "org-inbox",
+  "your-answer",
+  "org-grabs",
+  "reimbursements",
+].map((type) => ({ id: type, type, w: 2, h: 1 }));
+
 /** Widgets that belong to an add-on (src/lib/addons.ts), offered only once it's added. */
 const ADD_ON_WIDGETS: Partial<Record<string, string>> = { polls: "forms" };
 
 export function overviewWidgetsFor(
   isAdmin: boolean,
   addOns?: readonly string[] | null,
+  personal = false,
 ): OverviewWidgetMeta[] {
   return OVERVIEW_WIDGETS.filter((w) => {
+    if (personal ? TEAM_ONLY.has(w.type) : w.personalOnly) return false;
     const addOn = ADD_ON_WIDGETS[w.type];
     if (addOn && addOns != null && !addOns.includes(addOn)) return false;
     return isAdmin || !w.admin;
@@ -220,6 +309,28 @@ const DEFAULT_LAYOUT: readonly BoardWidget[] = [
 ];
 
 /**
+ * A Personal space's Home: what's next for you and your week first (your
+ * own tasks and your organizations'), what your organizations are waiting
+ * on, then your free hours, meetings and events, forms and what you had open.
+ */
+const PERSONAL_LAYOUT: readonly BoardWidget[] = [
+  { id: "my-tasks", type: "my-tasks", w: 2, h: 2 },
+  { id: "org-tasks", type: "org-tasks", w: 2, h: 1 },
+  { id: "org-inbox", type: "org-inbox", w: 2, h: 1 },
+  { id: "your-answer", type: "your-answer", w: 2, h: 1 },
+  { id: "org-grabs", type: "org-grabs", w: 2, h: 1 },
+  { id: "reimbursements", type: "reimbursements", w: 2, h: 1 },
+  { id: "deadlines", type: "deadlines", w: 2, h: 1 },
+  { id: "focus-time", type: "focus-time", w: 2, h: 1 },
+  { id: "week", type: "week", w: 4, h: null },
+  { id: "meetings", type: "meetings", w: 2, h: 1 },
+  { id: "events", type: "events", w: 2, h: 1 },
+  { id: "polls", type: "polls", w: 1, h: 1 },
+  { id: "recent", type: "recent", w: 2, h: 1 },
+  { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: 1 },
+];
+
+/**
  * The member's saved Overview, or the default one. A saved board keeps its
  * own order: widgets added since are offered in Add widget, never pushed
  * onto it, and widgets that are gone drop out (parseBoard keeps only known
@@ -229,11 +340,12 @@ export function resolveOverview(
   saved: unknown,
   isAdmin: boolean,
   addOns?: readonly string[] | null,
+  personal = false,
 ): BoardWidget[] {
-  const allowed = overviewWidgetsFor(isAdmin, addOns).map((w) => w.type);
+  const allowed = overviewWidgetsFor(isAdmin, addOns, personal).map((w) => w.type);
   if (saved != null) {
     const parsed = parseBoard(saved, allowed);
     if (parsed) return parsed;
   }
-  return DEFAULT_LAYOUT.filter((w) => allowed.includes(w.type));
+  return (personal ? PERSONAL_LAYOUT : DEFAULT_LAYOUT).filter((w) => allowed.includes(w.type));
 }

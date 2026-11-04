@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { AddAddOnButton } from "@/components/addons/addon-controls";
+import { AddAddOnButton, AddFormsAmbient } from "@/components/addons/addon-controls";
 import { Mini, PANEL, Pill } from "@/components/addons/addon-page";
 import { Check } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { ADD_ON_INFO, type AddOnId } from "@/lib/addons";
+import { suggestFormsAddOn } from "@/lib/ambient/integrations";
 import { cn } from "@/lib/utils";
 
 /**
@@ -118,6 +119,7 @@ export function AddOnCards({
   added,
   canManage,
   locked,
+  formsInUse = 0,
   only,
   personal = false,
 }: {
@@ -125,6 +127,8 @@ export function AddOnCards({
   orgSlug: string;
   added: readonly AddOnId[];
   canManage: boolean;
+  /** Forms the organization has (made while Forms was off, or kept from before). */
+  formsInUse?: number;
   /** Add-ons the plan doesn't include: offered as an upgrade, not an Add. */
   locked: readonly AddOnId[];
   /** The add-ons this space is offered (a Personal space: the CRM); every one when left out. */
@@ -133,6 +137,13 @@ export function AddOnCards({
   personal?: boolean;
 }) {
   const base = `/app/${orgSlug}`;
+  // Forms in use with the add-on off: Add Forms says so (src/lib/ambient/integrations.ts).
+  const formsWhy = suggestFormsAddOn({
+    added: added.includes("forms"),
+    locked: locked.includes("forms"),
+    canManage,
+    forms: formsInUse,
+  });
   const card = (id: AddOnId, preview: ReactNode) => {
     const plain = ADD_ON_INFO[id];
     const info = personal && plain.personal ? { ...plain, ...plain.personal } : plain;
@@ -171,7 +182,12 @@ export function AddOnCards({
                       <Link href={`${base}/settings/plan`}>See plans</Link>
                     </Button>
                   )
-                : canManage && <AddAddOnButton orgId={orgId} orgSlug={orgSlug} id={id} />}
+                : canManage &&
+                  (id === "forms" && formsWhy ? (
+                    <AddFormsAmbient orgId={orgId} reason={formsWhy.reason} />
+                  ) : (
+                    <AddAddOnButton orgId={orgId} orgSlug={orgSlug} id={id} />
+                  ))}
               <Button asChild variant="ghost">
                 <Link href={page}>Details</Link>
               </Button>

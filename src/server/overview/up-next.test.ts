@@ -222,6 +222,60 @@ describe("an event's life on Up next", () => {
     expect(slots).toHaveLength(3);
   });
 
+  it("doesn't take over two columns before anyone has checked in", () => {
+    const card = only({
+      events: [event("w8", min(-5))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 0 }]]) },
+    });
+    expect(card?.wide).toBeFalsy();
+  });
+
+  it("never shows two wide cards, and narrows one that the row can't fit", () => {
+    const turnout = new Map([
+      ["a", { rsvps: 10, checkIns: 4 }],
+      ["b", { rsvps: 12, checkIns: 6 }],
+    ]);
+    const slots = build({
+      events: [event("a", min(-20)), event("b", min(-10)), event("c", min(600))],
+      context: { turnout },
+    });
+    expect(slots.filter((s) => s.item.wide)).toHaveLength(1);
+  });
+
+  it('says someone is about to start, never "In 0 min"', () => {
+    const card = only({ events: [event("w8", new Date(NOW.getTime() + 20_000))] });
+    expect(card?.kicker).toBe("In 1 min");
+  });
+
+  it("says how many said they'd go when an event ends without check-ins", () => {
+    const card = only({
+      ended: [event("w8", min(-120))],
+      going: new Map([["w8", { going: 9, faces: [] }]]),
+    });
+    expect(card?.figureLabel).toBe("said they'd go");
+  });
+
+  it("offers Join on a call about to start, only to a secure link", () => {
+    const joinUrls = new Map([["w8", "https://zoom.us/j/1"]]);
+    const card = only({ events: [event("w8", min(10))], context: { joinUrls } });
+    expect(card?.acts?.[0]).toMatchObject({
+      kind: "join",
+      href: "https://zoom.us/j/1",
+      external: true,
+    });
+    const unsafe = only({
+      events: [event("w8", min(10))],
+      context: { joinUrls: new Map([["w8", "javascript:alert(1)"]]) },
+    });
+    expect(unsafe?.acts).toBeUndefined();
+  });
+
+  it("opens the door check-in while an event is on, and asks for notes once a meeting ends", () => {
+    expect(only({ events: [event("w8", min(-20))] })?.acts?.[0]?.kind).toBe("check-in");
+    const ended = { ...event("sync", min(-90)), title: "Weekly exec sync meeting" };
+    expect(only({ ended: [ended] })?.acts?.[0]?.kind).toBe("add-notes");
+  });
+
   it("shows an event's turnout once it's over", () => {
     const card = only({
       ended: [event("w8", min(-120))],

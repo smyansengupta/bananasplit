@@ -16,9 +16,7 @@ import { useTokenMenu } from "./use-token-menu";
  * is handled separately (useHashTags) because it is resolved on save, not
  * as you type.
  *
- * Two shapes, one behaviour: the composer's one-line field (TitleInput) and
- * the editor's title set straight on the panel (TitleTextarea, a textarea
- * so a long title wraps instead of scrolling sideways).
+ * One shape for creating and editing alike (TaskFormFields).
  */
 
 export function TitleInput({
@@ -39,49 +37,6 @@ export function TitleInput({
           {...props}
           ref={ref}
           value={value}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-controls={menu.listId}
-          aria-expanded={menu.open}
-          onChange={(e) => {
-            onChange(e.target.value);
-            menu.detect(e.target.value, e.target.selectionStart ?? e.target.value.length);
-          }}
-          onKeyDown={(e) => {
-            if (menu.handleKey(e)) return;
-            props.onKeyDown?.(e);
-          }}
-          onBlur={(e) => {
-            setTimeout(() => menu.close(), 150);
-            props.onBlur?.(e);
-          }}
-        />
-      </PopoverAnchor>
-      <TokenMenu menu={menu} />
-    </Popover>
-  );
-}
-
-export function TitleTextarea({
-  value,
-  onChange,
-  ...props
-}: Omit<React.ComponentProps<"textarea">, "value" | "onChange"> & {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const menu = useTokenMenu({ value, onChange, element: ref, kinds: ["file"] });
-
-  return (
-    <Popover open={menu.open} onOpenChange={(o) => !o && menu.close()}>
-      <PopoverAnchor asChild>
-        <textarea
-          {...props}
-          ref={ref}
-          value={value}
-          // A text field that opens a list is a combobox; without the role
-          // aria-expanded means nothing on a textarea.
           role="combobox"
           aria-autocomplete="list"
           aria-controls={menu.listId}

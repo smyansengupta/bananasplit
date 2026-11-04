@@ -14,7 +14,7 @@ import { DatabaseInputError, deleteDatabase, type Actor } from "./custom";
  */
 
 interface State {
-  def: { id: string; name: string; kind: string; archivedAt: Date | null } | null;
+  def: { id: string; key?: string; name: string; kind: string; archivedAt: Date | null } | null;
   forms: number;
   membersCanDelete: boolean;
   canView: boolean;
@@ -34,7 +34,16 @@ function fakeDb() {
     orgSettings: {
       findUnique: vi.fn(async () => ({ memberCanDeleteDatabases: state.membersCanDelete })),
     },
-    databaseRecord: { count: vi.fn(async () => 12) },
+    databaseRecord: {
+      count: vi.fn(async () => 12),
+      findMany: vi.fn(async () => [{ id: "rec_1" }]),
+    },
+    itemLink: {
+      findMany: vi.fn(async () => [
+        { fromKind: "task", fromId: "t_1", toKind: "record", toId: "rec_1" },
+      ]),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+    },
     $queryRaw: vi.fn(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
       const sql = strings.join("?");
       if (sql.includes("can_view_database")) return [{ ok: state.canView }];
@@ -54,7 +63,7 @@ const actor = (role: Actor["role"]): Actor => ({
 
 beforeEach(() => {
   state = {
-    def: { id: "db_1", name: "Roster", kind: "CUSTOM", archivedAt: null },
+    def: { id: "db_1", key: "roster", name: "Roster", kind: "CUSTOM", archivedAt: null },
     forms: 0,
     membersCanDelete: false,
     canView: true,
@@ -112,6 +121,26 @@ describe("deleteDatabase", () => {
     await expect(deleteDatabase(actor("MEMBER"), "db_1")).rejects.toBeInstanceOf(NotFoundError);
     state.def = null;
     await expect(deleteDatabase(actor("OWNER"), "db_x")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("treats an archived database the viewer can't open as missing too", async () => {
+    state.def = { id: "db_1", name: "Owners only", kind: "CUSTOM", archivedAt: new Date() };
+    state.canView = false;
+    await expect(deleteDatabase(actor("ADMIN"), "db_1")).rejects.toBeInstanceOf(NotFoundError);
+    expect(db.databaseDefinition.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("only counts forms that aren't in the trash, and drops the database's links", async () => {
+    await deleteDatabase(actor("ADMIN"), "db_1");
+    expect(db.form.count).toHaveBeenCalledWith({
+      where: { organizationId: "org_1", databaseId: "db_1", deletedAt: null },
+    });
+    expect(db.itemLink.deleteMany).toHaveBeenCalledTimes(1);
+    const where = (
+      db.itemLink.deleteMany.mock.calls[0] as unknown as [{ where: { OR: unknown[] } }]
+    )[0].where;
+    expect(where.OR).toContainEqual({ toKind: "record", toId: { in: ["rec_1"] } });
+    expect(where.OR).toContainEqual({ fromKind: "database", fromId: { in: ["roster"] } });
   });
 
   it("says so when the database refused the delete", async () => {

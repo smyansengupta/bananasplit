@@ -10,9 +10,11 @@ import {
   nextExpenseStatus,
   type ExpenseTransition,
 } from "@/lib/finance/reimbursement-state-machine";
+import { localDateKey } from "@/lib/tasks/dates";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import { ensureActivePeriod } from "@/server/finance/periods";
 import { enqueueJob } from "@/server/jobs/enqueue";
+import { notifyUser } from "@/server/notifications";
 
 import { getCategoryOptions } from "./queries";
 
@@ -504,6 +506,55 @@ export const rejectExpense = financeAction(async (ctx, transactionId: string, re
 
 export const reimburseExpense = financeAction(async (ctx, transactionId: string, method: string) =>
   applyExpenseTransition(ctx, transactionId, "REIMBURSE", { reimbursedMethod: method }),
+);
+
+/**
+ * Ask for receipt (Transactions row): a note to whoever paid, asking them to
+ * attach the receipt, linked to their request. A treasurer's, once a day per
+ * expense; logged in the finance audit. It rides on the mention
+ * notification (Inbox and email), there being no finance type of its own.
+ */
+export const askForReceipt = financeAction(
+  async (ctx, transactionId: string): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    const t = await ctx.db.transaction.findFirst({
+      where: { id: transactionId, organizationId: ctx.organizationId, voidedAt: null },
+      select: {
+        id: true,
+        description: true,
+        amountCents: true,
+        submittedById: true,
+        _count: { select: { receipts: true } },
+      },
+    });
+    if (!t) return { error: "Transaction not found." };
+    if (t._count.receipts > 0) return { error: "It has a receipt now." };
+    if (t.submittedById === ctx.userId) return { error: "This one is yours: attach it yourself." };
+    const org = await ctx.db.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { slug: true, timezone: true },
+    });
+    const me = await ctx.db.user.findUnique({ where: { id: ctx.userId }, select: { name: true } });
+    const amount = (t.amountCents / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+    await notifyUser(ctx.db, ctx.organizationId, t.submittedById, {
+      type: "TASK_MENTIONED",
+      title: `${me?.name?.trim() || "Your treasurer"} needs the receipt for ${t.description}`,
+      body: `${t.description}, ${amount}. Add the receipt to it when you can.`,
+      linkUrl: `/app/${org?.slug ?? ""}/finance/my-reimbursements?open=${t.id}`,
+      actorId: ctx.userId,
+      dedupeKey: `receipt:${t.id}:${localDateKey(new Date(), org?.timezone ?? "UTC")}`,
+    });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      transactionId: t.id,
+      action: "RECEIPT_REQUESTED",
+      after: { askedUserId: t.submittedById },
+    });
+    return { transactionId: t.id };
+  },
 );
 
 /** Approve and mark paid at once, with how it was paid. */

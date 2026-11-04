@@ -69,7 +69,7 @@ export function homeWidgetCards({
       "waiting-on-others": body("waiting-on-others", d.waitingOnOthers, (v) => (
         <WaitingOnOthers orgId={orgId} data={v} />
       )),
-      deadlines: body("deadlines", d.deadlines, (v) => <Deadlines data={v} />),
+      deadlines: body("deadlines", d.deadlines, (v) => <Deadlines data={v} orgId={orgId} />),
       "here-now": body("here-now", d.hereNow, (v) => (
         <HereNow orgId={orgId} orgSlug={orgSlug} you={you} initial={online} data={v} />
       )),

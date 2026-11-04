@@ -28,6 +28,22 @@ const call = (id: string, startsIn: number, provider = "ZOOM") => ({
 });
 
 describe("From your apps", () => {
+  it("never offers Join to a link that isn't https", () => {
+    for (const url of ["javascript:alert(1)", "http://zoom.us/j/1", "zoom.us/j/1"]) {
+      expect(feed({ calls: [{ ...call("sync", -5), url }] }).rows).toEqual([]);
+    }
+  });
+
+  it("leaves out an event that runs all day with a link on it", () => {
+    const long = { ...call("fair", -60), endsAt: min(9 * 60) };
+    expect(feed({ calls: [long] }).rows).toEqual([]);
+  });
+
+  it("puts the call nearest to now first", () => {
+    const rows = feed({ calls: [call("early", -25), call("now", -2), call("soon", 5)] }).rows;
+    expect(rows.map((r) => r.key)).toEqual(["call:now", "call:soon", "call:early"]);
+  });
+
   it("is empty when nothing is happening", () => {
     expect(feed().rows).toEqual([]);
   });

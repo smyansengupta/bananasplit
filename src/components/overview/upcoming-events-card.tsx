@@ -3,8 +3,10 @@ import {
   CircleQuestionMark,
   CircleX,
   Mail,
+  Video,
   type IconComponent,
 } from "@/components/icons";
+import { AmbientButton } from "@/components/ambient/ambient-button";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -61,7 +63,7 @@ function RsvpMark({ rsvp }: { rsvp: RSVPStatus | undefined }) {
 }
 
 function kindVars(kind: EventKind): CSSProperties {
-  return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
+  return { ["--kind" as string]: `var(${KIND_META[kind].fill})` };
 }
 
 /** "Today", "Tomorrow", "In 6 days": how soon, for the next meeting. */
@@ -89,6 +91,7 @@ export function MeetingsList({
   canEdit,
   empty,
   insight,
+  joinUrl,
 }: {
   orgSlug: string;
   meetings: readonly CalendarEventSummary[];
@@ -98,6 +101,8 @@ export function MeetingsList({
   now: Date;
   /** Whoever may edit meetings gets "Write agenda" where there's none. */
   canEdit: boolean;
+  /** The next one's call link, once it's within a quarter of an hour (https only). */
+  joinUrl?: string | null;
   empty: ReactNode;
   insight?: ReactNode;
 }) {
@@ -107,6 +112,9 @@ export function MeetingsList({
   const href = `/app/${orgSlug}/meetings/${next.id}`;
   const zone = next.allDay ? zones.org : zones.viewer;
   const noAgenda = extra?.agendaItems === null;
+  const when = formatEventWhen(next, zones, now);
+  // "Today, 7:00 PM" already says how soon; "In 6 days" adds it to a date.
+  const soon = /^(Today|Tomorrow)\b/.test(when) ? null : soonWord(next.startsAt, now, zone);
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex items-start gap-4">
@@ -130,12 +138,33 @@ export function MeetingsList({
             <Link href={href} className="text-[16px] font-semibold break-words hover:underline">
               {next.title}
             </Link>
-            <RsvpMark rsvp={rsvps.get(next.id)} />
+            {joinUrl ? (
+              <AmbientButton
+                action={{
+                  key: "join",
+                  label: "Join",
+                  icon: <Video />,
+                  tone: "solid",
+                  reason:
+                    next.startsAt <= now
+                      ? "On now"
+                      : `Starts in ${Math.ceil((next.startsAt.getTime() - now.getTime()) / 60_000)} min`,
+                  href: joinUrl,
+                  external: true,
+                }}
+              />
+            ) : (
+              <RsvpMark rsvp={rsvps.get(next.id)} />
+            )}
           </div>
           <p className="text-muted-foreground text-[13px]">
-            <b className="text-foreground font-semibold">{soonWord(next.startsAt, now, zone)}</b>
-            {", "}
-            {formatEventWhen(next, zones, now)}
+            {soon && (
+              <>
+                <b className="text-foreground font-semibold">{soon}</b>
+                {", "}
+              </>
+            )}
+            {when}
           </p>
           {next.location && <p className="text-muted-foreground text-[13px]">{next.location}</p>}
         </div>
@@ -144,7 +173,7 @@ export function MeetingsList({
       <div className="flex flex-wrap items-center gap-2">
         {extra?.agendaItems != null && extra.agendaItems > 0 && (
           <span className="bg-muted rounded-full px-2.5 py-1 text-[12.5px] font-semibold">
-            Agenda, {extra.agendaItems} {extra.agendaItems === 1 ? "item" : "items"}
+            {extra.agendaItems} agenda {extra.agendaItems === 1 ? "item" : "items"}
           </span>
         )}
         {noAgenda && (

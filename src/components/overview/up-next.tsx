@@ -1,9 +1,17 @@
 "use client";
 
-import { ArrowUpRight, CalendarCheck2, Check, EyeOff, RotateCcw, X } from "@/components/icons";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  Check,
+  EyeOff,
+  RotateCcw,
+  UserPlus,
+  X,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 
 import { ContextActions } from "@/components/context-actions";
 import { BlockCard } from "@/components/ui/block-card";
@@ -12,6 +20,8 @@ import type { UpNextSlot } from "@/lib/overview/up-next";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/enums";
 import { KIND_META } from "@/components/calendar/kinds";
 import { PushBackButton } from "@/components/tasks/overdue-actions";
+
+import { HomeActCardLink } from "./home-act";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
@@ -91,6 +101,9 @@ export function UpNext({
   onShowAll,
   /** Done on a task card, bound to the space like onHide. */
   onDone,
+  elsewhere,
+  /** Take it on a task nobody owns, bound to the space like onHide. */
+  onTake,
   orgId,
   /** Going / Can't go on an invitation card, bound to the space like onHide. */
   onRsvp,
@@ -101,9 +114,18 @@ export function UpNext({
   slots: readonly UpNextSlot<UpNextBlock>[];
   calendarHref: string;
   onHide?: (kind: string, refId: string) => Promise<unknown>;
+  /**
+   * The same jobs for a card from another organization (item.orgId), as
+   * unbound actions: Personal Home's cards from your organizations.
+   */
+  elsewhere?: {
+    onDone: (orgId: string, taskId: string, status: TaskStatus) => Promise<unknown>;
+    onRsvp: (orgId: string, eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
+  };
   onUnhide?: (kind: string, refId: string) => Promise<unknown>;
   onShowAll?: () => Promise<unknown>;
   onDone?: (taskId: string, status: TaskStatus) => Promise<unknown>;
+  onTake?: (taskId: string) => Promise<unknown>;
   /** The space, for Push on a task that's due today or late. */
   orgId?: string;
   onRsvp?: (eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
@@ -119,6 +141,16 @@ export function UpNext({
     result && typeof result === "object" && "error" in result
       ? ((result as { error?: string }).error ?? null)
       : null;
+
+  // A card from another organization acts there; the page's own cards, here.
+  const doneFor = (item: UpNextBlock) =>
+    item.orgId
+      ? elsewhere && ((id: string, s: TaskStatus) => elsewhere.onDone(item.orgId!, id, s))
+      : onDone;
+  const rsvpFor = (item: UpNextBlock) =>
+    item.orgId
+      ? elsewhere && ((id: string, r: RSVPStatus) => elsewhere.onRsvp(item.orgId!, id, r))
+      : onRsvp;
 
   const hide = (kind: string, id: string) =>
     start(async () => {
@@ -140,10 +172,11 @@ export function UpNext({
 
   const done = (item: UpNextBlock) =>
     start(async () => {
-      if (!onDone) return;
+      const act = doneFor(item);
+      if (!act) return;
       setBusy(item.id);
       const before = (item.taskStatus ?? "NOT_STARTED") as TaskStatus;
-      const failed = errorOf(await onDone(item.id, "COMPLETED"));
+      const failed = errorOf(await act(item.id, "COMPLETED"));
       setBusy(null);
       if (failed) {
         toast({ title: failed, tone: "error" });
@@ -156,7 +189,7 @@ export function UpNext({
         action: {
           label: "Undo",
           run: async () => {
-            const undone = errorOf(await onDone(item.id, before));
+            const undone = errorOf(await act(item.id, before));
             if (undone) return undone;
             router.refresh();
           },
@@ -164,11 +197,26 @@ export function UpNext({
       });
     });
 
+  const take = (item: UpNextBlock) =>
+    start(async () => {
+      if (!onTake) return;
+      setBusy(item.id);
+      const failed = errorOf(await onTake(item.id));
+      setBusy(null);
+      if (failed) {
+        toast({ title: failed, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({ title: "It's yours", tone: "success" });
+    });
+
   const answer = (item: UpNextBlock, rsvp: RSVPStatus) =>
     start(async () => {
-      if (!onRsvp) return;
+      const act = rsvpFor(item);
+      if (!act) return;
       setBusy(item.id);
-      const failed = errorOf(await onRsvp(item.id, rsvp));
+      const failed = errorOf(await act(item.id, rsvp));
       setBusy(null);
       if (failed) {
         toast({ title: failed, tone: "error" });
@@ -180,7 +228,7 @@ export function UpNext({
         action: {
           label: "Undo",
           run: async () => {
-            const undone = errorOf(await onRsvp(item.id, "PENDING"));
+            const undone = errorOf(await act(item.id, "PENDING"));
             if (undone) return undone;
             router.refresh();
           },
@@ -215,7 +263,15 @@ export function UpNext({
   /** The card's own job, right on it. */
   const actionsOf = (item: UpNextBlock) => {
     const working = pending && busy === item.id;
-    if (item.kind === "task" && onDone) {
+    if (item.grabs) {
+      return onTake && !item.orgId ? (
+        <button type="button" disabled={working} onClick={() => take(item)} className={ACT}>
+          <UserPlus className="size-3.5" aria-hidden="true" />
+          Take it
+        </button>
+      ) : null;
+    }
+    if (item.kind === "task" && doneFor(item)) {
       return (
         <>
           <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
@@ -223,9 +279,9 @@ export function UpNext({
             Done
           </button>
           {/* Due today or late: push it back without opening it. */}
-          {item.tone === "alert" && orgId && (
+          {item.tone === "alert" && (item.orgId ?? orgId) && (
             <PushBackButton
-              orgId={orgId}
+              orgId={(item.orgId ?? orgId)!}
               taskId={item.id}
               title={item.title}
               triggerClassName={ACT}
@@ -234,7 +290,7 @@ export function UpNext({
         </>
       );
     }
-    if (item.kind === "rsvp" && onRsvp) {
+    if (item.kind === "rsvp" && rsvpFor(item)) {
       return (
         <>
           <button
@@ -256,7 +312,12 @@ export function UpNext({
         </>
       );
     }
-    if (item.kind === "poll" && onVote && item.choices?.length) {
+    if ((item.kind === "meeting" || item.kind === "event") && item.acts?.length) {
+      return item.acts.map((act) => (
+        <HomeActCardLink key={act.kind} act={act} className={cn(ACT, "first:bg-current/10")} />
+      ));
+    }
+    if (item.kind === "poll" && onVote && !item.orgId && item.choices?.length) {
       return item.choices.map((c) => (
         <button
           key={c.id}
@@ -271,6 +332,15 @@ export function UpNext({
     }
     return null;
   };
+  // While a card counts down ("In 12 min") or is live, keep it current.
+  const ticking = slots.some(
+    ({ item }) => item.live !== undefined || /^In \d+ min/.test(item.kicker),
+  );
+  useEffect(() => {
+    if (!ticking) return;
+    const id = window.setInterval(() => router.refresh(), 60_000);
+    return () => window.clearInterval(id);
+  }, [ticking, router]);
   const showAll = () =>
     start(async () => {
       await onShowAll?.();
@@ -304,7 +374,7 @@ export function UpNext({
           Nothing this week.
         </div>
       ) : (
-        <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 max-sm:pt-1.5 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {/* A phone: just the next one, full width (the ↗ opens the rest). */}
           {slots.map(({ item, moreAlerts }, index) => (
             // Right-click a card for the same two things its "…" offers.
@@ -313,12 +383,13 @@ export function UpNext({
               heading={item.title}
               items={[
                 { label: "Open", icon: ArrowUpRight, href: item.href },
-                onHide && {
-                  label: "Hide",
-                  icon: EyeOff,
-                  disabled: pending,
-                  onSelect: () => hide(item.kind, item.id),
-                },
+                onHide &&
+                  !item.orgId && {
+                    label: "Hide",
+                    icon: EyeOff,
+                    disabled: pending,
+                    onSelect: () => hide(item.kind, item.id),
+                  },
               ]}
             >
               <BlockCard
@@ -330,7 +401,7 @@ export function UpNext({
                 subtitle={item.subtitle}
                 href={item.href}
                 action={
-                  !onHide ? (
+                  !onHide || item.orgId ? (
                     <Link
                       href={item.href}
                       aria-label={`Open ${item.title}`}

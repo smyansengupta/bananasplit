@@ -10,7 +10,8 @@ import type { WidgetPayload } from "./compute";
 export const MAX_INVITES = 50;
 
 /** What the share controls say, wherever they are. */
-export const SHARE_NOTE = "People you share with see what you see in this report.";
+export const SHARE_NOTE =
+  "People you share with see what you see in this report, without email addresses, phone numbers or who came.";
 
 const EMAIL = /^[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[^\s@,;<>()"]+$/;
 
@@ -63,10 +64,35 @@ function strip(value: unknown): unknown {
   return out;
 }
 
+/** What a hidden cell or name reads as in a shared view. */
+export const HIDDEN = "Hidden";
+
 /**
  * A widget as a shared view shows it: the same numbers, without links into
- * the organization's pages, anyone's address or member ids.
+ * the organization's pages, member ids, email addresses or phone numbers in
+ * a table, or the people behind Regulars and Stopped coming (contacts, not
+ * members, who never agreed to be shown outside).
  */
 export function sharePayload(payload: WidgetPayload): WidgetPayload {
-  return strip(payload) as WidgetPayload;
+  const out = strip(payload) as WidgetPayload;
+  if (out.type === "table") {
+    const hide = out.data.columns.map((c) => c.personal === true);
+    return {
+      ...out,
+      data: {
+        ...out.data,
+        rows: out.data.rows.map((r) => ({
+          ...r,
+          cells: r.cells.map((cell, i) => (hide[i] && cell ? HIDDEN : cell)),
+        })),
+      },
+    };
+  }
+  if (out.type === "regulars" || out.type === "stopped") {
+    return {
+      ...out,
+      data: { ...out.data, rows: out.data.rows.map((r) => ({ ...r, name: HIDDEN })) },
+    } as WidgetPayload;
+  }
+  return out;
 }

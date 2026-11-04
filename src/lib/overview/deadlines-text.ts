@@ -29,6 +29,8 @@ export interface DeadlineItem {
 export type DeadlineTone = "close" | "soon" | "later" | "warn";
 
 export interface DeadlineRow extends DeadlineItem {
+  /** Due within two days (today, tomorrow or the day after): Start it, when nobody has. */
+  soon?: boolean;
   /** "Wed" within the week, else "Nov 8". */
   tag: string;
   tone: DeadlineTone;
@@ -96,10 +98,16 @@ export function buildDeadlines(
     ...i,
     tag: deadlineTag(i.dayKey, todayKey),
     tone: warn?.key === i.key ? "warn" : toneOf(daysBetweenKeys(todayKey, i.dayKey)),
+    soon: daysBetweenKeys(todayKey, i.dayKey) <= 2,
   }));
   // The warned one stays in the list even past the first few.
   if (warn && !rows.some((r) => r.key === warn.key)) {
-    rows[rows.length - 1] = { ...warn, tag: deadlineTag(warn.dayKey, todayKey), tone: "warn" };
+    rows[rows.length - 1] = {
+      ...warn,
+      tag: deadlineTag(warn.dayKey, todayKey),
+      tone: "warn",
+      soon: daysBetweenKeys(todayKey, warn.dayKey) <= 2,
+    };
     rows.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
   }
   return { rows, total: items.length, insight: warn ? warningText(warn, todayKey) : null };

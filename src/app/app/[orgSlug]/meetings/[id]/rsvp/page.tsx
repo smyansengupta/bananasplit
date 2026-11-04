@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 
+import { RsvpFullAmbient } from "@/components/meetings/meeting-ambient";
 import { RsvpManager } from "@/components/rsvp/rsvp-manager";
+import { eventAmbient } from "@/lib/ambient/calendar";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
@@ -33,11 +35,37 @@ export default async function MeetingRsvpPage({
   if (!data) notFound();
   const mail = await resolveOrgMailRouting(org.id);
   const base = `/app/${orgSlug}/meetings/${id}`;
+  // Full, and people still want in: Open a waitlist, Add seats.
+  const { page, guests } = data.props;
+  const full = eventAmbient(
+    {
+      startsAt: data.event.startsAt,
+      endsAt: data.event.endsAt,
+      timeZone: org.timezone,
+      canEdit: true,
+      rsvp: {
+        enabled: page.enabled,
+        url: page.url,
+        going: guests.filter((g) => g.status === "GOING").length,
+        waitlist: guests.filter((g) => g.status === "WAITLIST").length,
+        capacity: page.settings.capacity,
+        waitlistOn: page.settings.waitlist,
+      },
+      checkedIn: 0,
+      thankedAt: null,
+    },
+    new Date(),
+  ).filter((a) => a.kind === "open-waitlist" || a.kind === "add-seats");
 
   return (
     <RsvpManager
       {...data.props}
       justCreated={justCreated}
+      ambient={
+        full.length > 0 ? (
+          <RsvpFullAmbient orgId={org.id} eventId={data.event.id} items={full} />
+        ) : null
+      }
       links={{
         back: { href: base, label: data.event.title },
         edit: `${base}?edit=1`,

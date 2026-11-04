@@ -34,6 +34,8 @@ vi.mock("@/server/google-calendar/requests", () => ({
 vi.mock("@/server/integrations/google-connect", () => ({ GOOGLE_CALLBACK_MESSAGES: {} }));
 vi.mock("@/server/integrations/google", () => ({ isGoogleConfigured: () => true }));
 vi.mock("./actions", () => ({}));
+vi.mock("@/app/app/[orgSlug]/databases/actions", () => ({}));
+vi.mock("@/server/sync/status", () => ({}));
 vi.mock("@/app/app/[orgSlug]/calendar/sync/actions", () => ({
   importGoogleEvents: vi.fn(),
   syncGoogleNow: vi.fn(),

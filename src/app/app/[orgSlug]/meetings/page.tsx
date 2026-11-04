@@ -109,7 +109,7 @@ export default async function MeetingsPage({
   const now = new Date();
 
   const [
-    { events, counts, attendees, notes, meetingTypes, findOpen },
+    { events, counts, attendees, notes, meetingTypes, findOpen, reminded },
     registrations,
     connections,
     members,
@@ -190,7 +190,26 @@ export default async function MeetingsPage({
           OR: [{ closesAt: null }, { closesAt: { gte: now } }],
         },
       });
-      return { events, counts, attendees, notes, meetingTypes, findOpen };
+      // Which upcoming ones members were already reminded about (hosts read the audit log).
+      const reminded = canManage
+        ? await db.orgAuditLog.findMany({
+            where: {
+              organizationId: org.id,
+              action: "event.members_reminded",
+              targetId: { in: events.filter((e) => e.startsAt > now).map((e) => e.id) },
+            },
+            select: { targetId: true },
+          })
+        : [];
+      return {
+        events,
+        counts,
+        attendees,
+        notes,
+        meetingTypes,
+        findOpen,
+        reminded: new Set(reminded.map((r) => r.targetId)),
+      };
     }),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
@@ -322,6 +341,7 @@ export default async function MeetingsPage({
       mine={ticketFor.get(e.id)?.status ?? null}
       myRsvp={myRsvp(e.id)}
       crowd={crowdOf(e.id)}
+      reminded={reminded.has(e.id)}
     />
   );
 

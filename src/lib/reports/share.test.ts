@@ -4,7 +4,7 @@ import { BOARD_COLUMNS } from "@/lib/boards";
 
 import { suggestedLayout, suggestedWidgets, type SourceSummary } from "./catalog";
 import type { WidgetPayload } from "./compute";
-import { isInvited, normalizeInviteEmail, readInviteEmails, sharePayload } from "./share";
+import { HIDDEN, isInvited, normalizeInviteEmail, readInviteEmails, sharePayload } from "./share";
 
 describe("readInviteEmails", () => {
   it("reads addresses split by commas, semicolons, spaces and lines, normalized, once each", () => {
@@ -66,6 +66,36 @@ describe("sharePayload", () => {
         emails: [],
       },
     });
+  });
+});
+
+describe("sharePayload, people's details", () => {
+  it("hides email and phone cells in a table, and keeps the rest", () => {
+    const payload = {
+      type: "table",
+      data: {
+        columns: [
+          { id: "name", name: "Name", numeric: false },
+          { id: "email", name: "Email", numeric: false, personal: true },
+          { id: "phone", name: "Phone", numeric: false, personal: true },
+        ],
+        rows: [{ id: "r1", href: null, cells: ["Sam Lee", "sam@x.org", ""] }],
+        total: 1,
+      },
+    } as unknown as WidgetPayload;
+    const out = sharePayload(payload) as unknown as { data: { rows: { cells: string[] }[] } };
+    expect(out.data.rows[0].cells).toEqual(["Sam Lee", HIDDEN, ""]);
+  });
+
+  it("names nobody in Regulars or Stopped coming", () => {
+    for (const type of ["regulars", "stopped"]) {
+      const payload = {
+        type,
+        data: { rows: [{ name: "Jordan Rivera", count: 7 }] },
+      } as unknown as WidgetPayload;
+      const out = sharePayload(payload) as unknown as { data: { rows: { name: string }[] } };
+      expect(out.data.rows.map((r) => r.name)).toEqual([HIDDEN]);
+    }
   });
 });
 

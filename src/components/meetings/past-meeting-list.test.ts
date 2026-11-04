@@ -6,6 +6,8 @@ import { groupByMonth } from "./past-meeting-list";
 
 vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({ rsvpToEvent: vi.fn(async () => ({})) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+// The hosts' ambient buttons call server actions; the card only places them.
+vi.mock("@/components/meetings/meeting-ambient", () => ({ EventsListAmbient: () => null }));
 
 const row = (id: string, iso: string) => ({ id, startsAt: new Date(iso) }) as unknown as MeetingRow;
 

@@ -164,7 +164,7 @@ export function WorkspaceToolbar() {
             ))}
           </div>
 
-          {/* Filters: one chip that opens Person, Epic, Tag and Status. */}
+          {/* Filters: one chip that opens Person, Epic, Tag, Status and, on the board, Group. */}
           <FiltersMenu
             count={ws.filterCount + (ws.query.epicId ? 1 : 0)}
             items={[
@@ -172,12 +172,11 @@ export function WorkspaceToolbar() {
               { name: "Epic", node: <EpicFilter /> },
               ...(labels.length > 0 ? [{ name: "Tag", node: <TagFilter /> }] : []),
               { name: "Status", node: <StatusFilter /> },
+              ...(ws.query.view === "board" ? [{ name: "Group", node: <GroupMenu /> }] : []),
             ]}
           />
 
           <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
-            {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
-            {ws.query.view === "board" && <GroupMenu />}
             <TaskSearch
               key={ws.query.q ?? ""}
               inputRef={searchRef}
@@ -240,6 +239,9 @@ export function WorkspaceToolbar() {
               label={`${ws.query.ownerId ? "Owned by" : "Involving"} ${pinnedMember.name ?? "someone"}`}
               onClear={() => ws.setFilters({ ownerId: undefined, assigneeId: undefined })}
             />
+          )}
+          {ws.query.unowned && (
+            <FilterPill label="Up for grabs" onClear={() => ws.setFilters({ unowned: false })} />
           )}
           {ws.query.blockers && (
             <FilterPill label="Blockers" onClear={() => ws.setFilters({ blockers: false })} />
@@ -317,20 +319,23 @@ function MobileToolbar({
     .filter((l) => !PHONE_HIDDEN_LAYOUTS.includes(l.value))
     .sort((a, b) => Number(b.value === "list") - Number(a.value === "list"));
   const current = layouts.find((l) => l.value === ws.query.view);
+  const CurrentIcon = current ? LAYOUT_ICONS[current.value as TaskLayout] : null;
 
   return (
     <>
       <PhoneToolbar
         middle={
           layouts.length > 1 && (
-            // The layouts a phone has, named, filling the room up to Filters.
+            // The layouts a phone has, first on the row, the current one by
+            // its icon and name (shortened before anything overlaps).
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 w-full min-w-0 justify-between gap-1 rounded-full px-3"
+                  className="h-10 min-w-0 shrink gap-1.5 rounded-full px-3"
                   aria-label={`Layout: ${current?.label ?? "List"}`}
                 >
+                  {CurrentIcon && <CurrentIcon className="size-4 shrink-0" aria-hidden="true" />}
                   <span className="truncate">{current?.label ?? "List"}</span>
                   <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
                 </Button>
@@ -372,7 +377,7 @@ function MobileToolbar({
               compact: true,
               title: scope.label,
             }))}
-            className="[&>button]:px-2.5"
+            className="[&>button]:px-2 min-[380px]:[&>button]:px-2.5"
           />
         }
         filterCount={count}
@@ -560,11 +565,12 @@ function PersonFilter() {
   const person = personId ? memberById.get(personId) : undefined;
   const [ownedOnly, setOwnedOnly] = useState(Boolean(ws.query.ownerId));
 
+  const grabs = ws.query.unowned;
   const choose = (userId: string | undefined, owned = ownedOnly) =>
     ws.setFilters(
       owned
-        ? { ownerId: userId, assigneeId: undefined }
-        : { assigneeId: userId, ownerId: undefined },
+        ? { ownerId: userId, assigneeId: undefined, unowned: false }
+        : { assigneeId: userId, ownerId: undefined, unowned: false },
     );
   const search = useMemberSearch(members, {
     always: true,
@@ -591,10 +597,21 @@ function PersonFilter() {
         <button
           type="button"
           title={`Filter by person (${TASK_KEYS.person})`}
-          aria-label={person ? `Filtered to ${person.name ?? "a member"}` : "Filter by person"}
-          className={cn(chipClass(Boolean(person)), person && "ps-1")}
+          aria-label={
+            person
+              ? `Filtered to ${person.name ?? "a member"}`
+              : grabs
+                ? "Filtered to tasks up for grabs"
+                : "Filter by person"
+          }
+          className={cn(chipClass(Boolean(person) || grabs), person && "ps-1")}
         >
-          {person ? (
+          {grabs ? (
+            <>
+              <UsersRound className="size-3.5" aria-hidden="true" />
+              <span>Up for grabs</span>
+            </>
+          ) : person ? (
             <>
               <UserAvatar user={person} size="xs" />
               <span className="max-w-32 truncate">{person.name ?? "Member"}</span>
@@ -625,7 +642,7 @@ function PersonFilter() {
           aria-label="Person"
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
-          {person && (
+          {(person || grabs) && (
             <button
               type="button"
               role="option"
@@ -640,6 +657,23 @@ function PersonFilter() {
               Anyone
             </button>
           )}
+          {/* Nobody owns it yet: the tasks anyone can take. */}
+          <button
+            type="button"
+            role="option"
+            aria-selected={grabs}
+            className={menuItemClass(grabs)}
+            onClick={() => {
+              ws.setFilters({ unowned: true, ownerId: undefined, assigneeId: undefined });
+              setOpen(false);
+            }}
+          >
+            <UsersRound className="size-3.5" aria-hidden="true" />
+            Up for grabs
+            {grabs && (
+              <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+            )}
+          </button>
           {search.filtered.length === 0 && (
             <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}
@@ -792,7 +826,7 @@ const SCOPE_ICONS: Record<string, typeof UserRound> = {
   all: Globe,
 };
 
-/** Group the board: none, or a lane per epic (?lanes=epic). */
+/** Group the board, the last of the Filters: none, or a lane per epic (?lanes=epic). */
 function GroupMenu() {
   const router = useRouter();
   const pathname = usePathname();
@@ -809,8 +843,8 @@ function GroupMenu() {
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(lanes)} aria-label="Group the board">
           <Rows3 className="size-3.5" aria-hidden="true" />
-          {lanes ? "Grouped by epic" : "Group"}
-          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
+          <span className="max-w-36 truncate">{lanes ? "By epic" : "No groups"}</span>
+          <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">

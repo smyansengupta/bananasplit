@@ -13,7 +13,15 @@ import {
 } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { LIMITS, normalizeOpenItems, type NormalizedChart } from "@/lib/org-chart/normalize";
+import type { DraftPosition } from "@/lib/org-chart/draft";
 import { applyOutline, draftFromMembers, parseOutline } from "@/lib/org-chart/outline";
+import { highestTitles } from "@/lib/org-chart/publish";
+import {
+  approvePlacement,
+  declinePlacement,
+  placeSelf,
+  type PlaceChoice,
+} from "@/lib/org-chart/self-place";
 import { isShape, shapeChart } from "@/lib/org-chart/shapes";
 import {
   clamp,
@@ -27,7 +35,7 @@ import { hasErrors, validateChart, type ValidationIssue } from "@/lib/org-chart/
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { tags } from "@/server/cache/tags";
-import type { OrgContext } from "@/server/db/context";
+import { withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { userPublicSelect, type UserPublic } from "@/server/members";
 import { chartHoldersChanging } from "@/server/crm/outreach/handover";
@@ -390,6 +398,7 @@ export const DRAFT_SOURCES = [
   "committees",
   "team",
   "members",
+  "ask",
 ] as const;
 export type DraftSource = (typeof DRAFT_SOURCES)[number];
 
@@ -402,6 +411,12 @@ export type DraftSource = (typeof DRAFT_SOURCES)[number];
 export const MEMBERS_DRAFT_MODEL = "members";
 
 /**
+ * parseModel on the draft members place themselves on ("Ask everyone
+ * where they sit"): placeSelfInDraft only writes to this one.
+ */
+export const ASK_DRAFT_MODEL = "ask";
+
+/**
  * A new MANUAL draft. Works with no Claude key, and never calls anything:
  *   blank    an empty chart to build up by hand;
  *   current  a copy of the published chart, to edit;
@@ -412,19 +427,30 @@ export const MEMBERS_DRAFT_MODEL = "members";
  *            bare seats with nobody in them;
  *   members  positions drafted from the titles members already have
  *            (draftFromMembers in src/lib/org-chart/outline.ts), each
- *            linked to its member; untitled members wait in the tray.
+ *            linked to its member; untitled members wait in the tray;
+ *   ask      the draft members place themselves on: a copy of the chart,
+ *            or the members draft, or the starter seats when nobody has
+ *            a title. One at a time: an open one is returned as it is.
  */
 export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
   const active = await activeVersionId(db, organizationId);
+  if (from === "ask") {
+    const open = await db.orgChartVersion.findFirst({
+      where: { organizationId, status: OrgChartVersionStatus.DRAFT, parseModel: ASK_DRAFT_MODEL },
+      select: { id: true },
+    });
+    if (open) return open.id;
+  }
   const versionId = newVersionId();
+  const kind = from === "ask" ? (active ? "current" : "members") : from;
   let writes: PositionWrite[] = [];
   let openItems: Prisma.InputJsonValue = [];
   let warnings: Prisma.InputJsonValue = [];
   let teams: Prisma.InputJsonValue = [];
-  if (from === "current") {
+  if (kind === "current") {
     if (!active)
       throw new OrgChartError(
         "There is no published chart to edit yet. Start a blank draft instead.",
@@ -439,7 +465,7 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
     const members = await memberIndex(db, organizationId);
     writes = rowsToWrites(source.positions, { memberIds: members.ids, userNames: members.names });
     openItems = source.openItems as Prisma.InputJsonValue;
-  } else if (from === "members") {
+  } else if (kind === "members") {
     const rows = await db.membership.findMany({
       where: { organizationId },
       select: { userId: true, role: true, title: true, user: { select: { name: true } } },
@@ -469,8 +495,11 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       sourceQuote: [],
       rank: p.rank,
     }));
-  } else if (isShape(from)) {
-    const chart = shapeChart(from);
+  }
+  // Asking with nobody titled yet: the starter seats to pick from.
+  const shape = isShape(from) ? from : from === "ask" && writes.length === 0 ? "starter" : null;
+  if (shape) {
+    const chart = shapeChart(shape);
     writes = chartToWrites(chart, await memberCandidates(db, organizationId));
     openItems = chart.openItems as unknown as Prisma.InputJsonValue;
     warnings = chart.warnings as unknown as Prisma.InputJsonValue;
@@ -482,9 +511,10 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       number: await nextNumber(db, organizationId),
       status: OrgChartVersionStatus.DRAFT,
       source: OrgChartSource.MANUAL,
-      basedOnVersionId: from === "current" ? active : null,
+      basedOnVersionId: kind === "current" ? active : null,
       parseMethod: isShape(from) ? OrgChartParseMethod.TEMPLATE : OrgChartParseMethod.MANUAL,
-      parseModel: from === "members" ? MEMBERS_DRAFT_MODEL : null,
+      parseModel:
+        from === "members" ? MEMBERS_DRAFT_MODEL : from === "ask" ? ASK_DRAFT_MODEL : null,
       openItems,
       warnings,
       teams,
@@ -697,28 +727,7 @@ export function titlesFor(
     "id" | "userId" | "reportsToId" | "title" | "rank" | "matchState"
   >[],
 ) {
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const depth = (r: (typeof rows)[number]) => {
-    let d = 0;
-    const seen = new Set<string>();
-    let cur = r.reportsToId ? byId.get(r.reportsToId) : undefined;
-    while (cur && !seen.has(cur.id)) {
-      seen.add(cur.id);
-      d++;
-      cur = cur.reportsToId ? byId.get(cur.reportsToId) : undefined;
-    }
-    return d;
-  };
-  const best = new Map<string, { title: string; depth: number; rank: string }>();
-  for (const r of rows) {
-    if (!r.userId || r.matchState !== "CONFIRMED") continue;
-    const d = depth(r);
-    const cur = best.get(r.userId);
-    if (!cur || d < cur.depth || (d === cur.depth && r.rank < cur.rank)) {
-      best.set(r.userId, { title: r.title, depth: d, rank: r.rank });
-    }
-  }
-  return new Map([...best].map(([userId, v]) => [userId, v.title]));
+  return highestTitles(rows);
 }
 
 async function publishLocked(
@@ -1029,6 +1038,191 @@ export async function loadVersion(ctx: Ctx, versionId: string): Promise<VersionD
     },
     positions,
   };
+}
+
+// ------------------------------------------------------------------ self-placement
+
+export type PlacementResult = { ok: true } | { ok: false; error: string };
+
+function rowsToDraft(rows: readonly PositionRow[]): DraftPosition[] {
+  return rows.map((r) => ({
+    id: r.id,
+    key: r.key,
+    title: r.title,
+    personName: r.personName,
+    userId: r.userId,
+    matchState: r.matchState,
+    matchScore: r.matchScore,
+    suggestedUserIds: r.suggestedUserIds,
+    reportsTo: r.reportsToId,
+    alsoReportsTo: r.alsoReportsToIds,
+    isOpen: r.isOpen,
+    isAdvisor: r.isAdvisor,
+    responsibilities: r.responsibilities,
+    decidesAlone: r.decidesAlone,
+    sourceQuote: r.sourceQuote,
+    rank: r.rank,
+    teamId: r.teamId,
+  }));
+}
+
+/**
+ * The open ask draft's positions, under the chart lock; null when
+ * `versionId` isn't one (published, discarded, or not an ask draft).
+ */
+async function loadAskDraft(ctx: Ctx, versionId: string): Promise<DraftPosition[] | null> {
+  const { db, organizationId } = ctx;
+  await lockCharts(db, organizationId);
+  const version = await db.orgChartVersion.findFirst({
+    where: {
+      id: versionId,
+      organizationId,
+      status: OrgChartVersionStatus.DRAFT,
+      parseModel: ASK_DRAFT_MODEL,
+    },
+    select: { id: true },
+  });
+  if (!version) return null;
+  const rows = await db.orgChartPosition.findMany({
+    where: { organizationId, versionId },
+    select: positionSelect,
+    orderBy: [{ rank: "asc" }, { id: "asc" }],
+  });
+  return rowsToDraft(rows);
+}
+
+/**
+ * Replaces the draft's positions with `positions` as they are, source
+ * quotes included (the placement markers), and bumps editVersion so an
+ * editor open on it reloads instead of saving over the answer.
+ */
+async function rewriteDraft(
+  ctx: Ctx,
+  versionId: string,
+  positions: readonly DraftPosition[],
+): Promise<void> {
+  const { db, organizationId } = ctx;
+  const members = await memberIndex(db, organizationId);
+  const taken = new Set(positions.map((p) => p.key).filter(Boolean));
+  const ids = new Set(positions.map((p) => p.id));
+  const writes: PositionWrite[] = positions.map((p) => {
+    const userId = !p.isOpen && p.userId && members.ids.has(p.userId) ? p.userId : null;
+    return {
+      ref: p.id,
+      id: p.key ? p.id : undefined,
+      key: p.key || uniqueKey(positionKeyFromTitle(p.title || "position"), taken),
+      title: clamp(cleanLine(p.title), LIMITS.title),
+      personName: p.isOpen ? null : clamp(cleanLine(p.personName), LIMITS.personName) || null,
+      userId,
+      matchState: p.isOpen ? "UNMATCHED" : p.matchState,
+      matchScore: p.matchScore,
+      suggestedUserIds: p.suggestedUserIds.filter((id) => members.ids.has(id)).slice(0, 3),
+      reportsToRef: p.reportsTo && ids.has(p.reportsTo) ? p.reportsTo : null,
+      alsoReportsToRefs: p.alsoReportsTo ?? [],
+      isOpen: p.isOpen,
+      isAdvisor: p.isAdvisor,
+      responsibilities: p.responsibilities,
+      decidesAlone: p.decidesAlone,
+      sourceQuote: p.sourceQuote,
+      rank: RANK.test(p.rank) ? p.rank : null,
+      teamId: p.teamId ?? null,
+    };
+  });
+  await db.orgChartVersion.updateMany({
+    where: { id: versionId, organizationId },
+    data: { editVersion: { increment: 1 } },
+  });
+  await db.orgChartPosition.deleteMany({ where: { organizationId, versionId } });
+  await insertPositions(db, organizationId, versionId, writes);
+}
+
+const PlaceChoiceSchema = z.union([
+  z.object({ positionId: z.string().min(1).max(100) }),
+  z.object({
+    title: z.string().trim().min(1).max(LIMITS.title),
+    managerId: z.string().min(1).max(100).nullable(),
+  }),
+]);
+
+/**
+ * A member's answer to "Where do you sit on the org chart?": the position
+ * they picked (or a role they add) waits for an admin's approval, and
+ * anything they held before opens up (placeSelf, src/lib/org-chart/self-place.ts).
+ */
+export async function placeSelfInDraft(
+  ctx: Ctx,
+  versionId: string,
+  raw: unknown,
+): Promise<PlacementResult> {
+  const choice = PlaceChoiceSchema.safeParse(raw);
+  if (!choice.success) return { ok: false, error: "Pick a position, or name your role." };
+  // Any member answers, so it's checked as them...
+  const member = await ctx.db.membership.findFirst({
+    where: { organizationId: ctx.organizationId, userId: ctx.userId },
+    select: { user: { select: { name: true } } },
+  });
+  if (!member) return { ok: false, error: "Only members can place themselves." };
+  // ...but a draft is only an admin's to read or write (RLS), so the service
+  // path reads the asking draft and writes back placeSelf's result: this
+  // member's answer and nothing else.
+  return withSystemOrgTx(ctx.organizationId, { userId: ctx.userId }, async ({ db }) => {
+    const sys: Ctx = { ...ctx, db };
+    const positions = await loadAskDraft(sys, versionId);
+    if (!positions) return { ok: false, error: "The org chart isn't asking anymore." };
+    const next = placeSelf(
+      positions,
+      { id: ctx.userId, name: member.user.name },
+      choice.data as PlaceChoice,
+    );
+    if (!next) return { ok: false, error: "Someone else has that position now. Pick another." };
+    await rewriteDraft(sys, versionId, next);
+    return { ok: true };
+  });
+}
+
+/**
+ * The org chart's open "Ask everyone where they sit" draft, for a member to
+ * answer: its id and positions, or null when it isn't asking. Members can't
+ * read drafts (RLS), so the service path reads just this one.
+ */
+export async function getAskDraft(
+  organizationId: string,
+  userId: string,
+): Promise<{ id: string; positions: DraftPosition[] } | null> {
+  return withSystemOrgTx(organizationId, { userId }, async ({ db }) => {
+    const version = await db.orgChartVersion.findFirst({
+      where: { organizationId, status: OrgChartVersionStatus.DRAFT, parseModel: ASK_DRAFT_MODEL },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    if (!version) return null;
+    const rows = await db.orgChartPosition.findMany({
+      where: { organizationId, versionId: version.id },
+      select: positionSelect,
+      orderBy: [{ rank: "asc" }, { id: "asc" }],
+    });
+    return { id: version.id, positions: rowsToDraft(rows) };
+  });
+}
+
+/** Approves (links the member) or turns down a member's answer. Admins only. */
+export async function reviewPlacement(
+  ctx: Ctx,
+  versionId: string,
+  positionId: string,
+  approve: boolean,
+): Promise<PlacementResult> {
+  requirePermission(ctx, "members.invite");
+  const positions = await loadAskDraft(ctx, versionId);
+  if (!positions) return { ok: false, error: "That draft was published or discarded." };
+  const { names } = await memberIndex(ctx.db, ctx.organizationId);
+  const who = positions.find((x) => x.id === positionId)?.suggestedUserIds[0];
+  const next = approve
+    ? approvePlacement(positions, positionId, who ? (names.get(who) ?? null) : null)
+    : declinePlacement(positions, positionId);
+  if (!next) return { ok: false, error: "That answer was changed in the meantime." };
+  await rewriteDraft(ctx, versionId, next);
+  return { ok: true };
 }
 
 // ------------------------------------------------------------------ side panel
