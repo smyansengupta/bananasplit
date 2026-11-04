@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
+  ArrowLeftRight,
   CalendarClock,
   Columns3,
   FileSpreadsheet,
@@ -24,6 +25,7 @@ import type { CrmSettingsSectionId } from "@/lib/crm/settings-sections";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, IconComponent> = {
+  ArrowLeftRight,
   CalendarClock,
   Columns3,
   FileSpreadsheet,

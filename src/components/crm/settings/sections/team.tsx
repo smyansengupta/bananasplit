@@ -2,14 +2,13 @@ import { readOrgRouting } from "@/server/crm/outreach/intake";
 import { withOrgTx } from "@/server/db/context";
 
 import { AccessCard, ManagersCard, RoutingCard } from "../team-settings";
-import { HandoverCards } from "./handover";
 import type { SectionProps } from "./types";
 
 /**
  * Team and access (owners and admins; never in a Personal space, where
- * the page doesn't offer it): who sees what, the CRM managers, who new
- * people go to, and handing someone's people over (members who left,
- * people with no owner, members changing roles; it was /crm/handover).
+ * the page doesn't offer it): who sees what, the CRM managers and who new
+ * people go to. Handing someone's people over is its own section (Hand
+ * people over), which CRM managers open too.
  */
 export async function TeamSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
@@ -50,7 +49,6 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
         members={shell.members}
         relationshipTypes={shell.access.settings?.relationshipTypes ?? []}
       />
-      <HandoverCards shell={shell} orgSlug={orgSlug} />
     </>
   );
 }
