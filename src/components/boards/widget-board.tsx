@@ -201,6 +201,9 @@ const PACK_GAP = 18;
 const PACKED_GRID =
   "grid grid-cols-1 items-start gap-4.5 sm:grid-cols-2 lg:grid-cols-8 data-[packed]:block sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
 
+/** A widget beside a wide one (data-beside, Focus time by the week): this wide, from this board width. */
+const BESIDE_WIDTH = { min: 240, max: 300, from: 700 };
+
 /** Columns Ambient may use at a width: three on a wide screen, two on a tablet, one on a phone. */
 function packColumns(width: number): number {
   if (width >= 960) return 3;
@@ -210,7 +213,8 @@ function packColumns(width: number): number {
 /**
  * Places Ambient's widgets (packSegment): each as tall as what's in it, in
  * columns that all end at the same line, so there's no hole anywhere. A
- * wide widget (data-wide) takes a whole row. Again whenever a widget or the
+ * wide widget (data-wide) takes a whole row, less a narrow one beside it
+ * (data-beside) on a board wide enough. Again whenever a widget or the
  * board changes size.
  */
 function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
@@ -240,9 +244,16 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
       const colWidth = (k: number) => (width - PACK_GAP * (k - 1)) / k;
       // Wide widgets split the rest into segments.
       const segments: HTMLElement[][] = [[]];
-      const order: (HTMLElement | HTMLElement[])[] = [];
-      for (const item of list) {
-        if (item.hasAttribute("data-wide")) {
+      const order: (HTMLElement | HTMLElement[] | { wide: HTMLElement; side: HTMLElement })[] = [];
+      const besides = width >= BESIDE_WIDTH.from;
+      for (let i = 0; i < list.length; i++) {
+        const item = list[i]!;
+        const next = list[i + 1];
+        if (item.hasAttribute("data-wide") && besides && next?.hasAttribute("data-beside")) {
+          order.push({ wide: item, side: next });
+          segments.push([]);
+          i++;
+        } else if (item.hasAttribute("data-wide")) {
           order.push(item);
           segments.push([]);
         } else {
@@ -257,6 +268,22 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
           const h = heightAt(part, width);
           part.style.setProperty("left", "0px");
           part.style.setProperty("top", `${top}px`);
+          top += h + PACK_GAP;
+          continue;
+        }
+        if (!Array.isArray(part)) {
+          const sideW = Math.min(
+            BESIDE_WIDTH.max,
+            Math.max(BESIDE_WIDTH.min, Math.round(width / 4)),
+          );
+          const wideW = width - sideW - PACK_GAP;
+          const h = Math.max(heightAt(part.wide, wideW), heightAt(part.side, sideW));
+          part.wide.style.setProperty("left", "0px");
+          part.side.style.setProperty("left", `${wideW + PACK_GAP}px`);
+          for (const item of [part.wide, part.side]) {
+            item.style.setProperty("top", `${top}px`);
+            item.style.setProperty("min-height", `${h}px`);
+          }
           top += h + PACK_GAP;
           continue;
         }
@@ -1161,6 +1188,7 @@ function BoardItem({
       data-widget-id={w.id}
       data-band={band?.name}
       data-wide={band && !band.square && band.span >= 6 ? "" : undefined}
+      data-beside={band?.name === "week" && band.span <= 2 ? "" : undefined}
       data-frame={bare ? "bare" : "card"}
       onPointerDown={coarse ? undefined : drag}
       style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
