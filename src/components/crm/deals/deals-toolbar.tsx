@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * The Deals tab's bar: the tabs, List and Board as round buttons, Report
- * (the deals report), Filters (pipeline when there's more than one, owner,
- * type, open, won or lost) and search.
+ * (the pipeline's Deals report in Databases > Reports), Filters (pipeline
+ * when there's more than one, owner, type, open, won or lost) and search.
  */
 export function DealsToolbar({
   tabs,
