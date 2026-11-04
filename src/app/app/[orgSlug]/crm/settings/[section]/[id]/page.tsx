@@ -17,7 +17,7 @@ import { builderContext } from "@/server/crm/builder-context";
 import { workflowRuns } from "@/server/crm/workflows";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmShell } from "../../../shell";
+import { crmSettingsShell } from "../../../shell";
 
 export const metadata = { title: "CRM settings" };
 
@@ -64,7 +64,7 @@ export default async function CrmSettingsItemPage({
   // A booking page opens in Meetings > Booking links now (docs/features/booking.md).
   if (findSection(sectionId)?.id === "booking") redirect(crmSettingsHref(orgSlug, "booking", `/${id}`));
   const sp = (await searchParams) as Record<string, string | undefined>;
-  const { gate, shell } = await crmShell(orgSlug);
+  const { gate, shell } = await crmSettingsShell(orgSlug);
   if (!shell) return gate;
   const section = findSection(sectionId);
   if (!section || section.id !== "automations") notFound();

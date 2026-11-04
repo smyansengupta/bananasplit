@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { cache, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Handshake } from "@/components/icons";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { resolveCrmTabs, type ResolvedCrmTab } from "@/lib/crm/nav";
 import { planGate } from "@/server/billing/plan-gate";
-import { crmAccess, type CrmAccess } from "@/server/crm/access";
+import { crmAccessOf, readCrmSettings, type CrmAccess } from "@/server/crm/access";
 import { rolePositions, type RoleOwner } from "@/server/crm/owners";
 import { listPipelines, type PipelineView } from "@/server/crm/pipelines";
 import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/db/context";
@@ -17,6 +17,12 @@ import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/
  * on Integrations and apps) and the one-step setup, then the pipelines for
  * the tabs. `gate` is what to show instead of the page when one of those
  * isn't there yet.
+ *
+ * Deduped per request (React cache()), so a page and the card open over it
+ * share one shell. The space and its add-ons come from the org context the
+ * layout already read; the org chart's positions (a cached read) load beside
+ * the CRM's settings and pipelines. Members load only where a page or card
+ * asks for them (crmMembers).
  */
 
 export interface CrmShell {
@@ -27,33 +33,68 @@ export interface CrmShell {
   pipelines: PipelineView[];
   tabs: ResolvedCrmTab[];
   roles: Map<string, RoleOwner>;
-  members: { id: string; name: string }[];
 }
 
-export async function crmShell(
-  orgSlug: string,
-  options: { setup?: boolean } = {},
-): Promise<{ gate: ReactNode; shell: null } | { gate: null; shell: CrmShell }> {
-  const locked = await planGate(orgSlug, "crm", { title: "CRM" });
-  if (locked) return { gate: locked, shell: null };
-  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
-  const base = `/app/${orgSlug}`;
-  const loaded = await withOrgTx(org.id, async (ctx) => {
-    const access = await crmAccess(ctx);
-    const pipelines = access.settings ? await listPipelines(ctx.db, org.id) : [];
-    const members = await ctx.db.membership.findMany({
-      where: { organizationId: org.id },
+export interface CrmMember {
+  id: string;
+  name: string;
+}
+
+/**
+ * The organization's members by name (owner pickers, "Owner:" lines, who
+ * wrote a note): once per request, and only where something shows them.
+ */
+export const crmMembers = cache(async (organizationId: string): Promise<CrmMember[]> => {
+  const rows = await withOrgTx(organizationId, ({ db }) =>
+    db.membership.findMany({
+      where: { organizationId },
       select: { userId: true, user: { select: { name: true } } },
       take: 2000,
-    });
-    return {
-      access,
-      pipelines,
-      members: members
-        .map((m) => ({ id: m.userId, name: m.user.name ?? "Member" }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    };
-  });
+    }),
+  );
+  return rows
+    .map((m) => ({ id: m.userId, name: m.user.name ?? "Member" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
+
+/** crmMembers as id to name. */
+export async function crmMemberNames(organizationId: string): Promise<Map<string, string>> {
+  return new Map((await crmMembers(organizationId)).map((m) => [m.id, m.name]));
+}
+
+type ShellResult = { gate: ReactNode; shell: null } | { gate: null; shell: CrmShell };
+
+export function crmShell(orgSlug: string, options: { setup?: boolean } = {}): Promise<ShellResult> {
+  return loadShell(orgSlug, Boolean(options.setup));
+}
+
+/** The shell with the members on it: CRM settings, where most sections list or pick members. */
+export interface CrmSettingsShell extends CrmShell {
+  members: CrmMember[];
+}
+
+export async function crmSettingsShell(
+  orgSlug: string,
+): Promise<{ gate: ReactNode; shell: null } | { gate: null; shell: CrmSettingsShell }> {
+  const loaded = await crmShell(orgSlug);
+  if (!loaded.shell) return loaded;
+  return { gate: null, shell: { ...loaded.shell, members: await crmMembers(loaded.shell.org.id) } };
+}
+
+const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellResult> => {
+  const locked = await planGate(orgSlug, "crm", { title: "CRM" });
+  if (locked) return { gate: locked, shell: null };
+  const { organization: org, user, role, settings: orgSettings } = await getOrgContextBySlug(orgSlug);
+  const base = `/app/${orgSlug}`;
+  const [loaded, roles] = await Promise.all([
+    withOrgTx(org.id, async ({ db }) => {
+      const settings = await readCrmSettings(db, org.id);
+      const access = crmAccessOf({ role, userId: user.id }, org, orgSettings?.addOns, settings);
+      const pipelines = access.added && settings ? await listPipelines(db, org.id) : [];
+      return { access, pipelines };
+    }),
+    rolePositions(org.id),
+  ]);
   const { access } = loaded;
   if (!access.added) {
     return {
@@ -80,7 +121,7 @@ export async function crmShell(
       shell: null,
     };
   }
-  if (!access.settings && !options.setup) {
+  if (!access.settings && !setup) {
     return {
       gate: (
         <Card>
@@ -105,7 +146,6 @@ export async function crmShell(
       shell: null,
     };
   }
-  const roles = await rolePositions(org.id);
   return {
     gate: null,
     shell: {
@@ -115,8 +155,7 @@ export async function crmShell(
       access,
       pipelines: loaded.pipelines,
       roles,
-      members: loaded.members,
       tabs: resolveCrmTabs(orgSlug, loaded.pipelines, { manager: access.manager }),
     },
   };
-}
+});

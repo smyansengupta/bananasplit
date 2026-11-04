@@ -59,7 +59,11 @@ export interface PeopleListEntry {
   /** The `?list=` value ("" for everyone). */
   id: string;
   label: string;
-  count: number;
+  /**
+   * How many it holds: counted for the open list only. Filters asks for the
+   * rest when it opens (peopleListCounts), so a page load isn't a count per list.
+   */
+  count: number | null;
   /** One of the organization's own lists (its people can be added to by hand). */
   own: boolean;
   /** A hand-picked list (Add to list adds to these). */
@@ -281,20 +285,15 @@ function rowDealView(deals: RowDealFull[] | undefined): { view: PeopleRowDeal | 
   };
 }
 
-export async function peoplePage(
+/** What the lists are read from: the view, the URL's filters, the organization's lists and each list's query. */
+async function listSetup(
   db: TxClient,
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
   sp: Search,
-  options: {
-    names: ReadonlyMap<string, string>;
-    relationships: readonly { id: string; label: string; color: string }[];
-    pipelines: readonly PipelineView[];
-    now?: Date;
-  },
-): Promise<PeoplePageData> {
-  const now = options.now ?? new Date();
+  pipelines: readonly PipelineView[],
+) {
   const view = readPeopleView(sp.view);
   const companies = view === "companies";
   const onBoard = view === "board";
@@ -305,7 +304,6 @@ export async function peoplePage(
   // The deal filters: as a where for the tables (the person's owner and
   // search are the table's own), and the pipelines they cover.
   const { filters: dealF, on: dealsOn } = peopleDealFilters(sp);
-  const pipelines = options.pipelines;
   const covered = pipelinesFor(pipelines, dealF);
   const typeFields = await dealTypeFields(db, organizationId, pipelines);
   const rowDealWhere = dealFilterWhere(
@@ -361,25 +359,61 @@ export async function peoplePage(
     }
     return base;
   };
-  const countOf = (q: ListQuery) =>
-    companies
-      ? db.crmCompany.count({ where: companiesWhere(organizationId, q, viewerId, roles, now) })
-      : db.crmPerson.count({ where: peopleWhere(organizationId, q, viewerId, roles, now) });
 
-  const lists: PeopleListEntry[] = [];
-  for (const l of builtIns) {
-    if (l.id === "dupes" && dupes.size === 0) continue;
-    lists.push({ id: l.id, label: l.label, count: await countOf(queryFor(l.id)), own: false, picked: false });
+  return { view, companies, onBoard, builtIns, dealF, dealsOn, covered, typeFields, rowDealWhere, base, views, dupes, queryFor };
+}
+
+/** Lists' counts, for Filters when it opens: each list with the bar's Owner, Relationship, search and deal filters. */
+export async function peopleListCounts(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  roles: ReadonlyMap<string, RoleOwner>,
+  sp: Search,
+  pipelines: readonly PipelineView[],
+  now: Date = new Date(),
+): Promise<Record<string, number>> {
+  const { companies, builtIns, views, dupes, queryFor } = await listSetup(db, organizationId, viewerId, roles, sp, pipelines);
+  const ids = [...builtIns.filter((l) => l.id !== "dupes" || dupes.size > 0).map((l) => l.id), ...views.map((v) => v.id)];
+  const out: Record<string, number> = {};
+  for (const id of ids) {
+    const q = queryFor(id);
+    out[id] = companies
+      ? await db.crmCompany.count({ where: companiesWhere(organizationId, q, viewerId, roles, now) })
+      : await db.crmPerson.count({ where: peopleWhere(organizationId, q, viewerId, roles, now) });
   }
-  for (const v of views) {
-    lists.push({
+  return out;
+}
+
+export async function peoplePage(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  roles: ReadonlyMap<string, RoleOwner>,
+  sp: Search,
+  options: {
+    names: ReadonlyMap<string, string>;
+    relationships: readonly { id: string; label: string; color: string }[];
+    pipelines: readonly PipelineView[];
+    now?: Date;
+  },
+): Promise<PeoplePageData> {
+  const now = options.now ?? new Date();
+  const pipelines = options.pipelines;
+  const { view, companies, onBoard, builtIns, dealF, dealsOn, covered, typeFields, rowDealWhere, views, dupes, queryFor } =
+    await listSetup(db, organizationId, viewerId, roles, sp, pipelines);
+  const lists: PeopleListEntry[] = [
+    ...builtIns
+      .filter((l) => l.id !== "dupes" || dupes.size > 0)
+      .map((l) => ({ id: l.id, label: l.label, count: null, own: false, picked: false })),
+    ...views.map((v) => ({
       id: v.id,
       label: v.name,
-      count: await countOf(queryFor(v.id)),
+      count: null,
       own: true,
       picked: viewListQuery(v.filters).ids !== undefined,
-    });
-  }
+    })),
+  ];
 
   const requested = one(sp, "list") ?? "";
   const picked = readList(requested, companies);
@@ -546,6 +580,10 @@ export async function peoplePage(
       };
     });
   }
+
+  // The open list's count is the table's; Filters asks for the others when it opens.
+  const openList = lists.find((l) => l.id === listId);
+  if (openList && !query.trash) openList.count = total;
 
   // "$X in open deals": the deals the filters allow, among everyone listed.
   let money: PeoplePageData["money"] = null;

@@ -178,14 +178,8 @@ export async function todayRows(
     mine = false;
   }
   const personIds = items.filter((i) => i.targetKind === "person").map((i) => i.id);
-  const people = personIds.length
-    ? await db.crmPerson.findMany({
-        where: { organizationId, id: { in: personIds } },
-        select: { id: true, relationship: true },
-      })
-    : [];
   const relationship = new Map(
-    people.map((p) => [
+    items.map((p) => [
       p.id,
       p.relationship ? (options.relationships.get(p.relationship) ?? null) : null,
     ]),

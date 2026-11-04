@@ -10,6 +10,7 @@ import { loadCompany } from "@/server/crm/records";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const DAY = 86_400_000;
 /** Someone at a company nobody has talked to in this long gets the intro button. */
@@ -32,7 +33,7 @@ function lastLabel(d: Date | null, now: Date): string {
 export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"company">) {
   const orgId = shell.org.id;
   const now = new Date();
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
+  const membersP = crmMembers(orgId);
   const data = await withOrgTx(orgId, async ({ db }) => {
     const loaded = await loadCompany(db, orgId, orgSlug, open.id);
     if (!loaded) return null;
@@ -80,6 +81,8 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
     return { ...loaded, form, summary, person, deal, notes, authors: new Map(authors.map((a) => [a.id, a.createdById])) };
   });
   if (!data) return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={null} />;
+  const members = await membersP;
+  const names = new Map(members.map((m) => [m.id, m.name]));
   const { company } = data;
 
   // The soonest of the two, as one line with where it's done.
@@ -202,7 +205,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
         about: about ? { id: about.id, label: about.label! } : null,
       };
     }),
-    members: shell.members,
+    members,
   };
   return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

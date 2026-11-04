@@ -42,7 +42,7 @@ export async function loadPerson(db: TxClient, organizationId: string, orgSlug: 
   const person = await db.crmPerson.findFirst({
     where: { id, organizationId },
     include: {
-      company: { select: { id: true, name: true, domain: true } },
+      company: { select: { id: true, name: true, domain: true, sponsorId: true } },
       emails: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], select: { email: true, isPrimary: true } },
       jobs: {
         orderBy: [{ current: "desc" }, { startedOn: { sort: "desc", nulls: "last" } }],

@@ -356,8 +356,8 @@ async function writeItem(actor: CrmActor, id: string | null, body: unknown) {
     select: { deletedAt: true, pipelineId: true, stageId: true },
   });
   if (!exists) return null;
-  if (pipelineId && pipelineId !== exists.pipelineId) throw new ApiInputError("An item stays in its pipeline.", ["pipelineId"]);
-  if (personIds) throw new ApiInputError("Add people to an item when you make it.", ["personIds"]);
+  if (pipelineId && pipelineId !== exists.pipelineId) throw new ApiInputError("A deal stays in its pipeline.", ["pipelineId"]);
+  if (personIds) throw new ApiInputError("Add people to a deal when you make it.", ["personIds"]);
   if (trashed === false && exists.deletedAt) await restoreDeals(actor, [id]);
   if (stageId && stageId !== exists.stageId) {
     const moved = await moveDeal(actor, id, { stageId, closeReason, fill: input }, OPTS);

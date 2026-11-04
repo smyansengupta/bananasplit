@@ -9,6 +9,7 @@ import { loadDeal } from "@/server/crm/records";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 /**
  * A deal's card (?open=deal:<id>, ?tab=quote to open on its quote):
@@ -17,7 +18,7 @@ import type { OverlayProps } from "./crm-overlays";
  */
 export async function DealOverlay({ shell, orgSlug, open }: OverlayProps<"deal">) {
   const orgId = shell.org.id;
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
+  const membersP = crmMembers(orgId);
   const data = await withOrgTx(orgId, async ({ db }) => {
     const loaded = await loadDeal(db, orgId, orgSlug, open.id);
     if (!loaded) return null;
@@ -58,6 +59,7 @@ export async function DealOverlay({ shell, orgSlug, open }: OverlayProps<"deal">
     };
   });
   if (!data) return <DealCard orgId={orgId} orgSlug={orgSlug} data={null} />;
+  const names = new Map((await membersP).map((m) => [m.id, m.name]));
   const { deal } = data.loaded;
   const stages = new Map(deal.pipeline.stages.map((s) => [s.id, s.name]));
   const toView = (q: (typeof data.quotes)[number]): DealQuoteView => {

@@ -1,4 +1,6 @@
-import { crmApprovalsHref, crmRecordHref } from "@/lib/crm/href";
+import { crmApprovalsHref, crmRecordHref, crmTodayHref } from "@/lib/crm/href";
+import { hrefWithOpen } from "@/lib/crm/overlay";
+import { formatNumber, phoneKey } from "@/lib/crm/phone";
 import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "../owners";
@@ -8,7 +10,9 @@ import { followUpQueue } from "./queue";
 /**
  * The member's follow-up queue as Inbox rows (kind "crm", key "crm:{id}",
  * the same key the CRM home snoozes): replies and sequence steps first,
- * then follow-ups and new people. Only the CRM add-on's organizations.
+ * then follow-ups and new people, then texts from numbers that aren't in
+ * the CRM (key "crm:text-{id}", one row per number, opening the text's card
+ * with Add them to the CRM). Only the CRM add-on's organizations.
  */
 export interface CrmInboxItem {
   key: string;
@@ -35,7 +39,7 @@ export async function crmInboxItems(
     .map((i) => ({ ...i, reasons: i.reasons.filter((r) => r.kind !== "cold" && r.kind !== "cadence") }))
     .filter((i) => i.reasons.length > 0)
     .slice(0, 20);
-  return items.map((i) => {
+  const rows: CrmInboxItem[] = items.map((i) => {
     const first = i.reasons[0]!;
     return {
       key: i.key,
@@ -45,6 +49,48 @@ export async function crmInboxItems(
       href: crmRecordHref(orgSlug, i.targetKind === "company" ? "company" : "person", i.id),
       urgent: i.urgent,
       group: first.kind === "reply" || first.kind === "step" || i.urgent ? "overdue" : first.kind === "followup" ? "today" : "review",
+    };
+  });
+  return [...rows, ...(await looseTexts(db, organizationId, orgSlug, now))];
+}
+
+const TEXT_DAYS = 30;
+
+/**
+ * Texts from numbers that aren't in the CRM, in the last month: one row per
+ * number (its latest text, and how many came in), for whoever can see them.
+ * Adding the person takes the texts onto their timeline, and the row goes.
+ */
+async function looseTexts(db: TxClient, organizationId: string, orgSlug: string, now: Date): Promise<CrmInboxItem[]> {
+  const texts = await db.crmTextMessage.findMany({
+    where: {
+      organizationId,
+      direction: "INBOUND",
+      personId: null,
+      sentAt: { gte: new Date(now.getTime() - TEXT_DAYS * 86_400_000) },
+    },
+    orderBy: { sentAt: "desc" },
+    take: 50,
+    select: { id: true, fromNumber: true, body: true },
+  });
+  const byNumber = new Map<string, { id: string; fromNumber: string; body: string; count: number }>();
+  for (const t of texts) {
+    const key = phoneKey(t.fromNumber) ?? t.fromNumber;
+    const seen = byNumber.get(key);
+    if (seen) seen.count++;
+    else if (byNumber.size < 5) byNumber.set(key, { ...t, count: 1 });
+  }
+  return [...byNumber.values()].map((t) => {
+    const words = t.body.replace(/\s+/g, " ").trim();
+    const said = words.length > 80 ? `${words.slice(0, 79)}…` : words;
+    return {
+      key: `crm:text-${t.id}`,
+      id: `text-${t.id}`,
+      title: `A text from ${formatNumber(t.fromNumber)}`,
+      meta: `${t.count > 1 ? `${t.count} texts, not in the CRM yet` : "Not in the CRM yet"}: "${said}"`,
+      href: hrefWithOpen(crmTodayHref(orgSlug), "", { kind: "text", id: t.id }),
+      urgent: false,
+      group: "today",
     };
   });
 }

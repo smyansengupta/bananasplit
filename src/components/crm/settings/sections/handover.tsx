@@ -1,16 +1,18 @@
 import Link from "next/link";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
-import type { CrmShell } from "@/app/app/[orgSlug]/crm/shell";
+import type { CrmSettingsShell } from "@/app/app/[orgSlug]/crm/shell";
 import { HandOverCard, Unowned, type OwnerChoice } from "@/components/crm/outreach/handover";
 import { crmRecordHref } from "@/lib/crm/href";
 import { briefs, departedOwners, unowned } from "@/server/crm/outreach/handover";
 import { withOrgTx } from "@/server/db/context";
 
+import type { SectionProps } from "./types";
+
 /**
  * Handover, in CRM settings (it was its own page, /crm/handover, which
- * redirects here). Team and access holds handing people over: members who
- * left, anyone with no owner, and members changing roles. You holds the
+ * redirects here). Hand people over (owners, admins and CRM managers) holds
+ * members who left, anyone with no owner, and members changing roles. You holds the
  * brief on each person handed to you lately, or that a position you hold
  * looks after (?role=). Never in a Personal space.
  */
@@ -19,7 +21,7 @@ function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 86_400_000);
 }
 
-function ownerChoices(shell: CrmShell): OwnerChoice[] {
+function ownerChoices(shell: CrmSettingsShell): OwnerChoice[] {
   return [
     ...shell.members.map((m) => ({ value: `u:${m.id}`, label: m.name })),
     ...[...shell.roles.values()].map((r) => ({
@@ -29,8 +31,13 @@ function ownerChoices(shell: CrmShell): OwnerChoice[] {
   ];
 }
 
-/** Team and access: hand people over (owners and admins). */
-export async function HandoverCards({ shell, orgSlug }: { shell: CrmShell; orgSlug: string }) {
+/** Hand people over (owners, admins and CRM managers; not in a Personal space). */
+export async function HandoverSection({ shell, orgSlug }: SectionProps) {
+  return <HandoverCards shell={shell} orgSlug={orgSlug} />;
+}
+
+/** Members who left, people with no owner, and handing a member's people over. */
+export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
   const orgId = shell.org.id;
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const data = await withOrgTx(orgId, async ({ db }) => {
@@ -97,7 +104,7 @@ export async function HandedToYou({
   orgSlug,
   role: asked,
 }: {
-  shell: CrmShell;
+  shell: CrmSettingsShell;
   orgSlug: string;
   role?: string;
 }) {

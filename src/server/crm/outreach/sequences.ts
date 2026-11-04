@@ -1,5 +1,5 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmCallsHref, crmRecordHref } from "@/lib/crm/href";
 import { renderMerge } from "@/lib/crm/outreach/merge";
 import { readExtras, withExtras } from "@/lib/crm/outreach/plans";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
@@ -16,7 +16,7 @@ import { emitCrmEvent } from "../events";
 import { queueText } from "../phone/texts";
 import { proposeChange } from "../review";
 import { actAs } from "../system-actor";
-import { conflictFor, contactable, mergeValuesFor, queueEmail, saveDraft, sentToday, startMayApprove } from "./send";
+import { conflictsFor, contactable, type Conflict, mergeValuesFor, queueEmail, saveDraft, sentToday, startMayApprove } from "./send";
 
 /**
  * Sequences (docs/features/crm.md, module 5): timed steps (an email, a
@@ -277,27 +277,50 @@ export async function enroll(
     select: { id: true, name: true, primaryEmail: true, doNotContact: true, unsubscribedAt: true, consent: true, deletedAt: true },
   });
   const result: EnrollResult = { enrolled: 0, skipped: [] };
+  // The checks for everyone at once: who's in it already, and who another
+  // member is talking to (with their names).
+  const reachable = people.filter((p) => contactable(p).ok).map((p) => p.id);
+  const already = new Set(
+    reachable.length
+      ? (
+          await db.crmEnrollment.findMany({
+            where: { organizationId, sequenceId: seq.id, personId: { in: reachable }, status: { in: ["ACTIVE", "PAUSED"] } },
+            select: { personId: true },
+          })
+        ).map((e) => e.personId)
+      : [],
+  );
+  const conflicts = options.confirmConflicts
+    ? new Map<string, Conflict>()
+    : await conflictsFor(db, organizationId, reachable.filter((id) => !already.has(id)), senderId, now);
+  const conflictNames = new Map(
+    conflicts.size
+      ? (
+          await db.user.findMany({
+            where: { id: { in: [...new Set([...conflicts.values()].map((c) => c.userId))] } },
+            select: { id: true, name: true },
+          })
+        ).map((u) => [u.id, u.name])
+      : [],
+  );
   for (const p of people) {
     const can = contactable(p);
     if (!can.ok) {
       result.skipped.push({ personId: p.id, name: p.name, reason: can.reason! });
       continue;
     }
-    const already = await db.crmEnrollment.findFirst({
-      where: { organizationId, sequenceId: seq.id, personId: p.id, status: { in: ["ACTIVE", "PAUSED"] } },
-      select: { id: true },
-    });
-    if (already) {
+    if (already.has(p.id)) {
       result.skipped.push({ personId: p.id, name: p.name, reason: "Already in it." });
       continue;
     }
-    if (!options.confirmConflicts) {
-      const conflict = await conflictFor(db, organizationId, p.id, senderId, now);
-      if (conflict) {
-        const who = await db.user.findUnique({ where: { id: conflict.userId }, select: { name: true } });
-        result.skipped.push({ personId: p.id, name: p.name, reason: `${who?.name ?? "Another member"} ${conflict.what}.` });
-        continue;
-      }
+    const conflict = conflicts.get(p.id);
+    if (conflict) {
+      result.skipped.push({
+        personId: p.id,
+        name: p.name,
+        reason: `${conflictNames.get(conflict.userId) ?? "Another member"} ${conflict.what}.`,
+      });
+      continue;
     }
     const runAt = nextInWindow(new Date(now.getTime() + delayMs(first)), window, tz);
     const e = await db.crmEnrollment.create({
@@ -745,8 +768,8 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         type: "CRM_FOLLOW_UP",
         title: what,
         body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
-        // A call waits on the dialer; anything else on their page.
-        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : crmRecordHref(org.slug, "person", person.id)) : null,
+        // A call waits in Today's Calls; anything else on their card.
+        linkUrl: org ? (step.kind === "CALL" ? crmCallsHref(org.slug) : crmRecordHref(org.slug, "person", person.id)) : null,
         dedupeKey: `crm-step:${e.id}:${stepIndex}`,
       });
     }

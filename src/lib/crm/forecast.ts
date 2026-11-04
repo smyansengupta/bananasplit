@@ -198,7 +198,7 @@ export function computeTrend(items: readonly ForecastItem[], p: Period, current:
     runRate,
     expected,
     basis: closed
-      ? `${Math.round(winRate * 100)}% of the ${closed} items closed in the four quarters before were won.`
+      ? `${Math.round(winRate * 100)}% of the ${closed} deals closed in the four quarters before were won.`
       : "Nothing has closed in the last four quarters yet.",
   };
 }

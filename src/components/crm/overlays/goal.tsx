@@ -6,6 +6,7 @@ import { goalActual, goalPeriodKey } from "@/server/crm/goals";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 /** A goal's card (?open=goal for a new one, ?open=goal:<id> to change one). */
 export async function GoalOverlay({ shell, open }: OverlayProps<"goal">) {
@@ -55,7 +56,7 @@ export async function GoalOverlay({ shell, open }: OverlayProps<"goal">) {
         ...data.goal,
         today: data.today,
         viewerId: shell.user.id,
-        members: shell.members,
+        members: await crmMembers(orgId),
         canEdit: shell.access.manager,
         personal: shell.access.personal,
       }

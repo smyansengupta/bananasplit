@@ -16,7 +16,7 @@ import type { TxClient } from "@/server/db/context";
 import { CrmError, type CrmActor } from "../access";
 import type { RoleOwner } from "../owners";
 import { parseListQuery, peopleWhere } from "../queries";
-import { campaignProgress } from "./campaigns";
+import { campaignsProgress } from "./campaigns";
 import { viewParams } from "./lists";
 import { contactable } from "./send";
 import { assertMayEditPlan, enroll, setSequenceStatus } from "./sequences";
@@ -136,6 +136,11 @@ export async function listPlans(
     where: { organizationId, sequenceId: { in: sequences.map((s) => s.id) } },
     _count: { _all: true },
   });
+  const waitingBy = await unansweredRepliesBySequence(
+    db,
+    organizationId,
+    sequences.filter((s) => sequencePlanStatus(s.status) === "running").map((s) => s.id),
+  );
   const n = (id: string, statuses: string[]) =>
     counts
       .filter((c) => c.sequenceId === id && statuses.includes(c.status))
@@ -166,7 +171,7 @@ export async function listPlans(
     if (status === "draft" && s.steps.length > 0 && audienceSet(extras.who)) {
       ambient = { key: "start", label: "Start it", reason: "Steps and who are set" };
     } else if (status === "running") {
-      const waiting = await unansweredReplies(db, organizationId, s.id);
+      const waiting = waitingBy.get(s.id) ?? 0;
       if (waiting > 0) {
         ambient = {
           key: "replies",
@@ -201,6 +206,7 @@ export async function listPlans(
       viewId: true,
       sequenceId: true,
       templateId: true,
+      eventId: true,
       dueOn: true,
       createdAt: true,
       updatedAt: true,
@@ -213,46 +219,35 @@ export async function listPlans(
     },
     select: { id: true, name: true },
   });
-  for (const c of campaigns) {
-    const bulk = c.channel === "bulk";
-    const list = views.find((v) => v.id === c.viewId)?.name ?? null;
-    let note: string;
-    let preview: StepPreview[];
-    let ambient: PlanSummary["ambient"] = null;
-    let total: number;
-    if (bulk) {
-      const sent = await db.crmEmailMessage.count({
-        where: { organizationId, campaignId: c.id, status: "SENT" },
-      });
-      const replied = await db.crmEmailMessage.count({
-        where: { organizationId, campaignId: c.id, repliedAt: { not: null } },
-      });
-      const bounced = await db.crmEmailMessage.count({
-        where: { organizationId, campaignId: c.id, bouncedAt: { not: null } },
-      });
-      const first = await db.crmEmailMessage.findFirst({
-        where: { organizationId, campaignId: c.id },
-        orderBy: { createdAt: "asc" },
-        select: { subject: true },
-      });
-      total = await db.crmEmailMessage.count({ where: { organizationId, campaignId: c.id } });
-      note = `Sent ${shortDay(c.createdAt)} from the organization. ${sent} sent, ${replied} replied${bounced ? `, ${bounced} bounced` : ""}.`;
-      preview = [
-        {
-          what: first?.subject?.slice(0, 34) || "One email",
-          when: shortDay(c.createdAt),
-          kind: "email",
-        },
-      ];
-    } else {
-      const p = await campaignProgress(db, organizationId, c.id);
-      total = p.total;
-      const splitAmong = p.byMember.filter((m) => m.userId).length;
-      note = `${splitAmong > 1 ? `Split among ${splitAmong} members. ` : ""}${p.contacted} of ${p.total} reached, ${p.replied} replied${p.booked ? `, ${p.booked} booked` : ""}.`;
-      if (c.sequenceId) {
-        const seq = await db.crmSequence.findFirst({
-          where: { id: c.sequenceId, organizationId },
+  // What the list shows of each, read for all of them at once: a group
+  // email's mail, a split list's progress, its steps and the viewer's share.
+  const bulkIds = campaigns.filter((c) => c.channel === "bulk").map((c) => c.id);
+  const splits = campaigns.filter((c) => c.channel !== "bulk");
+  const mail = bulkIds.length
+    ? await db.crmEmailMessage.groupBy({
+        by: ["campaignId", "status"],
+        where: { organizationId, campaignId: { in: bulkIds } },
+        _count: { _all: true, repliedAt: true, bouncedAt: true },
+      })
+    : [];
+  const firstSubject = new Map(
+    (bulkIds.length
+      ? await db.$queryRaw<{ campaignId: string; subject: string | null }[]>`
+          SELECT DISTINCT ON ("campaignId") "campaignId", subject
+          FROM "CrmEmailMessage"
+          WHERE "organizationId" = ${organizationId} AND "campaignId" = ANY(${bulkIds}::text[])
+          ORDER BY "campaignId", "createdAt" ASC`
+      : []
+    ).map((r) => [r.campaignId, r.subject]),
+  );
+  const progress = await campaignsProgress(db, organizationId, splits);
+  const seqIds = [...new Set(splits.map((c) => c.sequenceId).filter((x): x is string => Boolean(x)))];
+  const stepsOf = new Map(
+    (seqIds.length
+      ? await db.crmSequence.findMany({
+          where: { organizationId, id: { in: seqIds } },
           select: {
+            id: true,
             steps: {
               orderBy: { sortOrder: "asc" },
               select: {
@@ -266,8 +261,54 @@ export async function listPlans(
               },
             },
           },
-        });
-        preview = previewOf(seq?.steps ?? []);
+        })
+      : []
+    ).map((s) => [s.id, s.steps]),
+  );
+  const mineBy = new Map(
+    (splits.length
+      ? await db.crmCampaignTarget.groupBy({
+          by: ["campaignId"],
+          where: {
+            organizationId,
+            campaignId: { in: splits.map((c) => c.id) },
+            assigneeId: viewerId,
+            status: "TODO",
+          },
+          _count: { _all: true },
+        })
+      : []
+    ).map((r) => [r.campaignId, r._count._all]),
+  );
+  for (const c of campaigns) {
+    const bulk = c.channel === "bulk";
+    const list = views.find((v) => v.id === c.viewId)?.name ?? null;
+    let note: string;
+    let preview: StepPreview[];
+    let ambient: PlanSummary["ambient"] = null;
+    let total: number;
+    if (bulk) {
+      const theirs = mail.filter((m) => m.campaignId === c.id);
+      const sent = theirs.filter((m) => m.status === "SENT").reduce((a, m) => a + m._count._all, 0);
+      const replied = theirs.reduce((a, m) => a + m._count.repliedAt, 0);
+      const bounced = theirs.reduce((a, m) => a + m._count.bouncedAt, 0);
+      const first = { subject: firstSubject.get(c.id) ?? null };
+      total = theirs.reduce((a, m) => a + m._count._all, 0);
+      note = `Sent ${shortDay(c.createdAt)} from the organization. ${sent} sent, ${replied} replied${bounced ? `, ${bounced} bounced` : ""}.`;
+      preview = [
+        {
+          what: first?.subject?.slice(0, 34) || "One email",
+          when: shortDay(c.createdAt),
+          kind: "email",
+        },
+      ];
+    } else {
+      const p = progress.get(c.id)!;
+      total = p.total;
+      const splitAmong = p.byMember.filter((m) => m.userId).length;
+      note = `${splitAmong > 1 ? `Split among ${splitAmong} members. ` : ""}${p.contacted} of ${p.total} reached, ${p.replied} replied${p.booked ? `, ${p.booked} booked` : ""}.`;
+      if (c.sequenceId) {
+        preview = previewOf(stepsOf.get(c.sequenceId) ?? []);
       } else {
         const what =
           c.channel === "call"
@@ -279,9 +320,7 @@ export async function listPlans(
                 : "Email";
         preview = [{ what, when: "Day 0", kind: c.channel === "call" ? "call" : "email" }];
       }
-      const mine = await db.crmCampaignTarget.count({
-        where: { organizationId, campaignId: c.id, assigneeId: viewerId, status: "TODO" },
-      });
+      const mine = mineBy.get(c.id) ?? 0;
       if (c.status === "ACTIVE" && mine > 0) {
         ambient = {
           key: "share",
@@ -316,30 +355,56 @@ export async function unansweredReplies(
   organizationId: string,
   sequenceId: string,
 ): Promise<number> {
+  return (await unansweredRepliesBySequence(db, organizationId, [sequenceId])).get(sequenceId) ?? 0;
+}
+
+/**
+ * unansweredReplies for many sequences in three reads: who replied, each
+ * one's latest mail in, and the latest mail out on those threads.
+ */
+export async function unansweredRepliesBySequence(
+  db: TxClient,
+  organizationId: string,
+  sequenceIds: readonly string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (sequenceIds.length === 0) return out;
   const replied = await db.crmEnrollment.findMany({
-    where: { organizationId, sequenceId, status: { in: ["REPLIED", "BOOKED"] } },
-    select: { personId: true, finishedAt: true },
-    take: 200,
+    where: { organizationId, sequenceId: { in: [...sequenceIds] }, status: { in: ["REPLIED", "BOOKED"] } },
+    select: { sequenceId: true, personId: true },
+    take: 200 * sequenceIds.length,
   });
-  let n = 0;
+  const personIds = [...new Set(replied.map((r) => r.personId))];
+  if (personIds.length === 0) return out;
+  const latestIn = new Map(
+    (
+      await db.$queryRaw<{ personId: string; threadId: string; createdAt: Date }[]>`
+        SELECT DISTINCT ON ("personId") "personId", "threadId", "createdAt"
+        FROM "CrmEmailMessage"
+        WHERE "organizationId" = ${organizationId} AND direction = 'INBOUND'
+          AND "personId" = ANY(${personIds}::text[])
+        ORDER BY "personId", "createdAt" DESC`
+    ).map((m) => [m.personId, m]),
+  );
+  const threadIds = [...new Set([...latestIn.values()].map((m) => m.threadId))];
+  const lastOut = new Map(
+    (threadIds.length
+      ? await db.crmEmailMessage.groupBy({
+          by: ["threadId"],
+          where: { organizationId, threadId: { in: threadIds }, direction: "OUTBOUND" },
+          _max: { createdAt: true },
+        })
+      : []
+    ).map((o) => [o.threadId, o._max.createdAt]),
+  );
   for (const r of replied) {
-    const inbound = await db.crmEmailMessage.findFirst({
-      where: { organizationId, personId: r.personId, direction: "INBOUND" },
-      orderBy: { createdAt: "desc" },
-      select: { threadId: true, createdAt: true },
-    });
+    const inbound = latestIn.get(r.personId);
     if (!inbound) continue;
-    const answered = await db.crmEmailMessage.count({
-      where: {
-        organizationId,
-        threadId: inbound.threadId,
-        direction: "OUTBOUND",
-        createdAt: { gt: inbound.createdAt },
-      },
-    });
-    if (!answered) n++;
+    const answered = lastOut.get(inbound.threadId);
+    if (answered && answered > inbound.createdAt) continue;
+    out.set(r.sequenceId, (out.get(r.sequenceId) ?? 0) + 1);
   }
-  return n;
+  return out;
 }
 
 // ---------------------------------------------------------------- who's in a sequence plan

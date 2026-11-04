@@ -2,6 +2,9 @@
 
 import { Building2, ChartColumn, Columns3, UserRound } from "@/components/icons";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+
+import { peopleListCountsAction } from "@/app/app/[orgSlug]/crm/people-actions";
 
 import { CrmFilterPick, CrmToolbar, useParamSetter } from "@/components/crm/chrome/crm-toolbar";
 import { chipClass } from "@/components/ui/segmented";
@@ -23,7 +26,40 @@ import { cn } from "@/lib/utils";
 export interface ToolbarList {
   id: string;
   label: string;
-  count: number;
+  /** Counted on the server for the open list only; the rest come when Filters opens. */
+  count: number | null;
+}
+
+/** The URL's filters as the counts read them (the open card and the page don't change a count). */
+function countsKey(params: { toString(): string }): string {
+  const rest = new URLSearchParams(params.toString());
+  rest.delete("open");
+  rest.delete("page");
+  rest.delete("list");
+  rest.sort();
+  return rest.toString();
+}
+
+/** Asks for every list's count once Filters is open (it mounts with the panel). */
+function LoadCounts({
+  orgId,
+  query,
+  onLoad,
+}: {
+  orgId: string;
+  query: string;
+  onLoad: (query: string, counts: Record<string, number>) => void;
+}) {
+  useEffect(() => {
+    let live = true;
+    void peopleListCountsAction(orgId, Object.fromEntries(new URLSearchParams(query))).then((r) => {
+      if (live && r.ok) onLoad(query, r.counts);
+    });
+    return () => {
+      live = false;
+    };
+  }, [orgId, query, onLoad]);
+  return null;
 }
 
 const OPTION =
@@ -43,6 +79,7 @@ function chip(on: boolean) {
 const DEAL_KEYS = ["pipeline", "stage", "type", "show"] as const;
 
 export function PeopleToolbar({
+  orgId,
   tabs,
   view,
   lists,
@@ -53,6 +90,7 @@ export function PeopleToolbar({
   reportHref,
   personal = false,
 }: {
+  orgId: string;
   tabs: readonly ResolvedCrmTab[];
   view: PeopleView;
   lists: readonly ToolbarList[];
@@ -70,6 +108,10 @@ export function PeopleToolbar({
   personal?: boolean;
 }) {
   const { params, set } = useParamSetter();
+  const query = countsKey(params);
+  const [loaded, setLoaded] = useState<{ query: string; counts: Record<string, number> } | null>(null);
+  const counts = loaded?.query === query ? loaded.counts : null;
+  const onCounts = useCallback((q: string, c: Record<string, number>) => setLoaded({ query: q, counts: c }), []);
   const companies = view === "companies";
   const board = view === "board";
   const list = params.get("list") ?? "";
@@ -102,6 +144,7 @@ export function PeopleToolbar({
       name: "Lists",
       node: (
         <div className="flex max-h-72 flex-col !justify-start gap-0.5 overflow-y-auto">
+          {!counts && <LoadCounts orgId={orgId} query={query} onLoad={onCounts} />}
           {lists.map((l) => (
             <button
               key={l.id || "all"}
@@ -112,7 +155,7 @@ export function PeopleToolbar({
             >
               <span className="min-w-0 flex-1 truncate">{l.label}</span>
               <span className="text-muted-foreground text-sm font-medium tabular-nums">
-                {l.count}
+                {counts?.[l.id] ?? l.count ?? ""}
               </span>
             </button>
           ))}

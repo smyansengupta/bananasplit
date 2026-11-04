@@ -4,27 +4,17 @@ import { z } from "zod";
 
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requireUser } from "@/lib/auth/session";
-import type { BriefData, TranscriptData } from "@/lib/crm/ai-outputs";
 import { CrmValidationError } from "@/lib/crm/validate";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError, crmAccess, requireCrm, requireManager } from "@/server/crm/access";
 import { AiCapError, NoAiConnectionError } from "@/server/crm/ai";
 import { fillAiField, startColumnFill, type ColumnStart, type FillOutcome } from "@/server/crm/ai-fields";
 import { memberWho } from "@/server/crm/ai-tx";
-import { runFollowUpAgent, runResearchAgent, saveAgentSettings, type AgentSettings } from "@/server/crm/agents";
+import { runFollowUpAgent, saveAgentSettings, type AgentSettings } from "@/server/crm/agents";
 import { askCrm, type AskResponse } from "@/server/crm/ask";
 import { tellCrm, type TellResponse } from "@/server/crm/tell";
-import {
-  draftFollowUp,
-  meetingBrief,
-  readConversation,
-  readTranscript,
-  summarizeRecord,
-  TRANSCRIPT_SOURCES,
-  type DraftResult,
-} from "@/server/crm/assist";
+import { readConversation } from "@/server/crm/assist";
 import { saveDataKey, testDataKey, dataProvider, type ConnectResult, type DataProviderId } from "@/server/crm/data-connectors";
-import { enrichRecord, type EnrichOutcome } from "@/server/crm/enrich";
 import { acceptSuggestion, acceptSuggestions, rejectSuggestion, undoSuggestion } from "@/server/crm/review";
 import { setAiCap, setEnrichmentOrder } from "@/server/crm/usage";
 import { AppError } from "@/server/db/errors";
@@ -46,7 +36,6 @@ export type AiResult<T extends object = object> =
   | { ok: false; error: string; code?: "no-connection" | "cap" | "limit" };
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
-const kindSchema = z.enum(["person", "company", "deal"]);
 
 function failure(error: unknown): { ok: false; error: string; code?: "no-connection" | "cap" | "limit" } {
   if (error instanceof NoAiConnectionError) return { ok: false, error: error.message, code: "no-connection" };
@@ -131,71 +120,10 @@ export async function undoSuggestionAction(orgId: string, suggestionId: string) 
   return undoOne(orgId, suggestionId);
 }
 
-// ---- On a record ------------------------------------------------------------------
-
-export async function summarizeAction(orgId: string, kind: string, recordId: string): Promise<AiResult<{ text: string; points: string[]; at: string }>> {
-  return run(async () => {
-    const s = await summarizeRecord(await who(orgId), { kind: kindSchema.parse(kind), id: id.parse(recordId) });
-    return { text: s.text, points: s.points, at: s.at };
-  });
-}
-
-export async function draftFollowUpAction(orgId: string, kind: string, recordId: string, purpose?: string): Promise<AiResult<DraftResult>> {
-  return run(async () => draftFollowUp(await who(orgId), { kind: kindSchema.parse(kind), id: id.parse(recordId) }, z.string().max(1000).optional().parse(purpose)));
-}
-
-export async function briefAction(orgId: string, kind: string, recordId: string): Promise<AiResult<BriefData & { at: string }>> {
-  return run(async () => meetingBrief(await who(orgId), { kind: kindSchema.parse(kind), id: id.parse(recordId) }));
-}
-
-const transcriptInput = z.object({
-  text: z.string().min(1).max(200_000),
-  source: z.enum(TRANSCRIPT_SOURCES).default("pasted"),
-  title: z.string().max(200).nullish(),
-  meetingDay: z.string().max(10).nullish(),
-  kind: z.enum(["MEETING", "CALL"]).default("MEETING"),
-});
-
-export async function transcriptAction(
-  orgId: string,
-  kind: string,
-  recordId: string,
-  input: z.input<typeof transcriptInput>,
-): Promise<AiResult<{ reading: TranscriptData; queued: number }>> {
-  return run(async () => readTranscript(await who(orgId), { target: { kind: kindSchema.parse(kind), id: id.parse(recordId) }, ...transcriptInput.parse(input) }));
-}
-
-export async function enrichAction(orgId: string, kind: string, recordId: string): Promise<AiResult<EnrichOutcome>> {
-  return run(async () => {
-    const k = kindSchema.parse(kind);
-    if (k === "deal") throw new CrmError("Enrichment is for people and companies.");
-    return enrichRecord(await who(orgId), { kind: k, id: id.parse(recordId) });
-  });
-}
-
-export async function researchAction(orgId: string, kind: string, recordId: string): Promise<AiResult<{ status: string }>> {
-  return run(async () => {
-    const k = kindSchema.parse(kind);
-    if (k === "deal") throw new CrmError("The research agent looks into people and companies.");
-    return { status: await runResearchAgent(await who(orgId), { kind: k, id: id.parse(recordId) }) };
-  });
-}
-
 // ---- Anywhere in the CRM ----------------------------------------------------------
 
 export async function askAction(orgId: string, question: string): Promise<AiResult<AskResponse>> {
   return run(async () => askCrm(await who(orgId), z.string().max(500).parse(question)));
-}
-
-export async function conversationTextAction(
-  orgId: string,
-  text: string,
-  personId?: string | null,
-): Promise<AiResult<{ matched: { id: string; name: string } | null; queued: number; summary: string; notes: string[] }>> {
-  return run(async () => {
-    const r = await readConversation(await who(orgId), { text: z.string().max(20_000).parse(text), personId: personId ? id.parse(personId) : null });
-    return { matched: r.matched, queued: r.queued, summary: r.reading.summary, notes: r.reading.notes };
-  });
 }
 
 /** A change said in words, queued (not applied) for the Ask card to preview: Apply, Cancel, Undo. */

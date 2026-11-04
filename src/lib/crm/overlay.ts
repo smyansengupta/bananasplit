@@ -7,6 +7,8 @@
  *
  *   ?open=person:<id>    ?open=company:<id>    ?open=deal:<id>
  *   ?open=power          ?open=log             ?open=ask
+ *   ?open=calls          (call Today's calls in a row: the dialer)
+ *   ?open=text:<id>      (a text from a number not in the CRM, with Add them to the CRM)
  *   ?open=new:person     ?open=new:company     ?open=new:deal
  *   ?open=goal           ?open=goal:<id>
  *   ?open=merge:<idA>,<idB>   (two people, or two companies)
@@ -38,6 +40,8 @@ export type CrmOpen =
   | { kind: "power" }
   | { kind: "log" }
   | { kind: "ask" }
+  | { kind: "calls" }
+  | { kind: "text"; id: string }
   | { kind: "new"; what: CrmNewKind }
   | { kind: "goal"; id: string | null }
   | { kind: "merge"; ids: [string, string] | [string] }
@@ -80,10 +84,12 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
     case "company":
     case "deal":
     case "quote":
+    case "text":
       return rest && ID.test(rest) ? { kind: head, id: rest } : null;
     case "power":
     case "log":
     case "ask":
+    case "calls":
       return rest === null ? { kind: head } : null;
     case "new":
       return rest && (NEW_KINDS as readonly string[]).includes(rest)
@@ -114,6 +120,7 @@ export function formatOpen(open: CrmOpen): string {
     case "company":
     case "deal":
     case "quote":
+    case "text":
       return `${open.kind}:${open.id}`;
     case "new":
       return `new:${open.what}`;

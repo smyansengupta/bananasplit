@@ -13,7 +13,7 @@ import { peoplePage } from "@/server/crm/people-view";
 import { PAGE } from "@/server/crm/queries";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmShell } from "../shell";
+import { crmMembers, crmShell } from "../shell";
 
 export const metadata = { title: "People" };
 
@@ -46,21 +46,29 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
   if (!shell) return gate;
   const orgId = shell.org.id;
   const relationships = shell.access.settings?.relationshipTypes ?? [];
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
-  const { data, boardFields } = await withOrgTx(orgId, async ({ db }) => {
-    const data = await peoplePage(db, orgId, shell.user.id, shell.roles, sp, {
-      names,
-      relationships,
-      pipelines: shell.pipelines,
-    });
-    const boardFields = data.board ? await customFieldsFor(db, orgId, "deal", data.board.pipeline.id) : [];
-    return { data, boardFields };
-  });
+  // The members, the list and the card open over it load at once, each in its own transaction.
+  const membersP = crmMembers(orgId);
+  const [members, { data, boardFields }, overlay] = await Promise.all([
+    membersP,
+    membersP.then((members) => {
+      const names = new Map(members.map((m) => [m.id, m.name]));
+      return withOrgTx(orgId, async ({ db }) => {
+        const data = await peoplePage(db, orgId, shell.user.id, shell.roles, sp, {
+          names,
+          relationships,
+          pipelines: shell.pipelines,
+        });
+        const boardFields = data.board ? await customFieldsFor(db, orgId, "deal", data.board.pipeline.id) : [];
+        return { data, boardFields };
+      });
+    }),
+    CrmOverlays({ shell, orgSlug, searchParams: sp }),
+  ]);
 
   const base = `/app/${orgSlug}/crm`;
   const reportHref = data.board ? `${base}/reports/deals/${data.board.pipeline.id}` : null;
   const ownerOptions = [
-    ...shell.members.map((m) => ({ value: `u:${m.id}`, label: m.name })),
+    ...members.map((m) => ({ value: `u:${m.id}`, label: m.name })),
     ...[...shell.roles.values()].map((r) => ({ value: `r:${r.key}`, label: r.title })),
   ];
   const stageFields: EditField[] = [
@@ -92,11 +100,12 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
         create={data.companies ? "company" : "person"}
         toolbar={
           <PeopleToolbar
+            orgId={orgId}
             tabs={shell.tabs}
             view={data.view}
             lists={data.lists}
             trash={data.trash}
-            members={shell.members}
+            members={members}
             relationships={relationships.map((r) => ({ id: r.id, label: r.label }))}
             deals={data.dealOptions}
             reportHref={reportHref}
@@ -164,12 +173,12 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
           dealsOn={data.dealsOn}
           trash={sp.trash === "1"}
           pickedLists={data.lists.filter((l) => l.picked).map((l) => ({ id: l.id, label: l.label }))}
-          members={shell.members}
+          members={members}
           series={data.series}
           personal={shell.access.personal}
         />
       )}
-      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
+      {overlay}
     </div>
   );
 }

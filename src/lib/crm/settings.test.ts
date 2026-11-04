@@ -41,6 +41,9 @@ describe("CRM settings sections", () => {
     expect(ids).not.toContain("phone");
     expect(ids).not.toContain("team");
     expect(ids).not.toContain("api");
+    // Handing people over is theirs too, though Team and access isn't.
+    expect(ids).toContain("handover");
+    expect(canOpenSection(findSection("handover")!, member)).toBe(false);
   });
 
   it("gives every member their own sections only", () => {
@@ -50,6 +53,7 @@ describe("CRM settings sections", () => {
   it("hides Team and access in a Personal space", () => {
     const ids = visibleSections(personal).map((s) => s.id);
     expect(ids).not.toContain("team");
+    expect(ids).not.toContain("handover");
     expect(ids).toContain("api");
     expect(canOpenSection(findSection("team")!, personal)).toBe(false);
   });
@@ -62,6 +66,7 @@ describe("CRM settings sections", () => {
 
   it("maps the old sub-pages onto their sections", () => {
     expect(findSection("webhooks")!.id).toBe("api");
+    expect(findSection("handover")!.id).toBe("handover");
     expect(findSection("phone")!.id).toBe("phone");
     expect(findSection("nope")).toBeNull();
   });

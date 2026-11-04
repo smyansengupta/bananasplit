@@ -63,7 +63,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "client-yes",
     title: "A client said yes",
-    description: "Start the project: its tasks, its owner and the item's files, in Tasks.",
+    description: "Start the project: its tasks, its owner and the deal's files, in Tasks.",
     icon: "Briefcase",
     needs: "clients",
     trigger: { type: "stage.changed", params: { pipelineId: "@pipeline:clients", toKind: "WON" } },
@@ -84,7 +84,7 @@ export const RECIPES: readonly Recipe[] = [
   },
   {
     id: "stuck-nudge",
-    title: "An item is stuck",
+    title: "A deal is stuck",
     description: "Nudge its owner when it sits in one stage past that stage's limit.",
     icon: "Hourglass",
     trigger: { type: "deal.stuck", params: {} },

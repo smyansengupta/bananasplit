@@ -52,7 +52,7 @@ async function targetsOf(db: TxClient, organizationId: string, t: CallTargets): 
   }
   if (t.dealId) {
     const d = await db.crmDeal.findFirst({ where: { id: t.dealId, organizationId }, select: { id: true } });
-    if (!d) throw new CrmError("That item isn't in the CRM any more.");
+    if (!d) throw new CrmError("That deal isn't in the CRM any more.");
     out.push({ kind: "deal", id: d.id });
   }
   if (out.length === 0) throw new CrmError("Pick who the call was with.");

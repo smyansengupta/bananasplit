@@ -78,7 +78,7 @@ export async function memberLeft(db: TxClient, organizationId: string, userId: s
     ]
       .filter(Boolean)
       .join(", "),
-    linkUrl: org ? crmSettingsHref(org.slug, "team") : null,
+    linkUrl: org ? crmSettingsHref(org.slug, "handover") : null,
     dedupeKey: `crm-left:${userId}:${new Date().toISOString().slice(0, 10)}`,
   });
 }

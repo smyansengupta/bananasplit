@@ -1913,6 +1913,8 @@ named by one search param (`src/lib/crm/overlay.ts`):
 | `quote:<id>` | a quote or invoice with every detail |
 | `plan:sequence:<id>`, `plan:campaign:<id>` | a follow-up series, a split list or a group email |
 | `plan:email`, `plan:split` | a new one-email or split-a-list plan |
+| `calls` | Call them in a row: the dialer over the calls and follow-ups due (`&dial=<list id>` for one of the organization's lists) |
+| `text:<id>` | a text from a number not in the CRM, with Add them to the CRM |
 
 - **Opening and closing.** `useCrmOpen()` (client) gives the open card,
   `hrefFor(open)`, `setOpen(open)` (a push, so Back closes it) and
@@ -1965,7 +1967,8 @@ named by one search param (`src/lib/crm/overlay.ts`):
   suggestion). The bar is in Tasks' order: Mine and Everyone's as round
   buttons, Filters (picks a group), then search (a Personal space has no
   Mine and Everyone's: it's all yours). `/crm/calls` opens the Calls group
-  (`crmCallsHref`, `?show=calls`). Goals, Coming up
+  (`crmCallsHref`, `?show=calls`); with two or more calls due its header
+  has Call them in a row, the dialer as a card (`?open=calls`). Goals, Coming up
   (meetings in the next week) and Done on its own (the latest five with
   when, the week's count, See all opens `?open=log`;
   `src/components/crm/today/today-log.tsx`) sit on the right. Power hour
@@ -2099,19 +2102,21 @@ named by one search param (`src/lib/crm/overlay.ts`):
   (`CrmSettingsFrame`). Sections are server components in
   `src/components/crm/settings/sections/`. You, Templates and Booking link
   are every member's; Automations, Sending, Deal stages and types, Fields,
-  AI and Import and export are for owners, admins and CRM managers; Phone
-  and texts, Team and access and API and webhooks for owners and admins.
+  Hand people over, AI and Import and export are for owners, admins and CRM
+  managers; Phone and texts, Team and access and API and webhooks for owners
+  and admins.
   `/crm/settings` opens Automations (or You). The settings button is in
   every member's header; a section they can't open sends them to the one
   they can. A Personal space has no Team and access (so no who sees what,
   CRM managers or lead routing; `/crm/handover` goes to People) and is
   offered its own ready-made pipelines.
 - **Handover** (`sections/handover.tsx`; it was `/crm/handover`, which
-  redirects): Team and access holds members who left, people with no
-  owner and handing a member's people over; You holds "Handed to you", the
-  brief on each person handed to you in the last 90 days, or what a
-  position you hold looks after (`?role=`). The Inbox lines from
-  `handover.ts` link there. Whoever can't open Team and access lands on
+  redirects): Hand people over (`/crm/settings/handover`, owners, admins
+  and CRM managers, not in a Personal space) holds members who left, people
+  with no owner and handing a member's people over; You holds "Handed to
+  you", the brief on each person handed to you in the last 90 days, or what
+  a position you hold looks after (`?role=`). The Inbox lines from
+  `handover.ts` link there. Whoever can't open Hand people over lands on
   You.
 - **Pages under a section**: one automation at
   `/crm/settings/automations/{id}` (`new?describe=` fills the steps from
@@ -2552,3 +2557,78 @@ twice.
 **Input.** The deal, goal, People, reports and plan actions check their
 input with zod (`checkInput` in `crm/run.ts`).
 
+## Polish
+
+Built 2026-11-03 on `claude/crm-polish`.
+
+**Speed.** Pages ran their reads one after another in one transaction (a
+transaction runs one query at a time), and several read once per row.
+
+- `crmShell` is wrapped in React `cache()` (a page and the card over it
+  share one shell). It takes the space and its add-ons from the org
+  context the layout already read (`crmAccessOf`), reads only CrmSettings
+  and the pipelines, and loads the org chart's positions beside them.
+  Members are no longer on the shell: `crmMembers(orgId)` (cached per
+  request) loads them where something shows them; CRM settings pages use
+  `crmSettingsShell`, which has them.
+- Today and People start the card open over them (`CrmOverlays`) with
+  their own data, in parallel. Today reads its list (`todayForShell`,
+  cached, so Power hour reuses it), its right column and Coming up in
+  separate transactions. The person card reads the record, what's around
+  it (unanswered mail, a waiting step, templates, series, the booking
+  link) and the members at once.
+- One read instead of one per row: replies waiting in the follow-up queue
+  (`groupBy` on the threads' latest mail out), Power hour's latest touches
+  (one windowed query), Done on its own's "changed since" check, a plan
+  list's unanswered replies, group-email counts and first subjects, split
+  lists' progress (`campaignsProgress`), steps and shares, enrolling's
+  "already in it" and conflict checks (`conflictsFor`), and Merge's
+  counts. A queue item carries its relationship, so Today doesn't read
+  people twice.
+- People counts only the open list; Filters asks for every list's count
+  when it opens (`peopleListCountsAction`, `peopleListCounts`).
+- No `Promise.all` over one transaction's client any more (Merge,
+  `describeContext`, two report widgets, `workflowRuns`).
+
+Measured against the local database as jackson@example.edu (data queries,
+not counting BEGIN, SET and COMMIT; the card's own loads included):
+
+| Page | Before | After |
+| --- | --- | --- |
+| Today | 71 in 5 transactions | 59 in 7 |
+| Today with Power hour | 110 in 6 | 63 in 8 |
+| People | 42 in 5 | 33 in 6 |
+| People with a person card | 85 in 7 | 76 in 9 |
+| Board / Companies | 40 / 36 | 31 / 29 |
+
+The local data is small (8 members, 181 people, 3 plans); the per-row
+reads removed grow with replies, Today's people, lists and plans.
+
+**Calls.** The Calls page's tools have homes: Call them in a row on
+Today's Calls group (the dialer card, `overlays/calls.tsx`, with the
+organization's lists as chips); Your recent calls, with recordings, in CRM
+settings > You (`settings/recent-calls.tsx`; a person's calls are on their
+Timeline); and texts from numbers not in the CRM as Inbox lines (one per
+number, last 30 days, key `crm:text-<id>`, in `crmInboxItems`) that open
+the text's card (`overlays/text.tsx`) with Add them to the CRM.
+
+**Handover** for CRM managers: its own section (see "Settings and setup").
+
+**Removed as unused:** `forecast.tsx`, `ai/record-ai.tsx`,
+`ai/record-ai-panel.tsx`, `ai/ai-bar.tsx`, `ai/card-scan.tsx` (the New
+card uses `ai/image.tsx`), `cards/record-card.tsx`, `chrome/open-pill.tsx`,
+`deal-people.tsx`, `score.tsx`, `today-keys.tsx`, `record-page.tsx` (`when`
+is `src/lib/crm/when.ts`), `chip-class.ts`, `use-url.ts`, Outreach's
+`queue-section`, `record-section`, `settings-section`, `routing`,
+`partner-panel` and `bulk`, Phone's `phone-section` and `today-calls`,
+`quotes/new-quote.tsx`, the CRM's `views.ts`, and the actions only they
+used (`summarizeAction`, `draftFollowUpAction`, `briefAction`,
+`transcriptAction`, `enrichAction`, `researchAction`,
+`conversationTextAction`, `mergeAction`, `addDealPersonAction`,
+`removeDealPersonAction`, the forecast call and category actions, the
+deliverable and guest-link actions, `createQuoteAction`). The server code
+behind them stays.
+
+**Words.** Deals, never items, in the CRM's own screens, errors, the
+automation builder and recipes, and the public API's descriptions (its
+`/items` paths and `object: "item"` stay, as a contract).

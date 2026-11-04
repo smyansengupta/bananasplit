@@ -4,7 +4,8 @@
  * /crm/settings/{id}. Who sees which: You, Templates and Booking link are
  * every member's own; the rest are for whoever runs the CRM (owners, admins
  * and CRM managers), and a few for owners and admins only. A Personal space
- * has no Team and access. Pure: the page, the nav and the redirects read it.
+ * has no Team and access, and no Hand people over. Pure: the page, the nav
+ * and the redirects read it.
  */
 
 export type CrmSettingsSectionId =
@@ -17,6 +18,7 @@ export type CrmSettingsSectionId =
   | "booking"
   | "phone"
   | "team"
+  | "handover"
   | "ai"
   | "import"
   | "api";
@@ -100,6 +102,14 @@ export const CRM_SETTINGS_SECTIONS: readonly CrmSettingsSection[] = [
     team: true,
   },
   {
+    id: "handover",
+    label: "Hand people over",
+    description: "Members who left, people with no owner, and moving someone's people to someone else.",
+    icon: "ArrowLeftRight",
+    who: "manager",
+    team: true,
+  },
+  {
     id: "ai",
     label: "AI",
     description: "Your organization's own AI, billed to your own key.",
@@ -127,7 +137,7 @@ export const CRM_SETTINGS_ALIASES: Readonly<Record<string, CrmSettingsSectionId>
   webhooks: "api",
   keys: "api",
   mail: "you",
-  handover: "team",
+  handover: "handover",
   access: "team",
   pipelines: "stages",
 };

@@ -9,6 +9,7 @@ import { inboundDomain } from "@/server/crm/outreach/mailbox";
 import { ensureMemberSettings } from "@/server/crm/outreach/member";
 import { withOrgTx } from "@/server/db/context";
 
+import { RecentCalls } from "../recent-calls";
 import { DetailsCard, YourMailCard } from "../you-settings";
 import { HandedToYou } from "./handover";
 import type { SectionProps } from "./types";
@@ -58,6 +59,7 @@ export async function YouSection({ shell, orgSlug, sp }: SectionProps) {
         )}
       </SettingsCard>
       <HandedToYou shell={shell} orgSlug={orgSlug} role={sp.role} />
+      <RecentCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} />
     </>
   );
 }
