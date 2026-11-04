@@ -485,14 +485,30 @@ export function PeopleTable({
                           <CrmAvatar name={r.name} size={38} />
                         </span>
                         <span className="min-w-0">
-                          <b className="block max-w-72 truncate font-semibold hover:underline">{r.name}</b>
+                          <b className={cn("block truncate font-semibold hover:underline", NAME_WIDTH)}>
+                            {r.name}
+                          </b>
                           {r.sub && (
-                            <span className="text-muted-foreground block max-w-72 truncate text-[13px]">
+                            <span className={cn("text-muted-foreground block truncate text-[13px]", NAME_WIDTH)}>
                               {r.sub}
                             </span>
                           )}
                         </span>
                       </Link>
+                      {/* On a phone the Next step column is gone: its button sits under the name. */}
+                      <div className="mt-2 ps-[50px] sm:hidden">
+                        <div className={NAME_WIDTH}>
+                          <NextStep
+                            orgId={orgId}
+                            kind={kind}
+                            row={r}
+                            open={(o) => hrefFor(o)}
+                            quoteHref={(id) => hrefWith({ tab: "quote" }, { kind: "deal", id })}
+                            disabled={trash || r.deleted}
+                            wrap
+                          />
+                        </div>
+                      </div>
                     </td>
                     {!companies && (
                       <td className="px-3 py-3 max-lg:hidden">{r.rel && <RelationshipPill rel={r.rel} />}</td>
@@ -645,6 +661,9 @@ export function PeopleTable({
   );
 }
 
+/** A name's width: 18rem, and on a phone what's left beside the checkbox and avatar (no sideways scroll). */
+const NAME_WIDTH = "max-w-72 max-sm:max-w-[calc(100vw-10rem)]";
+
 const OUTLINE =
   "bg-transparent text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-current/8";
 
@@ -673,6 +692,7 @@ function NextStep({
   open,
   quoteHref,
   disabled,
+  wrap = false,
 }: {
   orgId: string;
   kind: Kind;
@@ -681,6 +701,8 @@ function NextStep({
   /** The deal's card, opened on its quote. */
   quoteHref: (dealId: string) => string;
   disabled: boolean;
+  /** On a phone: the reason wraps under the button instead of being cut. */
+  wrap?: boolean;
 }) {
   const [done, setDone] = useState<string | null>(null);
   const a = row.next.action;
@@ -734,9 +756,9 @@ function NextStep({
     );
   }
   return (
-    <div className="flex min-w-0 flex-nowrap items-center gap-2">
+    <div className={cn("flex min-w-0 items-center gap-2", wrap ? "flex-wrap" : "flex-nowrap")}>
       {node}
-      <AmbientWhy className="min-w-0 truncate whitespace-nowrap">{a.reason}</AmbientWhy>
+      <AmbientWhy className={cn("min-w-0", !wrap && "truncate whitespace-nowrap")}>{a.reason}</AmbientWhy>
     </div>
   );
 }

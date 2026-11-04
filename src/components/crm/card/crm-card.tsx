@@ -149,18 +149,22 @@ export function CrmCard({
                 // The sections, then anything beside them (a deal's stages),
                 // like Tasks' view switch with Mine / My team / Everyone next
                 // to it; on a narrow card the second group wraps under.
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                   {tabs && tabs.length > 0 && (
-                    <Segmented
-                      label={`${plainTitle}: sections`}
-                      value={current}
-                      onSelect={pick}
-                      options={tabs.map((t) => ({
-                        value: t.value,
-                        label: t.label,
-                        count: t.count,
-                      }))}
-                    />
+                    // On a phone the pills stay inside the card: tighter, and
+                    // they scroll sideways within it if they still don't fit.
+                    <div className="max-w-full min-w-0 [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden max-sm:[&_button]:px-2.5">
+                      <Segmented
+                        label={`${plainTitle}: sections`}
+                        value={current}
+                        onSelect={pick}
+                        options={tabs.map((t) => ({
+                          value: t.value,
+                          label: t.label,
+                          count: t.count,
+                        }))}
+                      />
+                    </div>
                   )}
                   {tabsAside}
                 </div>
