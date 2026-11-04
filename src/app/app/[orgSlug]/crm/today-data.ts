@@ -1,5 +1,7 @@
 import { cache } from "react";
 
+import type { TodayLogEntry } from "@/components/crm/today/today-log";
+import { dayLabel, onItsOwnWeek, type OnItsOwnEntry } from "@/server/crm/on-its-own";
 import { todayRows, type TodayData } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
@@ -29,6 +31,23 @@ export const todayForShell = cache(async (shell: CrmShell, who: CrmScope): Promi
     }),
   );
 });
+
+/** Done on its own on Today: the week as figures, and the latest few, with when. */
+export function todayLog(log: readonly OnItsOwnEntry[], now: Date, tz: string) {
+  const entries: TodayLogEntry[] = log.slice(0, 4).map((e) => {
+    const day = dayLabel(e.at, now, tz);
+    return {
+      id: e.id,
+      kind: e.kind,
+      when:
+        day === "Today"
+          ? e.at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })
+          : day,
+      text: e.text,
+    };
+  });
+  return { entries, week: onItsOwnWeek(log, now, tz) };
+}
 
 /** Today's ?who=: mine (the default), team or all. */
 export function todayScope(who: unknown): CrmScope {

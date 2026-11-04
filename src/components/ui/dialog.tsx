@@ -23,15 +23,25 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
+/**
+ * How a popup comes and goes: `full` fades in and out; `in` fades in and
+ * goes at once; `none` does neither. Two popups that take each other's
+ * place use `none`, so nothing fades over anything else.
+ */
+export type DialogMotion = "full" | "in" | "none";
+
 function DialogOverlay({
   className,
+  motion = "full",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Overlay> & { motion?: DialogMotion }) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-black/30 duration-150 supports-backdrop-filter:backdrop-blur-[2px]",
+        "fixed inset-0 isolate z-50 bg-black/30 duration-150 supports-backdrop-filter:backdrop-blur-[2px]",
+        motion !== "none" && "data-open:animate-in data-open:fade-in-0",
+        motion === "full" && "data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -43,17 +53,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  motion = "full",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  motion?: DialogMotion;
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay motion={motion} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-popover-foreground ring-foreground/6 shadow-e2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 rounded-card fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 p-6 text-sm ring-1 duration-100 outline-none sm:max-w-sm",
+          "bg-popover text-popover-foreground ring-foreground/6 shadow-e2 rounded-card fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 p-6 text-sm ring-1 duration-100 outline-none sm:max-w-sm",
+          motion !== "none" && "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+          motion === "full" && "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           // Keep a header's text clear of the round Close in the corner.
           showCloseButton && "[&_[data-slot=dialog-header]]:pe-8",
           className,

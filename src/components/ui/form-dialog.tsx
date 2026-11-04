@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, type ComponentProps, type ReactNode } from "react";
+import { useId, useRef, type ComponentProps, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "cn";
 
 import type { IconComponent } from "@/components/icons";
@@ -10,15 +10,18 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHead,
+  type DialogMotion,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { SegmentCount, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 
 /**
  * The create dialogs' shared pieces: New task's window (a fixed header with
  * the black Close, a body that scrolls, a fixed foot with the buttons), its
  * labelled fields in one column with pairs side by side, and New event's
  * kind cards. New task, New event and the CRM's New person, New company,
- * New deal and email plans are built from these, so they read as one.
+ * New deal, goals, Done on its own and email plans are built from these, so
+ * they read as one.
  */
 
 /**
@@ -36,18 +39,21 @@ export function FormDialog({
   onOpenChange,
   className,
   onInteractOutside,
+  motion,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   className?: string;
   onInteractOutside?: ComponentProps<typeof DialogContent>["onInteractOutside"];
+  motion?: DialogMotion;
   children: ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
+        motion={motion}
         className={cn(
           "flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl",
           PHONE_FULL_SCREEN,
@@ -89,6 +95,67 @@ export function FormDialogHead({
     >
       {children}
     </DialogHead>
+  );
+}
+
+/**
+ * A small switch under the head's line (FormDialogHead's children), out of
+ * the way of the fields. A radio group's keyboard: Tab reaches the chosen
+ * one, the arrows move the choice. On a phone it scrolls inside the dialog.
+ */
+export function FormDialogSwitch<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: T; label: string; icon?: IconComponent; count?: number }[];
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  const buttons = useRef<Partial<Record<T, HTMLButtonElement | null>>>({});
+  const onKeyDown = (e: KeyboardEvent, index: number) => {
+    const step =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    const next = options[(index + step + options.length) % options.length]!.value;
+    onChange(next);
+    buttons.current[next]?.focus();
+  };
+  return (
+    <div className="mt-3 max-w-full self-start [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden">
+      <div role="radiogroup" aria-label={label} className={cn(segmentedTrack, "h-9 [&>button]:h-7")}>
+        {options.map((o, index) => {
+          const on = o.value === value;
+          const Icon = o.icon;
+          return (
+            <button
+              key={o.value}
+              ref={(node) => {
+                buttons.current[o.value] = node;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on ? 0 : -1}
+              onClick={() => onChange(o.value)}
+              onKeyDown={(e) => onKeyDown(e, index)}
+              className={cn(segmentedItem(on), "px-3 max-sm:px-2.5")}
+            >
+              {Icon && <Icon aria-hidden="true" className="max-sm:hidden" />}
+              {o.label}
+              {o.count ? <SegmentCount n={o.count} active={on} /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -16,12 +16,12 @@ import {
 } from "@/lib/crm/power-hour";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
-import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
+import { onItsOwn } from "@/server/crm/on-its-own";
 import { comingUp, TODAY_GROUPS, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmMemberNames, crmShell, crmTeam } from "./shell";
-import { todayForShell, todayScope } from "./today-data";
+import { todayForShell, todayLog, todayScope } from "./today-data";
 
 export const metadata = { title: "CRM" };
 
@@ -108,19 +108,6 @@ export default async function CrmTodayPage({
   const powerIds = new Set(data.today.rows.flatMap((r) => (r.person ? [r.person.id] : [])));
   const powerRows = data.today.rows.filter((r) => r.person && powerIds.delete(r.person.id));
   const base = `/app/${orgSlug}/crm`;
-  // Done on its own, under Goals and Coming up: the latest five, with when.
-  const logEntries = data.log.slice(0, 5).map((e) => {
-    const day = dayLabel(e.at, now, data.tz);
-    return {
-      id: e.id,
-      when:
-        day === "Today"
-          ? e.at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: data.tz })
-          : day,
-      text: e.text,
-      held: e.kind === "held",
-    };
-  });
 
   return (
     <div>
@@ -172,6 +159,7 @@ export default async function CrmTodayPage({
               actual: g.attainment.actual,
               target: g.target,
               share: g.attainment.share,
+              pace: g.attainment.pace,
               onTrack: g.attainment.onTrack,
             }))}
           />
@@ -229,7 +217,11 @@ export default async function CrmTodayPage({
               })}
             </section>
           )}
-          <TodayLog entries={logEntries} total={data.log.length} seeAllHref={hrefWithOpen(base, sp, "log")} />
+          <TodayLog
+            {...todayLog(data.log, now, data.tz)}
+            seeAllHref={hrefWithOpen(base, sp, "log")}
+            automationsHref={`${base}/settings/automations`}
+          />
         </aside>
       </div>
       {overlay}

@@ -11,7 +11,7 @@ pages wear the same theme and logo.
 2. **Palette.** Pick a preset, or **Custom** to choose the five colours yourself:
    - **Moonstone** (the Default, id `default`): graphite and pearl with no fill
      colour of its own, lit by a banana glow (the light behind the page top, the
-     halo on create buttons, the active item and focus). Dark first: an org with
+     halo on the active item and focus). Dark first: an org with
      no theme opens in dark mode. Primary and accent are one colour (pearl in
      dark, ink in light).
    - **Banana night** (id `night`): graphite greys with banana as the accent.
@@ -65,8 +65,8 @@ In production an admin picks it on the Theme page.
 
 - **Tokens.** `src/lib/theme/derive.ts` maps the five roles to the full token set:
   the shadcn tokens in `globals.css` plus `--primary-hover`, `--create` (the
-  create button: the accent, or the white surface where the accent is the
-  ink itself, as Moonstone's is in light), `--brand-accent`
+  create button, a plain solid button with no glow or shadow: the theme's own
+  surface in light, with a hairline edge, and white in dark), `--brand-accent`
   (`-foreground`), `--success` (`-foreground`), `--warning` (`-foreground`),
   `--destructive-foreground` and `--chart-1..5`. Tailwind exposes them as
   `bg-primary-hover`, `text-success`, `bg-warning/10`, `bg-brand-accent`,

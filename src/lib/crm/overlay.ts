@@ -113,6 +113,15 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
   }
 }
 
+/**
+ * The create dialogs: they open from what the page already holds
+ * (CrmCreateHost), so `?open=` for one changes the URL shallowly and never
+ * asks the server. Everything else loads on the server (CrmOverlays).
+ */
+export function opensInstantly(open: CrmOpen | null): boolean {
+  return open?.kind === "new" || (open?.kind === "goal" && open.id === null);
+}
+
 /** A CrmOpen as the `?open=` value. */
 export function formatOpen(open: CrmOpen): string {
   switch (open.kind) {

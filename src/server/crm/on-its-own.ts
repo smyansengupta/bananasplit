@@ -465,6 +465,73 @@ export async function onItsOwn(
   return out.sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
+/** One day of the week's chart. */
+export interface OnItsOwnDay {
+  key: string;
+  /** "M". */
+  label: string;
+  /** "Tue, Nov 3: 4 done, 1 held back". */
+  title: string;
+  done: number;
+  held: number;
+  today: boolean;
+}
+
+/** The last seven days, today last: what it did and what it held back, by day. */
+export interface OnItsOwnWeek {
+  done: number;
+  held: number;
+  days: OnItsOwnDay[];
+}
+
+/**
+ * The seven days ending today, where the member is, from onItsOwn's entries.
+ * Sent and changed count as done; held back doesn't, it's what it didn't do.
+ */
+export function onItsOwnWeek(
+  entries: readonly Pick<OnItsOwnEntry, "kind" | "at">[],
+  now: Date,
+  tz: string,
+): OnItsOwnWeek {
+  const today = localDateKey(now, tz);
+  const days: OnItsOwnDay[] = Array.from({ length: 7 }, (_, i) => {
+    const key = addDaysToKey(today, i - 6);
+    const noon = new Date(`${key}T12:00:00Z`);
+    return {
+      key,
+      label: noon.toLocaleDateString("en-US", { weekday: "narrow", timeZone: "UTC" }),
+      title: noon.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
+      done: 0,
+      held: 0,
+      today: key === today,
+    };
+  });
+  const byKey = new Map(days.map((d) => [d.key, d]));
+  for (const e of entries) {
+    const day = byKey.get(localDateKey(e.at, tz));
+    if (!day) continue;
+    if (e.kind === "held") day.held += 1;
+    else day.done += 1;
+  }
+  for (const d of days) {
+    const parts = [
+      ...(d.done ? [`${d.done} done`] : []),
+      ...(d.held ? [`${d.held} held back`] : []),
+    ];
+    d.title = `${d.title}: ${parts.join(", ") || "nothing"}`;
+  }
+  return {
+    done: days.reduce((n, d) => n + d.done, 0),
+    held: days.reduce((n, d) => n + d.held, 0),
+    days,
+  };
+}
+
 /** "Today", "Yesterday" or "Oct 31", where the member is. */
 export function dayLabel(at: Date, now: Date, tz: string): string {
   const key = localDateKey(at, tz);

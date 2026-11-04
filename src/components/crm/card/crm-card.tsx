@@ -14,15 +14,16 @@ import { PHONE_FULL_SCREEN } from "@/components/ui/form-dialog";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
-import { useCrmOpen, usePendingOpen } from "./use-crm-open";
+import { useCardPresence } from "./use-crm-open";
 
 /** The card's frame: Tasks' task dialog at 680px (CrmPendingCard draws the same one while loading). */
 export const CRM_CARD_FRAME =
   "bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]";
 
 /**
- * The one card everything in the CRM opens as (a person, company, deal,
- * Power hour, Done on its own, Ask, New, a goal): Tasks' task dialog at
+ * The card a record and most else in the CRM open as (a person, company,
+ * deal, Power hour, Ask; New, a goal and Done on its own are New person's
+ * window instead, FormDialog and CrmFormCard): Tasks' task dialog at
  * 680px. A fixed header (DialogHead: avatar, title and subtitle; the black
  * Close in the corner with the card's round buttons and "…" under it), the
  * pill tab segment under it (with `tabsAside` beside it), a body that
@@ -85,27 +86,19 @@ export function CrmCard({
   bodyClassName?: string;
   children: ReactNode | ((tab: string) => ReactNode);
 }) {
-  const { close, raw } = useCrmOpen();
-  // Closing hides the card on the click; the URL catches up after. Another
-  // card on its way (CrmPendingCard) takes this one's place too.
-  const [closing, setClosing] = useState(false);
-  const pending = usePendingOpen();
+  const { shown, motion, shut } = useCardPresence(onClose);
   const [own, setOwn] = useState(defaultTab ?? tabs?.[0]?.value ?? "");
   const current = tab ?? own;
   const pick = (value: string) => {
     if (tab === undefined) setOwn(value);
     onTab?.(value);
   };
-  const shut = () => {
-    setClosing(true);
-    (onClose ?? close)();
-  };
-  const shown = !closing && !(pending !== null && pending !== raw);
   const plainTitle = typeof title === "string" ? title : "Details";
   return (
     <Dialog open={shown} onOpenChange={(o) => !o && shut()}>
       <DialogContent
         showCloseButton={false}
+        motion={motion}
         className={cn(
           CRM_CARD_FRAME,
           // On a phone the card is the whole screen, rounded at the top.
