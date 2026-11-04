@@ -649,7 +649,7 @@ Migrations `20261024120000_meetings` and `20261026120000_event_reminders`.
 ## The section
 
 Meetings has three parts, one switch bar (`MeetingsTabs`): Meetings, Find a
-time and Booking links (`/app/{slug}/meetings/booking`; your own link and the
+time and Meeting links (`/app/{slug}/meetings/booking`; your own link and the
 organization's, see [booking.md](./booking.md)). A booked meeting is an
 ordinary meeting here, with the guest's answers in its description.
 

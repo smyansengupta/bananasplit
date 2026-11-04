@@ -39,7 +39,7 @@ ${m.html}`;
   });
   it("asks an unconfirmed guest to say the address is theirs, on their booking page", () => {
     const m = guestEmail(base);
-    expect(m.subject).toBe("Confirm your time: Coffee with the president with Ada Lovelace");
+    expect(m.subject).toBe("Confirm your time: Coffee with the president (Ada Lovelace)");
     expect(m.text).toContain("Confirm it's me: https://app.example/book/m/tok");
     expect(m.text).toContain("Hi Sam,");
   });
@@ -60,7 +60,7 @@ ${m.html}`;
 
   it("cancels without links to move it", () => {
     const m = guestEmail({ ...base, template: "cancelled", verified: true });
-    expect(m.subject).toBe("Cancelled: Coffee with the president with Ada Lovelace");
+    expect(m.subject).toBe("Cancelled: Coffee with the president (Ada Lovelace)");
     expect(m.text).not.toContain("Move or cancel");
   });
 

@@ -7,15 +7,14 @@ const link = (over: Partial<LinkFacts> = {}): LinkFacts => ({
   active: true,
   canEdit: true,
   hosts: 2,
-  openSoon: 12,
-  booked: 3,
   ...over,
 });
 const kinds = (l: LinkFacts) => linkAmbient(l).map((a) => a.kind);
 
 describe("linkAmbient", () => {
-  it("says nothing about a link that's on, open and being booked", () => {
+  it("says nothing about a link that's on: nothing needs doing", () => {
     expect(kinds(link())).toEqual([]);
+    expect(kinds(link({ personal: true, hosts: 1 }))).toEqual([]);
   });
 
   it("offers Turn it on only to someone who can", () => {
@@ -24,20 +23,16 @@ describe("linkAmbient", () => {
     expect(linkAmbient(link({ personal: true, active: false, hosts: 1 }))[0]?.reason).toMatch(/free times/);
   });
 
-  it("asks for a host first on a link nobody hosts", () => {
+  it("asks for a host instead on a link nobody hosts, on or off", () => {
     expect(kinds(link({ active: false, hosts: 0 }))).toEqual(["add-host"]);
+    expect(kinds(link({ hosts: 0 }))).toEqual(["add-host"]);
+    expect(kinds(link({ hosts: 0, canEdit: false }))).toEqual([]);
   });
 
-  it("points at the hours when nobody can book it", () => {
-    expect(kinds(link({ openSoon: 0, booked: 0 }))).toEqual(["fix-hours"]);
-    // Not known isn't none.
-    expect(kinds(link({ openSoon: null }))).toEqual([]);
-  });
-
-  it("suggests the signature until someone books", () => {
-    expect(kinds(link({ booked: 0 }))).toEqual(["signature"]);
-    expect(kinds(link({ booked: 0, canEdit: false }))).toEqual(["signature"]);
-    expect(kinds(link({ booked: 1 }))).toEqual([]);
+  it("never offers more than one", () => {
+    for (const active of [true, false]) {
+      for (const hosts of [0, 1]) expect(kinds(link({ active, hosts })).length).toBeLessThanOrEqual(1);
+    }
   });
 });
 

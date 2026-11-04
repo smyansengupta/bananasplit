@@ -1,7 +1,5 @@
 "use client";
 
-import { Plus } from "@/components/icons";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -10,6 +8,7 @@ import {
   createOrgLinkAction,
 } from "@/app/app/[orgSlug]/meetings/booking/actions";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   FormDialog,
   FormDialogBody,
@@ -20,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
+import { UserAvatar } from "@/components/user-avatar";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { runAction } from "@/lib/run-action";
 import type {
@@ -31,20 +31,19 @@ import type {
 
 import { ComingUp } from "./coming-up";
 import { LinkDialog } from "./link-dialog";
-import { LinkStrip, MakeOrgLinkStrip } from "./link-strip";
+import { LinkStrip, OrgFace } from "./link-strip";
+import { OtherLinks } from "./other-links";
 import { PeopleGrid } from "./people-grid";
 import { WeekBars } from "./week-bars";
 
-/** How many organization links show as strips before More links. */
-const STRIPS = 2;
-
 /**
- * Meetings > Booking links. Two different pages (docs/features/booking.md):
+ * Meetings > Meeting links. Two different pages (docs/features/booking.md):
  *
- * An organization: its link as a strip across the top (the shape of Video
- * calls on Meetings), everyone's own links under it three to a row, then
- * what's booked. A Personal space: your link as the strip, your week as a
- * picture inside it, then what's booked.
+ * An organization: its own link as the strip across the top (the shape of
+ * Video calls on Meetings), its picture and name, never a person; its other
+ * links behind one quiet control at the end of the strip; everyone's own
+ * links under it three to a row; then what's booked. A Personal space: your
+ * link as the strip, your week as a picture inside it, then what's booked.
  *
  * Each link opens its editor as the app's centered dialog (LinkDialog, the
  * New event dialog's look).
@@ -53,11 +52,12 @@ export function BookingLinksView({
   orgId,
   orgSlug,
   orgName,
+  orgLogo,
   personalSpace,
   orgLinksAllowed,
   crmOn,
-  isAdmin,
   mine,
+  mainLink,
   orgLinks,
   people,
   upcoming,
@@ -70,11 +70,14 @@ export function BookingLinksView({
   orgId: string;
   orgSlug: string;
   orgName: string;
+  orgLogo: string | null;
   personalSpace: boolean;
   orgLinksAllowed: boolean;
   crmOn: boolean;
-  isAdmin: boolean;
   mine: BookingLinkState;
+  /** The organization's own link. */
+  mainLink: BookingLinkState | null;
+  /** Its other links. */
   orgLinks: BookingLinkState[];
   people: BookingPerson[];
   upcoming: BookingRow[];
@@ -85,12 +88,12 @@ export function BookingLinksView({
   openOnArrival: string | null;
 }) {
   const router = useRouter();
-  const all = [mine, ...orgLinks];
+  const all = [mine, ...(mainLink ? [mainLink] : []), ...orgLinks];
   const [editing, setEditing] = useState<string | null>(
     openOnArrival && all.some((l) => l.id === openOnArrival) ? openOnArrival : null,
   );
   const [creating, setCreating] = useState(false);
-  const [more, setMore] = useState(false);
+  const [others, setOthers] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [cancelling, setCancelling] = useState<BookingRow | null>(null);
   const [note, setNote] = useState("");
@@ -104,20 +107,14 @@ export function BookingLinksView({
     });
 
   /** Makes an organization link and opens its editor. */
-  const make = async (title: string) => {
-    const r = await runAction(() => createOrgLinkAction(orgId, title));
-    if (!r) return undefined;
-    if (!r.ok) return { error: r.error };
-    router.refresh();
-    setEditing(r.id);
-    return {};
-  };
   const create = async () => {
     setBusy(true);
-    const r = await make(newTitle);
+    const r = await runAction(() => createOrgLinkAction(orgId, newTitle));
     setBusy(false);
     if (!r) return;
-    if (r.error) return toast({ title: r.error, tone: "error" });
+    if (!r.ok) return toast({ title: r.error, tone: "error" });
+    router.refresh();
+    setEditing(r.id);
     setCreating(false);
     setNewTitle("");
   };
@@ -134,55 +131,50 @@ export function BookingLinksView({
     router.refresh();
   };
 
-  const strips = more ? orgLinks : orgLinks.slice(0, STRIPS);
-  const hidden = orgLinks.length - strips.length;
+  // One control for the other links; with none yet, New link waits in the strip's menu.
+  const more = orgLinks.length > 0 && (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="text-muted-foreground basis-full justify-start @2xl:basis-auto @2xl:justify-center"
+      onClick={() => setOthers(true)}
+    >
+      {orgLinks.length === 1 ? "1 more link" : `${orgLinks.length} more links`}
+    </Button>
+  );
+  const hosts = mainLink ? hostsOf(mainLink) : [];
   return (
     <div className="space-y-7.5">
       {personalSpace ? (
-        <LinkStrip orgId={orgId} link={mine} hosts={hostsOf(mine)} onEdit={() => setEditing(mine.id)}>
+        <LinkStrip
+          orgId={orgId}
+          link={mine}
+          name="your meeting link"
+          picture={<UserAvatar user={hostsOf(mine)[0] ?? { name: mine.title }} size="lg" className="shrink-0" />}
+          line={`${mine.lengths}. ${mine.hoursLine}.`}
+          onEdit={() => setEditing(mine.id)}
+        >
           <WeekBars days={mine.week} label={`Your week: ${mine.hoursLine}`} large />
         </LinkStrip>
-      ) : orgLinksAllowed ? (
-        <div className="space-y-2.5">
-          {orgLinks.length === 0 ? (
-            <MakeOrgLinkStrip orgName={orgName} onMake={make} />
-          ) : (
-            <>
-              {strips.map((l) => (
-                <LinkStrip
-                  key={l.id}
-                  orgId={orgId}
-                  link={l}
-                  hosts={hostsOf(l)}
-                  onEdit={() => setEditing(l.id)}
-                />
-              ))}
-              <div className="flex flex-wrap items-center gap-1">
-                {hidden > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setMore(true)}>
-                    More links ({hidden})
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>
-                  <Plus aria-hidden="true" />
-                  New link
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
+      ) : mainLink ? (
+        <LinkStrip
+          orgId={orgId}
+          link={mainLink}
+          name={mainLink.title}
+          picture={<OrgFace name={orgName} logo={orgLogo} />}
+          line={`${mainLink.lengths} with ${hosts.length > 0 ? "whoever's free" : "nobody yet"}`}
+          hosts={hosts}
+          onEdit={() => setEditing(mainLink.id)}
+          menu={
+            orgLinksAllowed &&
+            orgLinks.length === 0 && (
+              <DropdownMenuItem onSelect={() => setCreating(true)}>New link</DropdownMenuItem>
+            )
+          }
+          more={more}
+        />
       ) : (
-        isAdmin && (
-          <p className="text-muted-foreground text-[13px]">
-            One shared link for the whole organization comes with the CRM.{" "}
-            <Link
-              href={`/app/${orgSlug}/integrations/crm`}
-              className="text-foreground underline underline-offset-2"
-            >
-              Add the CRM
-            </Link>
-          </p>
-        )
+        more && <div className="@container">{more}</div>
       )}
 
       {!personalSpace && (
@@ -202,6 +194,23 @@ export function BookingLinksView({
         onCancel={setCancelling}
       />
 
+      <OtherLinks
+        orgId={orgId}
+        links={orgLinks}
+        hostNames={(l) => hostsOf(l).map((h) => h.name)}
+        canMake={orgLinksAllowed}
+        open={others}
+        onOpenChange={setOthers}
+        onEdit={(id) => {
+          setOthers(false);
+          setEditing(id);
+        }}
+        onNew={() => {
+          setOthers(false);
+          setCreating(true);
+        }}
+      />
+
       {open && (
         <LinkDialog
           key={open.id}
@@ -219,7 +228,7 @@ export function BookingLinksView({
       {/* New task's window, sized down to the one field; the whole screen on a phone. */}
       <FormDialog open={creating} onOpenChange={setCreating} className="sm:max-w-lg">
         <FormDialogHead
-          title="New booking link"
+          title="New meeting link"
           description="You host it to start. Add hosts and hours next."
         />
         <FormDialogBody>
@@ -242,7 +251,7 @@ export function BookingLinksView({
             Cancel
           </Button>
           <Button disabled={busy || !newTitle.trim()} onClick={create}>
-            Create booking link
+            Create meeting link
           </Button>
         </FormDialogFoot>
       </FormDialog>

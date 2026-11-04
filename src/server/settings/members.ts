@@ -123,7 +123,7 @@ export async function untieDepartingMember(
   await untieOrgChart(db, organizationId, userId);
   // The CRM: pause their sequences, flag their relationships for handover.
   await memberLeft(db, organizationId, userId);
-  // Booking links: theirs stops, they come off shared ones, their bookings move or are flagged.
+  // Meeting links: theirs stops, they come off shared ones, their bookings move or are flagged.
   await bookingMemberLeft(db, organizationId, userId);
 }
 

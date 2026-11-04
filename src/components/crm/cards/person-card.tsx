@@ -82,7 +82,7 @@ export interface PersonCardData {
   };
   conflict: string | null;
   templates: { id: string; name: string; subject: string | null; body: string }[];
-  /** Booking links for the "/" menu: yours first, then the organization's. */
+  /** Meeting links for the "/" menu: yours first, then the organization's. */
   booking: { label: string; url: string }[];
   /** Follow-up series that are on (Add to a follow-up series). */
   series: { id: string; name: string }[];

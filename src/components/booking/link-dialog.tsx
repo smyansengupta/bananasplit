@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
 import type { BookingLinkState } from "@/server/booking/view";
 
 /**
- * A booking link's editor, in New task's window (FormDialog: a fixed header
+ * A meeting link's editor, in New task's window (FormDialog: a fixed header
  * and foot, the fields scrolling between, the whole screen on a phone): the
  * title, then the fields that matter, the rest behind More options. The heart of it is "fill in the times you're free": each
  * weekday's ranges, plus one-off dates (a day off, or other hours that day).
@@ -150,7 +150,7 @@ export function LinkDialog({
         }}
       >
         <FormDialogHead
-          title={link.personal ? "Your booking link" : "Edit booking link"}
+          title={link.personal ? "Your meeting link" : "Edit meeting link"}
           description="When people can book it, and for how long."
         />
 

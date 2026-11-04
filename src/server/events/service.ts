@@ -467,7 +467,7 @@ async function afterSave(
       runAt: new Date(Date.now() + 60_000),
     });
   }
-  // A meeting booked on a booking link that was moved or deleted here (the
+  // A meeting booked on a meeting link that was moved or deleted here (the
   // calendar, the meeting's page): the booking follows and its guest is
   // told (src/server/booking/manage.ts). Bookings are read under RLS, which
   // shows them to their host and to owners and admins, who are the people

@@ -6,26 +6,38 @@ import { MEETING_INTEGRATIONS } from "@/server/conference/providers";
 import type { TxClient } from "@/server/db/context";
 
 /**
- * What a space may do with booking links (docs/features/booking.md, "Who
+ * What a space may do with meeting links (docs/features/booking.md, "Who
  * gets what"):
  * - Every member of every space has their own link, on any plan, with or
  *   without the CRM.
- * - Organization links (shared: round-robin or one named host, used by the
- *   CRM) need the CRM: on the plan and added (Integrations and apps), the
- *   same gate as /crm. A Personal space has none (it's just you).
+ * - Every organization has one main link of its own (mainLinkId), on any
+ *   plan, with or without the CRM. A Personal space has none (it's just you).
+ * - More organization links (shared: round-robin or one named host, used by
+ *   the CRM) need the CRM: on the plan and added (Integrations and apps), the
+ *   same gate as /crm.
  * - The CRM side of a booking (the guest as a person, the meeting on their
  *   timeline, a deal, follow-ups stopped) runs when the CRM is set up too.
  */
 
 export interface BookingAccess {
   personal: boolean;
-  /** Organization links can be made and booked. */
+  /** More organization links can be made and booked (the main link needs no CRM). */
   orgLinks: boolean;
   /** Bookings also go into the CRM. */
   crm: boolean;
   timezone: string;
   name: string;
   slug: string;
+}
+
+/**
+ * The organization's own link is the one with this id. A known primary key
+ * marks it, so the database itself keeps it to one per organization, the
+ * editor can't change it, and it needs no column of its own. Any other link
+ * with no owner is an additional organization link.
+ */
+export function mainLinkId(organizationId: string): string {
+  return `main-${organizationId}`;
 }
 
 export async function bookingAccess(db: TxClient, organizationId: string, now = new Date()): Promise<BookingAccess> {

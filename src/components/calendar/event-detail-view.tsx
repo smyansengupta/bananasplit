@@ -113,7 +113,7 @@ export function EventDetailView({
   syncAmbient = null,
 }: {
   /**
-   * Who booked it through a booking link, for its host and admins only
+   * Who booked it through a meeting link, for its host and admins only
    * (read from the Booking, whose RLS hides it from everyone else).
    */
   booking?: {

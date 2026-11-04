@@ -39,7 +39,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
   // Three reads at once, each in its own transaction (one transaction runs
   // one query at a time): the person and what hangs off their record; what
   // the card offers around them (their unanswered mail, a waiting step, the
-  // composer's templates, the series, the booking link); and the members.
+  // composer's templates, the series, the meeting link); and the members.
   // Whatever the viewer can't see stays out of the first, and the card shows
   // nothing then.
   const statusP = phoneStatus(orgId).catch(() => null);
@@ -94,8 +94,8 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       orderBy: { occurredAt: "asc" },
       select: { id: true, subject: true, occurredAt: true },
     });
-    // The "/" menu's booking links: your own first, then the organization's
-    // (Meetings > Booking links; docs/features/booking.md).
+    // The "/" menu's meeting links: your own first, then the organization's
+    // (Meetings > Meeting links; docs/features/booking.md).
     const bookingLinks = await db.crmBookingPage.findMany({
       where: { organizationId: orgId, active: true, OR: [{ ownerUserId: viewerId }, { ownerUserId: null }] },
       orderBy: { createdAt: "asc" },
@@ -109,7 +109,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
         ...bookingLinks.filter((b) => b.ownerUserId === viewerId),
         ...bookingLinks.filter((b) => b.ownerUserId !== viewerId),
       ].map((b) => ({
-        label: b.ownerUserId ? "my booking link" : b.title,
+        label: b.ownerUserId ? "my meeting link" : b.title,
         url: `${appOrigin()}/book/${b.slug}`,
       })),
       templates: await composeTemplates(db, orgId),

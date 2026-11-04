@@ -37,7 +37,7 @@ export default async function CrmSettingsSectionPage({
   searchParams,
 }: PageProps<"/app/[orgSlug]/crm/settings/[section]">) {
   const { orgSlug, section: id } = await params;
-  // Booking links moved to Meetings (docs/features/booking.md).
+  // Meeting links moved to Meetings (docs/features/booking.md).
   if (id === "booking") redirect(bookingLinksHref(orgSlug));
   const sp = (await searchParams) as Record<string, string | undefined>;
   const { gate, shell } = await crmSettingsShell(orgSlug);

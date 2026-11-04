@@ -9,7 +9,7 @@ export const metadata = { title: "CRM settings" };
  * Nothing lives under a CRM settings section any more: an old automation
  * link (/crm/settings/automations/{id}, or new, with ?describe=) opens it
  * over Automations and sending, and a booking page's old address
- * (/crm/settings/booking/{id}) opens it in Meetings > Booking links.
+ * (/crm/settings/booking/{id}) opens it in Meetings > Meeting links.
  */
 export default async function CrmSettingsItemPage({
   params,

@@ -10,7 +10,7 @@ Tavily and email permissions.
 How it is laid out now: the CRM has two tabs, **Today** and **People**;
 People's view switch is People, Companies and Board. Settings is the
 round button in the header. Reports live in Databases › Reports, booking
-links in Meetings › Booking links (docs/features/booking.md). The phase
+links in Meetings › Meeting links (docs/features/booking.md). The phase
 sections below record what was built at the time, so they name tabs that
 have since gone (Outreach, Deals, Forecast, Reports, Review, Automations,
 Calls, Quotes); "Redesign" and "One list" say where each went.
@@ -139,7 +139,7 @@ separate decision for those features.
 | Partners and a deals pipeline (Finance › Deals) | `Sponsor`, `Sponsorship` (Prospect to Received), linked to Finance | Finance |
 | People we've met | `Contact` + `ContactEmail` (check-ins, sign-ups, unsubscribes) | website sync |
 | Tasks, notes, meetings, files | Tasks, Notes, Meetings/Events, Files, plus `ItemLink` to link any two | `ItemLink` |
-| Booking links | Availability (`UserAvailability`), Find a time, RSVP pages | Meetings |
+| Meeting links | Availability (`UserAvailability`), Find a time, RSVP pages | Meetings |
 | Background work | `Job` queue drained by `/api/cron/jobs` | `src/server/jobs` |
 | Reports and dashboards | Reports on any database, a Pipeline widget, schedules, snapshots | `src/lib/reports`, `src/server/reports` |
 | AI with the org's key | `CLAUDE` and `OPENAI_COMPATIBLE` integrations, encrypted `OrgSecret` | `src/server/ai`, `src/lib/ai/vendors.ts` |
@@ -331,7 +331,7 @@ every member and every channel.
 | 1:1 email | Compose on any record; templates with merge fields; sends from the member's own connected Gmail or Outlook (from the coming email connections), or the org's Resend sender until then; open and click tracking with our own pixel and redirect | $0 | $0 |
 | Sequences | Timed steps (email, task, call reminder, LinkedIn reminder) run by the job queue; stop on reply, on meeting booked or on unsubscribe; daily send caps per mailbox | $0 | $0 |
 | Bulk email | Segments from any saved view; one-click unsubscribe header; sends through the org's Resend (or SES) key, never ours, so a bad list never hurts our sending reputation | $0 | Resend or SES rates |
-| Booking links | Built on availability and Find a time; booked meetings land in Meetings and on the timeline; round-robin for teams | $0 | $0 |
+| Meeting links | Built on availability and Find a time; booked meetings land in Meetings and on the timeline; round-robin for teams | $0 | $0 |
 | Calls | Click-to-call (`tel:` links) and a call log on day one; later a browser softphone and power dialer through the org's Telnyx or Twilio key, with recording consent built in | $0 | Telnyx about $0.007 a minute |
 | Texting | Two-way SMS through the org's Telnyx or Twilio key on the existing SMS module, logged to the timeline, STOP handled | $0 | carrier rates |
 | AI drafts and agents | Draft an email, a follow-up or a research brief on a person; a person always approves before anything sends | $0 | on their key |
@@ -652,7 +652,7 @@ day those land, it gets much better with no rework:
   sequence steps go out from the member's connected mailbox, appear in
   their Sent folder, and land on the timeline.
 - **Calendar alongside.** The same connection's calendar fills the timeline
-  with meetings and powers booking links without a second sign-in.
+  with meetings and powers meeting links without a second sign-in.
 - **Attachments** go to Files, linked to the person and the pipeline item.
 
 Until then, everything above works in a smaller way through the BCC address
@@ -700,7 +700,7 @@ is cut; this is only the order.
 2. **Reaching out.** The follow-up queue, keep-in-touch cadences, lists and
    campaigns split among members, templates and mail merge, 1:1 email
    (member's own mailbox when connected, the org's sender until then),
-   tracking, invites to events and forms, booking links, sequences with
+   tracking, invites to events and forms, meeting links, sequences with
    stop-on-reply, bulk email with unsubscribe and sender checks, Forms to
    CRM, embeds, owner routing, the BCC logging address, handover when
    members change roles, people updating their own details through RSVP
@@ -1620,7 +1620,7 @@ expires old mail suggestions.
 
 ### Booking, forms, handover, self-update
 
-- Booking links moved to Meetings > Booking links (docs/features/booking.md):
+- Meeting links moved to Meetings > Meeting links (docs/features/booking.md):
   organization links are the CRM's, every member has a personal one, and the
   CRM side of a booking waits for the guest to confirm their email. What
   follows is how they first worked.
@@ -1669,7 +1669,7 @@ owns them, who talked to them last, and the warning.
 Built as Outreach (Templates, Sequences, Booking pages, Bulk email, Your
 mail), Campaigns and Handover pages. Today the CRM has two tabs, Today and
 People: templates and Your mail are in CRM settings (Templates, You),
-plans in Automations, booking links in Meetings › Booking links, one email
+plans in Automations, meeting links in Meetings › Meeting links, one email
 to many is People's Email them, and Handover is a CRM settings section
 (see "One list" and "Settings and setup"). Public `/book`, `/c` and `/u` (unsubscribe, one button;
 `/api/crm/u/{token}` takes the one-click POST). Every public route finds its
@@ -2145,7 +2145,7 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Personal space has no Team (`/crm/handover` goes to People) and is offered
   its own ready-made pipelines.
 - **What's in each**: You has your mail (signature, logging address, what
-  it shares), your booking link, Templates, "Handed to you", and under More
+  it shares), your meeting link, Templates, "Handed to you", and under More
   what's never logged, a new address and your recent calls. Automations and
   sending has the list with its describe box, Follow-up series, Split lists
   and group emails, the Sending card (who it's from, daily cap, hours,
@@ -2188,7 +2188,7 @@ named by one search param (`src/lib/crm/overlay.ts`):
   `/crm/automations`, and each old section through `CRM_SETTINGS_ALIASES`
   (`crmSettingsAliasHref` keeps the query and adds the card's anchor).
   `/crm/settings/booking` and `/crm/settings/booking/{id}` redirect to
-  Meetings › Booking links (the latter opening that link's editor).
+  Meetings › Meeting links (the latter opening that link's editor).
 - **Import** (`/crm/import`) stays a page: matching a sheet's columns needs
   the room. It wears the CRM header (titled Import, no create) and the tab
   switch, with People lit; what you bring in is People, Companies or Deals.
@@ -2302,8 +2302,8 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Public booking page** (`/book/<slug>`): the organization's name and
   logo, then one card with who you're meeting and how long, a month
   calendar of open days, that day's times, a short form, Book, and a
-  booked state with Pick again. Booking links are set up in Meetings ›
-  Booking links (docs/features/booking.md is current);
+  booked state with Pick again. Meeting links are set up in Meetings ›
+  Meeting links (docs/features/booking.md is current);
   `/crm/settings/booking` and `/crm/outreach/booking` redirect there.
 
 ## One list

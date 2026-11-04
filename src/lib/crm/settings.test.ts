@@ -76,7 +76,7 @@ describe("CRM settings sections", () => {
 });
 
 describe("Old CRM settings links", () => {
-  it("cover every section the old list had but Booking link, which went to Meetings", () => {
+  it("cover every section the old list had but Meeting links, which went to Meetings", () => {
     for (const old of [
       "sending",
       "stages",

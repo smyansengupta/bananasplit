@@ -32,11 +32,12 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
   if (!page)
     return (
       <PublicNotice
-        title="This booking page isn't open"
+        title="This meeting link isn't open"
         body="Ask whoever sent it for a new link."
       />
     );
-  const host = page.ownerName ?? (page.hosts.length === 1 ? page.hosts[0]!.name : null);
+  // The organization's own link is the organization's, however many hosts it has.
+  const host = page.main ? null : (page.ownerName ?? (page.hosts.length === 1 ? page.hosts[0]!.name : null));
   return (
     <PublicThemeRoot>
       <main className="bg-background text-foreground flex min-h-dvh flex-col items-center gap-9 px-4 pt-10 pb-16 sm:px-8">

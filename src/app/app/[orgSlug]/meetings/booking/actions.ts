@@ -7,7 +7,7 @@ import { BookingActionError, hostCancel, takeBooking } from "@/server/booking/ma
 import { withOrgAction } from "@/server/db/context";
 
 /**
- * Meetings > Booking links (docs/features/booking.md): change your link or
+ * Meetings > Meeting links (docs/features/booking.md): change your link or
  * an organization link, make an organization link, ask a member to turn
  * theirs on, cancel a booking or take one whose host left. Every one runs as
  * the session member; the server module checks who may (your link is yours

@@ -1,5 +1,5 @@
 /**
- * A booking link's hours (docs/features/booking.md): "fill in the times
+ * A meeting link's hours (docs/features/booking.md): "fill in the times
  * you're free". Each week as ranges of minutes per weekday, in the link's
  * zone, plus one-off dates that replace a day's ranges (none is a day off).
  * Pure, and safe on anything read from the database: malformed entries are

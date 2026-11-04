@@ -43,7 +43,8 @@ import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { book, guestCancel, guestReschedule, guestView, LIMITS, loadBooking, verifyBooking } from "./book";
 import { bookingEmailJob } from "./jobs";
-import { createOrgLink, ensurePersonalLink, updateLink } from "./links";
+import { mainLinkId } from "./access";
+import { createOrgLink, ensureMainLink, ensurePersonalLink, updateLink } from "./links";
 import { bookingHostLeft, hostCancel, queueGuestReminders, syncBookingToEvent, takeBooking } from "./manage";
 import { bookingToken } from "./token";
 
@@ -158,7 +159,7 @@ afterAll(async () => {
   await disconnectOwnerDb();
 });
 
-describe("booking links against the local database", () => {
+describe("meeting links against the local database", () => {
   it("gives every member a personal link without the CRM, and a booking lands on the calendar and in the Inbox", async () => {
     if (!reachable) return;
     // A new personal link is off until its owner turns it on.
@@ -211,6 +212,39 @@ describe("booking links against the local database", () => {
       "That time was just taken. Pick another.",
     ]);
     expect(await ownerDb.booking.count({ where: { organizationId: plain, startsAt: new Date(start), status: "BOOKED" } })).toBe(1);
+  });
+
+  it("tells the guest the time was taken when only the unique index stops the second booking", async () => {
+    if (!reachable) return;
+    const link = await openLink(host, plain);
+    const start = await slotsOf(link.slug, 120);
+    const at = new Date(start);
+    const end = new Date(at.getTime() + 30 * 60_000);
+    // A live booking whose meeting is gone, so the slot check can't see it and only the index can.
+    const gone = await ownerDb.event.create({
+      data: { organizationId: plain, title: "Gone", startsAt: at, endsAt: end, createdById: host.id, deletedAt: new Date() },
+    });
+    await ownerDb.booking.create({
+      data: {
+        id: `stale-${tag}`,
+        organizationId: plain,
+        pageId: link.id,
+        eventId: gone.id,
+        hostUserId: host.id,
+        guestName: "Stale",
+        guestEmail: `stale-${tag}@example.org`,
+        startsAt: at,
+        endsAt: end,
+        tokenHash: `stale-${tag}`,
+      },
+    });
+    expect(await book(link.slug, { start, ...guest("indexed") })).toEqual({ ok: false, error: "That time was just taken. Pick another." });
+    // A guest moving onto it hears the same.
+    const other2 = await slotsOf(link.slug, 124);
+    expect((await book(link.slug, { start: other2, ...guest("indexed-move") })).ok).toBe(true);
+    const b = await ownerDb.booking.findFirstOrThrow({ where: { organizationId: plain, guestEmail: `g-indexed-move-${tag}@example.org` } });
+    expect(await guestReschedule(bookingToken(b.id), start)).toEqual({ ok: false, error: "That time was just taken. Pick another." });
+    await ownerDb.booking.delete({ where: { id: `stale-${tag}` } });
   });
 
   it("refuses a time that a meeting added after the page loaded now covers, even one in another space", async () => {
@@ -318,7 +352,33 @@ describe("booking links against the local database", () => {
     expect([gone.status, gone.cancelledBy]).toEqual(["CANCELLED", "host"]);
   });
 
-  it("lets the host cancel from Booking links, and members read only their own bookings", async () => {
+  it("tells the host every time a guest moves, even back to a time they had before", async () => {
+    if (!reachable) return;
+    const link = await openLink(host, plain);
+    const [a, b2] = [await slotsOf(link.slug, 80), await slotsOf(link.slug, 84)];
+    expect((await book(link.slug, { start: a, ...guest("backagain") })).ok).toBe(true);
+    const b = await ownerDb.booking.findFirstOrThrow({ where: { organizationId: plain, guestEmail: `g-backagain-${tag}@example.org` } });
+    const token = bookingToken(b.id);
+    for (const to of [b2, a, b2]) expect((await guestReschedule(token, to)).ok).toBe(true);
+    expect(await ownerDb.notification.count({ where: { userId: host.id, title: { contains: "Guest backagain moved" } } })).toBe(3);
+    expect((await ownerDb.event.findUniqueOrThrow({ where: { id: b.eventId } })).startsAt.toISOString()).toBe(b2);
+  });
+
+  it("holds the most a day, and a time already booked, when booking directly", async () => {
+    if (!reachable) return;
+    const link = await openLink(other, plain);
+    const start = await slotsOf(link.slug, 100);
+    expect((await book(link.slug, { start, ...guest("taken-a") })).ok).toBe(true);
+    expect(await book(link.slug, { start, ...guest("taken-b") })).toEqual({ ok: false, error: "That time was just taken. Pick another." });
+    expect((await loadBooking(link.slug))!.slots[30]).not.toContain(start);
+    // One a day: the rest of that day closes.
+    await as(other, plain, (ctx) => updateLink(ctx, link.id, { maxPerDay: 1 }));
+    const day = start.slice(0, 10);
+    expect((await loadBooking(link.slug))!.slots[30]!.filter((s) => s.startsWith(day))).toEqual([]);
+    await as(other, plain, (ctx) => updateLink(ctx, link.id, { maxPerDay: null }));
+  });
+
+  it("lets the host cancel from Meeting links, and members read only their own bookings", async () => {
     if (!reachable) return;
     const link = await openLink(host, plain);
     const start = await slotsOf(link.slug, 50);
@@ -441,7 +501,26 @@ describe("booking links against the local database", () => {
     expect(await ownerDb.notification.count({ where: { organizationId: crmOrg, userId: owner.id, title: { contains: "needs a host" } } })).toBe(1);
     // An admin takes it.
     await as(owner, crmOrg, (ctx) => takeBooking(ctx, personal.id));
-    expect((await ownerDb.booking.findUniqueOrThrow({ where: { id: personal.id } })).hostUserId).toBe(owner.id);
+    const taken = await ownerDb.booking.findUniqueOrThrow({ where: { id: personal.id } });
+    expect([taken.hostUserId, taken.needsHost]).toEqual([owner.id, false]);
+    // The meeting goes with it, the owner attends, and the guest hears who they'll meet.
+    expect((await ownerDb.event.findUniqueOrThrow({ where: { id: personal.eventId } })).hostUserId).toBe(owner.id);
+    expect((await ownerDb.eventAttendee.findFirstOrThrow({ where: { eventId: personal.eventId, userId: owner.id } })).rsvp).toBe("YES");
+    sendMock.mockClear();
+    await bookingEmailJob(run(crmOrg, { bookingId: personal.id, template: "host-changed", startsAt: personal.startsAt.toISOString() }));
+    expect(sendMock.mock.calls[0]![0]).toMatchObject({ to: `g-leave-b-${tag}@example.org`, subject: expect.stringMatching(/^New host/) });
+  });
+
+  it("says so when Take it lands on a time the taker already has booked", async () => {
+    if (!reachable) return;
+    const mine = await openLink(owner, plain);
+    const theirs = await openLink(host, plain);
+    const start = await slotsOf(mine.slug, 110);
+    expect((await book(mine.slug, { start, ...guest("clash-a") })).ok).toBe(true);
+    expect((await book(theirs.slug, { start, ...guest("clash-b") })).ok).toBe(true);
+    const b = await ownerDb.booking.findFirstOrThrow({ where: { organizationId: plain, guestEmail: `g-clash-b-${tag}@example.org` } });
+    await expect(as(owner, plain, (ctx) => takeBooking(ctx, b.id))).rejects.toThrow("You already have a meeting booked at that time.");
+    expect((await ownerDb.booking.findUniqueOrThrow({ where: { id: b.id } })).hostUserId).toBe(host.id);
   });
 
   it("closes organization links when the CRM comes off", async () => {
@@ -449,8 +528,13 @@ describe("booking links against the local database", () => {
     const link = await as(owner, crmOrg, (ctx) => createOrgLink(ctx, "Closing"));
     await as(owner, crmOrg, (ctx) => updateLink(ctx, link.id, { hours: ALL_DAY as never, minNoticeHours: 0 }));
     expect(await loadBooking(link.slug)).not.toBeNull();
+    // The organization's own link doesn't depend on the CRM.
+    await as(owner, crmOrg, (ctx) => ensureMainLink(ctx));
+    const main = await ownerDb.crmBookingPage.findUniqueOrThrow({ where: { id: mainLinkId(crmOrg) } });
+    await as(owner, crmOrg, (ctx) => updateLink(ctx, main.id, { hours: ALL_DAY as never, minNoticeHours: 0, active: true }));
     await ownerDb.orgSettings.update({ where: { organizationId: crmOrg }, data: { addOns: [] } });
     expect(await loadBooking(link.slug)).toBeNull();
+    expect((await loadBooking(main.slug))?.main).toBe(true);
     await ownerDb.orgSettings.update({ where: { organizationId: crmOrg }, data: { addOns: ["crm"] } });
   });
 });

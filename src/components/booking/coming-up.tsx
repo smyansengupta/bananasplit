@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { takeBookingAction } from "@/app/app/[orgSlug]/meetings/booking/actions";
-import { AmbientActions, AmbientWhy, type AmbientAction } from "@/components/ambient/ambient-button";
+import { AmbientButton, type AmbientAction } from "@/components/ambient/ambient-button";
 import { kindStyle } from "@/components/calendar/kinds";
 import { EmptyState } from "@/components/empty-state";
 import { CalendarClock, Ellipsis, MapPin, Video } from "@/components/icons";
@@ -26,7 +26,8 @@ import { CARD_GRID } from "./people-grid";
  * the guest (the one link, stretched over the card, to the meeting's page),
  * when, which link, the host's face. The next one's tile is filled. The page
  * has worked out the words and the ambient buttons, so the first paint and
- * the browser agree. Each one is on Meetings and the Calendar too: it's a
+ * the browser agree. One action at most on a card, Take it before Join; the
+ * rest is in its menu. Each one is on Meetings and the Calendar too: it's a
  * real meeting.
  */
 export function ComingUp({
@@ -88,30 +89,34 @@ function BookingCard({
   onCancel: (b: BookingRow) => void;
 }) {
   const guest = b.guestName.split(" ")[0];
-  const actions = b.ambient.map(({ kind, reason }): AmbientAction | null => {
+  const [action] = b.ambient.flatMap(({ kind, reason }): AmbientAction[] => {
     if (kind === "join") {
       return b.joinUrl
-        ? {
-            key: kind,
-            label: "Join",
-            icon: Video,
-            tone: "solid",
-            reason,
-            href: b.joinUrl,
-            external: true,
-            ariaLabel: `Join with ${b.guestName}`,
-          }
-        : null;
+        ? [
+            {
+              key: kind,
+              label: "Join",
+              icon: Video,
+              tone: "solid",
+              reason,
+              href: b.joinUrl,
+              external: true,
+              ariaLabel: `Join with ${b.guestName}`,
+            },
+          ]
+        : [];
     }
-    return {
-      key: kind,
-      label: "Take it",
-      tone: "solid",
-      reason,
-      ariaLabel: `Take the meeting with ${b.guestName}`,
-      run: () => takeBookingAction(orgId, b.id),
-      done: `It's yours. ${guest} has been told.`,
-    };
+    return [
+      {
+        key: kind,
+        label: "Take it",
+        tone: "solid",
+        reason,
+        ariaLabel: `Take the meeting with ${b.guestName}`,
+        run: () => takeBookingAction(orgId, b.id),
+        done: `It's yours. ${guest} has been told.`,
+      },
+    ];
   });
   return (
     <li>
@@ -147,6 +152,13 @@ function BookingCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {b.joinUrl && action?.key !== "join" && (
+                <DropdownMenuItem asChild>
+                  <a href={b.joinUrl} target="_blank" rel="noreferrer">
+                    Join
+                  </a>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onSelect={() => onCancel(b)}>
                 Cancel the meeting
               </DropdownMenuItem>
@@ -166,22 +178,22 @@ function BookingCard({
               <span className="min-w-0 break-words">{b.place.label}</span>
             </span>
           )}
-          {!b.verified && <Badge variant="outline">Unconfirmed</Badge>}
+          {!b.verified && (
+            <Badge variant="outline" title={b.waiting ?? undefined}>
+              Unconfirmed
+            </Badge>
+          )}
           {b.needsHost && <Badge variant="destructive">Needs a host</Badge>}
         </div>
 
-        <div className="border-border/70 mt-auto flex flex-col gap-2.5 border-t pt-4">
-          <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
-            <span className="flex min-w-0 items-center gap-2">
-              <UserAvatar user={b.host} size="sm" />
-              <span className="text-muted-foreground min-w-0 text-[13px] leading-snug break-words">
-                {b.mine ? "You're hosting" : `With ${b.host.name}`}
-              </span>
+        <div className="border-border/70 mt-auto flex min-h-[3.0625rem] flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <span className="flex min-w-0 items-center gap-2">
+            <UserAvatar user={b.host} size="sm" />
+            <span className="text-muted-foreground min-w-0 text-[13px] leading-snug break-words">
+              {b.mine ? "You're hosting" : `With ${b.host.name}`}
             </span>
-            <AmbientActions actions={actions} className="relative z-10" />
-          </div>
-          {b.ambient[0] && <AmbientWhy>{b.ambient[0].reason}</AmbientWhy>}
-          {b.waiting && <AmbientWhy>{b.waiting}</AmbientWhy>}
+          </span>
+          {action && <AmbientButton action={action} className="relative z-10" />}
         </div>
       </div>
     </li>

@@ -44,7 +44,7 @@ export async function YouSection({ shell, orgSlug, sp }: SectionProps) {
     });
     return {
       settings: await ensureMemberSettings(db, orgId, userId),
-      // Your own booking link (Meetings > Booking links; made the first time it's needed).
+      // Your own meeting link (Meetings > Meeting links; made the first time it's needed).
       booking: await db.crmBookingPage.findFirst({
         where: { organizationId: orgId, ownerUserId: userId },
         select: { id: true, slug: true, active: true },

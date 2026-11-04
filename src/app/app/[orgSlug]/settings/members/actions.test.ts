@@ -15,7 +15,7 @@ vi.mock("@/server/db/context", async () =>
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 // The CRM's handover on leaving has its own tests (src/server/crm/outreach).
 vi.mock("@/server/crm/outreach/handover", () => ({ memberLeft: vi.fn() }));
-// So do booking links (src/server/booking/booking.db.test.ts).
+// So do meeting links (src/server/booking/booking.db.test.ts).
 vi.mock("@/server/booking/links", () => ({ bookingMemberLeft: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ allowed: true })),

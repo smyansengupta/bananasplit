@@ -204,7 +204,7 @@ function fromWhere(source: string | null, detail: string | null, by: string | nu
     case "form":
       return detail ? `From the form ${detail}` : "From a form";
     case "booking":
-      return detail ? `Booked ${detail}` : "From your booking page";
+      return detail ? `Booked ${detail}` : "From your meeting link";
     case "email":
     case "gmail":
     case "outlook":

@@ -4,7 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
  * The meetings the Meetings page lists, for whoever is looking. Hosts work
  * from the whole list. Everyone else sees what they can act on: something
  * to join, or a page open for sign-ups, still to come. Row policies have
- * already limited this to what they may see. Find a time and Booking links
+ * already limited this to what they may see. Find a time and Meeting links
  * count the same rows for the Meetings tab, so every page shows one number.
  * `coHosted` is the meetings booked on organization links they also host
  * (coHostedEventIds): round-robin gave it to someone else, so they aren't
