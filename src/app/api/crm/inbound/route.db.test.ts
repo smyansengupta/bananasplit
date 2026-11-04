@@ -164,6 +164,7 @@ describe("/api/crm/inbound from the Cloudflare Email Worker", () => {
         },
         text: "Thanks, Thursday works for me.\n\nOn Tue someone wrote:\n> Hi Ada",
         html: null,
+        auth: { verdict: "pass", spf: "pass", dkim: "pass", dmarc: "pass", fromDomain: "harbor.org" },
       }),
     );
     expect(res.status).toBe(200);

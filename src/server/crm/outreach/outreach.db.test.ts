@@ -140,6 +140,7 @@ describe("reaching out against the local database", () => {
         text: "Yes please, Thursday works.\n\nOn Tue someone wrote:\n> Hi",
         date: new Date(),
         headers: {},
+        senderVerified: true,
       },
     );
     expect(r.status).toBe("logged");
@@ -193,6 +194,7 @@ describe("reaching out against the local database", () => {
         text: "I'm out of the office until December 1.",
         date: new Date(),
         headers: { "auto-submitted": "auto-replied" },
+        senderVerified: true,
       },
     );
     expect((await ownerDb.crmEnrollment.findUniqueOrThrow({ where: { id: e.id } })).status).toBe("PAUSED");
