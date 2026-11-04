@@ -27,9 +27,9 @@ export const GRAPHITE_PRESET_ID = "graphite";
 /**
  * "Moonstone", the default since the redesign: graphite and pearl with no
  * fill colour of its own, lit by a banana glow (the light behind the page,
- * the halo on create buttons, the active item and focus). Dark first: the
- * org mode defaults to dark. The primary and accent are one colour (pearl in
- * dark, ink in light); the glow is what marks "create".
+ * the halo on the active item and focus). Dark first: the org mode defaults
+ * to dark. The primary and accent are one colour (pearl in dark, ink in
+ * light).
  */
 export const DEFAULT_PRESET: ThemePreset = {
   id: DEFAULT_PRESET_ID,

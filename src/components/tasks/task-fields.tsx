@@ -252,6 +252,7 @@ export function MemberOwnerField({
   members,
   hint,
   none = { well: "Anyone", option: "Anyone can take it" },
+  label = "Owner",
 }: {
   id?: string;
   value: string | null;
@@ -261,6 +262,8 @@ export function MemberOwnerField({
   members: MemberOption[];
   hint?: (member: MemberOption) => ReactNode;
   none?: { well: string; option: string };
+  /** What's being picked, when it isn't an owner (a goal's Who). */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const owner = value ? members.find((m) => m.id === value) : undefined;
@@ -280,7 +283,7 @@ export function MemberOwnerField({
           id={id}
           type="button"
           disabled={disabled}
-          aria-label="Owner"
+          aria-label={label}
           className={wellClass(open, !owner)}
         >
           {owner && (
@@ -301,7 +304,7 @@ export function MemberOwnerField({
           search.focus();
         }}
       >
-        <MenuHeading>Owner</MenuHeading>
+        <MenuHeading>{label}</MenuHeading>
         {owner && (
           <div className="flex flex-wrap gap-1 px-1 pb-1.5">
             <span className="bg-muted inline-flex h-6 items-center gap-1 rounded-md ps-0.5 pe-0.5 text-xs font-medium">

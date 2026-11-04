@@ -2,10 +2,20 @@
 import { describe, expect, it } from "vitest";
 
 import { crmRecordHref } from "./href";
-import { formatOpen, hrefWithOpen, parseOpen, rendersOverlays } from "./overlay";
+import { formatOpen, hrefWithOpen, opensInstantly, parseOpen, rendersOverlays } from "./overlay";
 import { powerHourBackLabel, powerHourMinutes, powerHourSnoozeUntil } from "./power-hour";
 
 describe("the ?open= contract", () => {
+  it("opens the create dialogs from the page, and everything else from the server", () => {
+    for (const raw of ["new:person", "new:company", "new:deal", "goal"]) {
+      expect(opensInstantly(parseOpen(raw))).toBe(true);
+    }
+    for (const raw of ["person:p1", "goal:g1", "log", "plan:email", "power"]) {
+      expect(opensInstantly(parseOpen(raw))).toBe(false);
+    }
+    expect(opensInstantly(null)).toBe(false);
+  });
+
   it("reads every card kind", () => {
     expect(parseOpen("person:abc123")).toEqual({ kind: "person", id: "abc123" });
     expect(parseOpen("company:c_1")).toEqual({ kind: "company", id: "c_1" });

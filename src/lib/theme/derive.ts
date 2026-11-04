@@ -43,9 +43,8 @@ export const TOKEN_NAMES = [
   "accent-foreground",
   "brand-accent",
   "brand-accent-foreground",
-  // The create button (New task, New event): the accent, except where the
-  // accent is the ink itself (Moonstone in light), where it is the white
-  // surface, lit by the glow, as Moonstone's pearl button is in dark.
+  // The create button (New task, New event, Invite): a blank, plain button.
+  // The white surface in light, with a hairline edge; pure white in dark.
   "create",
   "create-foreground",
   "destructive",
@@ -292,10 +291,9 @@ export function deriveTokens(roles: ThemeRoles, options: DeriveOptions = {}): To
   const alert = whiteLabelBlock(dark ? 0.52 : 0.54, 0.17, 30);
   const goal = whiteLabelBlock(dark ? 0.47 : 0.45, 0.085, 165);
   const answerForeground = onFill(accent, palette);
-  const inkAccent = !dark && accent.toLowerCase() === text.toLowerCase();
-  // A monochrome dark theme's accent is the pearl text colour, which reads
-  // as grey on a button: create buttons go pure white there instead.
-  const pearlAccent = dark && accent.toLowerCase() === text.toLowerCase();
+  // Never the accent: Graphite's is a mid grey, and every button in the
+  // corner should read as the same blank button whatever the theme.
+  const create = dark ? WHITE : surface;
 
   // Info notes take the brand colour, unless it sits near the danger red
   // (a coral or brick club), where an info note would read as an error:
@@ -336,8 +334,8 @@ export function deriveTokens(roles: ThemeRoles, options: DeriveOptions = {}): To
     "accent-foreground": text,
     "brand-accent": accent,
     "brand-accent-foreground": answerForeground,
-    create: inkAccent ? surface : pearlAccent ? WHITE : accent,
-    "create-foreground": inkAccent ? text : pearlAccent ? background : answerForeground,
+    create,
+    "create-foreground": onFill(create, palette),
     destructive,
     "destructive-foreground": onFill(destructive, [WHITE, BLACK]),
     success,

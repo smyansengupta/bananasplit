@@ -1957,7 +1957,22 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Clicking a card's link (or `setOpen`) draws its frame at once with a
   loading body (`CrmPendingCard`, `usePendingOpen`), and the card on
   screen gives way to it; closing hides the card on the click, then the
-  URL catches up.
+  URL catches up. The frame is the shape of what's coming: the 680px card,
+  or New person's window for Done on its own, a goal and a new plan. One
+  popup takes the other's place with no fade between them
+  (`useCardPresence`, `motion` on `DialogContent`), so nothing shows
+  behind the card.
+- **Create dialogs open at once.** New person, New company, New deal and a
+  new goal never wait on the server and have no frame. What they need
+  (members, pipelines, relationship types, the viewer) comes with every
+  page that takes `?open=` (`CrmOverlays` hands it to `CrmCreateHost`), and
+  `opensInstantly` marks them: `setOpen` and `close` change the URL with
+  `history.pushState` and `replaceState`, and `CrmPendingCard` catches a
+  click on a link to one in the capture phase, so the link doesn't navigate.
+  A direct visit to the URL opens the same dialog. `?with=` is read after the
+  dialog is open (`newCardStartAction`) and never overwrites what's typed; a
+  new goal reads what it has reached the same way. A create opened over a
+  card hides that card (`useCardPresence`), since the page isn't replaced.
 - **On a phone** a card fills the screen: full height, no margin, rounded
   at the top only (`PHONE_FULL_SCREEN` in `ui/form-dialog.tsx`, used by
   `CrmCard`, `FormDialog` and Calendar's event detail). The header's
@@ -1981,9 +1996,11 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Owner in Filters (every member, with a search) and Report; C makes the
   page's new record (a deal on the Board). `/crm/calls` opens the Calls group
   (`crmCallsHref`, `?show=calls`); with two or more calls due its header
-  has Call them in a row, the dialer as a card (`?open=calls`). Goals, Coming up
-  (meetings in the next week) and Done on its own (the latest five with
-  when, the week's count, See all opens `?open=log`;
+  has Call them in a row, the dialer as a card (`?open=calls`). Goals (a ring
+  per goal with the big number, a notch for the pace, and a filled check on
+  green with a few sparks when one is hit), Coming up (meetings in the next
+  week) and Done on its own (the week's figure, a bar for each of seven days,
+  the latest four by kind, See all opens `?open=log`;
   `src/components/crm/today/today-log.tsx`) sit on the right. Power hour
   is one light strip; Snooze hides it
   until 2 PM, or 8 AM the next day, where the member is
@@ -2007,7 +2024,10 @@ named by one search param (`src/lib/crm/overlay.ts`):
   the system changed (Undo puts the record back, while nothing changed it
   since), an automation's other steps, and what was held back (Send anyway
   for a draft an automation held for review). Kinds with no real undo show
-  no button.
+  no button. The full list (`?open=log`, `cards/log-card.tsx`) is New
+  person's window. `onItsOwnWeek` counts the seven days ending today, where
+  the member is: sent and changed are done, held back is counted apart. It
+  shows no time saved: nothing records how long any of it would have taken.
 - **People** (`/crm/people`, `src/server/crm/people-view.ts`,
   `src/components/crm/people/`, pure parts in `src/lib/crm/people-view.ts`):
   People and Companies are round buttons (`?view=companies`; the old
@@ -2317,13 +2337,15 @@ Deals live in People (see "One list"); this is what a deal is on screen.
   board and `/crm/quotes/<id>` to the deal's Quote tab, or to the quote
   card when it has no deal (`crmQuoteHref`); `?edit=1` opens the card.
 - **Goals** (`?open=goal`, `?open=goal:<id>`, `cards/goal-card.tsx`;
-  `src/server/crm/goals.ts`): what it counts (deals won, money won and so
-  on), whose (the whole team, you or a member; not asked in a Personal
-  space), the quarter or year, and the target, with a line saying where
-  the pace lands. Today's right column shows each goal's score. CRM
-  managers set and change goals (`saveGoal` requires a manager); every
-  other member opens the same card read-only, with the facts in words and
-  who can change it, and a new goal tells them who sets goals.
+  `src/server/crm/goals.ts`): New person's window, with what it counts
+  (deals won, money won and so on), whose (the whole team, you or a member;
+  not asked in a Personal space), the quarter or year, and the target, then
+  its score: the ring (`GoalGauge`), the number so far and where the pace
+  lands. Save and Delete close it with Undo in the toast. Today's right
+  column shows each goal's score: hit, ahead, on pace or behind
+  (`goalStanding`, `standingWords`). CRM managers set and change goals
+  (`saveGoal` requires a manager); every other member opens the same window
+  read-only, and a new goal tells them who sets goals.
 
 ## Personal CRM
 

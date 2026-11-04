@@ -11,18 +11,17 @@ import {
   sendBulkAction,
 } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { MemberMultiPicker } from "@/components/calendar/member-picker";
+import { CrmFormCard } from "@/components/crm/card/crm-form-card";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { MergeMenu } from "@/components/crm/outreach/compose";
 import { Button } from "@/components/ui/button";
 import {
-  FormDialog,
   FormDialogBody,
   FormDialogFoot,
   FormDialogHead,
   FormError,
   FormField,
   FormRow,
-  keepOpenForToasts,
 } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -223,7 +222,7 @@ function EmailForm({
   };
 
   return (
-    <FormDialog open onOpenChange={(o) => !o && close()} onInteractOutside={keepOpenForToasts}>
+    <CrmFormCard>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -423,7 +422,7 @@ function EmailForm({
           </Button>
         </FormDialogFoot>
       </form>
-    </FormDialog>
+    </CrmFormCard>
   );
 }
 
@@ -502,7 +501,7 @@ function SplitForm({
   };
 
   return (
-    <FormDialog open onOpenChange={(o) => !o && close()} onInteractOutside={keepOpenForToasts}>
+    <CrmFormCard>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -663,6 +662,6 @@ function SplitForm({
           </Button>
         </FormDialogFoot>
       </form>
-    </FormDialog>
+    </CrmFormCard>
   );
 }

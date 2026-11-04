@@ -570,7 +570,7 @@ function PresetCard({
           {description}
         </span>
         <span aria-hidden="true" className="flex flex-wrap items-center gap-1.5">
-          <span className={buttonVariants({ variant: "create", size: "sm" })}>
+          <span className={cn(buttonVariants({ variant: "create", size: "sm" }))}>
             <Plus aria-hidden="true" />
             New task
           </span>

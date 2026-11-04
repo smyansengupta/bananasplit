@@ -1,6 +1,6 @@
 import { LogCard } from "@/components/crm/cards/log-card";
 import { effectiveTimezone } from "@/lib/tasks/dates";
-import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
+import { dayLabel, onItsOwn, onItsOwnWeek } from "@/server/crm/on-its-own";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
@@ -21,6 +21,7 @@ export async function LogOverlay({ shell, orgSlug }: OverlayProps<"log">) {
     <LogCard
       orgId={orgId}
       settingsHref={`/app/${orgSlug}/crm/settings/automations`}
+      week={onItsOwnWeek(entries, now, tz)}
       entries={entries.map((e) => ({
         id: e.id,
         kind: e.kind,
