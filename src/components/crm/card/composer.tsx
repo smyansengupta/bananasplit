@@ -26,7 +26,7 @@ import { TaskPreview } from "./task-preview";
  * and make with Create task (docs/features/crm.md, "Notes and tasks"). Sending
  * waits ten seconds with Undo: an email is queued to go then (Undo cancels
  * it), a text or a note is held here (Undo drops it; closing the card sends
- * it right away). `/` lists templates, your booking link (and the
+ * it right away). `/` lists templates, your meeting link (and the
  * organization's) and a voice note.
  * A red line says when someone else in the organization reached them lately.
  *
@@ -71,7 +71,7 @@ export function Composer({
   /** "Kristine emailed them Oct 30", shown in red while on Email. */
   conflict: string | null;
   templates: readonly { id: string; name: string; subject: string | null; body: string }[];
-  /** Booking links to drop in: yours first, then the organization's (Meetings > Booking links). */
+  /** Meeting links to drop in: yours first, then the organization's (Meetings > Meeting links). */
   booking: readonly { label: string; url: string }[];
   seed?: ComposerSeed | null;
   /** Notes also go on these (their company). */
@@ -295,8 +295,8 @@ export function Composer({
               className="hover:bg-muted flex items-center gap-2 rounded-xl px-2.5 py-2 text-start text-sm"
               onClick={() => {
                 setBody(
-                  b.label === "my booking link"
-                    ? `Here's my booking link if it's easier to pick a time: ${b.url}`
+                  b.label === "my meeting link"
+                    ? `Here's my meeting link if it's easier to pick a time: ${b.url}`
                     : `Here's a link to pick a time (${b.label}): ${b.url}`,
                 );
                 input.current?.focus();
@@ -394,7 +394,7 @@ export function Composer({
         </span>
       ) : (
         <span className="text-muted-foreground ps-1.5 text-xs">
-          Type / for a template, your booking link or a voice note
+          Type / for a template, your meeting link or a voice note
         </span>
       )}
     </div>

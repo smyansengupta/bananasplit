@@ -1,8 +1,9 @@
 /**
- * When the ambient buttons on Booking links show (Meetings > Booking links;
+ * When the ambient buttons on Meeting links show (Meetings > Meeting links;
  * docs/features/booking.md): on a link and on a booking. Pure, so the page
  * decides and the tests pin it. Each one's condition is its reason, and it
- * goes once that stops being true.
+ * goes once that stops being true. They show only where something needs
+ * doing, and one takes Copy link's place on its card rather than joining it.
  */
 
 const MINUTE_MS = 60_000;
@@ -10,7 +11,7 @@ const MINUTE_MS = 60_000;
 /** Join shows this long before a booked call starts. */
 export const JOIN_MINUTES = 10;
 
-export type LinkAmbientKind = "turn-on" | "add-host" | "fix-hours" | "signature";
+export type LinkAmbientKind = "turn-on" | "add-host";
 
 export interface LinkAmbient {
   kind: LinkAmbientKind;
@@ -22,37 +23,21 @@ export interface LinkFacts {
   active: boolean;
   canEdit: boolean;
   hosts: number;
-  /** Open times in the next two weeks; null when they weren't worked out. */
-  openSoon: number | null;
-  booked: number;
 }
 
-/** A link's buttons, most useful first. */
+/** A link's button, if something needs doing: hosts first, since it can't go on without any. */
 export function linkAmbient(l: LinkFacts): LinkAmbient[] {
-  const out: LinkAmbient[] = [];
-  if (l.canEdit && !l.personal && l.hosts === 0) {
-    out.push({ kind: "add-host", reason: "Nobody hosts it, so it can't take bookings" });
-  }
-  if (!l.active) {
-    if (l.canEdit && (l.personal || l.hosts > 0)) {
-      out.push({
-        kind: "turn-on",
-        reason: l.personal
-          ? "Off until you turn it on, so nobody sees your free times yet"
-          : "It's off, so nobody can book it",
-      });
-    }
-    return out;
-  }
-  if (l.canEdit && l.openSoon === 0) {
-    out.push({ kind: "fix-hours", reason: "Nobody can book it in the next two weeks" });
-  } else if (l.booked === 0) {
-    out.push({
-      kind: "signature",
-      reason: "Nobody's booked this yet: copy it into your email signature",
-    });
-  }
-  return out;
+  if (!l.canEdit) return [];
+  if (!l.personal && l.hosts === 0) return [{ kind: "add-host", reason: "Nobody hosts it, so it can't take bookings" }];
+  if (l.active) return [];
+  return [
+    {
+      kind: "turn-on",
+      reason: l.personal
+        ? "Off until you turn it on, so nobody sees your free times yet"
+        : "It's off, so nobody can book it",
+    },
+  ];
 }
 
 export type BookingAmbientKind = "take" | "join";

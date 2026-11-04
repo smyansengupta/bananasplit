@@ -12,7 +12,7 @@ import {
 } from "./hours";
 
 /**
- * A booking link's hours as a picture (Meetings > Booking links): the next
+ * A meeting link's hours as a picture (Meetings > Meeting links): the next
  * seven days in the link's zone, one-off dates included, so a day off shows
  * as one. Pure; the loader works it out, so the first paint and the browser
  * agree.

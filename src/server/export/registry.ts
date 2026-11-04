@@ -172,7 +172,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "CrmQuote", key: ID },
   { model: "CrmQuoteLine", key: ID },
   { model: "CrmBookingPage", key: ID },
-  // Booking links: the meetings booked (the guest's name, email and answers; never the link's token hash).
+  // Meeting links: the meetings booked (the guest's name, email and answers; never the link's token hash).
   { model: "Booking", key: ID, omit: ["tokenHash"] },
   { model: "CrmSuggestion", key: ID },
   { model: "CrmDeliverable", key: ID },

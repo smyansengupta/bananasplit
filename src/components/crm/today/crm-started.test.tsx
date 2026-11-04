@@ -138,7 +138,7 @@ describe("Get your CRM started", () => {
   it("gives a member only their own tiles", () => {
     panel({ state: nothing, viewer: { admin: false, personal: false }, counts: null });
     expect(screen.getByText("Set up your mail")).toBeTruthy();
-    expect(screen.getByText("Turn on your booking link")).toBeTruthy();
+    expect(screen.getByText("Turn on your meeting link")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Set up the CRM" })).toBeNull();
     expect(screen.queryByText("Add your AI key")).toBeNull();
   });

@@ -10,7 +10,7 @@ import { crmSettingsHref, bookingLinksHref } from "./settings-sections";
  * leaves by itself.
  *
  * Who sees what: owners and admins get the organization's steps, and their
- * own; everyone else only their own (mail and booking link), and a Personal
+ * own; everyone else only their own (mail and meeting link), and a Personal
  * space its own short list. What's checked off lives in two places, because
  * only owners and admins can write the first: the organization's steps in
  * OrgSettings.startedSkipped as "crm:<step>", beside Home's, and a member's
@@ -70,7 +70,7 @@ const STEPS: Record<CrmStartedKey, CrmStartedStep> = {
   },
   booking: {
     key: "booking",
-    label: "Turn on your booking link",
+    label: "Turn on your meeting link",
     hint: "People pick a time with you. You set your hours in Meetings.",
   },
   goal: { key: "goal", label: "Set your first goal", hint: "It shows on Today with your pace." },

@@ -7,8 +7,8 @@ import { toast } from "@/components/ui/toaster";
 
 /**
  * A link with Copy and Open, as the CRM shows its public links (your
- * booking link, your BCC address). Booking links themselves are managed in
- * Meetings > Booking links now (src/components/booking; docs/features/booking.md).
+ * meeting link, your BCC address). Meeting links themselves are managed in
+ * Meetings > Meeting links now (src/components/booking; docs/features/booking.md).
  */
 export function CopyLink({ url, label }: { url: string; label?: string }) {
   return (

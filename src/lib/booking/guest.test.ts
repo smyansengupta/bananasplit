@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_HOURS, hoursSummary, offeredDurations, parseMinuteInput, readOverrides } from "./hours";
-import { checkGuestName, cleanAnswer, greetingName } from "./guest";
+import { checkGuestName, cleanAnswer, greetingName, withHost } from "./guest";
+
+describe("a link's name with its host", () => {
+  it("adds the host, unless the name already says who", () => {
+    expect(withHost("Coffee", "Ada Lovelace")).toBe("Coffee with Ada Lovelace");
+    expect(withHost("Meet with Ada", "Ada Lovelace")).toBe("Meet with Ada");
+  });
+
+  it("doesn't say with twice", () => {
+    expect(withHost("Meet with Acme", "Ada Lovelace")).toBe("Meet with Acme (Ada Lovelace)");
+    expect(withHost("Coffee with the president", "Ada Lovelace")).toBe("Coffee with the president (Ada Lovelace)");
+  });
+});
 
 describe("what a guest types on a booking page", () => {
   it("takes plain names", () => {

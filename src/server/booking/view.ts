@@ -21,11 +21,11 @@ import { timeLine } from "@/lib/rsvp/when";
 import { withSystemOrgTx, type MemberContext } from "@/server/db/context";
 import { userPublicSelect, type UserPublic } from "@/server/members";
 
-import { bookingAccess, type BookingAccess } from "./access";
-import { askKey, canEditLink, ensurePersonalLink } from "./links";
+import { bookingAccess, mainLinkId, type BookingAccess } from "./access";
+import { askKey, canEditLink, ensureMainLink, ensurePersonalLink } from "./links";
 import { pageTimeZone, slotsFor } from "./slots";
 
-/** Meetings > Booking links' data (src/app/app/[orgSlug]/meetings/booking/page.tsx). */
+/** Meetings > Meeting links' data (src/app/app/[orgSlug]/meetings/booking/page.tsx). */
 
 /** The most links whose open times are worked out on one page load (each reads a calendar). */
 const OPEN_TIMES_FOR = 20;
@@ -33,6 +33,8 @@ const OPEN_TIMES_FOR = 20;
 export interface BookingLinkState {
   id: string;
   personal: boolean;
+  /** The organization's own link (mainLinkId). */
+  main: boolean;
   title: string;
   description: string;
   slug: string;
@@ -58,7 +60,7 @@ export interface BookingLinkState {
   /** Open times in the next two weeks (0 warns that nobody can book it); null when not worked out. */
   openSoon: number | null;
   booked: number;
-  /** "Tomorrow 9 AM", in the organization's zone. */
+  /** "Tomorrow 9 AM", in the link's own zone, as its hours are. */
   nextOpen: string | null;
   /** The next seven days as a picture; null when it reads the hosts' availability. */
   week: WeekDay[] | null;
@@ -113,6 +115,9 @@ export interface BookingRow {
 export interface BookingLinksData {
   access: BookingAccess;
   mine: BookingLinkState;
+  /** The organization's own link; null in a Personal space, and until someone who runs links opens the tab. */
+  main: BookingLinkState | null;
+  /** More organization links (with the CRM). */
   org: BookingLinkState[];
   /** Everyone's links, yours first, then those that are on. Empty in a Personal space. */
   people: BookingPerson[];
@@ -134,9 +139,11 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
   const { db, organizationId, userId } = ctx;
   const access = await bookingAccess(db, organizationId, now);
   const own = await ensurePersonalLink(ctx);
+  const mainId = mainLinkId(organizationId);
+  if (!access.personal) await ensureMainLink(ctx);
   const isAdmin = can(ctx, "settings.general.write");
   const pages = await db.crmBookingPage.findMany({
-    where: { organizationId, OR: [{ id: own.id }, ...(access.orgLinks ? [{ ownerUserId: null }] : [])] },
+    where: { organizationId, OR: [{ id: own.id }, { id: mainId }, ...(access.orgLinks ? [{ ownerUserId: null }] : [])] },
     orderBy: { createdAt: "asc" },
     take: 60,
   });
@@ -189,7 +196,8 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
   const open = new Map<string, { count: number; next: Date | null }>();
   const asked = new Set<string>();
   const counts = await withSystemOrgTx(organizationId, async ({ db: sdb }) => {
-    const ownFirst = [...pages].sort((a, b) => Number(b.id === own.id) - Number(a.id === own.id));
+    const rank = (p: PageRow) => (p.id === own.id ? 0 : p.id === mainId ? 1 : 2);
+    const ownFirst = [...pages].sort((a, b) => rank(a) - rank(b));
     for (const p of [...ownFirst, ...theirs].filter((x) => x.active).slice(0, OPEN_TIMES_FOR)) {
       const tz = pageTimeZone(p, access.timezone);
       const soon = await slotsFor(sdb, { ...p, maxDaysAhead: Math.min(p.maxDaysAhead, 14) }, tz, now, {
@@ -225,7 +233,7 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
       hoursLine: hours ? hoursShort(hours) : "Each host's own hours",
       lengths: lengthsLine(offeredDurations(p.durationMin, p.durations)),
       openSoon: open.get(p.id)?.count ?? null,
-      nextOpen: next ? `${shortDayAt(next, zone, now)} ${minuteLabel(wallClock(next, zone).min)}` : null,
+      nextOpen: next ? `${shortDayAt(next, tz, now)} ${minuteLabel(wallClock(next, tz).min)}` : null,
     };
   };
   const state = async (p: PageRow): Promise<BookingLinkState> => {
@@ -236,6 +244,7 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
       ...facts,
       id: p.id,
       personal: Boolean(p.ownerUserId),
+      main: p.id === mainId,
       description: p.description ?? "",
       slug: p.slug,
       durationMin: p.durationMin,
@@ -261,14 +270,14 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
         active: p.active,
         canEdit,
         hosts: p.hostIds.length,
-        openSoon: facts.openSoon,
-        booked,
       }),
     };
   };
   const mine = await state(pages.find((p) => p.id === own.id)!);
+  const mainPage = pages.find((p) => p.id === mainId);
+  const main = mainPage ? await state(mainPage) : null;
   const org = [];
-  for (const p of pages) if (!p.ownerUserId) org.push(await state(p));
+  for (const p of pages) if (!p.ownerUserId && p.id !== mainId) org.push(await state(p));
   const linkOf = new Map(theirs.map((p) => [p.ownerUserId, p]));
   const people: BookingPerson[] = access.personal
     ? []
@@ -306,6 +315,7 @@ export async function loadBookingLinks(ctx: MemberContext, now: Date = new Date(
   return {
     access,
     mine,
+    main,
     org,
     people,
     members,

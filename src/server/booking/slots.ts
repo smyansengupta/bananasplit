@@ -5,7 +5,7 @@ import { isValidTimeZone } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
 /**
- * Which times a booking link can take, from the database (the pure engine
+ * Which times a meeting link can take, from the database (the pure engine
  * is src/lib/crm/outreach/booking.ts). A host is busy whenever
  * app.booking_host_busy says so (what they host or were asked to and didn't
  * decline, in every space they're in, and their whole Personal calendar

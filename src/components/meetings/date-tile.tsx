@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * The date tile and type pill Meetings' cards are built from, on their own
- * so Booking links' Coming up (a client component) draws the same ones
+ * so Meeting links' Coming up (a client component) draws the same ones
  * without bringing the whole card. Both need `--kind` set by a parent.
  */
 

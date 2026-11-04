@@ -14,15 +14,16 @@ import { advanceTargets, stopEnrollments } from "@/server/crm/outreach/inbound";
 import { publicTarget } from "@/server/crm/outreach/public";
 import { createPerson } from "@/server/crm/people";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
+import { ConflictError } from "@/server/db/errors";
 import { createEvent, deleteEvent, updateEvent, type EventServiceContext } from "@/server/events/service";
 
-import { bookingAccess, connectedVideo } from "./access";
+import { bookingAccess, connectedVideo, mainLinkId } from "./access";
 import { emailGuest, tellHosts, whenText } from "./notify";
 import { liveHosts, pageTimeZone, slotsFor } from "./slots";
 import { BOOKING_TOKEN_RE, bookingToken, newBookingId, tokenHash } from "./token";
 
 /**
- * The public side of booking links (/book/{slug} and the guest's own
+ * The public side of meeting links (/book/{slug} and the guest's own
  * /book/m/{token}; docs/features/booking.md). Found without an organization
  * context (app.crm_public_target), then everything happens in that one
  * organization on the service path. Callers rate-limit first.
@@ -68,6 +69,8 @@ export interface PublicBooking {
   hosts: { id: string; name: string }[];
   /** A personal link: whose. */
   ownerName: string | null;
+  /** The organization's own link: it's headed by the organization, never one of its hosts. */
+  main: boolean;
   questions: BookingQuestion[];
   /** Open starts (ISO) for each length offered. */
   slots: Record<number, string[]>;
@@ -81,9 +84,9 @@ async function openPage(db: TxClient, organizationId: string, pageId: string): P
   const page = await db.crmBookingPage.findFirst({ where: { id: pageId, organizationId, active: true } });
   if (!page) return null;
   if (!page.ownerUserId) {
-    // Organization links are the CRM's: none once it's off the plan or removed.
-    const access = await bookingAccess(db, organizationId);
-    if (!access.orgLinks) return null;
+    // More organization links are the CRM's: none once it's off the plan or
+    // removed. The main link is every organization's.
+    if (page.id !== mainLinkId(organizationId) && !(await bookingAccess(db, organizationId)).orgLinks) return null;
   } else {
     const member = await db.membership.findFirst({ where: { organizationId, userId: page.ownerUserId }, select: { userId: true } });
     if (!member) return null;
@@ -119,6 +122,7 @@ export async function loadBooking(slug: string, now: Date = new Date()): Promise
       tz,
       hosts,
       ownerName: page.ownerUserId ? (hosts[0]?.name ?? null) : null,
+      main: page.id === mainLinkId(target.organizationId),
       questions: readQuestions(page.questions),
       slots,
       video: page.video,
@@ -140,6 +144,7 @@ export type BookResult =
   | { ok: false; error: string };
 
 const TAKEN = "That time was just taken. Pick another.";
+const CLOSED = "This meeting link isn't open.";
 
 /** Serializes everything that books a host, across every link and space they're in. */
 async function lockHosts(db: TxClient, hostIds: readonly string[]): Promise<void> {
@@ -195,12 +200,8 @@ async function fairOrder(db: TxClient, page: PageRow, free: readonly string[], n
   return out;
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
-
 export async function book(slug: string, input: BookInput, now: Date = new Date()): Promise<BookResult> {
-  if (!SLUG_RE.test(slug)) return { ok: false, error: "This booking page isn't open." };
+  if (!SLUG_RE.test(slug)) return { ok: false, error: CLOSED };
   const nameCheck = checkGuestName(input.name);
   if (!nameCheck.ok) return { ok: false, error: nameCheck.error };
   const name = nameCheck.name;
@@ -210,12 +211,12 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
   if (Number.isNaN(start.getTime())) return { ok: false, error: "Pick a time." };
   const guestTz = isValidTimeZone(input.timeZone) ? input.timeZone : null;
   const target = await publicTarget("booking", slug);
-  if (!target) return { ok: false, error: "This booking page isn't open." };
+  if (!target) return { ok: false, error: CLOSED };
   const orgId = target.organizationId;
   try {
     return await withSystemOrgTx(orgId, async ({ db }) => {
       const page = await openPage(db, orgId, target.id);
-      if (!page) return { ok: false as const, error: "This booking page isn't open." };
+      if (!page) return { ok: false as const, error: CLOSED };
       const durations = offeredDurations(page.durationMin, page.durations);
       const durationMin = input.durationMin ?? page.durationMin;
       if (!durations.includes(durationMin)) return { ok: false as const, error: "Pick how long." };
@@ -313,7 +314,7 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
     });
   } catch (error) {
     // The unique (host, start) index: someone else got there in the same instant.
-    if (isUniqueViolation(error)) return { ok: false, error: TAKEN };
+    if (error instanceof ConflictError) return { ok: false, error: TAKEN };
     throw error;
   }
 }
@@ -581,7 +582,7 @@ export async function guestReschedule(token: string, startIso: string, now: Date
       return { ok: true as const, when: whenText(slot.start, b.guestTimeZone ?? tz) };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) return { ok: false, error: TAKEN };
+    if (error instanceof ConflictError) return { ok: false, error: TAKEN };
     throw error;
   }
 }
@@ -608,7 +609,8 @@ export async function moveBooking(
     title: by === "guest" ? `${b.guestName} moved ${b.page.title}` : `${b.page.title} with ${b.guestName} moved`,
     body: `Now ${whenText(start, tz)} (was ${whenText(b.startsAt, tz)})`,
     eventId: b.eventId,
-    key: `${b.id}:moved:${start.getTime()}`,
+    // Each move is its own line: a guest can come back to a time they had before.
+    key: `${b.id}:moved:${start.getTime()}:${Date.now()}`,
     actorId,
   });
   await emailGuest(db, b.organizationId, b.id, "moved", { startsAt: start });

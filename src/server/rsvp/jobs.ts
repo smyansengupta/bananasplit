@@ -227,7 +227,7 @@ async function fanOutReminder(
     );
   }
 
-  // A meeting booked on a booking link: its guest's reminder (docs/features/booking.md).
+  // A meeting booked on a meeting link: its guest's reminder (docs/features/booking.md).
   reached += await queueGuestReminders(db, orgId, eventId, offset, event.startsAt);
 
   const invited = (

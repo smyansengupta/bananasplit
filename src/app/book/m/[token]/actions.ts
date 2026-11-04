@@ -7,7 +7,7 @@ import { getClientIp } from "@/lib/request-ip";
 import { guestCancel, guestReschedule, verifyBooking, type GuestChange } from "@/server/booking/book";
 
 /**
- * What a guest can do from their own booking link (/book/m/{token}): say
+ * What a guest can do from their own booking page (/book/m/{token}): say
  * the address is theirs, cancel, or pick another time with the same host.
  * The token is the only key (an HMAC of the booking, stored hashed);
  * rate-limited per visitor's address.

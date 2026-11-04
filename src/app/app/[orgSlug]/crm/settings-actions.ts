@@ -25,7 +25,7 @@ import { SpaceRefusedError, withOrgAction, type OrgContext } from "@/server/db/c
  * src/components/crm/settings/sections): the Sending window and
  * unsubscribe line, how much the CRM may do alone, fixing an import's
  * skipped rows, and "Get your CRM started" (who looks after them, checking
- * a step off, Hide, your booking link and logging address). Each runs in one
+ * a step off, Hide, your meeting link and logging address). Each runs in one
  * withOrgAction transaction as the member (RLS decides) and answers
  * { ok: true, ... } or { ok: false, error }.
  */
@@ -104,7 +104,7 @@ export const restoreCrmStartedAction = settingsAction(
   },
 );
 
-/** Your own booking link, made if it isn't there yet and switched on. */
+/** Your own meeting link, made if it isn't there yet and switched on. */
 export const turnOnBookingAction = settingsAction(async (ctx) => {
   try {
     const link = await ensurePersonalLink(ctx);

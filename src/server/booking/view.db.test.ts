@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * Booking links' page against the real roles and policies on the local
+ * Meeting links' page against the real roles and policies on the local
  * database (docs/features/booking.md): what the loader hands each member of
  * everyone else's link, Ask them, and every booked meeting showing up on
  * Meetings and the Calendar by itself. Skipped when the database is not
@@ -27,9 +27,13 @@ import { withOrgTx, type OrgContext } from "@/server/db/context";
 import { meetingsWhere } from "@/server/meetings/where";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
-import { book, loadBooking } from "./book";
+import { appUrl } from "@/lib/app-url";
+
+import { mainLinkId } from "./access";
+import { book, guestCancel, guestReschedule, guestView, loadBooking, verifyBooking } from "./book";
 import { coHostedEventIds } from "./co-hosted";
-import { askToTurnOn, createOrgLink, ensurePersonalLink, updateLink } from "./links";
+import { askToTurnOn, createOrgLink, ensureMainLink, ensurePersonalLink, updateLink } from "./links";
+import { bookingToken } from "./token";
 import { loadBookingLinks } from "./view";
 
 const tag = randomBytes(4).toString("hex");
@@ -140,7 +144,7 @@ afterAll(async () => {
   await disconnectOwnerDb();
 });
 
-describe("Booking links' page", () => {
+describe("Meeting links' page", () => {
   it("shows every member, with nothing of a link that's off, and only public facts of one that's on", async () => {
     if (!reachable) return;
     const anaLink = await openLink(ana, crmOrg);
@@ -198,7 +202,7 @@ describe("Booking links' page", () => {
       updateLink(ctx, link.id, { hours: ALL_DAY as never, timezone: "UTC", minNoticeHours: 0, maxDaysAhead: 7, video: false }),
     );
     let seen = await as(cy, crmOrg, (ctx) => loadBookingLinks(ctx));
-    expect(seen.org.find((l) => l.id === link.id)?.ambient.map((a) => a.kind)).toEqual(["signature"]);
+    expect(seen.org.find((l) => l.id === link.id)?.ambient).toEqual([]);
 
     expect((await book(link.slug, { start: await slotOf(link.slug, 3), ...guest("coffee") })).ok).toBe(true);
     seen = await as(cy, crmOrg, (ctx) => loadBookingLinks(ctx));
@@ -226,6 +230,188 @@ describe("Booking links' page", () => {
   });
 });
 
+describe("the organization's main link", () => {
+  const mainOf = (org: string) => ownerDb.crmBookingPage.findUnique({ where: { id: mainLinkId(org) } });
+
+  it("waits for someone who runs links: a member opening the page makes nothing", async () => {
+    if (!reachable) return;
+    const data = await as(ana, plainOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.main).toBeNull();
+    expect(await mainOf(plainOrg)).toBeNull();
+  });
+
+  it("is made the first time an owner opens the page, with or without the CRM: off, the organization's, hosted by its owners and admins", async () => {
+    if (!reachable) return;
+    await ownerDb.membership.createMany({
+      data: [
+        { organizationId: plainOrg, userId: owner.id, role: "OWNER" },
+        { organizationId: plainOrg, userId: cy.id, role: "ADMIN" },
+      ],
+    });
+    const data = await as(owner, plainOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.access.orgLinks).toBe(false);
+    expect(data.main).toMatchObject({ main: true, title: "Meet with View Plain", active: false, personal: false, canEdit: true });
+    expect([...data.main!.hostIds].sort()).toEqual([owner.id, cy.id].sort());
+    expect(data.main!.ambient.map((a) => a.kind)).toEqual(["turn-on"]);
+    // At the organization's own address, and not bookable until someone turns it on.
+    expect(data.main!.url).toBe(appUrl(`/book/bviewp-${tag}`));
+    expect(await loadBooking(`bviewp-${tag}`)).toBeNull();
+    // It isn't one of the other links, and a second open changes nothing.
+    expect(data.org).toEqual([]);
+    await as(owner, plainOrg, (ctx) => loadBookingLinks(ctx));
+    expect(await ownerDb.crmBookingPage.count({ where: { organizationId: plainOrg, ownerUserId: null } })).toBe(1);
+    // A member sees it from now on, and can't change it.
+    const seen = await as(bo, plainOrg, (ctx) => loadBookingLinks(ctx));
+    expect(seen.main).toMatchObject({ id: mainLinkId(plainOrg), canEdit: false, ambient: [] });
+    await expect(as(bo, plainOrg, (ctx) => updateLink(ctx, mainLinkId(plainOrg), { active: true }))).rejects.toThrow();
+  });
+
+  it("stays one link when two people open the page at the same moment", async () => {
+    if (!reachable) return;
+    const org = `c_bviewr_${tag}`;
+    await ownerDb.organization.create({ data: { id: org, name: "View Race", slug: `bviewr-${tag}`, timezone: "UTC", plan: "SOCIETY" } });
+    await ownerDb.membership.createMany({
+      data: [
+        { organizationId: org, userId: owner.id, role: "OWNER" },
+        { organizationId: org, userId: cy.id, role: "ADMIN" },
+      ],
+    });
+    requireUserMock.mockResolvedValue(owner);
+    await Promise.all([1, 2, 3].map(() => withOrgTx(org, (ctx) => ensureMainLink(ctx))));
+    expect(await ownerDb.crmBookingPage.count({ where: { organizationId: org } })).toBe(1);
+    // Your own link the same way: the page doesn't fall over in the second tab.
+    await Promise.all([1, 2, 3].map(() => withOrgTx(org, (ctx) => ensurePersonalLink(ctx))));
+    expect(await ownerDb.crmBookingPage.count({ where: { organizationId: org, ownerUserId: owner.id } })).toBe(1);
+    await ownerDb.organization.delete({ where: { id: org } });
+  });
+
+  it("takes another address when the organization's own is taken", async () => {
+    if (!reachable) return;
+    const org = `c_bviews_${tag}`;
+    await ownerDb.organization.create({ data: { id: org, name: "View Taken", slug: `bviews-${tag}`, timezone: "UTC", plan: "SOCIETY" } });
+    await ownerDb.membership.create({ data: { organizationId: org, userId: owner.id, role: "OWNER" } });
+    const mine = await as(ana, crmOrg, (ctx) => ensurePersonalLink(ctx));
+    await as(ana, crmOrg, (ctx) => updateLink(ctx, mine.id, { slug: `bviews-${tag}` }));
+    await as(owner, org, (ctx) => ensureMainLink(ctx));
+    const made = await mainOf(org);
+    expect(made?.slug).toMatch(/^view-taken-/);
+    // Slugs are unique across every space, and another space's links aren't visible here.
+    await expect(as(ana, crmOrg, (ctx) => updateLink(ctx, mine.id, { slug: made!.slug }))).rejects.toThrow("That link is taken.");
+    // As the save action does it: it hands the error back from inside the transaction, which still ends cleanly.
+    const said = await as(ana, crmOrg, (ctx) => updateLink(ctx, mine.id, { slug: made!.slug }).catch((e: Error) => e.message));
+    expect(said).toBe("That link is taken.");
+    await as(ana, crmOrg, (ctx) => updateLink(ctx, mine.id, { slug: `ana-back-${tag}` }));
+    await ownerDb.organization.delete({ where: { id: org } });
+  });
+
+  it("isn't made in a Personal space", async () => {
+    if (!reachable) return;
+    const data = await as(ana, personalOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.main).toBeNull();
+    expect(await mainOf(personalOrg)).toBeNull();
+  });
+
+  it("tells its other hosts when it goes on, once, and takes bookings without the CRM, headed by the organization", async () => {
+    if (!reachable) return;
+    const id = mainLinkId(plainOrg);
+    const slug = `bviewp-${tag}`;
+    await as(owner, plainOrg, (ctx) => updateLink(ctx, id, { hours: ALL_DAY as never, timezone: "UTC", minNoticeHours: 0, maxDaysAhead: 7, video: false }));
+    await as(owner, plainOrg, (ctx) => updateLink(ctx, id, { active: true }));
+    const told = () => ownerDb.notification.count({ where: { userId: cy.id, organizationId: plainOrg, title: { contains: "turned on Meet with View Plain" } } });
+    expect(await told()).toBe(1);
+    expect(await ownerDb.notification.count({ where: { userId: owner.id, organizationId: plainOrg, title: { contains: "turned on" } } })).toBe(0);
+    // Saving it while it's on says nothing more.
+    await as(owner, plainOrg, (ctx) => updateLink(ctx, id, { active: true, title: "Meet with View Plain" }));
+    expect(await told()).toBe(1);
+
+    const page = await loadBooking(slug);
+    expect(page).toMatchObject({ main: true, title: "Meet with View Plain", ownerName: null });
+    expect((await book(slug, { start: await slotOf(slug, 2), ...guest("main-a") })).ok).toBe(true);
+    const b = await bookingOf("main-a");
+    expect([owner.id, cy.id]).toContain(b.hostUserId);
+    const seen = await as(owner, plainOrg, (ctx) => loadBookingLinks(ctx));
+    expect(seen.main).toMatchObject({ booked: 1, ambient: [] });
+    expect(seen.upcoming.find((u) => u.id === b.id)?.linkTitle).toBe("Meet with View Plain");
+  });
+
+  it("rotates among its hosts", async () => {
+    if (!reachable) return;
+    const slug = `bviewp-${tag}`;
+    // The second booking goes to whoever hasn't had one.
+    expect((await book(slug, { start: await slotOf(slug, 20), ...guest("main-b") })).ok).toBe(true);
+    const hosts = [(await bookingOf("main-a")).hostUserId, (await bookingOf("main-b")).hostUserId];
+    expect(hosts.sort()).toEqual([owner.id, cy.id].sort());
+  });
+
+  it("confirms, moves and cancels for a guest with no CRM anywhere", async () => {
+    if (!reachable) return;
+    const slug = `bviewp-${tag}`;
+    expect((await book(slug, { start: await slotOf(slug, 40), ...guest("main-c") })).ok).toBe(true);
+    const b = await bookingOf("main-c");
+    const token = bookingToken(b.id);
+    expect(await verifyBooking(token)).toBe(true);
+    expect((await ownerDb.booking.findUniqueOrThrow({ where: { id: b.id } })).verifiedAt).not.toBeNull();
+    expect(await ownerDb.crmPerson.count({ where: { organizationId: plainOrg } })).toBe(0);
+    const view = await guestView(token, new Date(), true);
+    expect((await guestReschedule(token, view!.slots[3]!)).ok).toBe(true);
+    expect((await guestCancel(token, "")).ok).toBe(true);
+    expect((await ownerDb.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("CANCELLED");
+  });
+
+  it("keeps a link named for someone as another link, not as the heading", async () => {
+    if (!reachable) return;
+    const coffee = await as(owner, crmOrg, (ctx) => createOrgLink(ctx, "Coffee with the president"));
+    const data = await as(owner, crmOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.main?.title).toBe("Meet with View CRM");
+    expect(data.org.map((l) => l.id)).toContain(coffee.id);
+    expect(data.org.every((l) => !l.main)).toBe(true);
+  });
+
+  it("keeps the main link when the CRM comes off, and only it", async () => {
+    if (!reachable) return;
+    await ownerDb.orgSettings.update({ where: { organizationId: crmOrg }, data: { addOns: [] } });
+    const data = await as(owner, crmOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.main?.id).toBe(mainLinkId(crmOrg));
+    expect(data.org).toEqual([]);
+    await ownerDb.orgSettings.update({ where: { organizationId: crmOrg }, data: { addOns: ["crm"] } });
+  });
+
+  it("gives every link the address its public page answers on", async () => {
+    if (!reachable) return;
+    const data = await as(owner, plainOrg, (ctx) => loadBookingLinks(ctx));
+    const slug = new URL(data.main!.url).pathname.replace("/book/", "");
+    expect(data.main!.url).toBe(appUrl(`/book/${slug}`));
+    expect((await loadBooking(slug))?.pageId).toBe(data.main!.id);
+    await as(owner, plainOrg, (ctx) => updateLink(ctx, data.main!.id, { active: false }));
+    expect(await loadBooking(slug)).toBeNull();
+    expect(await book(slug, { start: new Date(Date.now() + 86_400_000).toISOString(), ...guest("main-off") })).toEqual({
+      ok: false,
+      error: "This meeting link isn't open.",
+    });
+    await as(owner, plainOrg, (ctx) => updateLink(ctx, data.main!.id, { active: true }));
+    expect((await loadBooking(slug))?.pageId).toBe(data.main!.id);
+  });
+});
+
+describe("a link in its own time zone", () => {
+  it("says the next free time in the link's zone, as its hours are, not the organization's", async () => {
+    if (!reachable) return;
+    const link = await as(bo, crmOrg, (ctx) => ensurePersonalLink(ctx));
+    // Every day, 9 AM to 10 AM in Tokyo; the organization is on UTC.
+    const nine = [[540, 600]];
+    const hours = { "1": nine, "2": nine, "3": nine, "4": nine, "5": nine, "6": nine, "7": nine };
+    await as(bo, crmOrg, (ctx) => updateLink(ctx, link.id, { hours: hours as never, timezone: "Asia/Tokyo", minNoticeHours: 0, maxDaysAhead: 7, active: true }));
+    const data = await as(bo, crmOrg, (ctx) => loadBookingLinks(ctx));
+    expect(data.mine.timezone).toBe("Asia/Tokyo");
+    expect(data.mine.nextOpen).toMatch(/9(:30)? AM$/);
+    const page = await loadBooking(link.slug);
+    expect(page?.tz).toBe("Asia/Tokyo");
+    // 9 AM in Tokyo is midnight UTC.
+    for (const s of page!.slots[30]!) expect(new Date(s).getUTCHours()).toBe(0);
+    await as(bo, crmOrg, (ctx) => updateLink(ctx, link.id, { active: false }));
+  });
+});
+
 describe("Ask them", () => {
   it("sends one Inbox line however many people ask, and the button goes for everyone", async () => {
     if (!reachable) return;
@@ -238,7 +424,7 @@ describe("Ask them", () => {
 
     const notes = await ownerDb.notification.findMany({ where: { organizationId: crmOrg, userId: bo.id, type: "MEETING_BOOKED" } });
     expect(notes).toHaveLength(1);
-    expect(notes[0]?.title).toBe(`${ana.name} asked you to turn on your booking link`);
+    expect(notes[0]?.title).toBe(`${ana.name} asked you to turn on your meeting link`);
     expect(notes[0]?.linkUrl).toContain("/meetings/booking");
 
     for (const viewer of [ana, owner, cy]) {

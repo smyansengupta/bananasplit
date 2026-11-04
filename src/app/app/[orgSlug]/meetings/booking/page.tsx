@@ -9,20 +9,24 @@ import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { sectionLabel } from "@/lib/nav/sidebar";
+import { orgLogoUrl } from "@/lib/org-logo";
 import { timeZoneOptions } from "@/lib/timezones";
 import { coHostedEventIds } from "@/server/booking/co-hosted";
 import { loadBookingLinks } from "@/server/booking/view";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { meetingsWhere } from "@/server/meetings/where";
 
-export const metadata = { title: "Booking links" };
+export const metadata = { title: "Meeting links" };
 
 /**
- * Meetings > Booking links (docs/features/booking.md): Meetings' third
+ * Meetings > Meeting links (docs/features/booking.md): Meetings' third
  * part, beside Meetings and Find a time.
- * - The organization's links (with the CRM), as strips across the top:
- *   shared links anyone here can send ("Coffee with the president"), with
- *   one named host or several taking turns. The CRM uses them too.
+ * - The organization's own link, as the strip across the top: every
+ *   organization has one, CRM or not, and it's the organization's, never a
+ *   person's. Its hosts take turns.
+ * - Its other links (with the CRM), behind one control at the end of the
+ *   strip: shared links anyone here can send ("Coffee with the president"),
+ *   with one named host or several taking turns. The CRM uses them too.
  * - Everyone's own links, a card each. Every member of every space has one
  *   (made the first time this opens, off until they turn it on): fill in
  *   the times you're free; people pick one and it goes straight onto your
@@ -105,11 +109,12 @@ export default async function BookingLinksPage({
         orgId={org.id}
         orgSlug={orgSlug}
         orgName={org.name}
+        orgLogo={orgLogoUrl(org.logo, 96)}
         personalSpace={data.access.personal}
         orgLinksAllowed={data.access.orgLinks}
         crmOn={data.access.crm}
-        isAdmin={data.isAdmin}
         mine={data.mine}
+        mainLink={data.main}
         orgLinks={data.org}
         people={data.people}
         upcoming={data.upcoming}

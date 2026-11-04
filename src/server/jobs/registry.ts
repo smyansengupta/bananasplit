@@ -343,7 +343,7 @@ export const JOB_KINDS = {
     description:
       "One RSVP email to a guest (confirmation, waitlist, a spot opened, a reminder with a text, cancelled); key rsvp-email:{registrationId}:{template}[...], a reminder's rsvp-email:{registrationId}:reminder:r{offsetMinutes}:{startMinute}. A reminder is claimed as an EventReminderSend row before it is sent and released if the send fails.",
   }),
-  // ---- Booking links (docs/features/booking.md) ----
+  // ---- Meeting links (docs/features/booking.md) ----
   "booking-email": kind({
     payload: z
       .object({

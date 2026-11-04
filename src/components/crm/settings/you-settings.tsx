@@ -16,7 +16,7 @@ import { useAutoSave } from "./use-save";
 
 /**
  * CRM settings > You (every member, only theirs): your signature, your
- * logging address, what your mail shares, and your booking link, each saved
+ * logging address, what your mail shares, and your meeting link, each saved
  * as you change it. What's never logged and a new address go under More.
  */
 
@@ -164,7 +164,7 @@ export function MailExtrasCard({
   );
 }
 
-/** Your booking link: copy it when it's on, turn it on right here when it's off. */
+/** Your meeting link: copy it when it's on, turn it on right here when it's off. */
 export function YourBookingCard({
   orgId,
   url,
@@ -178,7 +178,7 @@ export function YourBookingCard({
 }) {
   return (
     <SettingsCard
-      title="Your booking link"
+      title="Your meeting link"
       action={
         <Button variant="outline" size="sm" asChild>
           <a href={href}>Change it in Meetings</a>
@@ -186,7 +186,7 @@ export function YourBookingCard({
       }
     >
       {url ? (
-        <CopyLink url={url} label="Copy your booking link" />
+        <CopyLink url={url} label="Copy your meeting link" />
       ) : (
         <AmbientActions
           why
@@ -198,7 +198,7 @@ export function YourBookingCard({
               tone: "solid",
               reason: "It's off, so nobody can book you",
               run: () => turnOnBookingAction(orgId),
-              done: "Your booking link is on.",
+              done: "Your meeting link is on.",
             },
           ]}
         />

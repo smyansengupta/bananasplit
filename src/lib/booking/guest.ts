@@ -55,7 +55,7 @@ const LINKISH_RUN = /\S*(?::\/\/|\bwww\.|@)\S*|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a
  * Words a link's maker typed (its name, the host's name, the space's name),
  * fit to put in an email the platform sends to whatever address a visitor
  * typed: links and addresses taken out, control characters gone, short. So
- * a booking link can't be used to mail a stranger somebody's link.
+ * a meeting link can't be used to mail a stranger somebody's link.
  */
 export function plainForEmail(text: string, max = 80): string {
   const s = text
@@ -72,9 +72,13 @@ export function looksLikeLink(text: string): boolean {
   return LINKISH.test(text);
 }
 
-/** "Coffee with Ada Lovelace", or the link's own name when it already says who ("Meet with Ada"). */
+/**
+ * "Coffee with Ada Lovelace", or the link's own name when it already says who
+ * ("Meet with Ada"). A name that's with someone else keeps it and adds the
+ * host: "Meet with Acme (Ada Lovelace)".
+ */
 export function withHost(title: string, hostName: string): string {
   const first = hostName.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   if (first && title.toLowerCase().includes(first)) return title;
-  return `${title} with ${hostName}`;
+  return /\bwith\b/i.test(title) ? `${title} (${hostName})` : `${title} with ${hostName}`;
 }

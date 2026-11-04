@@ -42,7 +42,7 @@ export const TRIGGER_INFO: Record<TriggerType, { label: string; hint: string; ob
   "stage.changed": { label: "A deal moves stage", hint: "Into a stage, or won or lost", objects: ["deal"] },
   "form.submitted": { label: "A form is filled in", hint: "Someone answers one of your forms", objects: ["person"] },
   "email.replied": { label: "Someone replies", hint: "A reply to your email comes in", objects: ["person"] },
-  "meeting.booked": { label: "A meeting is booked", hint: "Through a booking link", objects: ["person"] },
+  "meeting.booked": { label: "A meeting is booked", hint: "Through a meeting link", objects: ["person"] },
   "date.reached": { label: "A date comes", hint: "Days before or after a date field", objects: WORKFLOW_OBJECTS },
   "no.activity": { label: "Nothing happens for a while", hint: "No contact for some days", objects: WORKFLOW_OBJECTS },
   "deal.stuck": { label: "A deal is stuck", hint: "In one stage too long", objects: ["deal"] },

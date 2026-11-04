@@ -300,7 +300,7 @@ export function CrmStarted({
                     type="button"
                     disabled={working("booking")}
                     onClick={() =>
-                      run("booking", () => turnOnBookingAction(orgId), "Your booking link is on.")
+                      run("booking", () => turnOnBookingAction(orgId), "Your meeting link is on.")
                     }
                     className={STARTED_SOLID}
                   >

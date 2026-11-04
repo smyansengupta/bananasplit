@@ -104,7 +104,7 @@ export function crmSettingsAliasHref(
   );
 }
 
-/** Meetings > Booking links, optionally opening one link's editor. */
+/** Meetings > Meeting links, optionally opening one link's editor. */
 export function bookingLinksHref(orgSlug: string, editId: string | null = null): string {
   const base = `/app/${orgSlug}/meetings/booking`;
   return editId ? `${base}?edit=${encodeURIComponent(editId)}` : base;
