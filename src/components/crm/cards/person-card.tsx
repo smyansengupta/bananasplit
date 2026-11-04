@@ -74,7 +74,8 @@ export interface PersonCardData {
   };
   conflict: string | null;
   templates: { id: string; name: string; subject: string | null; body: string }[];
-  booking: string | null;
+  /** Booking links for the "/" menu: yours first, then the organization's. */
+  booking: { label: string; url: string }[];
 }
 
 export function PersonCard({

@@ -2,13 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
-import { BookingEditor } from "@/components/crm/outreach/booking";
 import { CrmSettingsFrame } from "@/components/crm/settings/settings-frame";
 import { RunLog, WorkflowBuilder, type BuilderDraft } from "@/components/crm/workflow-builder";
 import { Badge } from "@/components/ui/badge";
-import { appUrl } from "@/lib/app-url";
 import { crmRecordHref } from "@/lib/crm/href";
-import { readQuestions } from "@/lib/crm/outreach/booking";
 import {
   canOpenSection,
   crmSettingsHref,
@@ -56,19 +53,21 @@ const EVENT_WORD: Record<string, string> = {
 /**
  * A page under a CRM settings section: one automation
  * (/crm/settings/automations/{id}, or new, with ?describe= from the
- * describe box) with its run history, or one booking page
- * (/crm/settings/booking/{id}).
+ * describe box) with its run history. A booking page's old address
+ * (/crm/settings/booking/{id}) opens it in Meetings > Booking links.
  */
 export default async function CrmSettingsItemPage({
   params,
   searchParams,
 }: PageProps<"/app/[orgSlug]/crm/settings/[section]/[id]">) {
   const { orgSlug, section: sectionId, id } = await params;
+  // A booking page opens in Meetings > Booking links now (docs/features/booking.md).
+  if (findSection(sectionId)?.id === "booking") redirect(crmSettingsHref(orgSlug, "booking", `/${id}`));
   const sp = (await searchParams) as Record<string, string | undefined>;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const section = findSection(sectionId);
-  if (!section || (section.id !== "automations" && section.id !== "booking")) notFound();
+  if (!section || section.id !== "automations") notFound();
   const viewer = {
     admin: shell.access.admin,
     manager: shell.access.manager,
@@ -77,44 +76,6 @@ export default async function CrmSettingsItemPage({
   if (!canOpenSection(section, viewer)) redirect(crmSettingsHref(orgSlug, defaultSection(viewer)));
   const orgId = shell.org.id;
   const back = { href: crmSettingsHref(orgSlug, section.id), label: section.label };
-
-  if (section.id === "booking") {
-    const page = await withOrgTx(orgId, ({ db }) =>
-      db.crmBookingPage.findFirst({ where: { id, organizationId: orgId } }),
-    );
-    if (!page) notFound();
-    return (
-      <CrmSettingsFrame
-        orgSlug={orgSlug}
-        viewer={viewer}
-        section={section}
-        back={back}
-        title={page.title}
-        description="Anyone with the link can book. It lands in Meetings and on their timeline."
-      >
-        <BookingEditor
-          orgId={orgId}
-          members={shell.members}
-          pipelines={shell.pipelines.map((p) => ({ id: p.id, name: p.name }))}
-          page={{
-            id: page.id,
-            title: page.title,
-            description: page.description ?? "",
-            slug: page.slug,
-            url: appUrl(`/book/${page.slug}`),
-            durationMin: page.durationMin,
-            bufferMin: page.bufferMin,
-            minNoticeHours: page.minNoticeHours,
-            maxDaysAhead: page.maxDaysAhead,
-            hostIds: page.hostIds,
-            questions: readQuestions(page.questions),
-            pipelineId: page.pipelineId,
-            active: page.active,
-          }}
-        />
-      </CrmSettingsFrame>
-    );
-  }
 
   const isNew = id === "new";
   const data = await withOrgTx(orgId, async ({ db }) => {
