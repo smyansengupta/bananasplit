@@ -280,6 +280,23 @@ async function mirrorLinks(db: TxClient, organizationId: string, since: Date): P
       if (!t) continue;
       kind = "TASK";
       subject = t.status === "COMPLETED" ? `Done: ${t.title}` : t.title;
+      // A task made from a note (note-task.ts) already has its row: "Task created for <name>", the title under it.
+      const made = await db.crmActivity.findFirst({
+        where: { organizationId, sourceKind: "link", sourceId: l.id },
+        select: { meta: true },
+      });
+      const meta = (made?.meta ?? {}) as Record<string, unknown>;
+      if (made && "createdFor" in meta) {
+        await db.crmActivity.updateMany({
+          where: { organizationId, sourceKind: "link", sourceId: l.id },
+          data: {
+            subject: t.status === "COMPLETED" ? `Done: ${t.title}` : typeof meta.createdFor === "string" ? `Task created for ${meta.createdFor}` : "Task created",
+            body: t.title,
+          },
+        });
+        written++;
+        continue;
+      }
     } else if (other.kind === "note") {
       const nt = await db.note.findFirst({
         where: { id: other.id, organizationId, deletedAt: null },
