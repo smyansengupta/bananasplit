@@ -10,13 +10,13 @@ import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { notifyUser } from "@/server/notifications";
 import { createTask, loadTaskEnv } from "@/server/tasks/service";
 
-import { CrmError, requireMember, type CrmActor } from "../access";
+import { CrmError, crmAccess, requireMember, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { emitCrmEvent } from "../events";
 import { queueText } from "../phone/texts";
 import { proposeChange } from "../review";
 import { actAs } from "../system-actor";
-import { conflictFor, contactable, mergeValuesFor, queueEmail, saveDraft, sentToday } from "./send";
+import { conflictFor, contactable, mergeValuesFor, queueEmail, saveDraft, sentToday, startMayApprove } from "./send";
 
 /**
  * Sequences (docs/features/crm.md, module 5): timed steps (an email, a
@@ -82,10 +82,29 @@ export async function createSequence(actor: CrmActor, name: string): Promise<{ i
   });
 }
 
+/**
+ * A running plan is its maker's: someone else changing it (its words, who
+ * it's for, who sends it) would change what goes out in the maker's name,
+ * so only they, owners, admins and CRM managers may. A plan that isn't
+ * running is anyone's to work on.
+ */
+export async function assertMayEditPlan(
+  actor: CrmActor,
+  seq: { status: string; createdById: string | null },
+): Promise<void> {
+  if (seq.status !== "ON" || !seq.createdById || seq.createdById === actor.userId) return;
+  if ((await crmAccess(actor)).manager) return;
+  throw new CrmError("This plan is running. Only whoever made it, or a CRM manager, can change it now.");
+}
+
 export async function saveSequence(actor: CrmActor, sequenceId: string, input: SequenceInput): Promise<void> {
   const { db, organizationId } = actor;
-  const seq = await db.crmSequence.findFirst({ where: { id: sequenceId, organizationId }, select: { id: true, sendWindow: true } });
+  const seq = await db.crmSequence.findFirst({
+    where: { id: sequenceId, organizationId },
+    select: { id: true, sendWindow: true, status: true, createdById: true },
+  });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
+  await assertMayEditPlan(actor, seq);
   const data: Prisma.CrmSequenceUpdateInput = {};
   if (input.name !== undefined) {
     const n = input.name.trim().slice(0, 120);
@@ -150,6 +169,11 @@ export async function setSequenceStatus(actor: CrmActor, sequenceId: string, sta
 
 export async function archiveSequence(actor: CrmActor, sequenceId: string): Promise<void> {
   const { db, organizationId } = actor;
+  const seq = await db.crmSequence.findFirst({
+    where: { id: sequenceId, organizationId },
+    select: { status: true, createdById: true },
+  });
+  if (seq) await assertMayEditPlan(actor, seq);
   const res = await db.crmSequence.updateMany({
     where: { id: sequenceId, organizationId },
     data: { archivedAt: new Date(), status: "OFF" },
@@ -224,7 +248,17 @@ export async function enroll(
   if (senderId !== userId) await requireMember(db, organizationId, senderId);
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId, archivedAt: null },
-    select: { id: true, status: true, sendWindow: true, steps: { orderBy: { sortOrder: "asc" }, select: { delayDays: true, delayHours: true } } },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      sendWindow: true,
+      createdById: true,
+      steps: {
+        orderBy: { sortOrder: "asc" },
+        select: { kind: true, delayDays: true, delayHours: true, subject: true, body: true, templateId: true },
+      },
+    },
   });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
   if (seq.status !== "ON") throw new CrmError("Turn the sequence on first.");
@@ -232,6 +266,12 @@ export async function enroll(
   if (!first) throw new CrmError("Add a step first.");
   const tz = await orgTimezone(db, organizationId);
   const window = readWindow(seq.sendWindow);
+  // Pressing Start (or Enroll) is the OK for the first email when it goes as
+  // the one pressing it, or they made the plan, or they shape the CRM;
+  // otherwise it waits for the sender's own OK (startMayApprove).
+  const firstApproved =
+    !options.byAutomation &&
+    (await startMayApprove(db, organizationId, { enrolledById: userId, senderId, createdById: seq.createdById }));
   const people = await db.crmPerson.findMany({
     where: { organizationId, id: { in: ids } },
     select: { id: true, name: true, primaryEmail: true, doNotContact: true, unsubscribedAt: true, consent: true, deletedAt: true },
@@ -272,6 +312,31 @@ export async function enroll(
       },
       select: { id: true },
     });
+    if (first.kind === "EMAIL" && !options.byAutomation) {
+      // The first email is written now, as it was previewed: later edits to
+      // the plan or its template don't change what Start approved.
+      const mail = await stepEmail(db, organizationId, first, p.id, senderId, now, null);
+      if (!firstApproved) {
+        // Not theirs to approve: a draft for the sender, and the plan carries
+        // on behind it (the next step waits until it's sent or let go).
+        await draftStep(db, organizationId, { id: e.id, senderId, sequence: { id: seq.id, name: seq.name } }, 0, p, mail);
+        const next = seq.steps[1];
+        const at = next
+          ? nextInWindow(new Date(now.getTime() + delayMs(next)), window, tz)
+          : new Date(now.getTime() + 6 * 3_600_000);
+        await db.crmEnrollment.update({ where: { id: e.id }, data: { nextStep: 1, nextRunAt: at } });
+        await enqueueJob(db, {
+          orgId: organizationId,
+          kind: "crm-sequence",
+          key: `${e.id}:1`,
+          payload: { enrollmentId: e.id, step: 1 },
+          runAt: at,
+        });
+        result.enrolled++;
+        continue;
+      }
+      await freezeFirstEmail(db, organizationId, { enrollmentId: e.id, senderId, approvedById: userId }, p, mail);
+    }
     await enqueueJob(db, {
       orgId: organizationId,
       kind: "crm-sequence",
@@ -299,8 +364,67 @@ export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Pro
     data: { status: "STOPPED", stopReason: "stopped by hand", finishedAt: new Date(), nextRunAt: null },
   });
   await db.crmEmailMessage.updateMany({
-    where: { organizationId, enrollmentId: e.id, status: "QUEUED" },
+    where: { organizationId, enrollmentId: e.id, status: { in: ["QUEUED", "SCHEDULED"] } },
     data: { status: "FAILED", error: "stopped by hand" },
+  });
+}
+
+/** A step's email for one person, merged now: its subject (or "Re:" the first one's), body and template. */
+async function stepEmail(
+  db: TxClient,
+  organizationId: string,
+  step: { subject: string | null; body: string | null; templateId: string | null },
+  personId: string,
+  senderId: string,
+  now: Date,
+  prior: { subject: string | null } | null,
+): Promise<{ subject: string; body: string; templateId: string | null }> {
+  const template = step.templateId
+    ? await db.crmTemplate.findFirst({ where: { id: step.templateId, organizationId }, select: { subject: true, body: true } })
+    : null;
+  const values = await mergeValuesFor(db, organizationId, personId, senderId, now);
+  const rawSubject = (step.subject?.trim() || template?.subject?.trim() || "").trim();
+  const subject = rawSubject
+    ? renderMerge(rawSubject, values).text
+    : prior?.subject
+      ? `Re: ${prior.subject.replace(/^re:\s*/i, "")}`
+      : renderMerge(`Hello from {{organization}}`, values).text;
+  const body = renderMerge(step.body?.trim() ? step.body : (template?.body ?? ""), values).text;
+  return { subject, body, templateId: step.templateId };
+}
+
+/**
+ * A plan's first email, written and approved when Start was pressed, kept
+ * (status SCHEDULED, its own thread, no timeline row) until its step runs:
+ * then it's queued exactly as written, under the caps and the send window.
+ */
+async function freezeFirstEmail(
+  db: TxClient,
+  organizationId: string,
+  e: { enrollmentId: string; senderId: string; approvedById: string },
+  person: { id: string; primaryEmail: string | null },
+  mail: { subject: string; body: string; templateId: string | null },
+): Promise<void> {
+  const subject = mail.subject.trim().slice(0, 300);
+  const thread = await db.crmEmailThread.create({ data: { organizationId, subject }, select: { id: true } });
+  await db.crmEmailMessage.create({
+    data: {
+      organizationId,
+      threadId: thread.id,
+      direction: "OUTBOUND",
+      status: "SCHEDULED",
+      mailbox: "ORG_SENDER",
+      mailboxUserId: e.senderId,
+      fromAddress: "scheduled",
+      toAddresses: person.primaryEmail ? [person.primaryEmail] : [],
+      subject,
+      bodyText: mail.body.trim().slice(0, 50_000),
+      personId: person.id,
+      enrollmentId: e.enrollmentId,
+      templateId: mail.templateId,
+      approval: "start",
+      approvedById: e.approvedById,
+    },
   });
 }
 
@@ -465,40 +589,54 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
     if (planCap !== null && (await planSentToday(db, organizationId, e.sequence.id, now)) >= planCap) {
       return reschedule(nextInWindow(new Date(now.getTime() + 86_400_000 - (now.getTime() % 86_400_000)), window, tz));
     }
-    const template = step.templateId
-      ? await db.crmTemplate.findFirst({ where: { id: step.templateId, organizationId }, select: { subject: true, body: true } })
-      : null;
-    const values = await mergeValuesFor(db, organizationId, person.id, e.senderId, now);
     // Follow-ups answer the first email of this enrollment, in its thread.
     const prior = await db.crmEmailMessage.findFirst({
       where: { organizationId, enrollmentId: e.id, status: { in: ["SENT", "QUEUED"] } },
       orderBy: { createdAt: "asc" },
       select: { threadId: true, messageIdHeader: true, subject: true },
     });
-    const rawSubject = (step.subject?.trim() || template?.subject?.trim() || "").trim();
-    const subject = rawSubject
-      ? renderMerge(rawSubject, values).text
-      : prior?.subject
-        ? `Re: ${prior.subject.replace(/^re:\s*/i, "")}`
-        : renderMerge(`Hello from {{organization}}`, values).text;
-    const body = renderMerge(step.body?.trim() ? step.body : (template?.body ?? ""), values).text;
-    if (approvedByStart(e, stepIndex)) {
-      await queueEmail(db, {
-        organizationId,
-        senderId: e.senderId,
-        createdById: null,
-        personId: person.id,
-        subject,
-        body,
-        templateId: step.templateId,
-        enrollmentId: e.id,
-        threadId: prior?.threadId ?? null,
-        inReplyTo: prior?.messageIdHeader ?? null,
-      });
-    } else {
-      // Nothing goes out without a person: the step's email waits as a draft
-      // in the sender's To approve (Today, Power hour, their Inbox).
-      await draftStep(db, organizationId, e, stepIndex, person, { subject, body, templateId: step.templateId });
+    // The first email as Start wrote it, when it did; one already drafted,
+    // sent or let go needs nothing more written.
+    const frozen =
+      stepIndex === 0
+        ? await db.crmEmailMessage.findFirst({
+            where: { organizationId, enrollmentId: e.id },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, status: true, subject: true, bodyText: true, templateId: true, threadId: true, approvedById: true },
+          })
+        : null;
+    if (!frozen || frozen.status === "SCHEDULED") {
+      const mail = frozen
+        ? { subject: frozen.subject ?? "", body: frozen.bodyText ?? "", templateId: frozen.templateId }
+        : await stepEmail(db, organizationId, step, person.id, e.senderId, now, prior);
+      const approved =
+        approvedByStart(e, stepIndex) &&
+        (!frozen || frozen.approvedById === e.enrolledById) &&
+        (await startMayApprove(db, organizationId, {
+          enrolledById: e.enrolledById,
+          senderId: e.senderId,
+          createdById: e.sequence.createdById,
+        }));
+      if (approved) {
+        await queueEmail(db, {
+          organizationId,
+          senderId: e.senderId,
+          createdById: null,
+          personId: person.id,
+          subject: mail.subject,
+          body: mail.body,
+          templateId: mail.templateId,
+          enrollmentId: e.id,
+          threadId: prior?.threadId ?? null,
+          inReplyTo: prior?.messageIdHeader ?? null,
+          approval: { kind: "start", by: e.enrolledById },
+        });
+      } else {
+        // Nothing goes out without a person: the step's email waits as a draft
+        // in the sender's To approve (Today, Power hour, their Inbox).
+        await draftStep(db, organizationId, e, stepIndex, person, mail);
+      }
+      if (frozen) await db.crmEmailThread.deleteMany({ where: { id: frozen.threadId, organizationId } });
     }
   } else {
     // A to-do becomes a real Task (made the way a workflow makes one: as the
@@ -542,14 +680,29 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
           note = made.error ?? "the task couldn't be made";
         }
       }
-    } else if (step.kind === "TEXT" && step.body?.trim() && !approvedByStart(e, stepIndex)) {
-      // A later text waits for the sender, its words ready in their queue.
+    } else if (
+      step.kind === "TEXT" &&
+      step.body?.trim() &&
+      !(
+        approvedByStart(e, stepIndex) &&
+        (await startMayApprove(db, organizationId, {
+          enrolledById: e.enrolledById,
+          senderId: e.senderId,
+          createdById: e.sequence.createdById,
+        }))
+      )
+    ) {
+      // A later text, or one Start couldn't approve, waits for the sender, its words ready in their queue.
       note = TEXT_WAITS;
     } else if (step.kind === "TEXT" && step.body?.trim()) {
       const sender = await actAs(sys, organizationId, e.senderId);
       if (sender) {
         try {
-          await queueText(sender.actor, { personId: person.id, body: renderMerge(step.body.trim(), values).text });
+          await queueText(sender.actor, {
+            personId: person.id,
+            body: renderMerge(step.body.trim(), values).text,
+            approvedById: e.enrolledById,
+          });
           done = true;
         } catch (error) {
           if (!(error instanceof CrmError)) throw error;

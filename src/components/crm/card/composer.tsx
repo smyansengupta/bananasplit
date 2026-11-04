@@ -108,16 +108,26 @@ export function Composer({
     if (seed?.nonce) input.current?.focus();
   }, [seed?.nonce]);
 
-  // A held text or note goes as soon as the card closes.
-  useEffect(
-    () => () => {
+  // A held text or note goes as soon as the card closes, or the tab is
+  // hidden or left (closing it, going to another page): never lost.
+  useEffect(() => {
+    const flushNow = () => {
       if (held.current) {
         clearTimeout(held.current.timer);
         held.current.flush();
       }
-    },
-    [],
-  );
+    };
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") flushNow();
+    };
+    window.addEventListener("pagehide", flushNow);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", flushNow);
+      document.removeEventListener("visibilitychange", onHidden);
+      flushNow();
+    };
+  }, []);
 
   const placeholder =
     channel === "email"
@@ -174,7 +184,8 @@ export function Composer({
           body: text,
           templateId,
           replyToMessageId: replyTo?.messageId ?? null,
-          sendAt: new Date(Date.now() + HOLD_MS + 2000).toISOString(),
+          // Held on the server's clock (a wrong clock here can't skip Undo).
+          holdSeconds: HOLD_MS / 1000 + 2,
           confirmConflict: true,
         }),
       );
@@ -219,7 +230,13 @@ export function Composer({
     held.current = { timer, flush: () => void flush() };
     reset();
     finish(kind === "text" ? "Sending in 10 seconds" : "Saving in 10 seconds", () => {
-      if (held.current) clearTimeout(held.current.timer);
+      // Already gone (the tab was hidden or left): nothing to take back here.
+      if (!held.current) {
+        setSent(null);
+        toast({ title: kind === "text" ? "That text already went." : "That note is already saved." });
+        return;
+      }
+      clearTimeout(held.current.timer);
       held.current = null;
       setBody(text);
       setSent(null);

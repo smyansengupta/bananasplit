@@ -11,8 +11,9 @@ import { EmailConfigError } from "@/server/email/transport";
 import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
 import { crmHeldBack, crmSendingPaused } from "../inbox-notify";
+import { proposeChange } from "../review";
 import { costOf, meterUseIn, underCap } from "../spend";
-import { messageIdFor, replyAddress, sendFromMailbox, type MailPurpose, type SentEmail } from "./mailbox";
+import { messageIdFor, orgPaysForMail, replyAddress, sendFromMailbox, type MailPurpose, type SentEmail } from "./mailbox";
 import { clickUrl, mailToken, oneClickUrl, pixelUrl, unsubscribeUrl } from "./tokens";
 
 /**
@@ -27,6 +28,12 @@ import { clickUrl, mailToken, oneClickUrl, pixelUrl, unsubscribeUrl } from "./to
  * AND again just before it goes, so a person who opts out in between gets
  * nothing. Sequence and campaign mail counts toward the sender's daily cap
  * (CrmSettings.dailySendCap); past it, the send waits for tomorrow.
+ *
+ * Approval is checked again just before it goes too (docs/features/crm.md,
+ * "Nothing sends unapproved"): every message records who said it may go
+ * (`approvedById`, `approval`: a person pressed Send, a person pressed Start
+ * for a plan's first email, or a booking receipt). Anything without one is
+ * turned into a draft in its sender's To approve instead of being sent.
  */
 
 export const SOURCE_KIND = "crm-email";
@@ -147,6 +154,31 @@ export interface QueueEmailInput {
   track?: boolean;
   /** Don't enqueue a job per message (bulk sends in batches). */
   noJob?: boolean;
+  /**
+   * Who said it may go and how. Left out: a member who queued it (createdById)
+   * pressed Send; an untracked message to one person from nothing else is a
+   * booking receipt; anything else has no approval and becomes a draft when
+   * its time comes.
+   */
+  approval?: { kind: Approval; by: string | null } | null;
+}
+
+/** send: a person pressed Send. start: a plan's first email, Start pressed. receipt: a booking confirmation. */
+export type Approval = "send" | "start" | "receipt";
+
+/** What a queued message records as its approval (see QueueEmailInput.approval). */
+export function approvalFor(input: Pick<QueueEmailInput, "approval" | "createdById" | "enrollmentId" | "workflowId" | "campaignId" | "track">): {
+  approval: Approval | null;
+  approvedById: string | null;
+} {
+  if (input.approval !== undefined) {
+    return { approval: input.approval?.kind ?? null, approvedById: input.approval?.by ?? null };
+  }
+  if (input.createdById) return { approval: "send", approvedById: input.createdById };
+  if (!input.enrollmentId && !input.workflowId && !input.campaignId && input.track === false) {
+    return { approval: "receipt", approvedById: null };
+  }
+  return { approval: null, approvedById: null };
 }
 
 /** Writes one QUEUED message and its pending timeline row; returns its id. */
@@ -178,6 +210,7 @@ export async function queueEmail(db: TxClient, input: QueueEmailInput): Promise<
   const threadId =
     thread?.id ?? (await db.crmEmailThread.create({ data: { organizationId, subject }, select: { id: true } })).id;
   const token = input.track === false ? null : mailToken();
+  const approved = approvalFor(input);
   const message = await db.crmEmailMessage.create({
     data: {
       organizationId,
@@ -199,6 +232,8 @@ export async function queueEmail(db: TxClient, input: QueueEmailInput): Promise<
       personId: person.id,
       scheduledFor: input.scheduledFor ?? null,
       createdById: input.createdById,
+      approval: approved.approval,
+      approvedById: approved.approvedById,
       error: input.track === false ? "untracked" : null,
     },
     select: { id: true },
@@ -331,6 +366,11 @@ export interface ComposeInput {
   replyToMessageId?: string | null;
   /** ISO time to send later. */
   sendAt?: string | null;
+  /**
+   * Seconds to hold it before it goes (the Undo window), counted on the
+   * server so a client's clock can't skip it. Up to a minute.
+   */
+  holdSeconds?: number | null;
   /** They saw who else is talking to this person and still want to send. */
   confirmConflict?: boolean;
   track?: boolean;
@@ -479,12 +519,9 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
   // A sequence step's or an automation's draft stays theirs once a person
   // sends it: the same thread as the sequence's first email, its footer and
   // its daily cap, and the sequence carries on from here.
-  const draft = input.draftId
-    ? await db.crmEmailMessage.findFirst({
-        where: { id: input.draftId, organizationId, status: "DRAFT" },
-        select: { enrollmentId: true, workflowId: true, templateId: true },
-      })
-    : null;
+  // The draft is claimed first, in one statement: sent from two places at
+  // once (Today, Power hour, the card, two tabs), only one of them gets it.
+  const draft = input.draftId ? await claimDraft(db, organizationId, input.draftId, input.personId) : null;
   if (draft?.enrollmentId && !threadId) {
     const first = await db.crmEmailMessage.findFirst({
       where: { organizationId, enrollmentId: draft.enrollmentId, status: { in: ["SENT", "QUEUED"] } },
@@ -495,7 +532,10 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     inReplyTo = first?.messageIdHeader ?? null;
   }
   let sendAt: Date | null = null;
-  if (input.sendAt) {
+  if (input.holdSeconds) {
+    const hold = Math.min(Math.max(Math.round(Number(input.holdSeconds) || 0), 0), 60);
+    if (hold > 0) sendAt = new Date(Date.now() + hold * 1000);
+  } else if (input.sendAt) {
     sendAt = new Date(input.sendAt);
     if (Number.isNaN(sendAt.getTime())) throw new CrmError("Pick a real time.");
     if (sendAt.getTime() < Date.now()) sendAt = null;
@@ -515,19 +555,63 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     inReplyTo,
     scheduledFor: sendAt,
     track: input.track,
+    approval: { kind: "send", by: userId },
   });
   if (input.draftId) {
-    // The draft went: it leaves compose, and a Review suggestion for it is done.
-    await discardDraft(db, organizationId, input.draftId);
-    await db.crmSuggestion.updateMany({
-      where: { organizationId, kind: "DRAFT_EMAIL", status: "PENDING", payload: { path: ["draftId"], equals: input.draftId } },
-      data: { status: "ACCEPTED", reviewedById: userId, reviewedAt: new Date() },
+    // The draft stays claimed until the email leaves: then it goes and its
+    // To approve row is done (markSent). Undo before then gives it back.
+    await db.crmEmailMessage.updateMany({
+      where: { id: input.draftId, organizationId, status: "FAILED", error: CLAIMED },
+      data: { error: `${SENDING}${queued.messageId}` },
     });
   }
   return queued;
 }
 
-/** Cancels a message still waiting to go (sent later, or a sequence step). */
+/** A claimed draft's mark while its email waits to leave. */
+const CLAIMED = "sending";
+const SENDING = "sending:";
+/** What a draft taken back by a reply, a booking or a bounce is marked (stopEnrollments). */
+export const WITHDRAWN = "withdrawn:";
+
+/**
+ * Takes a draft for sending, atomically: only a draft still waiting goes,
+ * and only once. A draft that was withdrawn (they replied, booked or
+ * bounced), thrown away or already sent is refused in words.
+ */
+async function claimDraft(
+  db: TxClient,
+  organizationId: string,
+  draftId: string,
+  personId: string,
+): Promise<{ enrollmentId: string | null; workflowId: string | null; templateId: string | null }> {
+  const d = await db.crmEmailMessage.findFirst({
+    where: { id: draftId, organizationId },
+    select: { status: true, error: true, personId: true, enrollmentId: true, workflowId: true, templateId: true },
+  });
+  if (!d) throw new CrmError("That draft isn't here any more.");
+  if (d.status !== "DRAFT") throw new CrmError(draftGone(d.error));
+  if (d.personId && d.personId !== personId) throw new CrmError("That draft is for someone else.");
+  const claimed = await db.crmEmailMessage.updateMany({
+    where: { id: draftId, organizationId, status: "DRAFT" },
+    data: { status: "FAILED", error: CLAIMED },
+  });
+  if (claimed.count === 0) throw new CrmError("That draft is already on its way.");
+  return { enrollmentId: d.enrollmentId, workflowId: d.workflowId, templateId: d.templateId };
+}
+
+/** Why a draft can't be sent, in words. */
+export function draftGone(error: string | null): string {
+  if (error?.startsWith(SENDING) || error === CLAIMED) return "That draft is already on its way.";
+  if (error === "sent") return "That draft already went.";
+  if (error?.startsWith(WITHDRAWN)) {
+    const why = error.slice(WITHDRAWN.length).trim();
+    return `That draft was withdrawn${why ? ` because ${why}` : ""}. Write to them fresh if you still want to.`;
+  }
+  return "That draft was thrown away.";
+}
+
+/** Cancels a message still waiting to go (sent later, or a sequence step). A draft it was sent from comes back. */
 export async function cancelEmail(actor: CrmActor, messageId: string): Promise<void> {
   const { db, organizationId } = actor;
   const m = await db.crmEmailMessage.findFirst({
@@ -535,10 +619,175 @@ export async function cancelEmail(actor: CrmActor, messageId: string): Promise<v
     select: { id: true, activityId: true },
   });
   if (!m) throw new CrmError("It already went, or it's gone.");
-  await db.crmEmailMessage.update({ where: { id: m.id }, data: { status: "FAILED", error: "cancelled" } });
+  const gone = await db.crmEmailMessage.updateMany({
+    where: { id: m.id, organizationId, status: "QUEUED" },
+    data: { status: "FAILED", error: "cancelled" },
+  });
+  if (gone.count === 0) throw new CrmError("It already went, or it's gone.");
   if (m.activityId) {
     await db.crmActivity.updateMany({ where: { id: m.activityId, organizationId }, data: { deletedAt: new Date() } });
   }
+  // Undo on a draft: it waits again as it was, and its To approve row stays.
+  await db.crmEmailMessage.updateMany({
+    where: { organizationId, status: "FAILED", error: `${SENDING}${m.id}` },
+    data: { status: "DRAFT", error: null },
+  });
+}
+
+/** The draft a message was sent from, once it left (or never will): out of compose, its To approve row closed. */
+async function settleDraft(db: TxClient, organizationId: string, messageId: string, outcome: "sent" | "failed"): Promise<void> {
+  const d = await db.crmEmailMessage.findFirst({
+    where: { organizationId, status: "FAILED", error: `${SENDING}${messageId}` },
+    select: { id: true, threadId: true },
+  });
+  if (!d) return;
+  const m = await db.crmEmailMessage.findFirst({ where: { id: messageId, organizationId }, select: { approvedById: true } });
+  await db.crmSuggestion.updateMany({
+    where: { organizationId, kind: "DRAFT_EMAIL", status: "PENDING", payload: { path: ["draftId"], equals: d.id } },
+    data:
+      outcome === "sent"
+        ? { status: "ACCEPTED", reviewedById: m?.approvedById ?? null, reviewedAt: new Date() }
+        : { status: "EXPIRED" },
+  });
+  await db.crmEmailMessage.updateMany({ where: { id: d.id, organizationId }, data: { error: outcome } });
+  const others = await db.crmEmailMessage.count({ where: { organizationId, threadId: d.threadId, id: { not: d.id } } });
+  if (others === 0) await dropThread(db, organizationId, d.threadId);
+}
+
+// ---- Approval when it leaves ------------------------------------------------------------------
+
+/**
+ * Whether pressing Start (or Enroll) is the OK for a plan's first email:
+ * it goes from the mailbox of whoever pressed it, or they made the plan, or
+ * they're an owner, admin or CRM manager. Otherwise (a member starting
+ * someone else's plan "from each person's owner") the owner approves their
+ * own first email.
+ */
+export async function startMayApprove(
+  db: TxClient,
+  organizationId: string,
+  e: { enrolledById: string | null; senderId: string; createdById: string | null },
+): Promise<boolean> {
+  if (!e.enrolledById) return false;
+  if (e.enrolledById === e.senderId || e.enrolledById === e.createdById) return true;
+  const m = await db.membership.findFirst({
+    where: { organizationId, userId: e.enrolledById },
+    select: { role: true },
+  });
+  if (!m) return false;
+  if (m.role === "OWNER" || m.role === "ADMIN") return true;
+  const s = await db.crmSettings.findUnique({ where: { organizationId }, select: { managerIds: true } });
+  return Boolean(s?.managerIds.includes(e.enrolledById));
+}
+
+/**
+ * Why a queued message may not go now, or null when its approval holds:
+ * Send by someone still in the organization; Start on a plan, for that
+ * enrollment's first email only, by whoever put them in; a receipt that is
+ * nothing but a receipt. Anything else (an automation's email queued before
+ * approvals, a step queued on its own) has no approval.
+ */
+export async function approvalProblem(
+  db: TxClient,
+  organizationId: string,
+  m: {
+    id: string;
+    approval: string | null;
+    approvedById: string | null;
+    enrollmentId: string | null;
+    workflowId: string | null;
+    campaignId: string | null;
+    error: string | null;
+    createdAt: Date;
+  },
+): Promise<string | null> {
+  const member = async (userId: string) =>
+    Boolean(await db.membership.findFirst({ where: { organizationId, userId }, select: { userId: true } }));
+  switch (m.approval) {
+    case "send":
+      if (!m.approvedById) return "nobody approved it";
+      return (await member(m.approvedById)) ? null : "whoever approved it left the organization";
+    case "start": {
+      if (!m.enrollmentId || !m.approvedById) return "nobody approved it";
+      const e = await db.crmEnrollment.findFirst({
+        where: { id: m.enrollmentId, organizationId },
+        select: { enrolledById: true, senderId: true, sequence: { select: { createdById: true } } },
+      });
+      if (!e || e.enrolledById !== m.approvedById) return "nobody approved it";
+      if (
+        !(await startMayApprove(db, organizationId, {
+          enrolledById: e.enrolledById,
+          senderId: e.senderId,
+          createdById: e.sequence.createdById,
+        }))
+      ) {
+        return "it goes from someone else's mailbox, so it waits for their OK";
+      }
+      const earlier = await db.crmEmailMessage.count({
+        where: {
+          organizationId,
+          enrollmentId: m.enrollmentId,
+          id: { not: m.id },
+          status: { in: ["QUEUED", "SENT", "BOUNCED"] },
+          createdAt: { lt: m.createdAt },
+        },
+      });
+      if (earlier > 0) return "only a plan's first email goes on Start";
+      return (await member(m.approvedById)) ? null : "whoever started the plan left the organization";
+    }
+    case "receipt":
+      return !m.enrollmentId && !m.workflowId && !m.campaignId && m.error === "untracked"
+        ? null
+        : "nobody approved it";
+    default:
+      return "nobody approved it";
+  }
+}
+
+/**
+ * A queued message nobody approved, turned into a draft in its sender's
+ * compose with a To approve row (Today, Power hour, their Inbox), instead of
+ * being sent. A plan waits for it as for any step's draft.
+ */
+async function holdAsDraft(db: TxClient, organizationId: string, messageId: string, why: string): Promise<void> {
+  const m = await db.crmEmailMessage.findFirst({
+    where: { id: messageId, organizationId, status: "QUEUED" },
+    select: { id: true, activityId: true, subject: true, bodyText: true, toAddresses: true, mailboxUserId: true, personId: true, workflowId: true, enrollmentId: true },
+  });
+  if (!m) return;
+  await db.crmEmailMessage.update({
+    where: { id: m.id },
+    data: { status: "DRAFT", fromAddress: "draft", scheduledFor: null, error: null, approval: null, approvedById: null },
+  });
+  if (m.activityId) {
+    await db.crmActivity.updateMany({ where: { id: m.activityId, organizationId }, data: { deletedAt: new Date() } });
+    await db.crmEmailMessage.update({ where: { id: m.id }, data: { activityId: null } });
+  }
+  const person = m.personId
+    ? await db.crmPerson.findFirst({ where: { id: m.personId, organizationId }, select: { id: true, name: true } })
+    : null;
+  await proposeChange(db, {
+    organizationId,
+    kind: "DRAFT_EMAIL",
+    source: "AUTOMATION",
+    title: `Email ${person?.name ?? m.toAddresses[0] ?? "someone"}: waiting for your OK`,
+    summary: m.subject ?? "",
+    payload: {
+      to: m.toAddresses,
+      subject: m.subject ?? "",
+      body: m.bodyText ?? "",
+      why: `It was about to go, but ${why.replace(/\.$/, "")}. Nothing goes out until a person sends it.`,
+      draftId: m.id,
+    },
+    target: person ? { kind: "person", id: person.id } : null,
+    citation: m.workflowId
+      ? { kind: "automation", id: m.workflowId, label: "an automation" }
+      : m.enrollmentId
+        ? { kind: "automation", id: m.enrollmentId, label: "a plan" }
+        : null,
+    assigneeId: m.mailboxUserId,
+    proposedById: null,
+  });
 }
 
 // ---- Sending (the job) -----------------------------------------------------------------------
@@ -584,9 +833,11 @@ interface Prepared {
   purpose: MailPurpose;
   /** What the timeline keeps: the message as written and merged, without signature or footer. */
   written: string;
+  /** A person pressed Send (or Start, for a plan's first email) on this one: the only mail our own sender may carry. */
+  pressedSend: boolean;
 }
 
-type PrepareOutcome = { send: Prepared } | { skip: string } | { later: Date };
+type PrepareOutcome = { send: Prepared } | { skip: string } | { later: Date } | { hold: string };
 
 async function prepare(db: TxClient, organizationId: string, messageId: string, now: Date): Promise<PrepareOutcome> {
   const m = await db.crmEmailMessage.findFirst({
@@ -607,10 +858,17 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
       scheduledFor: true,
       error: true,
       activityId: true,
+      approval: true,
+      approvedById: true,
+      createdAt: true,
     },
   });
   if (!m || m.status !== "QUEUED") return { skip: "not waiting" };
-  if (m.scheduledFor && m.scheduledFor.getTime() > now.getTime() + 60_000) return { later: m.scheduledFor };
+  // Held for Undo (or sent later): never before its time, by the server's clock.
+  if (m.scheduledFor && m.scheduledFor.getTime() > now.getTime() + 2_000) return { later: m.scheduledFor };
+  // Who said it may go, checked again now: nobody, and it becomes a draft.
+  const problem = await approvalProblem(db, organizationId, m);
+  if (problem) return { hold: problem };
   const activity = m.activityId
     ? await db.crmActivityTarget.findFirst({
         where: { organizationId, activityId: m.activityId, targetKind: "person" },
@@ -715,6 +973,7 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
       replyTo,
       headers,
       purpose,
+      pressedSend: m.approval === "send" || m.approval === "start",
     },
   };
 }
@@ -775,6 +1034,7 @@ async function markSent(
     },
   });
   await db.crmEmailMessage.update({ where: { id: p.messageId }, data: { activityId } });
+  await settleDraft(db, p.organizationId, p.messageId, "sent");
   if (m?.campaignId) {
     await db.crmCampaignTarget.updateMany({
       where: { organizationId: p.organizationId, campaignId: m.campaignId, personId: p.personId, status: "TODO" },
@@ -801,6 +1061,7 @@ async function markFailed(
   });
   if (!m) return;
   await db.crmEmailMessage.update({ where: { id: messageId }, data: { status: "FAILED", error: reason.slice(0, 300) } });
+  await settleDraft(db, organizationId, messageId, "failed");
   if (m.activityId) {
     await db.crmActivity.updateMany({
       where: { id: m.activityId, organizationId },
@@ -827,11 +1088,15 @@ export async function deliver(
   messageId: string,
   signal?: AbortSignal,
   now: Date = new Date(),
-): Promise<"sent" | "skipped" | "later" | "failed"> {
+): Promise<"sent" | "skipped" | "later" | "failed" | "held"> {
   const outcome = await withSystemOrgTx(organizationId, ({ db }) => prepare(db, organizationId, messageId, now));
   if ("skip" in outcome) {
     await withSystemOrgTx(organizationId, ({ db }) => markFailed(db, organizationId, messageId, outcome.skip));
     return "skipped";
+  }
+  if ("hold" in outcome) {
+    await withSystemOrgTx(organizationId, ({ db }) => holdAsDraft(db, organizationId, messageId, outcome.hold));
+    return "held";
   }
   if ("later" in outcome) {
     await withSystemOrgTx(organizationId, async ({ db }) => {
@@ -851,9 +1116,14 @@ export async function deliver(
     return "later";
   }
   const p = outcome.send;
-  // Bulk mail is volume on the organization's own Resend account: past the
-  // monthly spending cap it stops (one-to-one mail still goes).
-  if (p.purpose === "bulk" && !(await underCap(organizationId, costOf("email.sent")))) {
+  // Bulk, sequence, campaign and automation mail is volume on the
+  // organization's own Resend account: past the monthly spending cap it stops
+  // (one-to-one mail still goes).
+  if (
+    p.purpose !== "one-to-one" &&
+    (await orgPaysForMail(organizationId)) &&
+    !(await underCap(organizationId, costOf("email.sent")))
+  ) {
     await withSystemOrgTx(organizationId, ({ db }) =>
       markFailed(db, organizationId, messageId, "This month's spending cap is reached", "paused"),
     );
@@ -865,15 +1135,23 @@ export async function deliver(
       senderUserId: p.senderId,
       senderName: p.senderName,
       purpose: p.purpose,
+      pressedSend: p.pressedSend,
       message: { to: p.to, subject: p.subject, text: p.text, html: p.html, replyTo: p.replyTo, headers: p.headers },
       idempotencyKey: p.messageId,
       signal,
     });
     await withSystemOrgTx(organizationId, async ({ db }) => {
       await markSent(db, p, sent, new Date());
-      if (sent.paidBy === "ORG_KEY") {
-        await meterUseIn(db, { organizationId, userId: p.senderId, feature: "crm.email", provider: "resend", what: "email.sent" });
-      }
+      // Counted either way: on the organization's key toward its cap, on ours
+      // as the record of what we carried for it (outside its cap).
+      await meterUseIn(db, {
+        organizationId,
+        userId: p.senderId,
+        feature: sent.paidBy === "ORG_KEY" ? "crm.email" : "crm.email.platform",
+        provider: "resend",
+        what: "email.sent",
+        paidBy: sent.paidBy,
+      });
     });
     return "sent";
   } catch (error) {

@@ -7,6 +7,7 @@ import { domainOf, platformFrom } from "@/server/email/config";
 import { displayName } from "@/server/email/escape";
 import { platformNoReplyAddress, resolveOrgMailRouting, type OrgMailRouting } from "@/server/email/mailer";
 import { EmailConfigError, transportFor } from "@/server/email/transport";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getSecret } from "@/server/secrets";
 
 /**
@@ -18,9 +19,13 @@ import { getSecret } from "@/server/secrets";
  *
  * Today a member has no connected mailbox, so mail goes out from the
  * organization's own verified Resend sender ("Ada at Harbor Robotics"
- * <hello@robotics.org>), or for one-to-one mail the platform sender on
- * the organization's behalf. Bulk mail never uses the platform sender: a
- * bad list must never hurt our sending reputation. When the email
+ * <hello@robotics.org>). Until it has one, mail a person pressed Send on
+ * (one-to-one, a draft they sent, a plan's first email on Start) may go
+ * from the platform sender on the organization's behalf: counted (an
+ * AiUsage row paid by PLATFORM) and capped per organization
+ * (PLATFORM_DAILY_LIMIT a day). Nothing else ever uses the platform
+ * sender: not bulk, not a booking receipt, nothing queued without a
+ * person. A bad list must never hurt our sending reputation. When the email
  * connections project lands, memberMailbox() returns the member's Gmail or
  * Outlook and the same callers send from it unchanged.
  *
@@ -75,6 +80,15 @@ export function senderCheckOf(routing: OrgMailRouting): SenderCheck {
   };
 }
 
+/** Most mail our own sender carries for one organization in a day (a person pressed Send on each). */
+export const PLATFORM_DAILY_LIMIT = 50;
+
+/** Whether the organization's own Resend account sends its mail now (so it counts toward its cap). */
+export async function orgPaysForMail(organizationId: string): Promise<boolean> {
+  const routing = await resolveOrgMailRouting(organizationId);
+  return routing.mode === "org" && Boolean(routing.integrationId && routing.sender);
+}
+
 /** Checks the organization's sender (service path; call outside a transaction). */
 export async function checkSender(organizationId: string): Promise<SenderCheck> {
   return senderCheckOf(await resolveOrgMailRouting(organizationId));
@@ -99,6 +113,8 @@ export async function sendFromMailbox(input: {
   senderUserId: string | null;
   senderName: string | null;
   purpose: MailPurpose;
+  /** A person pressed Send on this message (or Start, for a plan's first email): the only mail our own sender may carry. */
+  pressedSend?: boolean;
   message: OutboundEmail;
   /** Provider de-duplication (the CrmEmailMessage id). */
   idempotencyKey: string;
@@ -124,8 +140,20 @@ export async function sendFromMailbox(input: {
       throw new EmailConfigError("bulk email needs the organization's own verified sender");
     }
     // The documented fallback (docs/features/crm.md, "Whose keys pay for
-    // what"): one-to-one and sequence mail may go from our sender on the
-    // organization's behalf until it verifies its own. Bulk never does.
+    // what"): mail a person pressed Send (or Start) on may go from our sender
+    // on the organization's behalf until it verifies its own, a few a day.
+    // Nothing else ever does.
+    if (!input.pressedSend) {
+      throw new EmailConfigError(
+        `Only email a person sends goes out until your organization has its own sender. Add your Resend key and sender in ${ORG_KEYS_PLACE}`,
+      );
+    }
+    const limited = await checkRateLimit(rateLimitKey("crm-platform-mail", input.organizationId), PLATFORM_DAILY_LIMIT, 86_400);
+    if (!limited.allowed) {
+      throw new EmailConfigError(
+        `Your organization sent its ${PLATFORM_DAILY_LIMIT} emails for today without its own sender. Add your Resend key and sender in ${ORG_KEYS_PLACE}`,
+      );
+    }
     apiKey = process.env.RESEND_API_KEY;
     paidBy = "PLATFORM";
     const label = person ? `${person} at ${routing.orgName} via Bananasplit` : `${routing.orgName} via Bananasplit`;

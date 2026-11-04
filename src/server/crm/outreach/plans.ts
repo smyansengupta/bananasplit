@@ -19,7 +19,7 @@ import { parseListQuery, peopleWhere } from "../queries";
 import { campaignProgress } from "./campaigns";
 import { viewParams } from "./lists";
 import { contactable } from "./send";
-import { enroll, setSequenceStatus } from "./sequences";
+import { assertMayEditPlan, enroll, setSequenceStatus } from "./sequences";
 
 /**
  * Outreach plans (docs/features/crm.md, "Redesign", Outreach): sequences
@@ -420,9 +420,10 @@ export async function savePlanExtras(
   const { db, organizationId } = actor;
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId, archivedAt: null },
-    select: { id: true, sendWindow: true },
+    select: { id: true, sendWindow: true, status: true, createdById: true },
   });
   if (!seq) throw new CrmError("That plan isn't here any more.");
+  await assertMayEditPlan(actor, seq);
   const now = readExtras(seq.sendWindow);
   const next = readExtras(
     withExtras(seq.sendWindow, {
@@ -442,7 +443,11 @@ export async function savePlanExtras(
 /**
  * Starts a sequence plan: switches it on and puts in everyone its audience
  * picks out who isn't left out, each sent from their owner (when the plan
- * says so and the owner is a member) or the member starting it.
+ * says so and the owner is a member) or the member starting it. Each first
+ * email is written now, as previewed. Start approves it when it goes as
+ * the one pressing Start, or they made the plan or manage the CRM; any
+ * other owner's first email is a draft for that owner (enroll,
+ * startMayApprove).
  */
 export async function startPlan(
   actor: CrmActor,
