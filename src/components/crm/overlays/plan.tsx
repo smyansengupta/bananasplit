@@ -24,6 +24,7 @@ import type { TxClient } from "@/server/db/context";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const DAY = 86_400_000;
 
@@ -97,7 +98,8 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
   const orgId = shell.org.id;
   const viewerId = shell.user.id;
   const now = new Date();
-  const members = new Map(shell.members.map((m) => [m.id, m.name]));
+  const memberList = await crmMembers(orgId);
+  const members = new Map(memberList.map((m) => [m.id, m.name]));
   const relTypes = shell.access.settings?.relationshipTypes ?? [];
   const relationships = new Map(relTypes.map((t) => [t.id, t.label]));
   const me = members.get(viewerId) ?? "You";
@@ -163,7 +165,7 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
         sequences={data.sequences}
         events={data.events}
         forms={data.forms}
-        members={shell.members}
+        members={memberList}
         userId={viewerId}
         orgSlug={orgSlug}
         sender={sender}
@@ -527,7 +529,7 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
       }),
       next: null,
     },
-    members: shell.members,
+    members: memberList,
     userId: viewerId,
   };
   return <PlanCard orgId={orgId} data={card} />;

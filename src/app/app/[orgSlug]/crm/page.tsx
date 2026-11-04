@@ -10,10 +10,11 @@ import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
 import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
-import { comingUp, TODAY_GROUPS, todayRows, type TodayGroup } from "@/server/crm/today";
+import { comingUp, TODAY_GROUPS, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmShell } from "./shell";
+import { crmMemberNames, crmShell } from "./shell";
+import { todayForShell } from "./today-data";
 
 export const metadata = { title: "CRM" };
 
@@ -47,27 +48,18 @@ export default async function CrmTodayPage({
   const show = one(sp.show) as TodayGroup | undefined;
   const q = one(sp.q)?.toLowerCase();
   const now = new Date();
-  const relationships = new Map(
-    (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
-  );
 
-  const data = await withOrgTx(orgId, async ({ db }) => {
+  // In parallel, each in its own transaction: the list (shared with Power
+  // hour, todayForShell), the right column, what's coming up (which needs
+  // to know whether the list is yours) and the card open over the page.
+  const todayP = todayForShell(shell, one(sp.who) === "all");
+  const sideP = withOrgTx(orgId, async ({ db }) => {
     const me = await db.user.findUnique({
       where: { id: shell.user.id },
       select: { timezone: true },
     });
     const tz = effectiveTimezone(me, shell.org);
-    const today = await todayRows(db, orgId, shell.user.id, shell.roles, {
-      everyone,
-      relationships,
-      now,
-      personal,
-    });
     const goals = await listGoals(db, orgId, localDateKey(now, tz), { current: true, take: 4 });
-    const upcoming = await comingUp(db, orgId, shell.user.id, {
-      everyone: everyone || !today.mine,
-      now,
-    });
     const log = await onItsOwn(db, orgId, { now, tz });
     const snooze = await db.inboxItemState.findFirst({
       where: {
@@ -78,15 +70,22 @@ export default async function CrmTodayPage({
       },
       select: { snoozedUntil: true },
     });
-    return {
-      tz,
-      today,
-      goals,
-      upcoming,
-      log,
-      snoozedUntil: snooze?.snoozedUntil ?? null,
-    };
+    return { tz, goals, log, snoozedUntil: snooze?.snoozedUntil ?? null };
   });
+  const upcomingP = todayP.then((today) =>
+    withOrgTx(orgId, ({ db }) =>
+      comingUp(db, orgId, shell.user.id, { everyone: everyone || !today.mine, now }),
+    ),
+  );
+  const [today, side, upcoming, overlay] = await Promise.all([
+    todayP,
+    sideP,
+    upcomingP,
+    CrmOverlays({ shell, orgSlug, searchParams: sp }),
+  ]);
+  // Goals name their member only when one is set for someone.
+  const names = side.goals.some((g) => g.ownerId) ? await crmMemberNames(orgId) : new Map<string, string>();
+  const data = { ...side, today, upcoming };
 
   const rows = data.today.rows.filter(
     (r) =>
@@ -110,7 +109,6 @@ export default async function CrmTodayPage({
       held: e.kind === "held",
     };
   });
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
 
   return (
     <div>
@@ -207,7 +205,7 @@ export default async function CrmTodayPage({
           <TodayLog entries={logEntries} total={data.log.length} seeAllHref={hrefWithOpen(base, sp, "log")} />
         </aside>
       </div>
-      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
+      {overlay}
     </div>
   );
 }

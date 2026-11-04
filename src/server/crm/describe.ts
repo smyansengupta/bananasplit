@@ -13,33 +13,32 @@ import { readCrmSettings } from "./access";
  */
 
 export async function describeContext(db: TxClient, organizationId: string): Promise<DescribeContext> {
-  const [pipelines, members, templates, sequences, forms, events, settings] = await Promise.all([
-    db.crmPipeline.findMany({
-      where: { organizationId, archivedAt: null },
-      orderBy: { sortOrder: "asc" },
-      select: {
-        id: true,
-        name: true,
-        itemNoun: true,
-        stages: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, kind: true } },
-      },
-    }),
-    db.membership.findMany({
-      where: { organizationId },
-      select: { userId: true, user: { select: { name: true } } },
-      take: 300,
-    }),
-    db.crmTemplate.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, name: true }, take: 100 }),
-    db.crmSequence.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, name: true }, take: 100 }),
-    db.form.findMany({ where: { organizationId }, select: { id: true, title: true }, take: 100 }),
-    db.event.findMany({
-      where: { organizationId, deletedAt: null, mergedIntoId: null, startsAt: { gt: new Date() } },
-      orderBy: { startsAt: "asc" },
-      select: { id: true, title: true },
-      take: 30,
-    }),
-    readCrmSettings(db, organizationId),
-  ]);
+  // One after another: a transaction runs one query at a time.
+  const pipelines = await db.crmPipeline.findMany({
+    where: { organizationId, archivedAt: null },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      name: true,
+      itemNoun: true,
+      stages: { orderBy: { sortOrder: "asc" }, select: { id: true, name: true, kind: true } },
+    },
+  });
+  const members = await db.membership.findMany({
+    where: { organizationId },
+    select: { userId: true, user: { select: { name: true } } },
+    take: 300,
+  });
+  const templates = await db.crmTemplate.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, name: true }, take: 100 });
+  const sequences = await db.crmSequence.findMany({ where: { organizationId, archivedAt: null }, select: { id: true, name: true }, take: 100 });
+  const forms = await db.form.findMany({ where: { organizationId }, select: { id: true, title: true }, take: 100 });
+  const events = await db.event.findMany({
+    where: { organizationId, deletedAt: null, mergedIntoId: null, startsAt: { gt: new Date() } },
+    orderBy: { startsAt: "asc" },
+    select: { id: true, title: true },
+    take: 30,
+  });
+  const settings = await readCrmSettings(db, organizationId);
   return {
     pipelines,
     members: members.map((m) => ({ id: m.userId, name: m.user.name ?? "Member" })),

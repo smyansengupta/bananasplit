@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
-import type { CrmShell } from "@/app/app/[orgSlug]/crm/shell";
+import type { CrmSettingsShell } from "@/app/app/[orgSlug]/crm/shell";
 import { HandOverCard, Unowned, type OwnerChoice } from "@/components/crm/outreach/handover";
 import { crmRecordHref } from "@/lib/crm/href";
 import { briefs, departedOwners, unowned } from "@/server/crm/outreach/handover";
@@ -19,7 +19,7 @@ function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 86_400_000);
 }
 
-function ownerChoices(shell: CrmShell): OwnerChoice[] {
+function ownerChoices(shell: CrmSettingsShell): OwnerChoice[] {
   return [
     ...shell.members.map((m) => ({ value: `u:${m.id}`, label: m.name })),
     ...[...shell.roles.values()].map((r) => ({
@@ -30,7 +30,7 @@ function ownerChoices(shell: CrmShell): OwnerChoice[] {
 }
 
 /** Team and access: hand people over (owners and admins). */
-export async function HandoverCards({ shell, orgSlug }: { shell: CrmShell; orgSlug: string }) {
+export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
   const orgId = shell.org.id;
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const data = await withOrgTx(orgId, async ({ db }) => {
@@ -97,7 +97,7 @@ export async function HandedToYou({
   orgSlug,
   role: asked,
 }: {
-  shell: CrmShell;
+  shell: CrmSettingsShell;
   orgSlug: string;
   role?: string;
 }) {

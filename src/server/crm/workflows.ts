@@ -88,11 +88,10 @@ export async function workflowRuns(db: TxClient, organizationId: string, workflo
   });
   const refs = runs.map((r) => r.triggerRef as { kind?: string; id?: string; event?: string } | null);
   const ids = (kind: string) => refs.filter((r) => r?.kind === kind && r.id).map((r) => r!.id!);
-  const [people, companies, deals] = await Promise.all([
-    db.crmPerson.findMany({ where: { organizationId, id: { in: ids("person") } }, select: { id: true, name: true } }),
-    db.crmCompany.findMany({ where: { organizationId, id: { in: ids("company") } }, select: { id: true, name: true } }),
-    db.crmDeal.findMany({ where: { organizationId, id: { in: ids("deal") } }, select: { id: true, title: true } }),
-  ]);
+  // One after another: a transaction runs one query at a time.
+  const people = await db.crmPerson.findMany({ where: { organizationId, id: { in: ids("person") } }, select: { id: true, name: true } });
+  const companies = await db.crmCompany.findMany({ where: { organizationId, id: { in: ids("company") } }, select: { id: true, name: true } });
+  const deals = await db.crmDeal.findMany({ where: { organizationId, id: { in: ids("deal") } }, select: { id: true, title: true } });
   const names = new Map<string, string>([
     ...people.map((p) => [`person:${p.id}`, p.name] as const),
     ...companies.map((c) => [`company:${c.id}`, c.name] as const),

@@ -11,7 +11,7 @@ import {
 } from "@/lib/crm/settings-sections";
 import { hrefWithOpen, OPEN_PARAM, parseOpen } from "@/lib/crm/overlay";
 
-import { crmShell } from "../../shell";
+import { crmSettingsShell } from "../../shell";
 
 export async function generateMetadata({
   params,
@@ -35,7 +35,7 @@ export default async function CrmSettingsSectionPage({
 }: PageProps<"/app/[orgSlug]/crm/settings/[section]">) {
   const { orgSlug, section: id } = await params;
   const sp = (await searchParams) as Record<string, string | undefined>;
-  const { gate, shell } = await crmShell(orgSlug);
+  const { gate, shell } = await crmSettingsShell(orgSlug);
   if (!shell) return gate;
   const section = findSection(id);
   if (!section) notFound();

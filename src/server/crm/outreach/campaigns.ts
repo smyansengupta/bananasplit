@@ -322,6 +322,56 @@ export async function campaignProgress(db: TxClient, organizationId: string, cam
     select: { personId: true, status: true, assigneeId: true, person: { select: { primaryEmail: true, userId: true } } },
   });
   const converted = c ? await convertedPeople(db, organizationId, c, targets) : new Set<string>();
+  return progressOf(targets, converted);
+}
+
+/**
+ * campaignProgress for many campaigns at once (the plans list): one read
+ * of their people and one of the deals won with them; an event's RSVPs or
+ * a form's answers are read only for the campaigns that have one.
+ */
+export async function campaignsProgress(
+  db: TxClient,
+  organizationId: string,
+  campaigns: readonly { id: string; createdAt: Date; eventId: string | null; channel: string }[],
+): Promise<Map<string, CampaignProgress>> {
+  const out = new Map<string, CampaignProgress>();
+  if (campaigns.length === 0) return out;
+  const targets = await db.crmCampaignTarget.findMany({
+    where: { organizationId, campaignId: { in: campaigns.map((c) => c.id) } },
+    select: {
+      campaignId: true,
+      personId: true,
+      status: true,
+      assigneeId: true,
+      person: { select: { primaryEmail: true, userId: true } },
+    },
+  });
+  const since = new Date(Math.min(...campaigns.map((c) => c.createdAt.getTime())));
+  const personIds = [...new Set(targets.map((t) => t.personId))];
+  const won = personIds.length
+    ? (
+        await db.crmDealPerson.findMany({
+          where: {
+            organizationId,
+            personId: { in: personIds },
+            deal: { deletedAt: null, closedAt: { gte: since }, stage: { kind: "WON" } },
+          },
+          select: { personId: true, deal: { select: { closedAt: true } } },
+        })
+      ).map((w) => ({ personId: w.personId, closedAt: w.deal.closedAt }))
+    : [];
+  for (const c of campaigns) {
+    const mine = targets.filter((t) => t.campaignId === c.id);
+    out.set(c.id, progressOf(mine, await convertedPeople(db, organizationId, c, mine, won)));
+  }
+  return out;
+}
+
+function progressOf(
+  targets: readonly { personId: string; status: CrmTargetStatus; assigneeId: string | null }[],
+  converted: ReadonlySet<string>,
+): CampaignProgress {
   const statuses = targets.map((t) => (converted.has(t.personId) && t.status !== "SKIPPED" ? ("CONVERTED" as const) : t.status));
   const byMember = new Map<string | null, { total: number; contacted: number; replied: number }>();
   targets.forEach((t, i) => {
@@ -340,6 +390,8 @@ async function convertedPeople(
   organizationId: string,
   c: { createdAt: Date; eventId: string | null; channel: string },
   targets: readonly { personId: string; person: { primaryEmail: string | null; userId: string | null } }[],
+  /** Deals already read for many campaigns (campaignsProgress); else they're read here. */
+  wonAlready?: readonly { personId: string; closedAt: Date | null }[],
 ): Promise<Set<string>> {
   const out = new Set<string>();
   const byEmail = new Map<string, string>();
@@ -362,15 +414,20 @@ async function convertedPeople(
     });
     for (const r of rs) if (r.email) out.add(byEmail.get(r.email.toLowerCase())!);
   }
-  const won = await db.crmDealPerson.findMany({
-    where: {
-      organizationId,
-      personId: { in: targets.map((t) => t.personId) },
-      deal: { deletedAt: null, closedAt: { gte: c.createdAt }, stage: { kind: "WON" } },
-    },
-    select: { personId: true },
-  });
-  for (const w of won) out.add(w.personId);
+  if (wonAlready) {
+    const theirs = new Set(targets.map((t) => t.personId));
+    for (const w of wonAlready) if (theirs.has(w.personId) && w.closedAt && w.closedAt >= c.createdAt) out.add(w.personId);
+  } else {
+    const won = await db.crmDealPerson.findMany({
+      where: {
+        organizationId,
+        personId: { in: targets.map((t) => t.personId) },
+        deal: { deletedAt: null, closedAt: { gte: c.createdAt }, stage: { kind: "WON" } },
+      },
+      select: { personId: true },
+    });
+    for (const w of won) out.add(w.personId);
+  }
   out.delete(undefined as unknown as string);
   return out;
 }

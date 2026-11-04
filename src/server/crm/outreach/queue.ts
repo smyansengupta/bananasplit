@@ -46,6 +46,8 @@ export interface QueueItem {
   unsubscribed: boolean;
   ownerId: string | null;
   lastContactedAt: Date | null;
+  /** Their relationship type id (people only). */
+  relationship: string | null;
   reasons: QueueReason[];
   urgent: boolean;
 }
@@ -112,16 +114,33 @@ export async function followUpQueue(
     take: 100,
     select: { id: true, threadId: true, activityId: true, createdAt: true, subject: true },
   });
-  for (const m of inbound) {
-    const answered = await db.crmEmailMessage.count({
-      where: { organizationId, threadId: m.threadId, direction: "OUTBOUND", createdAt: { gt: m.createdAt } },
+  // Two reads for all of them: the latest mail out on each thread, and who each message was from.
+  const threadIds = [...new Set(inbound.map((m) => m.threadId))];
+  const lastOut = new Map(
+    (threadIds.length
+      ? await db.crmEmailMessage.groupBy({
+          by: ["threadId"],
+          where: { organizationId, threadId: { in: threadIds }, direction: "OUTBOUND" },
+          _max: { createdAt: true },
+        })
+      : []
+    ).map((o) => [o.threadId, o._max.createdAt]),
+  );
+  const waiting = inbound.filter((m) => {
+    const out = lastOut.get(m.threadId);
+    return m.activityId && !(out && out > m.createdAt);
+  });
+  const from = new Map<string, string>();
+  if (waiting.length) {
+    const links = await db.crmActivityTarget.findMany({
+      where: { organizationId, activityId: { in: waiting.map((m) => m.activityId!) }, targetKind: "person" },
+      select: { activityId: true, targetId: true },
     });
-    if (answered || !m.activityId) continue;
-    const t = await db.crmActivityTarget.findFirst({
-      where: { organizationId, activityId: m.activityId, targetKind: "person" },
-      select: { targetId: true },
-    });
-    if (t) add(t.targetId, { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id });
+    for (const l of links) if (!from.has(l.activityId)) from.set(l.activityId, l.targetId);
+  }
+  for (const m of waiting) {
+    const personId = from.get(m.activityId!);
+    if (personId) add(personId, { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id });
   }
 
   // Sequence steps waiting on someone.
@@ -242,6 +261,7 @@ export async function followUpQueue(
           unsubscribedAt: true,
           ownerId: true,
           lastContactedAt: true,
+          relationship: true,
           company: { select: { name: true } },
         },
       })
@@ -260,6 +280,7 @@ export async function followUpQueue(
       unsubscribed: Boolean(p.unsubscribedAt),
       ownerId: p.ownerId,
       lastContactedAt: p.lastContactedAt,
+      relationship: p.relationship,
       reasons: rs,
       urgent: rs.some((r) => r.kind === "reply" || r.kind === "step" || (r.kind === "followup" && r.label.includes("overdue"))),
     };
@@ -292,6 +313,7 @@ export async function followUpQueue(
       unsubscribed: false,
       ownerId: c.ownerId,
       lastContactedAt: c.lastContactedAt,
+      relationship: null,
       reasons: [{ kind: "followup", label: "Follow up today", at: c.nextFollowUpAt }],
       urgent: false,
     });

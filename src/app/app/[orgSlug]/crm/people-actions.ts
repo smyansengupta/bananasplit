@@ -15,10 +15,13 @@ import { createDeal } from "@/server/crm/deals";
 import { likelyExisting, type MergePayload } from "@/server/crm/dedupe";
 import { mergeCompanies, mergePeople, undoMerge } from "@/server/crm/merge";
 import { viewIds } from "@/server/crm/outreach/lists";
+import { rolePositions } from "@/server/crm/owners";
+import { peopleListCounts } from "@/server/crm/people-view";
+import { listPipelines } from "@/server/crm/pipelines";
 import { createPerson, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
-import { crmAction, toResult } from "./run";
+import { checkInput, crmAction, toResult } from "./run";
 
 /**
  * The People tab's own actions (docs/features/crm.md, "Redesign"): a next
@@ -353,3 +356,17 @@ export async function readSignatureAction(orgId: string, text: string): Promise<
     return toResult(error);
   }
 }
+
+const ListSearch = z.record(z.string().max(40), z.string().max(500));
+
+/**
+ * Lists' counts for People's Filters, asked for when it opens (the page
+ * counts only the open list): every list with the bar's Owner,
+ * Relationship, search and deal filters, as the member sees them.
+ */
+export const peopleListCountsAction = crmAction(async (ctx, _a, search: Record<string, string>) => {
+  const sp = checkInput(ListSearch, search);
+  const pipelines = await listPipelines(ctx.db, ctx.organizationId);
+  const roles = await rolePositions(ctx.organizationId);
+  return { counts: await peopleListCounts(ctx.db, ctx.organizationId, ctx.userId, roles, sp, pipelines) };
+});

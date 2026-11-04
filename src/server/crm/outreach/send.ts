@@ -306,51 +306,94 @@ export async function conflictFor(
   viewerId: string,
   now: Date = new Date(),
 ): Promise<Conflict | null> {
+  return (await conflictsFor(db, organizationId, [personId], viewerId, now)).get(personId) ?? null;
+}
+
+const TOUCH_WORDS: Record<string, string> = {
+  EMAIL: "emailed them",
+  CALL: "called them",
+  MEETING: "met them",
+  TEXT: "texted them",
+};
+
+/**
+ * conflictFor for many people in at most three reads (a sequence of
+ * someone else's first, then their campaign share, then their latest
+ * email, call, meeting or text in the last two weeks): only the people
+ * with one are in the map.
+ */
+export async function conflictsFor(
+  db: TxClient,
+  organizationId: string,
+  personIds: readonly string[],
+  viewerId: string,
+  now: Date = new Date(),
+): Promise<Map<string, Conflict>> {
+  const out = new Map<string, Conflict>();
+  if (personIds.length === 0) return out;
   const since = new Date(now.getTime() - 14 * 86_400_000);
-  const enrollment = await db.crmEnrollment.findFirst({
-    where: { organizationId, personId, status: { in: ["ACTIVE", "PAUSED"] }, senderId: { not: viewerId } },
-    select: { senderId: true, startedAt: true, sequence: { select: { name: true } } },
-  });
-  if (enrollment) {
-    return { userId: enrollment.senderId, what: `has them in the sequence "${enrollment.sequence.name}"`, at: enrollment.startedAt };
-  }
-  const target = await db.crmCampaignTarget.findFirst({
+  const left = () => personIds.filter((id) => !out.has(id));
+  const enrollments = await db.crmEnrollment.findMany({
     where: {
       organizationId,
-      personId,
-      assigneeId: { not: viewerId },
-      status: { in: ["TODO", "CONTACTED", "REPLIED"] },
-      campaign: { status: "ACTIVE" },
+      personId: { in: [...personIds] },
+      status: { in: ["ACTIVE", "PAUSED"] },
+      senderId: { not: viewerId },
     },
-    select: { assigneeId: true, updatedAt: true, campaign: { select: { name: true } } },
+    select: { personId: true, senderId: true, startedAt: true, sequence: { select: { name: true } } },
   });
-  if (target?.assigneeId) {
-    return { userId: target.assigneeId, what: `has them in their share of "${target.campaign.name}"`, at: target.updatedAt };
+  for (const e of enrollments) {
+    if (!out.has(e.personId)) {
+      out.set(e.personId, { userId: e.senderId, what: `has them in the sequence "${e.sequence.name}"`, at: e.startedAt });
+    }
   }
-  const links = await db.crmActivityTarget.findMany({
-    where: { organizationId, targetKind: "person", targetId: personId, occurredAt: { gte: since, lte: now } },
-    orderBy: { occurredAt: "desc" },
-    take: 30,
-    select: { activityId: true },
-  });
-  if (links.length) {
-    const recent = await db.crmActivity.findFirst({
+  if (left().length) {
+    const targets = await db.crmCampaignTarget.findMany({
       where: {
         organizationId,
-        id: { in: links.map((l) => l.activityId) },
+        personId: { in: left() },
+        assigneeId: { not: viewerId },
+        status: { in: ["TODO", "CONTACTED", "REPLIED"] },
+        campaign: { status: "ACTIVE" },
+      },
+      select: { personId: true, assigneeId: true, updatedAt: true, campaign: { select: { name: true } } },
+    });
+    for (const t of targets) {
+      if (t.assigneeId && !out.has(t.personId)) {
+        out.set(t.personId, { userId: t.assigneeId, what: `has them in their share of "${t.campaign.name}"`, at: t.updatedAt });
+      }
+    }
+  }
+  const rest = left();
+  if (rest.length) {
+    const touches = await db.crmActivity.findMany({
+      where: {
+        organizationId,
         deletedAt: null,
         kind: { in: ["EMAIL", "CALL", "MEETING", "TEXT"] },
         actorId: { not: null, notIn: [viewerId] },
+        targets: {
+          some: { targetKind: "person", targetId: { in: rest }, occurredAt: { gte: since, lte: now } },
+        },
       },
       orderBy: { occurredAt: "desc" },
-      select: { actorId: true, occurredAt: true, kind: true },
+      take: 30 * rest.length,
+      select: {
+        actorId: true,
+        occurredAt: true,
+        kind: true,
+        targets: { where: { targetKind: "person", targetId: { in: rest } }, select: { targetId: true } },
+      },
     });
-    if (recent?.actorId) {
-      const words: Record<string, string> = { EMAIL: "emailed them", CALL: "called them", MEETING: "met them", TEXT: "texted them" };
-      return { userId: recent.actorId, what: words[recent.kind] ?? "was in touch", at: recent.occurredAt };
+    for (const a of touches) {
+      for (const t of a.targets) {
+        if (a.actorId && !out.has(t.targetId)) {
+          out.set(t.targetId, { userId: a.actorId, what: TOUCH_WORDS[a.kind] ?? "was in touch", at: a.occurredAt });
+        }
+      }
     }
   }
-  return null;
+  return out;
 }
 
 // ---- Compose (the member path) ------------------------------------------------------------

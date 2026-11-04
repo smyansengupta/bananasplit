@@ -2,6 +2,7 @@ import { NewCard, type NewCardWith } from "@/components/crm/cards/new-card";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -45,7 +46,7 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
     }
     return { company: null, people: [] };
   });
-  const others = shell.members.filter((m) => m.id !== shell.user.id);
+  const others = (await crmMembers(orgId)).filter((m) => m.id !== shell.user.id);
   return (
     <NewCard
       orgId={orgId}

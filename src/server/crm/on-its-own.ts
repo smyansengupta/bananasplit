@@ -353,6 +353,18 @@ export async function onItsOwn(
     });
   }
 
+  // Whether anything changed each record since (then there is no Undo): one read for all.
+  const shown = changeGroups.filter((g) => people.has(g.id) || companies.has(g.id) || deals.has(g.id));
+  const latestChange = new Map(
+    (shown.length
+      ? await db.crmFieldHistory.groupBy({
+          by: ["targetKind", "targetId"],
+          where: { organizationId, OR: shown.map((g) => ({ targetKind: g.kind, targetId: g.id })) },
+          _max: { changedAt: true },
+        })
+      : []
+    ).map((r) => [`${r.targetKind}:${r.targetId}`, r._max.changedAt]),
+  );
   for (const g of changeGroups) {
     const name =
       g.kind === "person"
@@ -390,10 +402,8 @@ export async function onItsOwn(
         : `Took the owner off ${name}.`;
     else
       text = `Updated ${name}: ${list([...new Set(g.fields.map((f) => fieldWords(kind, f.field)))])}.`;
-    const later = await db.crmFieldHistory.findFirst({
-      where: { organizationId, targetKind: g.kind, targetId: g.id, changedAt: { gt: g.last } },
-      select: { id: true },
-    });
+    const newest = latestChange.get(`${g.kind}:${g.id}`);
+    const later = Boolean(newest && newest > g.last);
     out.push({
       id: `change:${g.kind}:${g.id}:${g.first.getTime()}`,
       kind: "changed",
