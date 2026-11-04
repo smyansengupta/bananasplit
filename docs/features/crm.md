@@ -94,7 +94,7 @@ them, and only the last four characters ever come back ("sk-ant-…4f2a").
 | Texts and calls | `src/server/crm/phone/` | Its Telnyx or Twilio account |
 | Call and voice note transcripts | `crmTranscribeJob` | Its Deepgram key |
 | Bulk email and campaigns | `sendFromMailbox` | Its own Resend sender on a verified domain, always |
-| One-to-one and sequence email | `sendFromMailbox` | Its Resend sender when verified; until then our sender on its behalf (the one allowed fallback: low volume, never bulk) |
+| One-to-one and sequence email | `sendFromMailbox` | Its Resend sender when verified; until then our sender on its behalf, only for mail a person pressed Send on (or Start, for a plan's first email): counted (an `AiUsage` row paid by PLATFORM, outside the cap) and at most 50 a day per organization. Never bulk, never a booking receipt, never anything queued without a person |
 | Your own Claude over MCP | `src/server/connectors/tools/crm*.ts` | The member's own Claude plan |
 
 **The meter and the cap.** Every use writes one `AiUsage` row: tokens for
@@ -107,8 +107,14 @@ minute, an email on the organization's sender), metered by
 covers all of it: past the cap, AI and lookups refuse with "Your
 organization has reached this month's spending cap of $25. An owner or
 admin can raise it in CRM settings > AI.", texts and calls refuse before
-they start, queued texts and bulk email stop, and transcripts leave the
-audio as it is. One-to-one email still goes. A missing key says where to
+they start, queued texts, bulk, sequence, campaign and automation email
+on its own Resend stop, and transcripts leave the audio as it is.
+One-to-one email still goes. A paid call about to run holds its estimated
+cost (an `AiUsage` row, feature `crm.reserve`, dropped when the real use
+is written, lapsing after ten minutes; checks run one at a time per
+organization), so calls at once can't all pass a full cap
+(`reserveUnderCap` in `ai.ts`, used by `runCrmAi`, enrichment, AI fields'
+and agents' searches). A missing key says where to
 add it ("Add your Telnyx or Twilio key in CRM settings > AI first.").
 Outside the CRM, the AI imports (`docs/features/ai-imports.md`), Reports'
 AI, Forms' AI and the pulse summary still use the shared connection list
@@ -2270,3 +2276,84 @@ under one CRM chip, linked to the card (`crmRecordHref`, `?open=`):
 - **Not yet.** A quote opened by the sender themselves counts as opened.
   Text sends that fail don't write a line. A bring-in (members, event
   guests) is quiet like an import but writes no summary line yet.
+
+## Safety fixes
+
+Built 2026-11-03 on `claude/crm-safety` (migration
+`20261106120000_crm_send_approval`: `CrmEmailMessage.approval` and
+`approvedById`, `CrmTextMessage.approvedById`, backfilled for what was
+already approved; no policy changes). Tests:
+`src/server/crm/safety.db.test.ts` and `safety.test.ts`.
+
+**Approval is checked when mail leaves, not only when it's queued.** Every
+outgoing email records who said it may go: `send` (a person pressed Send:
+compose, a draft, a campaign share, bulk), `start` (a plan's first email,
+by whoever pressed Start) or `receipt` (a booking confirmation, untracked,
+to the guest alone). The send job (`prepare` in `send.ts`,
+`approvalProblem`) checks it again just before it goes: the approver is
+still a member, a `start` is the enrollment's first email and Start could
+approve it. Anything else (an automation's email queued before approvals,
+like "Welcome, Theo") becomes a draft in its sender's To approve instead.
+Texts the same way: `crm-text-send` holds a text nobody approved
+(status `held-for-ok`) and tells its sender.
+
+**Drafts are sent once.** Send claims the draft in one statement, so Today,
+Power hour, the card and two tabs can't all send it; a draft withdrawn by
+a reply, booking or bounce, thrown away or already sent is refused in
+words. The draft and its To approve row close when the email actually
+leaves; Undo (`cancelEmail`) gives the draft back as it was, and the plan
+doesn't move on. The ten seconds for Undo are counted on the server
+(`holdSeconds`), and the composer and Today send what they're holding when
+the tab is hidden or left.
+
+**Start.** Pressing Start (or Enroll) approves a plan's first email only
+when it goes from the one pressing it, or they made the plan, or they're
+an owner, admin or CRM manager (`startMayApprove`). Otherwise, as with a
+member starting someone else's plan "from each person's owner", each
+owner's first email is a draft for that owner. The first email is written
+and frozen when Start is pressed (status `SCHEDULED` until its step runs),
+so later edits to the plan or template don't change it. A running plan is
+its maker's: only they, owners, admins and CRM managers may edit or
+archive it (`assertMayEditPlan`; the database still lets any member
+update, as before).
+
+**Email in.** The Worker reads the Authentication-Results Cloudflare adds
+(only under its own name, `AUTHSERV_ID`, the topmost one) and sends a
+verdict: pass when DMARC passed, or DKIM or SPF passed for the From
+domain. The app takes only a sender that checked out as who it says:
+an unverified From with a member's address is never logged as their own
+email, and mail coming in acts only for its checked sender (their timeline,
+their sequences, their issue). Cc'd contacts are never touched by someone
+else's mail; a Cc'd stranger may still be suggested. A bounce found by
+address alone needs a checked sender. `/api/crm/inbound` drops mail past
+20 an hour per reply address and 60 an hour per sender. Replies fold into
+one Inbox row ("3 new replies") like the CRM's other lines, and a reply
+queues a biggest-issue refresh at most once an hour per person. Check on
+a real message that Cloudflare's results reach the Worker: if they don't,
+every sender reads as unverified and replies are ignored.
+
+**The biggest issue** reads only entries everyone who can see the person
+can see (`everyViewerSees` in `issue.ts`): never a private one, and with
+members seeing only their own records, only entries by the person's owner
+(and whoever added them). Notes-to-task reads that same stored line, and
+on a company it takes only notes on the company or its own people. Undo on
+"Make it a task" removes only the task that note made.
+
+**Events.** A bulk edit's events carry its batch, and the Inbox leaves
+those records to the edit's own line; an event queues a job only when a
+switched-on workflow's trigger type could match it (`eventCouldTrigger`),
+a webhook listens or the Inbox could want it.
+
+**Merging.** Any member may merge two records they can both see. The merge
+keeps what Undo needs on its timeline row (`meta.undo`: the moved
+addresses, timeline links, deals, enrollments, campaign places, calls,
+texts, jobs and the kept record's values before, including the fields
+picked on the Merge card). Undo in the merge toast (`undoMergeAction`,
+`undoMerge`) puts both back, for 7 days, by whoever merged or an owner or
+admin. Relation links in databases stay on the kept record. When both were
+in the same plan, the duplicate's enrollment stops instead of running
+twice.
+
+**Input.** The deal, goal, People, reports and plan actions check their
+input with zod (`checkInput` in `crm/run.ts`).
+
