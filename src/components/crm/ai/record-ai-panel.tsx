@@ -40,6 +40,7 @@ import { chipClass, Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import type { BriefData } from "@/lib/crm/ai-outputs";
+import { crmApprovalsHref } from "@/lib/crm/href";
 import { cn } from "@/lib/utils";
 
 import { OpenDraftDialog } from "../outreach/compose";
@@ -147,7 +148,7 @@ export function RecordAiPanel({
     }
     toast({
       title: r.filled.length ? `Filled ${r.filled.length} ${r.filled.length === 1 ? "field" : "fields"} from ${r.provider}.` : `${r.provider} had nothing for the empty fields.`,
-      description: r.suggested ? "Some differ from what's there now: they wait in Review." : undefined,
+      description: r.suggested ? "Some differ from what's there now: they wait in To approve." : undefined,
       tone: "success",
     });
     router.refresh();
@@ -159,7 +160,7 @@ export function RecordAiPanel({
     setBusy(null);
     if (!r || !r.ok) return failToast(r as Fail | null);
     toast({
-      title: r.status === "done" ? "Research done. The brief and any details wait in Review." : "The research agent stopped. Its run log in CRM settings says why.",
+      title: r.status === "done" ? "Research done. The brief and any details wait in To approve." : "The research agent stopped. Its run log in CRM settings says why.",
       tone: r.status === "done" ? "success" : "default",
     });
     router.refresh();
@@ -253,9 +254,9 @@ export function RecordAiPanel({
         </details>
       )}
       {waiting > 0 && (
-        <Link href={`/app/${orgSlug}/crm/queue`} className="bg-tint-info text-tint-info-foreground flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90">
+        <Link href={crmApprovalsHref(orgSlug)} className="bg-tint-info text-tint-info-foreground flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90">
           <Inbox className="size-4" aria-hidden="true" />
-          {waiting} {waiting === 1 ? "suggestion waits" : "suggestions wait"} for review
+          {waiting} {waiting === 1 ? "suggestion waits" : "suggestions wait"} in To approve
         </Link>
       )}
 
@@ -390,7 +391,7 @@ function MeetingNotes({
     if (!r || !r.ok) return failToast(r as Fail | null);
     const promises = r.reading.promises.length + r.reading.nextSteps.length;
     toast({
-      title: `Read the ${what === "CALL" ? "call" : "meeting"}. ${r.queued} ${r.queued === 1 ? "suggestion waits" : "suggestions wait"} in Review.`,
+      title: `Read the ${what === "CALL" ? "call" : "meeting"}. ${r.queued} ${r.queued === 1 ? "suggestion waits" : "suggestions wait"} in To approve.`,
       description: promises ? `${promises} ${promises === 1 ? "promise or next step" : "promises and next steps"} became task suggestions.` : undefined,
       tone: "success",
     });
@@ -408,7 +409,7 @@ function MeetingNotes({
           <DialogTitle>Meeting notes with {name}</DialogTitle>
           <DialogDescription>
             Paste notes or a transcript, or upload one (.txt, .vtt, .srt, .md). You get a summary, next steps, objections and
-            sentiment, and promises become tasks, all waiting in Review.
+            sentiment, and promises become tasks, all waiting in To approve.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

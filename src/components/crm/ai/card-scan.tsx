@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { crmApprovalsHref } from "@/lib/crm/href";
 
 import { IMAGE_ACCEPT, sendImage, shrinkImage } from "./image";
 
@@ -80,7 +81,7 @@ export function CardScan({ orgId, orgSlug }: { orgId: string; orgSlug: string })
       </Card>
       {done.length > 0 && (
         <Card className="gap-2 p-5">
-          <p className="font-semibold">Waiting in Review</p>
+          <p className="font-semibold">Waiting in To approve</p>
           <ul className="space-y-1.5 text-sm">
             {done.map((d, i) => (
               <li key={i} className="flex items-center gap-2">
@@ -92,7 +93,7 @@ export function CardScan({ orgId, orgSlug }: { orgId: string; orgSlug: string })
             ))}
           </ul>
           <Button variant="outline" asChild className="mt-2">
-            <Link href={`/app/${orgSlug}/crm/queue`}>Review them</Link>
+            <Link href={crmApprovalsHref(orgSlug)}>Open To approve</Link>
           </Button>
         </Card>
       )}

@@ -140,7 +140,7 @@ export function AiSettings({
     const r = await followUpAgentAction(orgId, agents.followUpDays).catch(() => null);
     setBusy(null);
     if (!r || !r.ok) return toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
-    toast({ title: r.drafted ? `Drafted ${r.drafted} follow-ups. They wait in Review.` : "Nobody of yours is going cold without a draft." });
+    toast({ title: r.drafted ? `Drafted ${r.drafted} follow-ups. They wait in To approve.` : "Nobody of yours is going cold without a draft." });
     router.refresh();
   };
 
@@ -218,7 +218,7 @@ export function AiSettings({
       <Block title="Enrichment">
         <p className="text-muted-foreground text-sm">
           Enrich tries these in order and stops at the first that finds something, so you pay only for that one. Empty fields fill at once; anything
-          already filled in waits in Review instead.
+          already filled in waits in To approve instead.
         </p>
         <ol className="divide-border bg-muted/45 divide-y rounded-2xl">
           {order.map((o, i) => (
@@ -242,7 +242,7 @@ export function AiSettings({
       </Block>
 
       <Block title="Agents">
-        <p className="text-muted-foreground text-sm">Agents stop at suggestions and drafts. Nothing is sent or changed until someone accepts it in Review.</p>
+        <p className="text-muted-foreground text-sm">Agents stop at suggestions and drafts. Nothing is sent or changed until someone accepts it in To approve.</p>
         <div className="divide-border divide-y">
           <label className="flex items-center gap-3 py-3">
             <Globe className="text-muted-foreground size-5" aria-hidden="true" />
@@ -321,7 +321,7 @@ export function AiSettings({
         <Block title="AI fields">
           <p className="text-muted-foreground text-sm">
             Fill a whole column now. On a Claude key, 10 rows or more go as one batch at half price. A value someone typed in is never replaced;
-            a different answer waits in Review.
+            a different answer waits in To approve.
           </p>
           <ul className="divide-border bg-muted/45 divide-y rounded-2xl text-sm">
             {fields.map((f) => (

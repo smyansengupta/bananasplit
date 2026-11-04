@@ -25,6 +25,51 @@ export function crmRecordHref(orgSlug: string, kind: CrmTargetKind, id: string):
   return hrefWithOpen(`${base}/deals`, "", { kind: "deal", id });
 }
 
+/** Today, optionally filtered to one group (Replies, Due today, To approve, Calls). */
+export function crmTodayHref(
+  orgSlug: string,
+  show?: "replies" | "due" | "approve" | "calls",
+): string {
+  const base = crmBase(orgSlug);
+  return show ? `${base}?show=${show}` : base;
+}
+
+/** What waits for a member's OK (suggestions, drafts, duplicates): Today's To approve. */
+export function crmApprovalsHref(orgSlug: string): string {
+  return crmTodayHref(orgSlug, "approve");
+}
+
+/** People, or Companies, optionally on one list (`?list=`: a built-in one or a saved list's id). */
+export function crmPeopleHref(
+  orgSlug: string,
+  options: { companies?: boolean; list?: string | null } = {},
+): string {
+  const params = new URLSearchParams();
+  if (options.companies) params.set("view", "companies");
+  if (options.list) params.set("list", options.list);
+  const qs = params.toString();
+  return `${crmBase(orgSlug)}/people${qs ? `?${qs}` : ""}`;
+}
+
+/** The New card for a person, company or deal, over the list it belongs to. */
+export function crmNewHref(orgSlug: string, what: "person" | "company" | "deal"): string {
+  const base = crmBase(orgSlug);
+  if (what === "deal") return hrefWithOpen(`${base}/deals`, "", { kind: "new", what });
+  if (what === "company")
+    return hrefWithOpen(`${base}/people`, "view=companies", { kind: "new", what });
+  return hrefWithOpen(`${base}/people`, "", { kind: "new", what });
+}
+
+/** Every deal. */
+export function crmDealsHref(orgSlug: string): string {
+  return `${crmBase(orgSlug)}/deals`;
+}
+
+/** CRM settings, on the section that suits the viewer (a section's own link: settings-sections.ts). */
+export function crmSettingsHomeHref(orgSlug: string): string {
+  return `${crmBase(orgSlug)}/settings`;
+}
+
 /** An outreach plan: Outreach with its card open. */
 export function crmPlanHref(orgSlug: string, type: "sequence" | "campaign", id: string): string {
   return hrefWithOpen(`${crmBase(orgSlug)}/outreach`, "", { kind: "plan", type, id });

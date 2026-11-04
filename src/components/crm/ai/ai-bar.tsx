@@ -90,7 +90,7 @@ export function PasteConversation({
     }
     toast({
       title: r.matched ? `Read the conversation with ${r.matched.name}.` : "Read the conversation.",
-      description: `${r.queued ?? 0} ${r.queued === 1 ? "suggestion waits" : "suggestions wait"} in Review.`,
+      description: `${r.queued ?? 0} ${r.queued === 1 ? "suggestion waits" : "suggestions wait"} in To approve.`,
       tone: "success",
     });
     reset();
@@ -111,7 +111,7 @@ export function PasteConversation({
           <DialogTitle>Paste a conversation</DialogTitle>
           <DialogDescription>
             Text or a screenshot from WhatsApp, LinkedIn, Instagram, texts or email. Your organization&apos;s AI finds who
-            it&apos;s with and what&apos;s next; everything waits in Review for you to accept.
+            it&apos;s with and what&apos;s next; everything waits in To approve on Today for you to accept.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

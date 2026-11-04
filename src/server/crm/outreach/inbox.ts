@@ -1,4 +1,4 @@
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmApprovalsHref, crmRecordHref } from "@/lib/crm/href";
 import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "../owners";
@@ -70,7 +70,7 @@ export async function crmReviewRow(
     id: "review",
     title: n === 1 ? "1 thing to approve in the CRM" : `${n} things to approve in the CRM`,
     meta: "Drafts, changes and new people waiting for your OK",
-    href: `/app/${orgSlug}/crm?show=approve`,
+    href: crmApprovalsHref(orgSlug),
     urgent: false,
     group: "review",
   };
