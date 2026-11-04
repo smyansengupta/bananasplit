@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { settingsNavItems, isSettingsItemActive } from "@/app/app/[orgSlug]/settings/settings-nav";
 
+import { crmNewHref } from "@/lib/crm/href";
 import { resolveSidebar, sectionLabel, toConfig, visibleSidebar } from "@/lib/nav/sidebar";
 
 import { createActions, isExactPage, isLinkActive, navSections } from "./nav-config";
@@ -327,9 +328,9 @@ describe("the create menu", () => {
       ["poll", "/app/me/forms/new?poll=1"],
       ["form", "/app/me/forms/new"],
       ["expense", "/app/me/finance/my-reimbursements?new=1"],
-      ["crm-person", "/app/me/crm/people?new=1"],
-      ["crm-company", "/app/me/crm/companies?new=1"],
-      ["crm-item", "/app/me/crm/items/new"],
+      ["crm-person", crmNewHref("me", "person")],
+      ["crm-company", crmNewHref("me", "company")],
+      ["crm-deal", crmNewHref("me", "deal")],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
     ]);
     // Members who can't create events don't get New event.
@@ -361,7 +362,7 @@ describe("the create menu", () => {
       "expense",
       "crm-person",
       "crm-company",
-      "crm-item",
+      "crm-deal",
       "find-a-time",
     ]);
   });
