@@ -131,7 +131,7 @@ async function recordFacts(
   };
 }
 
-/** The note (a NOTE on this record) as text. */
+/** The note (a NOTE on this record, or on one of a company's people) as text. */
 async function noteText(
   db: TxClient,
   organizationId: string,
@@ -146,11 +146,14 @@ async function noteText(
       targets: { select: { targetKind: true, targetId: true } },
     },
   });
-  const on = note?.targets.some(
-    (t) =>
-      (t.targetKind === target.kind && t.targetId === target.id) ||
-      (target.kind === "company" && t.targetKind === "person"),
-  );
+  let on = Boolean(note?.targets.some((t) => t.targetKind === target.kind && t.targetId === target.id));
+  if (note && !on && target.kind === "company") {
+    // A note on one of this company's people (theirs now, not someone else's).
+    const people = note.targets.filter((t) => t.targetKind === "person").map((t) => t.targetId);
+    on =
+      people.length > 0 &&
+      (await db.crmPerson.count({ where: { organizationId, id: { in: people }, companyId: target.id, deletedAt: null } })) > 0;
+  }
   if (!note || !on) throw new CrmError("That note isn't here any more.");
   return [note.subject, note.body].filter(Boolean).join("\n").trim();
 }
@@ -364,11 +367,26 @@ export async function createNoteTask(
   return { taskId: result.taskId, activityId, linkId: link.id, ownerName };
 }
 
-/** Undo: the task goes to the trash and its timeline row goes. */
+/** Undo: the task goes to the trash and its timeline row goes. Only the task that row made. */
 export async function undoNoteTask(
   ctx: OrgContext,
   input: { taskId: string; activityId: string },
 ): Promise<void> {
+  const row = await ctx.db.crmActivity.findFirst({
+    where: { id: input.activityId, organizationId: ctx.organizationId, kind: "TASK", sourceKind: "link", deletedAt: null },
+    select: { meta: true, sourceId: true },
+  });
+  const linked = (row?.meta ?? {}) as { linkedKind?: unknown; linkedId?: unknown };
+  if (!row || linked.linkedKind !== "task" || linked.linkedId !== input.taskId) {
+    throw new CrmError("That task wasn't made from this note.");
+  }
+  const link = row.sourceId
+    ? await ctx.db.itemLink.findFirst({
+        where: { id: row.sourceId, organizationId: ctx.organizationId, fromKind: "task", fromId: input.taskId },
+        select: { id: true },
+      })
+    : null;
+  if (!link) throw new CrmError("That task wasn't made from this note.");
   const env = await loadTaskEnv(ctx);
   try {
     const r = await deleteTask(env, input.taskId);
