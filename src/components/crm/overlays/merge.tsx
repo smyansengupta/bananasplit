@@ -1,4 +1,9 @@
-import { MergeCard, type MergeCardData, type MergeSideData } from "@/components/crm/cards/merge-card";
+import {
+  MergeCard,
+  MergePickCard,
+  type MergeCardData,
+  type MergeSideData,
+} from "@/components/crm/cards/merge-card";
 import { scoreCompanies, scorePeople } from "@/lib/crm/dedupe";
 import { duplicateReason } from "@/lib/crm/people-view";
 import type { MergePayload } from "@/server/crm/dedupe";
@@ -27,16 +32,33 @@ function sentence(reasons: readonly string[]): string {
 /**
  * The Merge card (?open=merge:<a>,<b>, Merge.dc.html): two people (or two
  * companies) side by side, a pick per field, and what moves. Kept apart
- * with Keep both, so they're never suggested again.
+ * with Keep both, so they're never suggested again. With one id
+ * (?open=merge:<a>, a card's "…" > Merge a duplicate) it asks for the other.
  */
 export async function MergeOverlay({ shell, open }: OverlayProps<"merge">) {
   const orgId = shell.org.id;
+  if (open.ids.length === 1) {
+    const id = open.ids[0];
+    const first = await withOrgTx(orgId, async ({ db }) => {
+      const person = await db.crmPerson.findFirst({
+        where: { id, organizationId: orgId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      if (person) return { kind: "person" as const, ...person };
+      const company = await db.crmCompany.findFirst({
+        where: { id, organizationId: orgId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      return company ? { kind: "company" as const, ...company } : null;
+    });
+    return <MergePickCard orgId={orgId} first={first} />;
+  }
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const relationships = new Map(
     (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
   );
   const data = await withOrgTx(orgId, async ({ db }): Promise<MergeCardData | null> => {
-    const [a, b] = open.ids;
+    const [a, b] = open.ids as [string, string];
     const pending = await db.crmSuggestion.findMany({
       where: { organizationId: orgId, kind: "MERGE", status: "PENDING", targetId: { in: [a, b] } },
       select: { payload: true },

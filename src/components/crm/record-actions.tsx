@@ -2,22 +2,23 @@
 
 import { History, Merge, MoreHorizontal, RotateCcw, Trash2, Undo2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
-import { mergeAction, restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
+import { restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogHead } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toaster";
 import { crmBase } from "@/lib/crm/href";
 
-import { CrmPicker } from "./crm-picker";
+import { useCrmOpen } from "./card/use-crm-open";
 
 /**
- * A record's own actions, as buttons: merge a duplicate into it, its field
- * history (and putting it back to any point in it), and the trash (with
- * Undo). Restoring a trashed one is one click too.
+ * A record's own actions, as buttons: merge a duplicate into it (the Merge
+ * card, ?open=merge:<id>, which asks for the other one), its field history
+ * (a panel over the card it's in, with putting it back to any point in
+ * it), and the trash (with Undo). Restoring a trashed one is one click too.
  *
  * `menu` draws them as one round "…" instead (a CRM card's header), and
  * `onTrashed` replaces going back to the list once it's in the trash.
@@ -63,9 +64,15 @@ export function RecordActions({
   onTrashed?: () => void;
 }) {
   const router = useRouter();
-  const [merging, setMerging] = useState(false);
-  const [dup, setDup] = useState<{ id: string; label: string } | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const { setOpen } = useCrmOpen();
+  // Where History is open: over the card this sits in, never beside it.
+  const [historyHost, setHistoryHost] = useState<HTMLElement | null>(null);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const showHistory = () =>
+    setHistoryHost(anchor.current?.closest<HTMLElement>("[data-slot=dialog-content]") ?? document.body);
+  const merge = () => {
+    if (kind !== "deal") setOpen({ kind: "merge", ids: [id] });
+  };
   const list = kind === "person" ? "people" : kind === "company" ? "companies" : null;
 
   if (deleted) {
@@ -108,6 +115,7 @@ export function RecordActions({
 
   return (
     <>
+      <span ref={anchor} hidden />
       {menu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -117,12 +125,12 @@ export function RecordActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
             {menuItems}
-            <DropdownMenuItem onSelect={() => setShowHistory(true)}>
+            <DropdownMenuItem onSelect={showHistory}>
               <History className="size-4" aria-hidden="true" />
               History
             </DropdownMenuItem>
             {canMerge && kind !== "deal" && (
-              <DropdownMenuItem onSelect={() => setMerging(true)}>
+              <DropdownMenuItem onSelect={merge}>
                 <Merge className="size-4" aria-hidden="true" />
                 Merge a duplicate
               </DropdownMenuItem>
@@ -137,11 +145,11 @@ export function RecordActions({
         </DropdownMenu>
       ) : (
         <>
-          <Button variant="outline" size="icon" title="History" aria-label="History" onClick={() => setShowHistory(true)}>
+          <Button variant="outline" size="icon" title="History" aria-label="History" onClick={showHistory}>
             <History className="size-4" aria-hidden="true" />
           </Button>
           {canMerge && kind !== "deal" && (
-            <Button variant="outline" size="icon" title="Merge a duplicate into this one" aria-label="Merge a duplicate" onClick={() => setMerging(true)}>
+            <Button variant="outline" size="icon" title="Merge a duplicate into this one" aria-label="Merge a duplicate" onClick={merge}>
               <Merge className="size-4" aria-hidden="true" />
             </Button>
           )}
@@ -159,57 +167,9 @@ export function RecordActions({
         </>
       )}
 
-      {merging && (
-        <Dialog open onOpenChange={(o) => !o && setMerging(false)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Merge a duplicate into {name}</DialogTitle>
-              <DialogDescription>
-                Its addresses, items, timeline, history and links move here, empty fields are filled from it, and it goes to the trash.
-              </DialogDescription>
-            </DialogHeader>
-            <CrmPicker
-              orgId={orgId}
-              kind={kind === "person" ? "person" : "company"}
-              value={dup?.id ?? null}
-              display={dup?.label}
-              placeholder={kind === "person" ? "Pick the duplicate" : "Pick the duplicate company"}
-              onPick={(h) => setDup(h && h.id !== id ? { id: h.id, label: h.label } : null)}
-              autoOpen
-            />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setMerging(false)}>
-                Cancel
-              </Button>
-              <Button
-                disabled={!dup}
-                onClick={async () => {
-                  if (!dup) return;
-                  const r = await mergeAction(orgId, kind === "person" ? "person" : "company", id, dup.id).catch(() => null);
-                  if (!r || !r.ok) {
-                    toast({ title: r && !r.ok ? r.error : "That didn't merge.", tone: "error" });
-                    return;
-                  }
-                  toast({
-                    title: r.conflicts
-                      ? `Merged. ${r.conflicts} values differed; this one's were kept and the others are in its history.`
-                      : `Merged ${dup.label} into ${name}.`,
-                  });
-                  setMerging(false);
-                  router.refresh();
-                }}
-              >
-                Merge
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      <Sheet open={showHistory} onOpenChange={setShowHistory}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-          <SheetTitle className="px-5 pt-5">History</SheetTitle>
-          <ol className="space-y-1 p-5">
+      {historyHost && (
+        <HistoryPanel host={historyHost} name={name} onClose={() => setHistoryHost(null)}>
+          <ol className="space-y-1 px-6 py-4 max-sm:px-4">
             {history.length === 0 && <li className="text-muted-foreground text-sm">No changes yet.</li>}
             {history.map((h) => (
               <li key={h.id} className="border-border flex gap-3 border-b py-2.5 text-sm last:border-0">
@@ -256,8 +216,49 @@ export function RecordActions({
               </li>
             ))}
           </ol>
-        </SheetContent>
-      </Sheet>
+        </HistoryPanel>
+      )}
     </>
   );
+}
+
+/**
+ * History over the card it was opened from: the card's own frame (the
+ * DialogContent), covered by a panel with the shared header, whose Close
+ * goes back to the card. Outside a card it covers the screen.
+ */
+function HistoryPanel({
+  host,
+  name,
+  onClose,
+  children,
+}: {
+  /** The card's DialogContent, or the page's body outside a card. */
+  host: HTMLElement;
+  name: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const card = host !== document.body;
+  const panel = (
+    <section
+      aria-label={`History of ${name}`}
+      className={
+        card
+          ? "bg-background absolute inset-0 z-10 flex flex-col"
+          : "bg-background fixed inset-0 z-50 flex flex-col"
+      }
+    >
+      <header className="border-border/60 shrink-0 border-b ps-6 pe-4 pt-4 pb-3.5 max-sm:ps-4">
+        <DialogHead
+          plainTitle
+          title={<h2 className="display-title truncate text-[26px] leading-tight max-sm:text-[22px]">History</h2>}
+          subtitle={`Every change to ${name}. Put it back to before any of them.`}
+          onClose={onClose}
+        />
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+    </section>
+  );
+  return createPortal(panel, host);
 }
