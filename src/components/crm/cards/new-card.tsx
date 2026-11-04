@@ -754,7 +754,7 @@ function FillZone({
         <textarea
           rows={1}
           aria-label="Paste an email signature or a business card photo"
-          placeholder="Paste an email signature or a card photo and it fills these in"
+          placeholder="Paste a signature or card photo to fill these in"
           className="placeholder:text-muted-foreground min-h-8 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
           onPaste={(e) => {
             const img = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
