@@ -28,7 +28,8 @@ the person card's `/` menu inserts your link or any organization link.
 
 - **When you're free**: each weekday's time ranges ("Monday 9 AM to 12 PM and
   1 PM to 5 PM"), plus one-off dates (not free that day, or other hours that
-  day), in the link's own time zone. A new personal link starts at weekdays 9
+  day), in the link's own time zone. A new personal link starts switched off (a live link shows when you're
+  free, so you turn it on), at weekdays 9
   to 5 in your time zone. An organization link can instead use each host's
   availability grid from Find a time (the older behavior, kept for existing
   links).
@@ -52,7 +53,7 @@ the person card's `/` menu inserts your link or any organization link.
    (round-robin), and then:
    - a calendar event (Meetings, the host's calendar, and Google Calendar when
      the organization mirrors there) with the host attending, the video link
-     being made, the guest's answers in the description, and the link's
+     being made, and the link's
      reminders;
    - a `Booking` row (the guest, their answers, the event, the hash of their
      manage link);
@@ -102,11 +103,12 @@ it even when no email reaches them.
 | A host with no free time | Left out of the slots; others take the bookings; a link nobody can book in the next two weeks says "No open times" in Booking links | `slots.test.ts` "leaves out a host with no free time..." |
 | Reminders before the meeting | The meeting's reminder fan-out (`rsvp-fanout`) reminds the host in-app as for any meeting, and now queues the guest's email; each is sent once per start (claimed in `Booking.remindedOffsets`), released if sending fails, re-armed when it moves | `booking.db.test.ts` "sends each reminder once, releases it when sending fails..." |
 | Email sending fails, or the space has no sender of its own | The guest email is a job on the app's own transactional sender (not the CRM mailbox) that retries (8 tries); the guest also sees the booking and gets a calendar file on the page; the host's Inbox line and the calendar event are written in the booking transaction, so they're there regardless | `booking.db.test.ts` (same test) |
-| Spam and abuse on the public page | Honeypot field; 10 bookings per visitor per hour, 3 per guest address per day; per link: 40 in 24 hours, 10 unconfirmed upcoming, 2 upcoming per address; page views and manage links rate-limited; input caps (name 80, answers 1000, ten questions) | `booking.db.test.ts` "refuses links in the name, and caps one address and one link" |
+| Spam and abuse on the public page | Honeypot field; 10 bookings per visitor per hour, 3 per guest address per day; per link: 40 in 24 hours, 10 unconfirmed made in 24 hours (a burst cap, so old unconfirmed ones never keep a link shut), 2 upcoming per address; page views and manage links rate-limited; input caps (name 80, answers 1000, ten questions) | `booking.db.test.ts` "refuses links in the name, and caps one address and one link" |
 | The page used to email someone else's words | The name can't hold links, addresses or markup; emails repeat only a first name that looks like one and never the answers; fixed copy | `guest.test.ts`, `emails.test.ts` "never repeats a name that isn't one" |
 | A stranger books with a real contact's address | Nothing in the CRM changes until the guest confirms from the email | `booking.db.test.ts` "waits for the guest to confirm before the CRM matches them..."; `outreach.db.test.ts` |
 | A booking the host can't see | It's a real event in the space's calendar with the host attending, so it shows on Calendar, Meetings, the meeting's page, Personal's "when you meet next" and Google Calendar when mirrored; plus the Inbox line | `booking.db.test.ts` "gives every member a personal link..." |
-| Who reads guests' details | `Booking` RLS: the host, and owners and admins; members write nothing (service path only) | RLS `P-BOOK-01` |
+| Who reads guests' details | `Booking` RLS: the host, and owners and admins; members write nothing (service path only). The calendar event carries none of it (every member reads events): the meeting page shows the guest from the `Booking` | RLS `P-BOOK-01` |
+| Someone made host without asking | Only owners, admins and CRM managers add other people as hosts of an organization link; anyone may add or remove themselves | `booking.db.test.ts` "lets only admins and CRM managers put someone else on an organization link" |
 | CRM turned off | Organization links stop taking bookings; personal links keep working | `booking.db.test.ts` "closes organization links when the CRM comes off" |
 
 ## Where things live

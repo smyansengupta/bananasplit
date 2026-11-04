@@ -42,7 +42,8 @@ import { deliverDraft } from "./drafts";
 import type { CrmEventPayload } from "./events";
 import { forecastItems } from "./forecast";
 import { ingestEmail } from "./outreach/inbound";
-import { book, createBookingPage, loadBooking, updateBookingPage } from "./outreach/booking";
+import { book, loadBooking } from "@/server/booking/book";
+import { createOrgLink as createBookingPage, updateLink as updateBookingPage } from "@/server/booking/links";
 import { composeEmail, crmSendJob, deliver, discardDraft, draftsFor } from "./outreach/send";
 import { createSequence, crmSequenceJob, enroll, saveSequence, setSequenceStatus } from "./outreach/sequences";
 import { createTemplate } from "./outreach/templates";
@@ -398,7 +399,8 @@ describe("the CRM's phases together", () => {
       },
     });
     const page = await as(member, (ctx) => createBookingPage(ctx, "Intro call"));
-    await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30 }));
+    // On the host's own availability grid (hours: null), where their one-off dates live.
+    await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30, hours: null }));
     const loaded = await loadBooking(page.slug, now);
     const slots = loaded!.slots[30]!.map((s) => ({ start: new Date(s) }));
     const day = (d: Date) => localDateKey(d, tz);

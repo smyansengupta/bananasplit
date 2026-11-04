@@ -90,9 +90,32 @@ export default async function MeetingPage({
           event.attendees.map((a) => a.userId),
         )
       : null;
-    return { event, signups, tasks, crm };
+    // Who booked it, for its host and admins only (the Booking's RLS hides it
+    // from everyone else, and the event itself carries none of it).
+    const booking = event
+      ? await db.booking.findFirst({
+          where: { organizationId: org.id, eventId: event.id },
+          select: { guestName: true, guestEmail: true, answers: true, verifiedAt: true },
+        })
+      : null;
+    return { event, signups, tasks, crm, booking };
   });
   const { event, signups, tasks, crm } = loaded;
+  const booking = loaded.booking
+    ? {
+        name: loaded.booking.guestName,
+        email: loaded.booking.guestEmail,
+        confirmed: Boolean(loaded.booking.verifiedAt),
+        answers: (Array.isArray(loaded.booking.answers) ? loaded.booking.answers : []).flatMap(
+          (x) => {
+            const r = x as { q?: unknown; a?: unknown } | null;
+            return r && typeof r.q === "string" && typeof r.a === "string"
+              ? [{ q: r.q, a: r.a }]
+              : [];
+          },
+        ),
+      }
+    : null;
   const dueFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -182,6 +205,7 @@ export default async function MeetingPage({
       }
       askedRsvp={askedRsvp}
       crm={crm}
+      booking={booking}
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}

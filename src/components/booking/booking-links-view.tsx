@@ -11,13 +11,15 @@ import {
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   cancelBookingByHostAction,
   createOrgLinkAction,
+  saveBookingLinkAction,
   takeBookingAction,
 } from "@/app/app/[orgSlug]/meetings/booking/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -151,6 +153,23 @@ export function BookingLinksView({
             mine.hours ? hoursSummary(mine.hours) : "Your availability",
           ]}
           onEdit={() => setEditing(mine.id)}
+          ambient={
+            // Your link starts off: a live link shows when you're free.
+            !mine.active ? (
+              <AmbientActions
+                why
+                actions={[
+                  {
+                    key: "on",
+                    label: "Turn it on",
+                    tone: "solid",
+                    reason: "Off until you turn it on, so nobody sees your free times yet",
+                    run: () => saveBookingLinkAction(orgId, mine.id, { active: true }),
+                  },
+                ]}
+              />
+            ) : null
+          }
         />
       </section>
 
@@ -300,7 +319,17 @@ export function BookingLinksView({
   );
 }
 
-function LinkCard({ link, lines, onEdit }: { link: BookingLinkState; lines: string[]; onEdit?: () => void }) {
+function LinkCard({
+  link,
+  lines,
+  onEdit,
+  ambient = null,
+}: {
+  link: BookingLinkState;
+  lines: string[];
+  onEdit?: () => void;
+  ambient?: ReactNode;
+}) {
   return (
     <div className="bg-card text-card-foreground edge rounded-card flex flex-col gap-3 p-4">
       <div className="flex items-center gap-2">
@@ -327,6 +356,7 @@ function LinkCard({ link, lines, onEdit }: { link: BookingLinkState; lines: stri
         )}
         <p>{link.booked === 1 ? "1 booked" : `${link.booked} booked`}</p>
       </div>
+      {ambient}
       <CopyLink url={link.url} />
     </div>
   );

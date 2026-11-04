@@ -4,7 +4,7 @@ import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx } from "@/server/db/context";
 
 import { CrmError } from "./access";
-import { claudeWebResearch, crmCredentials, dataRule, fenced, runCrmAi, assertUnderCap, recordAiUsage, reserveUnderCap, withTier } from "./ai";
+import { claudeWebResearch, crmCredentials, dataRule, estimateCallMicros, fenced, holdForCall, runCrmAi, recordAiUsage, reserveUnderCap, withTier, WEB_RESEARCH_SEARCH_MICROS } from "./ai";
 import type { AiWho } from "./ai-tx";
 import { updateCompany } from "./companies";
 import { costOf, meterUse } from "./spend";
@@ -197,19 +197,26 @@ async function tryStep(
   if (step === "claude") {
     const creds = await crmCredentials(who.organizationId);
     if (!creds || creds.protocol !== "anthropic") return "skip";
-    await assertUnderCap(who.organizationId);
     const tiered = withTier(creds, "fast") as typeof creds;
-    const r = await claudeWebResearch(tiered, {
-      system: enrichSystemPrompt(kind),
-      text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\nSearch the web for this ${kind} and answer with the facts you find. Number the pages you used in the order you cite them; "source" is that number.`,
-      schema: EnrichOutput,
-      name: "crm_enrich",
-      maxOutputTokens: 1_000,
-      standin: () => ({ facts: [], notes: [] }),
-    });
-    await withSystemOrgTx(who.organizationId, ({ db }) =>
-      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: r, extraMicros: r.webSearchMicros }),
-    );
+    // Held against the cap until it's metered: the model plus a few searches.
+    const hold = await holdForCall(who.organizationId, tiered, estimateCallMicros(tiered.model, 4_000, 1_000) + 3 * WEB_RESEARCH_SEARCH_MICROS);
+    let r;
+    try {
+      r = await claudeWebResearch(tiered, {
+        system: enrichSystemPrompt(kind),
+        text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\nSearch the web for this ${kind} and answer with the facts you find. Number the pages you used in the order you cite them; "source" is that number.`,
+        schema: EnrichOutput,
+        name: "crm_enrich",
+        maxOutputTokens: 1_000,
+        standin: () => ({ facts: [], notes: [] }),
+      });
+      const done = r;
+      await withSystemOrgTx(who.organizationId, ({ db }) =>
+        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: done, extraMicros: done.webSearchMicros }),
+      );
+    } finally {
+      await hold?.release();
+    }
     const results = r.sources.map((x) => ({ title: x.label, url: x.url, content: "" }));
     return factsFrom(r.data, results);
   }

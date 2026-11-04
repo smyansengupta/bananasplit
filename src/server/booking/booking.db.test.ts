@@ -91,7 +91,7 @@ function run<P>(org: string, payload: P) {
 async function openLink(user: U, org: string) {
   const link = await as(user, org, (ctx) => ensurePersonalLink(ctx));
   await as(user, org, (ctx) =>
-    updateLink(ctx, link.id, { hours: ALL_DAY as never, minNoticeHours: 0, maxDaysAhead: 7, durationMin: 30, bufferMin: 0, timezone: "UTC" }),
+    updateLink(ctx, link.id, { hours: ALL_DAY as never, minNoticeHours: 0, maxDaysAhead: 7, durationMin: 30, bufferMin: 0, timezone: "UTC", active: true }),
   );
   return link;
 }
@@ -161,6 +161,10 @@ afterAll(async () => {
 describe("booking links against the local database", () => {
   it("gives every member a personal link without the CRM, and a booking lands on the calendar and in the Inbox", async () => {
     if (!reachable) return;
+    // A new personal link is off until its owner turns it on.
+    const fresh = await as(host, plain, (ctx) => ensurePersonalLink(ctx));
+    expect((await ownerDb.crmBookingPage.findUniqueOrThrow({ where: { id: fresh.id } })).active).toBe(false);
+    expect(await loadBooking(fresh.slug)).toBeNull();
     const link = await openLink(host, plain);
     // Only its owner changes it.
     await expect(as(other, plain, (ctx) => updateLink(ctx, link.id, { title: "Mine now" }))).rejects.toThrow();
@@ -174,7 +178,10 @@ describe("booking links against the local database", () => {
     expect(b.guestTimeZone).toBe("Asia/Tokyo");
     const event = await ownerDb.event.findUniqueOrThrow({ where: { id: b.eventId } });
     expect([event.hostUserId, event.startsAt.toISOString(), event.deletedAt]).toEqual([host.id, start, null]);
-    expect(event.description).toContain("The budget");
+    // Every member reads events: the guest's email and answers stay on the Booking.
+    expect(event.description).not.toContain("The budget");
+    expect(event.description).not.toContain("@example.org");
+    expect(b.answers).toEqual([{ q: "What would you like to talk about?", a: "The budget" }]);
     expect(event.reminderMinutes).toEqual([1440, 60]);
     const attendee = await ownerDb.eventAttendee.findFirstOrThrow({ where: { eventId: b.eventId, userId: host.id } });
     expect(attendee.rsvp).toBe("YES");
@@ -351,6 +358,20 @@ describe("booking links against the local database", () => {
     sendMock.mockClear();
     await bookingEmailJob(run(plain, { bookingId: b.id, template: "booked", startsAt: start }));
     expect(sendMock.mock.calls[0]![0]).toMatchObject({ to: `g-remind-${tag}@example.org`, subject: expect.stringMatching(/^Confirm your time/) });
+  });
+
+  it("lets only admins and CRM managers put someone else on an organization link", async () => {
+    if (!reachable) return;
+    const link = await as(other, crmOrg, (ctx) => createOrgLink(ctx, "Pick my brain"));
+    // A member can't publish another member's open times or book their calendar.
+    await expect(as(other, crmOrg, (ctx) => updateLink(ctx, link.id, { hostIds: [owner.id] }))).rejects.toThrow(/admins and CRM managers/);
+    await expect(as(other, crmOrg, (ctx) => updateLink(ctx, link.id, { hostIds: [other.id, host.id] }))).rejects.toThrow(/admins and CRM managers/);
+    // Themselves, yes; and an admin may add anyone.
+    await as(other, crmOrg, (ctx) => updateLink(ctx, link.id, { hostIds: [other.id], title: "Still mine" }));
+    await as(owner, crmOrg, (ctx) => updateLink(ctx, link.id, { hostIds: [other.id, host.id] }));
+    expect((await ownerDb.crmBookingPage.findUniqueOrThrow({ where: { id: link.id } })).hostIds).toEqual([other.id, host.id]);
+    // Once on it, a host may keep the others on it (nobody new added).
+    await as(other, crmOrg, (ctx) => updateLink(ctx, link.id, { hostIds: [host.id, other.id] }));
   });
 
   it("waits for the guest to confirm before the CRM matches them, then puts the meeting on their timeline", async () => {

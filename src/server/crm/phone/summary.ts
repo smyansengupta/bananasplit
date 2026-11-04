@@ -4,7 +4,7 @@ import { NO_AI_KEY_MESSAGE } from "@/lib/crm/org-keys";
 import { AiImportError } from "@/server/ai/generate";
 import { withSystemOrgTx } from "@/server/db/context";
 
-import { checkAiCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "../ai";
+import { crmCredentials, crmGenerate, estimateCallMicros, holdForCall, paidByOf, providerOf, recordAiUsage } from "../ai";
 
 /**
  * A call's or voice note's transcript summed up into notes and next steps,
@@ -49,15 +49,17 @@ export async function summarizeTranscript(
 ): Promise<SummaryOutcome> {
   const transcript = input.transcript.trim().slice(0, 60_000);
   if (!transcript) return { ok: false, reason: "failed", message: "Nothing was said." };
+  // The organization's own key only, never Bananasplit's.
+  const creds = await crmCredentials(organizationId);
+  if (!creds) return { ok: false, reason: "no-ai", message: NO_AI_KEY_MESSAGE };
+  // Held against the cap while it runs, like every other paid call.
+  let hold;
   try {
-    await withSystemOrgTx(organizationId, ({ db }) => checkAiCap(db, organizationId));
+    hold = await holdForCall(organizationId, creds, estimateCallMicros(creds.model, transcript.length + 1_000, 900));
   } catch (error) {
     if (error instanceof AiImportError) return { ok: false, reason: "cap", message: error.message };
     throw error;
   }
-  // The organization's own key only, never Bananasplit's.
-  const creds = await crmCredentials(organizationId);
-  if (!creds) return { ok: false, reason: "no-ai", message: NO_AI_KEY_MESSAGE };
   try {
     const result = await crmGenerate(creds, {
       system: SYSTEM,
@@ -90,6 +92,8 @@ export async function summarizeTranscript(
       reason: "failed",
       message: error instanceof AiImportError ? error.message : "The summary didn't work this time.",
     };
+  } finally {
+    await hold?.release();
   }
 }
 

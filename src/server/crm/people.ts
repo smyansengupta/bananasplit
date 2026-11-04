@@ -1,4 +1,4 @@
-import type { CrmRecordStatus, Prisma } from "@/generated/prisma/client";
+import { Prisma, type CrmRecordStatus } from "@/generated/prisma/client";
 import { normalizeEmail, workDomain } from "@/lib/crm/dedupe";
 import { personName, splitName } from "@/lib/crm/fields";
 import type { TxClient } from "@/server/db/context";
@@ -169,7 +169,20 @@ export async function setPersonEmails(
     if (owner) {
       await db.crmPersonEmail.update({ where: { id: owner.id }, data: { isPrimary } });
     } else {
-      await db.crmPersonEmail.create({ data: { organizationId, personId, email: address, isPrimary } });
+      // Not found can still be taken: by a person this member can't see
+      // (members who see only their own records). A savepoint keeps the
+      // transaction usable so the answer is a plain sentence.
+      await db.$executeRaw`SAVEPOINT crm_email`;
+      try {
+        await db.crmPersonEmail.create({ data: { organizationId, personId, email: address, isPrimary } });
+        await db.$executeRaw`RELEASE SAVEPOINT crm_email`;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          await db.$executeRaw`ROLLBACK TO SAVEPOINT crm_email`;
+          throw new CrmError(`${address} is already someone else's address in the CRM.`, ["primaryEmail"]);
+        }
+        throw error;
+      }
     }
   }
   const drop = current.filter((e) => !wanted.has(e.email)).map((e) => e.id);

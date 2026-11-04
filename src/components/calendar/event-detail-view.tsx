@@ -107,7 +107,18 @@ export function EventDetailView({
   recording = null,
   askedRsvp = null,
   crm = null,
+  booking = null,
 }: {
+  /**
+   * Who booked it through a booking link, for its host and admins only
+   * (read from the Booking, whose RLS hides it from everyone else).
+   */
+  booking?: {
+    name: string;
+    email: string;
+    confirmed: boolean;
+    answers: { q: string; a: string }[];
+  } | null;
   /**
    * Its people in the CRM (src/server/crm/outside-links.ts): attendees who
    * are CRM people link to their card; guests are CRM people it was with
@@ -627,7 +638,32 @@ export function EventDetailView({
                   </ul>
                 </>
               ) : (
-                !crm?.guests.length && <EmptyState size="compact" title="Nobody is invited yet" />
+                !crm?.guests.length &&
+                !booking && <EmptyState size="compact" title="Nobody is invited yet" />
+              )}
+              {booking && (
+                <div className="border-border/60 mt-3 space-y-2 border-t pt-3 text-sm">
+                  <p className="flex min-w-0 flex-col">
+                    <span className="font-medium break-words">{booking.name}</span>
+                    <a
+                      href={`mailto:${booking.email}`}
+                      className="text-muted-foreground truncate text-[13px] underline-offset-4 hover:underline"
+                    >
+                      {booking.email}
+                    </a>
+                    {!booking.confirmed && (
+                      <span className="text-muted-foreground text-[13px]">
+                        Booked, hasn&apos;t confirmed their email yet
+                      </span>
+                    )}
+                  </p>
+                  {booking.answers.map((x, i) => (
+                    <div key={i} className="text-[13px]">
+                      <p className="text-muted-foreground">{x.q}</p>
+                      <p className="break-words whitespace-pre-line">{x.a}</p>
+                    </div>
+                  ))}
+                </div>
               )}
               {crm && crm.guests.length > 0 && (
                 <ul className="border-border/60 mt-3 space-y-2 border-t pt-3">

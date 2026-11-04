@@ -6,7 +6,6 @@ import type { CrmShareMode, CrmTargetStatus } from "@/generated/prisma/client";
 import { SNOOZES, type SnoozeKey } from "@/lib/crm/outreach/schedule";
 import type { CrmDestination } from "@/lib/crm/outreach/form-map";
 import type { Routing } from "@/lib/crm/outreach/assign";
-import type { BookingQuestion } from "@/lib/crm/outreach/booking";
 import type { Audience, PlanFrom } from "@/lib/crm/outreach/plans";
 import { CrmError, requireManager } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
@@ -14,7 +13,6 @@ import { newBatchId } from "@/server/crm/history";
 import { updatePerson } from "@/server/crm/people";
 import { acceptSuggestion, rejectSuggestion } from "@/server/crm/review";
 import { rolePositions } from "@/server/crm/owners";
-import { createBookingPage, updateBookingPage, type BookingPageInput } from "@/server/crm/outreach/booking";
 import { planBulk, sendBulk } from "@/server/crm/outreach/bulk-email";
 import {
   createCampaign,
@@ -307,15 +305,6 @@ export const closeStepAction = outreachAction(async (ctx, _a, activityId: string
 
 export const setFollowUpAction = outreachAction(async (ctx, _a, personId: string, days: number | null) => {
   await updatePerson(ctx, personId, { nextFollowUpAt: days ? new Date(Date.now() + days * 86_400_000) : null });
-  return {};
-});
-
-// ---- Booking pages ------------------------------------------------------------------------
-
-export const createBookingPageAction = outreachAction(async (ctx, _a, title: string) => createBookingPage(ctx, title));
-
-export const saveBookingPageAction = outreachAction(async (ctx, _a, id: string, input: BookingPageInput & { questions?: BookingQuestion[] }) => {
-  await updateBookingPage(ctx, id, input);
   return {};
 });
 

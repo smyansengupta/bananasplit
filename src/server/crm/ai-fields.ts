@@ -349,7 +349,17 @@ export async function startColumnFill(who: AiWho, fieldId: string, options: { on
 async function startBatch(who: AiWho, ref: AiFieldRef, ids: readonly string[], base: Extract<AiCredentials, { protocol: "anthropic" }>): Promise<void> {
   const creds = withTier(base, "fast") as typeof base;
   const estimate = estimateCostMicros(creds.model, ROW_TOKENS.input * ids.length, ROW_TOKENS.output * ids.length, { batch: true });
-  await assertUnderCap(who.organizationId, estimate);
+  // Batches start one at a time per organization, each checked with the
+  // others' holds counted, so two at once can't both pass a nearly full cap.
+  const hold = await reserveUnderCap(who.organizationId, estimate);
+  try {
+    await startBatchHeld(who, ref, ids, creds);
+  } finally {
+    await hold.release();
+  }
+}
+
+async function startBatchHeld(who: AiWho, ref: AiFieldRef, ids: readonly string[], creds: Extract<AiCredentials, { protocol: "anthropic" }>): Promise<void> {
   const prepared: Prepared[] = [];
   for (const id of ids.slice(0, MAX_ROWS_PER_RUN)) {
     const p = await prepare(who.tx, who.organizationId, ref, id);

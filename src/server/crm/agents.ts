@@ -6,7 +6,7 @@ import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 
 import { CrmError, type CrmActor } from "./access";
-import { claudeWebResearch, crmCredentials, dataRule, fenced, assertUnderCap, recordAiUsage, reserveUnderCap, runCrmAi, withTier } from "./ai";
+import { claudeWebResearch, crmCredentials, dataRule, estimateCallMicros, fenced, holdForCall, recordAiUsage, reserveUnderCap, runCrmAi, withTier, WEB_RESEARCH_SEARCH_MICROS } from "./ai";
 import { recordContext } from "./ai-context";
 import type { AiWho } from "./ai-tx";
 import { draftFollowUp } from "./assist";
@@ -267,19 +267,30 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
       model = r.model;
     } else if (creds.protocol === "anthropic") {
       log.note("No Tavily key, so Claude searched the web itself.");
-      await assertUnderCap(who.organizationId);
       const tiered = withTier(creds, "strong") as typeof creds;
-      const r = await claudeWebResearch(tiered, {
-        system: researchSystemPrompt(kind, ctx.today),
-        text: `${ctx.text}\n\nSearch the web for ${ctx.name} and research them. Number the pages you use in the order you cite them; each "source" is that number.`,
-        schema: ResearchOutput,
-        name: "crm_research",
-        maxOutputTokens: 3_000,
-        standin: () => ({ summary: "", facts: [], news: [], talkingPoints: [], notes: [] }),
-      });
-      await withSystemOrgTx(who.organizationId, ({ db }) =>
-        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "claude", result: r, extraMicros: r.webSearchMicros }),
+      // Held against the cap until it's metered: the model plus a few searches.
+      const hold = await holdForCall(
+        who.organizationId,
+        tiered,
+        estimateCallMicros(tiered.model, ctx.text.length + 4_000, 3_000) + 5 * WEB_RESEARCH_SEARCH_MICROS,
       );
+      let r;
+      try {
+        r = await claudeWebResearch(tiered, {
+          system: researchSystemPrompt(kind, ctx.today),
+          text: `${ctx.text}\n\nSearch the web for ${ctx.name} and research them. Number the pages you use in the order you cite them; each "source" is that number.`,
+          schema: ResearchOutput,
+          name: "crm_research",
+          maxOutputTokens: 3_000,
+          standin: () => ({ summary: "", facts: [], news: [], talkingPoints: [], notes: [] }),
+        });
+        const done = r;
+        await withSystemOrgTx(who.organizationId, ({ db }) =>
+          recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "claude", result: done, extraMicros: done.webSearchMicros }),
+        );
+      } finally {
+        await hold?.release();
+      }
       results = r.sources.map((s) => ({ title: s.label, url: s.url, content: "" }));
       data = r.data;
       model = r.model;

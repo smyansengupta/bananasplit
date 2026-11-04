@@ -336,6 +336,9 @@ export async function onItsOwn(
   }
 
   for (const d of drafts) {
+    // A draft carries the message itself: only for someone who can see who
+    // it's to (the people map is read as the viewer, under RLS).
+    if (!d.targetId || !people.has(d.targetId)) continue;
     const p = (d.payload ?? {}) as { subject?: string; body?: string; draftId?: string };
     const c = (d.citation ?? {}) as { label?: string };
     const who = (d.targetId && people.get(d.targetId)) || "someone";

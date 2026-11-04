@@ -11,7 +11,7 @@ import { CrmValidationError } from "@/lib/crm/validate";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError, requireCrm, requireManager } from "@/server/crm/access";
-import { assertUnderCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
+import { crmCredentials, crmGenerate, estimateCallMicros, holdForCall, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
 import { describeContext, describeRequest } from "@/server/crm/describe";
 import { deleteGoal, saveGoal } from "@/server/crm/goals";
 import { deleteScoreRule, saveScoreRule } from "@/server/crm/scoring";
@@ -133,10 +133,18 @@ export async function describeWorkflowAction(
     };
   }
   let result;
+  const request = describeRequest(sentence, context);
+  let hold = null;
   try {
-    await assertUnderCap(organizationId);
-    result = await crmGenerate(creds, describeRequest(sentence, context));
+    // Held against the cap while it runs, like every other paid call.
+    hold = await holdForCall(
+      organizationId,
+      creds,
+      estimateCallMicros(creds.model, (request.system?.length ?? 0) + (request.text?.length ?? 0), request.maxOutputTokens ?? 2_000),
+    );
+    result = await crmGenerate(creds, request);
   } catch (error) {
+    await hold?.release();
     return { ok: false, error: words(error) };
   }
   try {
@@ -152,6 +160,8 @@ export async function describeWorkflowAction(
     );
   } catch {
     // The meter is best effort here; the draft is still shown.
+  } finally {
+    await hold?.release();
   }
   const mapped = mapDescribed(result.data, context);
   return { ok: true, draft: mapped.draft, notes: mapped.notes, model: result.label };

@@ -161,6 +161,24 @@ export async function reserveUnderCap(organizationId: string, estimateMicros: nu
   };
 }
 
+/**
+ * The cap check for one paid call, as runCrmAi does it: on the
+ * organization's own key the estimate is held until `release()` (calls at
+ * once can't all pass a full cap); otherwise just the check. Service path,
+ * no transaction open.
+ */
+export async function holdForCall(
+  organizationId: string,
+  creds: AiCredentials,
+  estimateMicros: number,
+): Promise<SpendHold | null> {
+  if (paidByOf(creds) === "ORG_KEY" && creds.protocol !== "standin") {
+    return reserveUnderCap(organizationId, estimateMicros);
+  }
+  await assertUnderCap(organizationId);
+  return null;
+}
+
 /** A rough cost for a model call before it runs: its text (about four characters a token) and its longest answer. */
 export function estimateCallMicros(model: string | null | undefined, chars: number, maxOutputTokens: number): number {
   return estimateCostMicros(model ?? null, Math.ceil(chars / 4), maxOutputTokens);
@@ -373,6 +391,8 @@ export async function recordAiUsage(
 
 /** Claude's web search: $10 per thousand searches, on top of the tokens. */
 const WEB_SEARCH_MICROS = 10_000;
+/** One Claude web search, for estimating a research call before it runs. */
+export const WEB_RESEARCH_SEARCH_MICROS = WEB_SEARCH_MICROS;
 
 /**
  * Research with Claude's own web search (the research agent's fallback when

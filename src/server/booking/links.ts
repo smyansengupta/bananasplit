@@ -85,6 +85,8 @@ export async function ensurePersonalLink(ctx: MemberContext): Promise<{ id: stri
         minNoticeHours: 12,
         maxDaysAhead: 30,
         questions: [{ id: "q1", label: "What would you like to talk about?", required: false }],
+        // Off until you turn it on: a live link shows when you're free.
+        active: false,
         createdById: userId,
       },
       select: { id: true, slug: true },
@@ -130,6 +132,11 @@ export async function canEditLink(
 ): Promise<boolean> {
   if (page.ownerUserId) return page.ownerUserId === ctx.userId;
   if (page.hostIds.includes(ctx.userId) || page.createdById === ctx.userId) return true;
+  return runsLinks(ctx);
+}
+
+/** Owners, admins and CRM managers: they may put anyone on an organization link. */
+async function runsLinks(ctx: MemberContext): Promise<boolean> {
   if (can(ctx, "settings.general.write")) return true;
   const s = await ctx.db.crmSettings.findUnique({ where: { organizationId: ctx.organizationId }, select: { managerIds: true } });
   return Boolean(s?.managerIds.includes(ctx.userId));
@@ -190,6 +197,13 @@ export async function updateLink(ctx: MemberContext, id: string, input: LinkInpu
       if (hosts.length === 0) throw new BookingLinkError("Someone has to host it.");
       const members = await db.membership.findMany({ where: { organizationId, userId: { in: hosts } }, select: { userId: true } });
       if (members.length !== hosts.length) throw new BookingLinkError("Hosts have to be in the organization.");
+      // A public link shows its hosts' open times and books their calendars,
+      // so only whoever runs the CRM puts someone else on one; anyone may add
+      // or take off themselves.
+      const added = hosts.filter((h) => h !== ctx.userId && !page.hostIds.includes(h));
+      if (added.length && !(await runsLinks(ctx))) {
+        throw new BookingLinkError("Only admins and CRM managers can add other people as hosts.");
+      }
       data.hostIds = hosts;
     }
     if (input.pipelineId !== undefined) {

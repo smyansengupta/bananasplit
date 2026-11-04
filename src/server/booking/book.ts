@@ -43,7 +43,11 @@ import { BOOKING_TOKEN_RE, bookingToken, newBookingId, tokenHash } from "./token
 export const LIMITS = {
   /** Bookings a link takes in any 24 hours. */
   perPagePerDay: 40,
-  /** Upcoming bookings on a link whose guest hasn't confirmed their address yet. */
+  /**
+   * Bookings made on a link in the last 24 hours whose guest hasn't confirmed
+   * their address yet: a burst cap only, so old unconfirmed bookings never
+   * keep a link shut.
+   */
   unverifiedPerPage: 10,
   /** Upcoming bookings one address may hold on one link. */
   perEmailPerPage: 2,
@@ -223,7 +227,7 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
       const dayAgo = new Date(now.getTime() - 86_400_000);
       const [lastDay, unverified, mine] = await Promise.all([
         db.booking.count({ where: { organizationId: orgId, pageId: page.id, createdAt: { gte: dayAgo } } }),
-        db.booking.count({ where: { organizationId: orgId, pageId: page.id, status: "BOOKED", verifiedAt: null, startsAt: { gt: now } } }),
+        db.booking.count({ where: { organizationId: orgId, pageId: page.id, status: "BOOKED", verifiedAt: null, startsAt: { gt: now }, createdAt: { gte: dayAgo } } }),
         db.booking.count({ where: { organizationId: orgId, pageId: page.id, status: "BOOKED", guestEmail: email, startsAt: { gt: now } } }),
       ]);
       if (lastDay >= LIMITS.perPagePerDay || unverified >= LIMITS.unverifiedPerPage) {
@@ -250,10 +254,10 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
       const answers = questions
         .map((q) => ({ q: q.label, a: cleanAnswer(input.answers[q.id]) }))
         .filter((x) => x.a);
-      const description = [
-        `Booked through ${page.title} by ${name} (${email}).`,
-        ...answers.map((x) => `${x.q}\n${x.a}`),
-      ].join("\n\n");
+      // Everyone in the organization can read an event, so the guest's email
+      // and answers stay on the Booking (host and admins only); the meeting
+      // page shows them from there.
+      const description = `Booked through ${page.title}.`;
       const place = await meetingPlace(db, page);
       const { event } = await createEvent(systemCtx(db, orgId, hostId, host.role), {
         title: `${name}: ${page.title}`.slice(0, 200),

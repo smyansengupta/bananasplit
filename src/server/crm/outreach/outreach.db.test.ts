@@ -29,7 +29,8 @@ import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { createPerson } from "../people";
 import { runSetup } from "../setup";
-import { book, createBookingPage, loadBooking, updateBookingPage } from "./booking";
+import { book, loadBooking } from "@/server/booking/book";
+import { createOrgLink as createBookingPage, updateLink as updateBookingPage } from "@/server/booking/links";
 import { lapseCadences } from "./daily";
 import { briefs, handOver } from "./handover";
 import { ingestEmail } from "./inbound";
