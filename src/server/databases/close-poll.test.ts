@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OrgContext } from "@/server/db/context";
 
@@ -37,15 +37,18 @@ function ctxWith(def: { opensAt: Date | null; closesAt: Date | null }) {
 }
 
 describe("closePoll", () => {
+  // Every case runs at NOW: the poll times are fixed, so the real clock
+  // would turn "hasn't opened yet" into "already open" once NOW+48h passes.
+  beforeEach(() => vi.useFakeTimers({ now: NOW }));
+  afterEach(() => vi.useRealTimers());
+
   it("closes an open poll now", async () => {
-    vi.useFakeTimers({ now: NOW });
     const { ctx, db } = ctxWith({ opensAt: hours(-24), closesAt: hours(24) });
     await closePoll(ctx, "bd_1");
     expect(db.ballotDefinition.update).toHaveBeenCalledWith({
       where: { id: "bd_1" },
       data: { closesAt: NOW },
     });
-    vi.useRealTimers();
   });
 
   it("refuses one that's already closed, so its closing time never moves later", async () => {
