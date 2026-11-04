@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { SpaceBanner } from "@/components/billing/space-banner";
 import { TrialEndedDialog } from "@/components/billing/trial-ended-dialog";
+import { BeforeSettings } from "@/components/settings-close";
 import { AppShell } from "@/components/shell/app-shell";
 import { navSections } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
@@ -261,6 +263,9 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
           />
         }
       >
+        <Suspense fallback={null}>
+          <BeforeSettings />
+        </Suspense>
         {children}
       </AppShell>
     </OrgThemeRoot>

@@ -4,16 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
-  ArrowLeftRight,
-  CalendarClock,
   Columns3,
-  FileSpreadsheet,
-  FileText,
-  ListChecks,
-  Phone,
   Plug,
-  Send,
-  Sparkles,
   UserRound,
   Users,
   Zap,
@@ -24,21 +16,7 @@ import { chipClass } from "@/components/ui/segmented";
 import type { CrmSettingsSectionId } from "@/lib/crm/settings-sections";
 import { cn } from "@/lib/utils";
 
-const ICONS: Record<string, IconComponent> = {
-  ArrowLeftRight,
-  CalendarClock,
-  Columns3,
-  FileSpreadsheet,
-  FileText,
-  ListChecks,
-  Phone,
-  Plug,
-  Send,
-  Sparkles,
-  UserRound,
-  Users,
-  Zap,
-};
+const ICONS: Record<string, IconComponent> = { Columns3, Plug, UserRound, Users, Zap };
 
 export interface CrmSettingsNavItem {
   id: CrmSettingsSectionId;
@@ -51,7 +29,6 @@ export interface CrmSettingsNavItem {
  * CRM settings' list, drawn like the Admin panel's (SettingsSubnav): one
  * card of icon and label rows beside the section on wide screens, the open
  * section a filled pill; a scrolling strip of pills on phones and tablets.
- * A section stays lit on the pages under it (an automation, a booking page).
  */
 export function CrmSettingsNav({ items }: { items: CrmSettingsNavItem[] }) {
   const pathname = usePathname() ?? "";

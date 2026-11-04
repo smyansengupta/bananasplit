@@ -11,7 +11,7 @@ import { SpaceRefusedError, withOrgAction } from "@/server/db/context";
 import { resolveActor, type OrgActor } from "@/server/integrations/service";
 
 /**
- * The organization's own keys (CRM settings > AI; src/server/crm/org-keys.ts):
+ * The organization's own keys (CRM settings > Connections; src/server/crm/org-keys.ts):
  * save, test and remove each provider's key, and set the monthly spending
  * cap. Not withOrgAction for the keys: saving and testing a secret run on
  * the service path with no transaction open around the network check; the

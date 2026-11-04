@@ -449,7 +449,7 @@ export async function crmImportDone(
       .filter(Boolean)
       .join(", ") || "Nothing new in it",
     // Skipped rows are fixed on the import page: any member can import, and
-    // Settings > Import and export is for managers.
+    // Settings > Connections is for managers.
     linkUrl: input.skipped
       ? `${base}/import`
       : input.object === "deal"
@@ -584,7 +584,7 @@ export async function crmSendingPaused(db: TxClient, organizationId: string, sen
     type: "CRM_REVIEW",
     title: "Sending is paused",
     body: why.replace(/\.?$/, "."),
-    linkUrl: `${crmBase(slug)}/settings/sending`,
+    linkUrl: `${crmBase(slug)}/settings/automations#sending`,
     dedupeKey: `crm-paused:${day}`,
   });
 }

@@ -153,7 +153,7 @@ describe("the organization's own keys", () => {
       const refused = await assertCanSpend(orgA, costOf("text.segment")).catch((e: unknown) => e);
       expect(refused).toBeInstanceOf(CrmError);
       expect((refused as Error).message).toBe(
-        "Your organization has reached this month's spending cap of $0.05. An owner or admin can raise it in CRM settings > AI.",
+        "Your organization has reached this month's spending cap of $0.05. An owner or admin can raise it in CRM settings > Connections.",
       );
     } finally {
       await ownerDb.crmSettings.update({ where: { organizationId: orgA }, data: { aiMonthlyCapCents: null } });

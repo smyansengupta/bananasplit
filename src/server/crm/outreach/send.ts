@@ -971,7 +971,7 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
     purpose === "one-to-one"
       ? null
       : await db.crmSettings.findUnique({ where: { organizationId }, select: { dailySendCap: true, sending: true } });
-  // CRM settings > Sending: group mail waits for the organization's hours
+  // CRM settings > Automations and sending: group mail waits for the organization's hours
   // (and for Monday, with weekends off). Untouched settings change nothing.
   if (settings && sendingIsSet(settings.sending)) {
     const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });

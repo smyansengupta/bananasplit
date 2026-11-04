@@ -27,7 +27,7 @@ export async function SendingPausedBanner({ orgId, orgSlug }: { orgId: string; o
  * The banner on the CRM's own pages (Today, People): what stopped, as
  * above, but the missing sender only once group email is actually waiting
  * on it. An organization that never sends group email isn't told on every
- * page; CRM settings, Sending, always says it.
+ * page; CRM settings, Automations and sending, always says it.
  */
 export async function CrmSendingBanner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const loaded = await loadSendingHealth(orgId).catch(() => null);
@@ -90,8 +90,8 @@ export function SendingPausedView({
               <Link
                 href={
                   p.fix === "ai"
-                    ? crmSettingsHref(orgSlug, "ai")
-                    : crmSettingsHref(orgSlug, "sending", "#didnt-send")
+                    ? crmSettingsHref(orgSlug, "connections", "#email")
+                    : crmSettingsHref(orgSlug, "automations", "#didnt-send")
                 }
               >
                 {p.action}

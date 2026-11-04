@@ -19,7 +19,8 @@ import { connectedDataProviders } from "@/server/crm/data-connectors";
  * Every CRM page starts here: the plan (Team Advanced), the add-on (added
  * on Integrations and apps) and the one-step setup, then the pipelines for
  * the tabs. `gate` is what to show instead of the page when one of those
- * isn't there yet.
+ * isn't there yet. Today passes `setup`: an owner or admin gets through
+ * before the CRM's settings exist, to answer "Get your CRM started".
  *
  * Deduped per request (React cache()), so a page and the card open over it
  * share one shell. The space and its add-ons come from the org context the
@@ -146,7 +147,7 @@ const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellRe
       shell: null,
     };
   }
-  if (!access.settings && !setup) {
+  if (!access.settings && !(setup && access.admin)) {
     return {
       gate: (
         <Card>
@@ -155,13 +156,13 @@ const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellRe
             title="Set up the CRM"
             description={
               access.admin
-                ? "Say what you mostly reach out to, and it makes the pipelines and lists for you."
+                ? "Pick what you mostly reach out to on Today. It makes your pipelines and lists."
                 : "An owner or admin sets it up first. It takes a minute."
             }
             action={
               access.admin ? (
                 <Button asChild>
-                  <Link href={`${base}/crm/setup`}>Set it up</Link>
+                  <Link href={`${base}/crm`}>Set it up</Link>
                 </Button>
               ) : undefined
             }

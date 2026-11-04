@@ -7,12 +7,10 @@ import { crmRecordHref } from "@/lib/crm/href";
 import { briefs, departedOwners, unowned } from "@/server/crm/outreach/handover";
 import { withOrgTx } from "@/server/db/context";
 
-import type { SectionProps } from "./types";
-
 /**
  * Handover, in CRM settings (it was its own page, /crm/handover, which
- * redirects here). Hand people over (owners, admins and CRM managers) holds
- * members who left, anyone with no owner, and members changing roles. You holds the
+ * redirects here). Team holds members who left, anyone with no owner, and
+ * members changing roles (owners, admins and CRM managers). You holds the
  * brief on each person handed to you lately, or that a position you hold
  * looks after (?role=). Never in a Personal space.
  */
@@ -29,11 +27,6 @@ function ownerChoices(shell: CrmSettingsShell): OwnerChoice[] {
       label: `${r.title} (${r.holderName?.split(" ")[0] ?? "open"})`,
     })),
   ];
-}
-
-/** Hand people over (owners, admins and CRM managers; not in a Personal space). */
-export async function HandoverSection({ shell, orgSlug }: SectionProps) {
-  return <HandoverCards shell={shell} orgSlug={orgSlug} />;
 }
 
 /** Members who left, people with no owner, and handing a member's people over. */
@@ -63,12 +56,9 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
   });
   const choices = ownerChoices(shell);
   return (
-    <>
+    <div id="handover" className="scroll-mt-24 space-y-4.5">
       {data.left.length > 0 && (
-        <SettingsCard
-          title="Members who left"
-          description="Give everyone they looked after to someone else in one step."
-        >
+        <SettingsCard title="Members who left">
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {data.left.map((l) => (
               <HandOverCard key={l.userId} orgId={orgId} from={{ ...l, left: true }} choices={choices} />
@@ -76,17 +66,13 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
           </ul>
         </SettingsCard>
       )}
-      <SettingsCard
-        title="No owner"
-        description="People nobody looks after. Pick some and give them to someone."
-      >
-        <Unowned orgId={orgId} orgSlug={orgSlug} rows={data.unowned} choices={choices} />
-      </SettingsCard>
+      {data.unowned.length > 0 && (
+        <SettingsCard title="No owner">
+          <Unowned orgId={orgId} orgSlug={orgSlug} rows={data.unowned} choices={choices} />
+        </SettingsCard>
+      )}
       {data.members.length > 0 && (
-        <SettingsCard
-          title="Hand people over"
-          description="When someone steps back or changes role, hand their relationships to whoever takes over, or to a position so they follow it."
-        >
+        <SettingsCard title="Hand people over">
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {data.members.map((m) => (
               <HandOverCard key={m.userId} orgId={orgId} from={{ ...m, left: false }} choices={choices} />
@@ -94,7 +80,7 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
           </ul>
         </SettingsCard>
       )}
-    </>
+    </div>
   );
 }
 

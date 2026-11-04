@@ -2,7 +2,7 @@ import type { SendWindow } from "./outreach/schedule";
 
 /**
  * What CRM settings keeps beyond the plain columns (docs/features/crm.md,
- * "Redesign", Settings): the Sending section's window and unsubscribe line
+ * "Redesign", Settings): the Sending card's window and unsubscribe line
  * (CrmSettings.sending), how much the CRM may do alone (CrmSettings.autonomy),
  * and when sending is paused. Pure and client-safe: the settings cards
  * render from here and the send path reads the same values.

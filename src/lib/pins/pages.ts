@@ -85,7 +85,6 @@ const SUBPAGES: Record<string, string> = {
   "finance/sponsorships": "Deals",
   "finance/transactions": "Transactions",
   "crm/import": "CRM import",
-  "crm/setup": "CRM setup",
   "org-chart/import": "Import org chart",
   "org-chart/versions": "Org chart history",
   "setup/status": "Connection status",

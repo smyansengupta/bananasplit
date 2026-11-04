@@ -611,7 +611,7 @@ export async function runImportTurn(actor: CrmActor, importId: string, max = TUR
     data: {
       filters: state as unknown as Prisma.InputJsonObject,
       // A finished import keeps its log, not its rows: only the skipped
-      // ones, so they can be fixed in CRM settings > Import and export.
+      // ones, so they can be fixed in CRM settings > Connections.
       ...(finished
         ? {
             columns: {

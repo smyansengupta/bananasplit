@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type DragEvent } from "react";
 
 import { ArrowRight, FileSpreadsheet, Upload } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,11 @@ import { ACTIVITY_TARGET_LABELS, type Mapping } from "@/lib/crm/mapping";
 import { cn } from "@/lib/utils";
 
 /**
- * A spreadsheet dropped for people (CRM settings > Import and export, and
- * first-time setup): the file goes to /crm/import/upload, which keeps its
+ * A spreadsheet dropped for people (CRM settings > Connections, and "Get
+ * your CRM started"): the file goes to /crm/import/upload, which keeps its
  * rows and suggests where each column goes; this shows those matches. The
- * caller starts the import (startImportAction) with `mapping`, at once or
- * after setup. Changing a match is the full importer's job (/crm/import).
+ * caller starts the import (startImportAction) with `mapping`. Changing a
+ * match is the full importer's job (/crm/import).
  */
 
 export interface DroppedSheet {
@@ -35,21 +35,17 @@ export function targetLabel(target: string): string {
   return builtinFields("person").find((f) => f.key === target)?.label ?? target;
 }
 
-export function SheetDrop({
-  orgSlug,
-  onDropped,
-  big = false,
-  hint = "CSV or Excel, or an export from another CRM. Up to 4 MB.",
-}: {
-  orgSlug: string;
-  onDropped: (sheet: DroppedSheet) => void;
-  /** Setup's tall zone with a round icon; settings' is one line. */
-  big?: boolean;
-  hint?: string;
-}) {
+const ACCEPT = ".csv,.tsv,.txt,.xlsx,.xlsm,.vcf,.vcard";
+
+/**
+ * Taking a file in: `zone` makes anything a drop target, `pick` opens the
+ * file picker, `input` is the hidden field to render with them. The rows go
+ * to /crm/import/upload and come back as a DroppedSheet.
+ */
+export function useSheetUpload(orgSlug: string, onDropped: (sheet: DroppedSheet) => void) {
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement>(null);
   const send = async (file: File) => {
     setBusy(true);
     const body = new FormData();
@@ -79,58 +75,67 @@ export function SheetDrop({
       mapping: log.mapping,
     });
   };
-  return (
-    <div
-      onDragOver={(e) => {
+  return {
+    busy,
+    over,
+    pick: () => ref.current?.click(),
+    zone: {
+      onDragOver: (e: DragEvent) => {
         e.preventDefault();
         setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
+      },
+      onDragLeave: () => setOver(false),
+      onDrop: (e: DragEvent) => {
         e.preventDefault();
         setOver(false);
         const f = e.dataTransfer.files[0];
         if (f) void send(f);
-      }}
-      className={cn(
-        "border-input bg-muted/40 flex border-[1.5px] border-dashed transition-colors",
-        big
-          ? "h-full flex-col items-center justify-center gap-3 rounded-[1.5rem] px-6 py-8 text-center"
-          : "flex-wrap items-center gap-3.5 rounded-[1.75rem] px-5 py-4 sm:rounded-full",
-        over && "bg-muted border-foreground/40",
-      )}
-    >
-      <span
-        className={cn(
-          "grid shrink-0 place-items-center",
-          big && "bg-card border-border size-14 rounded-full border",
-        )}
-      >
-        <Upload className={big ? "size-6" : "size-[22px]"} aria-hidden="true" />
-      </span>
-      <span className={cn("flex min-w-0 flex-col gap-0.5", !big && "flex-[1_1_14rem]")}>
-        <b className={big ? "text-lg" : "text-[15px]"}>Drop a spreadsheet here</b>
-        <span className="text-muted-foreground text-sm">{hint}</span>
-      </span>
+      },
+    },
+    input: (
       <input
-        ref={input}
+        ref={ref}
         type="file"
-        accept=".csv,.tsv,.txt,.xlsx,.xlsm,.vcf,.vcard"
+        accept={ACCEPT}
         className="sr-only"
+        aria-label="Choose a spreadsheet"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void send(f);
           e.target.value = "";
         }}
       />
-      <Button
-        type="button"
-        variant={big ? "default" : "outline"}
-        disabled={busy}
-        onClick={() => input.current?.click()}
-      >
+    ),
+  };
+}
+
+export function SheetDrop({
+  orgSlug,
+  onDropped,
+  hint = "CSV or Excel, or an export from another CRM. Up to 4 MB.",
+}: {
+  orgSlug: string;
+  onDropped: (sheet: DroppedSheet) => void;
+  hint?: string;
+}) {
+  const upload = useSheetUpload(orgSlug, onDropped);
+  return (
+    <div
+      {...upload.zone}
+      className={cn(
+        "border-input bg-muted/40 flex flex-wrap items-center gap-3.5 rounded-[1.75rem] border-[1.5px] border-dashed px-5 py-4 transition-colors sm:rounded-full",
+        upload.over && "bg-muted border-foreground/40",
+      )}
+    >
+      <Upload className="size-[22px] shrink-0" aria-hidden="true" />
+      <span className="flex min-w-0 flex-[1_1_14rem] flex-col gap-0.5">
+        <b className="text-[15px]">Drop a spreadsheet here</b>
+        <span className="text-muted-foreground text-sm">{hint}</span>
+      </span>
+      {upload.input}
+      <Button type="button" variant="outline" disabled={upload.busy} onClick={upload.pick}>
         <FileSpreadsheet className="size-4" aria-hidden="true" />
-        {busy ? "Reading…" : "Choose a file"}
+        {upload.busy ? "Reading…" : "Choose a file"}
       </Button>
     </div>
   );

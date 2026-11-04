@@ -9,6 +9,7 @@ import {
   type CrmOpenKind,
 } from "@/lib/crm/overlay";
 
+import { AutomationOverlay, RecipesOverlay, ScoringOverlay } from "./automation";
 import { CompanyOverlay } from "./company";
 import { DealOverlay } from "./deal";
 import { GoalOverlay } from "./goal";
@@ -63,6 +64,9 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   quote: QuoteOverlay,
   calls: CallsOverlay,
   text: TextOverlay,
+  automation: AutomationOverlay,
+  recipes: RecipesOverlay,
+  scoring: ScoringOverlay,
 };
 
 export async function CrmOverlays({

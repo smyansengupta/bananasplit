@@ -15,7 +15,7 @@ import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * Handover (CRM settings > Hand people over): hand a member's relationships
+ * Handover (CRM settings > Team): hand a member's relationships
  * to someone else (or to a position, so they follow whoever holds it) in
  * one step, and give anyone left with no owner to someone.
  */
