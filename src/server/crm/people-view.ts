@@ -23,6 +23,7 @@ import {
   peopleWhere,
   type ListQuery,
 } from "./queries";
+import { taskSteps } from "./task-steps";
 
 /**
  * The People tab's data (docs/features/crm.md, "Redesign"): which list is
@@ -221,6 +222,7 @@ export async function peoplePage(
   if (companies) {
     const data = await listCompanies(db, organizationId, query, viewerId, roles);
     total = data.total;
+    const tasks = await taskSteps(db, organizationId, "company", data.rows.map((c) => c.id));
     rows = data.rows.map((c) => ({
       id: c.id,
       name: c.name,
@@ -232,7 +234,14 @@ export async function peoplePage(
       bars: strengthBars(c.strength),
       strength: c.strength,
       last: lastTalked(c.lastContactedAt, now),
-      next: rowNext({ nextFollowUpAt: c.nextFollowUpAt, lastContactedAt: c.lastContactedAt }, now),
+      next: rowNext(
+        {
+          nextFollowUpAt: c.nextFollowUpAt,
+          lastContactedAt: c.lastContactedAt,
+          task: tasks.get(c.id) ?? null,
+        },
+        now,
+      ),
       mergeWith: null,
       owner: ownerLabel(c, roles, options.names),
       deleted: Boolean(c.deletedAt),
@@ -250,6 +259,7 @@ export async function peoplePage(
       ).map((p) => p.id),
     );
     const wrote = await unanswered(db, organizationId, ids, now);
+    const tasks = await taskSteps(db, organizationId, "person", ids);
     rows = data.rows.map((p) => {
       const dup = dupes.get(p.id) ?? null;
       const type = p.relationship ? tones.get(p.relationship) : null;
@@ -270,6 +280,7 @@ export async function peoplePage(
             doNotContact: blocked.has(p.id),
             duplicate: dup ? { name: dup.name, reason: dup.reason } : null,
             wroteAt: wrote.get(p.id) ?? null,
+            task: tasks.get(p.id) ?? null,
           },
           now,
         ),

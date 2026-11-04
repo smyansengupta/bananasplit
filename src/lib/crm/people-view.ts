@@ -9,6 +9,7 @@
 import type { TagColor } from "@/lib/tag-colors";
 
 import { COLD_AFTER_DAYS } from "./strength";
+import { taskStepText, type TaskStep } from "./task-steps";
 
 const DAY = 86_400_000;
 
@@ -109,6 +110,8 @@ export interface RowNextInput {
   duplicate?: { name: string; reason: string | null } | null;
   /** They wrote and nobody has answered. */
   wroteAt?: Date | null;
+  /** An open task linked to them: it is their next step (src/lib/crm/task-steps.ts). */
+  task?: TaskStep | null;
 }
 
 function shortDate(d: Date): string {
@@ -131,7 +134,9 @@ export function duplicateReason(reason: string | null, other: string): string {
  * The one thing a People row offers, most pressing first: merge a likely
  * duplicate, answer someone who wrote, a follow-up that's due, someone
  * going cold, or a next step when someone you've talked to has none.
- * Otherwise the next step in words, and no button.
+ * Otherwise the next step in words, and no button. An open linked task is
+ * a next step (its due date is when): it shows in words, and nobody with
+ * one is "going cold" or missing a step.
  */
 export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
   if (input.duplicate) {
@@ -173,8 +178,15 @@ export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
       text: null,
     };
   }
+  if (input.task) {
+    const laterKey = later ? later.toISOString().slice(0, 10) : null;
+    // A later follow-up that comes before the task is the nearer step.
+    if (!laterKey || (input.task.dueKey !== null && input.task.dueKey <= laterKey)) {
+      return { action: null, text: taskStepText(input.task, now.toISOString().slice(0, 10)) };
+    }
+  }
   const quiet = input.lastContactedAt ? daysBetween(input.lastContactedAt, now) : null;
-  if (!later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
+  if (!input.task && !later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
     return {
       action: { kind: "checkin", label: "Check in", tone: "spark", reason: `${quiet} days quiet` },
       text: null,
