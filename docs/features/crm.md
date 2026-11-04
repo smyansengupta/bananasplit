@@ -2382,7 +2382,7 @@ under one CRM chip, linked to the card (`crmRecordHref`, `?open=`):
 | An import finished | `CRM_NEW` | Whoever started it, one line | `runImportTurn` |
 | A new member joined | `CRM_NEW` | The managers | invitation accept and join code |
 | A reply | `CRM_REPLY` | The member it answers | `ingestEmail` (as before) |
-| A booking | `CRM_BOOKED` | The host | `book` |
+| A booking, a move or a cancellation | `MEETING_BOOKED` (a Meetings line, not under the CRM chip) | The host | `src/server/booking/notify.ts` (docs/features/booking.md) |
 | A quote or invoice opened, accepted or declined | `CRM_DEAL` | The deal's owner, else whoever made it, else managers | `/q/{token}` |
 | A draft or change waiting for your OK | `CRM_REVIEW` | Its assignee | `proposeChange` |
 | Mail that didn't go; what an automation held back | `CRM_REVIEW` | The sender; the automation's member | `send.ts` `markFailed`, `runWorkflowOn` |
@@ -2401,7 +2401,9 @@ under one CRM chip, linked to the card (`crmRecordHref`, `?open=`):
 - **Email copies.** The notify-email job reads each member's preference as
   for any type. `CRM_NEW` is off until they turn it on (`DEFAULT_OFF_TYPES`).
 - **Migration** `20261106090000_crm_inbox_kinds` adds `CRM_NEW`,
-  `CRM_BOOKED` and `CRM_DEAL` to `NotificationType`.
+  `CRM_BOOKED` and `CRM_DEAL` to `NotificationType`. Nothing writes
+  `CRM_BOOKED` any more (bookings write `MEETING_BOOKED`), so it has no
+  switch in your profile; the enum value stays.
 - **Not yet.** A quote opened by the sender themselves counts as opened.
   Text sends that fail don't write a line. A bring-in (members, event
   guests) is quiet like an import but writes no summary line yet.

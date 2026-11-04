@@ -205,10 +205,11 @@ export interface NotificationTypeMeta {
 
 /**
  * Labels for the per-type email switches. TASK_DIGEST is not listed: the
- * digest has its own switch and hour.
+ * digest has its own switch and hour. Nor is CRM_BOOKED: nothing writes it
+ * any more (a booking is MEETING_BOOKED), but the enum value stays.
  */
 export const NOTIFICATION_TYPE_META: Record<
-  Exclude<NotificationType, "TASK_DIGEST">,
+  Exclude<NotificationType, "TASK_DIGEST" | "CRM_BOOKED">,
   NotificationTypeMeta
 > = {
   TASK_ASSIGNED: { label: "A task is assigned to me", group: "tasks" },
@@ -256,7 +257,6 @@ export const NOTIFICATION_TYPE_META: Record<
   },
   CRM_HANDOVER: { label: "CRM relationships are handed to me", group: "org" },
   CRM_NEW: { label: "Someone new comes into the CRM for me", group: "org" },
-  CRM_BOOKED: { label: "Someone books a meeting with me", group: "org" },
   CRM_DEAL: { label: "A deal of mine is won or lost, or a quote is opened or accepted", group: "org" },
 };
 

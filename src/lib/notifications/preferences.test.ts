@@ -149,8 +149,8 @@ describe("preference patches", () => {
     expect(emailEnabledFor({ ...prefs, types: { TASK_OVERDUE: false } }, "TASK_OVERDUE")).toBe(false);
   });
 
-  it("labels every type except the digest, which has its own control", () => {
+  it("labels every type except the digest, which has its own control, and CRM_BOOKED, which nothing sends", () => {
     const labelled = Object.keys(NOTIFICATION_TYPE_META).sort();
-    expect(labelled).toEqual(NOTIFICATION_TYPES.filter((t) => t !== "TASK_DIGEST").sort());
+    expect(labelled).toEqual(NOTIFICATION_TYPES.filter((t) => t !== "TASK_DIGEST" && t !== "CRM_BOOKED").sort());
   });
 });
