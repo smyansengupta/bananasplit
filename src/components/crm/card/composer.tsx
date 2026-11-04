@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { logActivityAction } from "@/app/app/[orgSlug]/crm/actions";
+import { draftNoteTaskAction } from "@/app/app/[orgSlug]/crm/note-actions";
 import { cancelEmailAction, composeEmailAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { sendTextAction } from "@/app/app/[orgSlug]/crm/phone-actions";
 import { AMBIENT_BUTTON } from "@/components/ambient/ambient-button";
@@ -12,21 +13,28 @@ import { VoiceNoteButton } from "@/components/crm/phone/voice-note";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { runAction } from "@/lib/run-action";
+import type { NoteTaskDraft } from "@/lib/crm/note-task";
 import { cn } from "@/lib/utils";
+
+import { TaskPreview } from "./task-preview";
 
 /**
  * A card's one composer (docs/features/crm.md, "Redesign"): a channel pill
- * that cycles Email, Text and Note, the message, and a round send. Sending
+ * that cycles Email, Text, Note and Task, the message, and a round send.
+ * Task has the organization's AI write a task from what you typed ("Marcus
+ * doesn't like the new export, for Kristine") and shows it above to change
+ * and make with Create task (docs/features/crm.md, "Notes and tasks"). Sending
  * waits ten seconds with Undo: an email is queued to go then (Undo cancels
  * it), a text or a note is held here (Undo drops it; closing the card sends
  * it right away). `/` lists templates, your booking link and a voice note.
  * A red line says when someone else in the organization reached them lately.
  *
- * Uses outreach's compose, the phone's texts and the timeline's log: no
- * back end of its own.
+ * Uses outreach's compose, the phone's texts, the timeline's log and the
+ * notes' task drafts: no back end of its own. A company's card has Note
+ * and Task only.
  */
 
-export type ComposerChannel = "email" | "text" | "note";
+export type ComposerChannel = "email" | "text" | "note" | "task";
 
 export interface ComposerSeed {
   /** Bumped by the parent to apply it again. */
@@ -37,12 +45,14 @@ export interface ComposerSeed {
   replyTo?: { messageId: string; subject: string } | null;
 }
 
-const WORDS: Record<ComposerChannel, string> = { email: "Email", text: "Text", note: "Note" };
+const WORDS: Record<ComposerChannel, string> = { email: "Email", text: "Text", note: "Note", task: "Task" };
 const HOLD_MS = 10_000;
 
 export function Composer({
   orgId,
-  person,
+  orgSlug,
+  record,
+  members,
   channels,
   conflict,
   templates,
@@ -51,7 +61,11 @@ export function Composer({
   alsoOn = [],
 }: {
   orgId: string;
-  person: { id: string; name: string };
+  orgSlug: string;
+  /** Who it's to or about. Email and Text are a person's only. */
+  record: { kind: "person" | "company"; id: string; name: string };
+  /** For the Task channel's assignee. */
+  members: readonly { id: string; name: string }[];
   channels: { email: boolean; text: boolean };
   /** "Kristine emailed them Oct 30", shown in red while on Email. */
   conflict: string | null;
@@ -66,6 +80,7 @@ export function Composer({
     ...(channels.email ? ["email" as const] : []),
     ...(channels.text ? ["text" as const] : []),
     "note",
+    "task",
   ];
   const [channel, setChannel] = useState<ComposerChannel>(order[0]!);
   const [subject, setSubject] = useState("");
@@ -76,7 +91,8 @@ export function Composer({
   const [sent, setSent] = useState<{ label: string; undo: () => void } | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const held = useRef<{ timer: ReturnType<typeof setTimeout>; flush: () => void } | null>(null);
-  const first = person.name.split(" ")[0] ?? person.name;
+  const [taskDraft, setTaskDraft] = useState<{ draft: NoteTaskDraft; text: string } | null>(null);
+  const first = record.name.split(" ")[0] ?? record.name;
 
   // The parent asks for a draft (Reply, Remind): apply it once per nonce.
   const [applied, setApplied] = useState(0);
@@ -108,7 +124,9 @@ export function Composer({
       ? `Write to ${first}`
       : channel === "text"
         ? `Text ${first}`
-        : "Add a note. Promises become tasks.";
+        : channel === "note"
+          ? "Add a note. Promises become tasks."
+          : `A task about ${first}. Add "for" and a name to hand it over.`;
   const slash = body.startsWith("/") && !body.includes("\n");
   const query = slash ? body.slice(1).trim().toLowerCase() : "";
   const picks = slash
@@ -130,6 +148,18 @@ export function Composer({
   async function send() {
     const text = body.trim();
     if (!text || busy) return;
+    if (channel === "task") {
+      setBusy(true);
+      const r = await runAction(() =>
+        draftNoteTaskAction(orgId, { target: { kind: record.kind, id: record.id }, text }),
+      );
+      setBusy(false);
+      if (!r) return;
+      if (!r.ok) return toast({ title: r.error, tone: "error" });
+      setTaskDraft({ draft: r.draft, text });
+      reset();
+      return;
+    }
     if (channel === "email") {
       const subj = (replyTo ? subject || `Re: ${replyTo.subject}` : subject).trim();
       if (!subj) {
@@ -139,7 +169,7 @@ export function Composer({
       setBusy(true);
       const r = await runAction(() =>
         composeEmailAction(orgId, {
-          personId: person.id,
+          personId: record.id,
           subject: subj,
           body: text,
           templateId,
@@ -174,12 +204,12 @@ export function Composer({
       held.current = null;
       const r =
         kind === "text"
-          ? await runAction(() => sendTextAction(orgId, person.id, text))
+          ? await runAction(() => sendTextAction(orgId, record.id, text))
           : await runAction(() =>
               logActivityAction(orgId, {
                 kind: "NOTE",
                 body: text,
-                targets: [{ kind: "person", id: person.id }, ...alsoOn],
+                targets: [{ kind: record.kind, id: record.id }, ...alsoOn],
               }),
             );
       if (r && !r.ok) toast({ title: r.error, tone: "error" });
@@ -198,6 +228,22 @@ export function Composer({
 
   return (
     <div className="relative flex flex-col gap-1.5">
+      {taskDraft && (
+        <TaskPreview
+          orgId={orgId}
+          orgSlug={orgSlug}
+          target={{ kind: record.kind, id: record.id }}
+          draft={taskDraft.draft}
+          members={members}
+          className="mb-1 max-h-[46vh] overflow-y-auto"
+          onDone={() => setTaskDraft(null)}
+          onCancel={() => {
+            setBody(taskDraft.text);
+            setTaskDraft(null);
+            input.current?.focus();
+          }}
+        />
+      )}
       {channel === "email" && conflict && (
         <span className="text-destructive flex items-center gap-2 ps-1.5 text-[13px]">
           <Ban className="size-3.5 shrink-0" aria-hidden="true" />
@@ -239,7 +285,7 @@ export function Composer({
           <div className="px-1 py-1">
             <VoiceNoteButton
               orgId={orgId}
-              targets={[{ kind: "person", id: person.id }]}
+              targets={[{ kind: record.kind, id: record.id }]}
               label="Record a voice note"
               onSaved={() => setBody("")}
             />
@@ -298,7 +344,7 @@ export function Composer({
           onClick={() => void send()}
           disabled={busy || !body.trim() || slash}
           aria-label="Send"
-          title={channel === "note" ? "Save the note" : "Send"}
+          title={channel === "note" ? "Save the note" : channel === "task" ? "Write the task" : "Send"}
           className="bg-foreground text-background grid size-9 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-40"
         >
           <ArrowRight className="size-4" aria-hidden="true" />
@@ -317,6 +363,10 @@ export function Composer({
           >
             Undo
           </button>
+        </span>
+      ) : channel === "task" ? (
+        <span className="text-muted-foreground ps-1.5 text-xs">
+          {busy ? "Writing the task…" : "You check the task before it's made"}
         </span>
       ) : (
         <span className="text-muted-foreground ps-1.5 text-xs">
