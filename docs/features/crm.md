@@ -2127,7 +2127,10 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Import and export**: a dropped spreadsheet shows its column matches
   and comes in with one button; a finished import keeps its skipped rows,
   and each is fixed in place (an email added) or left out
-  (`fixImportRow`, `letRowGo`). Export everything is one zip
+  (`fixImportRow`, `letRowGo`). The same rows show on `/crm/import` for
+  whoever ran the import, since any member can import and this section is
+  for managers; the Inbox line for a file with skipped rows opens
+  `/crm/import`. Export everything is one zip
   (`/crm/export?kind=all`, `&notes=1` adds the timeline).
 - **First-time setup** (`/crm/setup`, `src/components/crm/setup.tsx`):
   what you mostly reach out to (picked for you), then 1 Bring people in (a
