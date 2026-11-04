@@ -7,6 +7,7 @@ import {
   type LinkRef,
   type ResolvedRef,
 } from "@/lib/links";
+import { crmRecordHref } from "@/lib/crm/href";
 import { pollHref } from "@/lib/polls/paths";
 import type { TxClient } from "@/server/db/context";
 
@@ -439,7 +440,7 @@ export async function resolveRefs(
       where: { organizationId: orgId, id: { in: crmPeople }, deletedAt: null },
       select: { id: true, name: true, title: true },
     });
-    for (const p of rows) put("crm-person", p.id, p.name, `${base}/crm/people/${p.id}`, p.title);
+    for (const p of rows) put("crm-person", p.id, p.name, crmRecordHref(orgSlug, "person", p.id), p.title);
   }
   const crmCompanies = ids("crm-company");
   if (crmCompanies.length) {
@@ -447,7 +448,7 @@ export async function resolveRefs(
       where: { organizationId: orgId, id: { in: crmCompanies }, deletedAt: null },
       select: { id: true, name: true, domain: true },
     });
-    for (const c of rows) put("crm-company", c.id, c.name, `${base}/crm/companies/${c.id}`, c.domain);
+    for (const c of rows) put("crm-company", c.id, c.name, crmRecordHref(orgSlug, "company", c.id), c.domain);
   }
   const crmDeals = ids("crm-deal");
   if (crmDeals.length) {
@@ -455,7 +456,7 @@ export async function resolveRefs(
       where: { organizationId: orgId, id: { in: crmDeals }, deletedAt: null },
       select: { id: true, title: true, stage: { select: { name: true } } },
     });
-    for (const d of rows) put("crm-deal", d.id, d.title, `${base}/crm/items/${d.id}`, d.stage.name);
+    for (const d of rows) put("crm-deal", d.id, d.title, crmRecordHref(orgSlug, "deal", d.id), d.stage.name);
   }
   return out;
 }

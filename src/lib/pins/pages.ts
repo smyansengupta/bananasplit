@@ -11,6 +11,9 @@
  * in a query string is dropped.
  */
 
+import { COMPANY_LISTS, PEOPLE_LISTS } from "@/lib/crm/people-view";
+import { findSection as findCrmSettingsSection } from "@/lib/crm/settings-sections";
+
 export const PIN_KINDS = [
   "page",
   "note",
@@ -56,6 +59,7 @@ const SECTIONS: Record<string, string> = {
   forms: "Forms",
   databases: "Databases",
   finance: "Finance",
+  crm: "CRM",
   "org-chart": "Org chart",
   people: "People",
   profile: "Your profile",
@@ -80,6 +84,13 @@ const SUBPAGES: Record<string, string> = {
   // Pins saved before Sponsorships became Deals (the old URL redirects).
   "finance/sponsorships": "Deals",
   "finance/transactions": "Transactions",
+  "crm/deals": "CRM deals",
+  "crm/calls": "CRM calls",
+  "crm/import": "CRM import",
+  "crm/setup": "CRM setup",
+  "crm/forecast": "CRM forecast",
+  "crm/handover": "CRM handover",
+  "crm/settings": "CRM settings",
   "org-chart/import": "Import org chart",
   "org-chart/versions": "Org chart history",
   "setup/status": "Connection status",
@@ -96,6 +107,14 @@ export const TASK_VIEWS: Record<string, string> = {
 const TASK_SCOPES: Record<string, string> = { mine: "Mine", team: "My team", all: "Everyone" };
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Today's groups (?show=). */
+const CRM_TODAY: Record<string, string> = {
+  replies: "Replies",
+  due: "Due today",
+  approve: "To approve",
+  calls: "Calls",
+};
 
 function titleCase(slug: string): string {
   return slug
@@ -123,7 +142,45 @@ function keptQuery(section: string, parts: string[], search: URLSearchParams): [
     if (scope && TASK_SCOPES[scope]) kept.push(["scope", scope]);
     return kept;
   }
+  // The CRM: Today's group (?show=), and People's view and list (?view=, ?list=).
+  if (section === "crm" && parts.length === 1) {
+    const show = search.get("show");
+    return show && CRM_TODAY[show] ? [["show", show]] : [];
+  }
+  if (section === "crm" && parts.length === 2 && parts[1] === "people") {
+    const kept: [string, string][] = [];
+    const view = search.get("view");
+    if (view === "companies" || view === "board") kept.push(["view", view]);
+    const list = search.get("list");
+    if (list && ID.test(list)) kept.push(["list", list]);
+    return kept;
+  }
   return [];
+}
+
+/** A CRM page's label: Today and its groups, People and its views and lists, settings sections. */
+function crmPage(href: string, parts: string[], q: Record<string, string>): PageInfo | null {
+  const [, second, third] = parts;
+  if (parts.length === 1) {
+    return { href, kind: "page", label: q.show ? `CRM, ${CRM_TODAY[q.show]}` : "CRM" };
+  }
+  if (second === "people" && parts.length === 2) {
+    if (q.view === "board") return { href, kind: "page", label: "CRM deals" };
+    const companies = q.view === "companies";
+    const what = companies ? "CRM companies" : "CRM people";
+    if (!q.list) return { href, kind: "page", label: what };
+    const builtIn = (companies ? COMPANY_LISTS : PEOPLE_LISTS).find((l) => l.id === q.list);
+    return { href, kind: "page", label: `${what}, ${builtIn ? builtIn.label : "A saved list"}` };
+  }
+  if (second === "settings" && third) {
+    const section = findCrmSettingsSection(third);
+    return { href, kind: "page", label: `CRM settings, ${section?.label ?? titleCase(third)}` };
+  }
+  if (parts.length === 2 && SUBPAGES[parts.join("/")]) {
+    return { href, kind: "page", label: SUBPAGES[parts.join("/")]! };
+  }
+  // A record's old page (people/<id>, items/<id>...) redirects to its card: nothing to keep.
+  return null;
 }
 
 /**
@@ -148,6 +205,7 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
   if (href.length > 400) return null;
   const q = Object.fromEntries(kept);
 
+  if (section === "crm") return crmPage(href, parts, q);
   const joined = parts.join("/");
   if (SUBPAGES[joined]) return { href, kind: "page", label: SUBPAGES[joined] };
   if (!SECTIONS[section]) return null;

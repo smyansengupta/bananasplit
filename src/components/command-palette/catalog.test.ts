@@ -45,6 +45,20 @@ function titles(input: Partial<CatalogInput>, query: string) {
 }
 
 describe("the page catalog", () => {
+  it("has the CRM's pages, and tells Finance's deals from the CRM's", () => {
+    expect(titles({}, "crm")).toEqual(
+      expect.arrayContaining(["CRM today", "CRM people", "CRM deals", "CRM settings"]),
+    );
+    expect(titles({}, "to approve")).toContain("To approve");
+    expect(titles({ role: "ADMIN" }, "deals")).toEqual(
+      expect.arrayContaining(["Finance deals", "CRM deals"]),
+    );
+    const people = catalog().find((e) => e.key === "page:crm:people");
+    expect(people?.command).toEqual({ type: "href", href: "/app/cbc/crm/people" });
+    const notAdded = sections().map((s) => (s.id === "crm" ? { ...s, notAdded: true } : s));
+    expect(titles({ sections: notAdded }, "crm")).not.toContain("CRM people");
+  });
+
   it("finds pages by their name and by the words people use for them", () => {
     expect(titles({}, "kanban")[0]).toBe("Task board");
     expect(titles({ role: "ADMIN" }, "dark mode")).toEqual(
