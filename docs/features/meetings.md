@@ -648,6 +648,12 @@ Migrations `20261024120000_meetings` and `20261026120000_event_reminders`.
 
 ## The section
 
+Meetings has three parts, one switch bar (`MeetingsTabs`): Meetings, Find a
+time and Booking links (`/app/{slug}/meetings/booking`; your own link and the
+organization's, see [booking.md](./booking.md)). A booked meeting is an
+ordinary meeting here, with the guest's answers in its description.
+
+
 `RSVPs` became `meetings` in `src/lib/nav/sidebar.ts`. A saved sidebar naming
 the old id still means the new section (`RENAMED_FROM`), so a club that hid
 RSVPs still has Meetings hidden, in the group they put it in and under the name

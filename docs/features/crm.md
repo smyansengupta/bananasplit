@@ -1614,6 +1614,10 @@ expires old mail suggestions.
 
 ### Booking, forms, handover, partners, self-update, giving
 
+- Booking links moved to Meetings > Booking links (docs/features/booking.md):
+  organization links are the CRM's, every member has a personal one, and the
+  CRM side of a booking waits for the guest to confirm their email. What
+  follows is how they first worked.
 - Booking pages (`booking.ts`, `/book/{slug}`): the hosts' busy hours plus
   the meetings they're in or host, weekdays 9 to 5 in the organization's
   timezone, notice and days ahead, round-robin by recent bookings. A booking
