@@ -106,7 +106,17 @@ export function EventDetailView({
   tasks = null,
   recording = null,
   askedRsvp = null,
+  crm = null,
 }: {
+  /**
+   * Its people in the CRM (src/server/crm/outside-links.ts): attendees who
+   * are CRM people link to their card; guests are CRM people it was with
+   * who aren't members (a booking's guest).
+   */
+  crm?: {
+    attendees: Record<string, string>;
+    guests: { id: string; name: string; detail: string | null; href: string }[];
+  } | null;
   /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
   askedRsvp?: "YES" | "NO" | "MAYBE" | null;
   /** The Linked panel (components/links), first in the side column. */
@@ -597,7 +607,17 @@ export function EventDetailView({
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <UserAvatar user={a.user} size="md" />
-                          <span className="font-medium break-words">{a.user.name ?? "Member"}</span>
+                          {crm?.attendees[a.userId] ? (
+                            <Link
+                              href={String(crm.attendees[a.userId])}
+                              className="font-medium break-words underline-offset-4 hover:underline"
+                              title="Open in CRM"
+                            >
+                              {a.user.name ?? "Member"}
+                            </Link>
+                          ) : (
+                            <span className="font-medium break-words">{a.user.name ?? "Member"}</span>
+                          )}
                         </span>
                         <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>
                           {RSVP_META[a.rsvp].short}
@@ -607,7 +627,26 @@ export function EventDetailView({
                   </ul>
                 </>
               ) : (
-                <EmptyState size="compact" title="Nobody is invited yet" />
+                !crm?.guests.length && <EmptyState size="compact" title="Nobody is invited yet" />
+              )}
+              {crm && crm.guests.length > 0 && (
+                <ul className="border-border/60 mt-3 space-y-2 border-t pt-3">
+                  {crm.guests.map((g) => (
+                    <li key={g.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium break-words">{g.name}</span>
+                        {g.detail && (
+                          <span className="text-muted-foreground truncate text-[13px]">
+                            {g.detail}
+                          </span>
+                        )}
+                      </span>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={g.href}>Open in CRM</Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
