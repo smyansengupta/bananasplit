@@ -32,7 +32,7 @@ import { clickUrl, mailToken, oneClickUrl, pixelUrl, unsubscribeUrl } from "./to
  * Approval is checked again just before it goes too (docs/features/crm.md,
  * "Nothing sends unapproved"): every message records who said it may go
  * (`approvedById`, `approval`: a person pressed Send, a person pressed Start
- * for a plan's first email, or a booking receipt). Anything without one is
+ * for a plan's first email). Anything without one is
  * turned into a draft in its sender's To approve instead of being sent.
  */
 
@@ -156,14 +156,13 @@ export interface QueueEmailInput {
   noJob?: boolean;
   /**
    * Who said it may go and how. Left out: a member who queued it (createdById)
-   * pressed Send; an untracked message to one person from nothing else is a
-   * booking receipt; anything else has no approval and becomes a draft when
-   * its time comes.
+   * pressed Send; anything else has no approval and becomes a draft when its
+   * time comes.
    */
   approval?: { kind: Approval; by: string | null } | null;
 }
 
-/** send: a person pressed Send. start: a plan's first email, Start pressed. receipt: a booking confirmation. */
+/** send: a person pressed Send. start: a plan's first email, Start pressed. receipt: from before booking emails had their own job; never approves now. */
 export type Approval = "send" | "start" | "receipt";
 
 /** What a queued message records as its approval (see QueueEmailInput.approval). */
@@ -730,8 +729,8 @@ export async function startMayApprove(
 /**
  * Why a queued message may not go now, or null when its approval holds:
  * Send by someone still in the organization; Start on a plan, for that
- * enrollment's first email only, by whoever put them in; a receipt that is
- * nothing but a receipt. Anything else (an automation's email queued before
+ * enrollment's first email only, by whoever put them in (and, for group
+ * mail, someone who still runs the CRM). Anything else (an automation's email queued before
  * approvals, a step queued on its own) has no approval.
  */
 export async function approvalProblem(
