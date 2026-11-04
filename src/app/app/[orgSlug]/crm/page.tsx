@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
+import { CrmSendingBanner } from "@/components/crm/settings/sending-paused";
 import { TodayGoals } from "@/components/crm/today/today-goals";
 import { TodayList } from "@/components/crm/today/today-list";
 import { TodayLog } from "@/components/crm/today/today-log";
@@ -124,6 +126,11 @@ export default async function CrmTodayPage({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
+        banner={
+          <Suspense fallback={null}>
+            <CrmSendingBanner orgId={orgId} orgSlug={orgSlug} />
+          </Suspense>
+        }
         toolbar={<TodayToolbar tabs={shell.tabs} personal={personal} hasTeam={team.length > 0} />}
       />
       {!personal && !data.today.mine && !everyone && (

@@ -125,6 +125,7 @@ export function PeopleTable({
   members,
   series,
   personal = false,
+  canBulkEmail = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -146,6 +147,8 @@ export function PeopleTable({
   series: { id: string; name: string }[];
   /** A Personal space: one person owns everything, so no Owner column or Change owner. */
   personal?: boolean;
+  /** May send one email to several (owners, admins, CRM managers); anyone may email one person. */
+  canBulkEmail?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -349,7 +352,7 @@ export function PeopleTable({
                 </DropdownMenuContent>
               </DropdownMenu>
               )}
-              {!companies && (
+              {!companies && (ids.length === 1 || canBulkEmail) && (
                 <Button
                   size="sm"
                   variant="outline"

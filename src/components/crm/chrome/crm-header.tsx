@@ -27,12 +27,15 @@ export function CrmHeader({
   orgSlug,
   title = "CRM",
   toolbar,
+  banner,
   create = "person",
 }: {
   orgSlug: string;
   title?: string;
   /** The toolbar row under it (CrmToolbar). */
   toolbar?: ReactNode;
+  /** One line under the toolbar when something stopped (CrmSendingBanner). */
+  banner?: ReactNode;
   /**
    * What the create button makes in one click (People's Companies view: a
    * company), a page's own create in its place, or
@@ -95,6 +98,7 @@ export function CrmHeader({
         </div>
       </div>
       {toolbar}
+      {banner}
     </div>
   );
 }

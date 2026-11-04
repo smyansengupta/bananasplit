@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
+import { CrmSendingBanner } from "@/components/crm/settings/sending-paused";
 import { PeopleBoardView } from "@/components/crm/people/people-board";
 import { PeopleEmpty } from "@/components/crm/people/people-empty";
 import { PeopleTable } from "@/components/crm/people/people-table";
@@ -101,6 +103,11 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
     <div>
       <CrmHeader
         orgSlug={orgSlug}
+        banner={
+          <Suspense fallback={null}>
+            <CrmSendingBanner orgId={orgId} orgSlug={orgSlug} />
+          </Suspense>
+        }
         create={data.view === "board" ? "deal" : data.companies ? "company" : "person"}
         toolbar={
           <PeopleToolbar
@@ -181,6 +188,8 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
           members={members}
           series={data.series}
           personal={shell.access.personal}
+          // Group email is for managers (sendBulk); one person is their card's composer.
+          canBulkEmail={shell.access.manager}
         />
       )}
       {overlay}
