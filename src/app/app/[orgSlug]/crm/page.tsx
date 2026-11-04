@@ -3,12 +3,13 @@ import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { TodayGoals } from "@/components/crm/today/today-goals";
 import { TodayList } from "@/components/crm/today/today-list";
+import { TodayLog } from "@/components/crm/today/today-log";
 import { TodayToolbar } from "@/components/crm/today/today-toolbar";
 import { hrefWithOpen } from "@/lib/crm/overlay";
 import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/power-hour";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
-import { onItsOwn } from "@/server/crm/on-its-own";
+import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
 import { comingUp, TODAY_GROUPS, todayRows, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
@@ -26,8 +27,9 @@ function one(v: string | string[] | undefined): string | undefined {
  * The CRM's Today (docs/features/crm.md, "Redesign"): who needs you and
  * why, in one list grouped as Replies, Due today, To approve and Calls,
  * each row with at most two ambient buttons. Power hour works the list one
- * person at a time (?open=power); Done on its own lists what the CRM did
- * without asking (?open=log). Goals and what's coming up on the right.
+ * person at a time (?open=power). On the right: Goals, what's coming up,
+ * and Done on its own (the latest few things the CRM did without asking,
+ * See all opens ?open=log).
  * Yours first; everyone's with ?who=all or when nothing is yours.
  */
 export default async function CrmTodayPage({
@@ -78,7 +80,7 @@ export default async function CrmTodayPage({
       today,
       goals,
       upcoming,
-      logCount: log.length,
+      log,
       snoozedUntil: snooze?.snoozedUntil ?? null,
     };
   });
@@ -88,10 +90,23 @@ export default async function CrmTodayPage({
       (!show || r.group === show) &&
       (!q || r.name.toLowerCase().includes(q) || r.text.toLowerCase().includes(q)),
   );
-  const powerRows = data.today.rows.filter(
-    (r) => (r.group === "replies" || r.group === "due" || r.group === "calls") && r.person,
-  );
+  // Power hour: the people to reach, then drafts waiting for an OK, each person once.
+  const powerIds = new Set(data.today.rows.flatMap((r) => (r.person ? [r.person.id] : [])));
+  const powerRows = data.today.rows.filter((r) => r.person && powerIds.delete(r.person.id));
   const base = `/app/${orgSlug}/crm`;
+  // Done on its own, under Goals and Coming up: the latest five, with when.
+  const logEntries = data.log.slice(0, 5).map((e) => {
+    const day = dayLabel(e.at, now, data.tz);
+    return {
+      id: e.id,
+      when:
+        day === "Today"
+          ? e.at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: data.tz })
+          : day,
+      text: e.text,
+      held: e.kind === "held",
+    };
+  });
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
 
   return (
@@ -99,7 +114,7 @@ export default async function CrmTodayPage({
       <CrmHeader
         orgSlug={orgSlug}
         settings={shell.access.manager}
-        toolbar={<TodayToolbar tabs={shell.tabs} logCount={data.logCount} />}
+        toolbar={<TodayToolbar tabs={shell.tabs} />}
       />
       {!data.today.mine && !everyone && (
         <p className="text-muted-foreground -mt-3 mb-5 text-sm">
@@ -187,6 +202,7 @@ export default async function CrmTodayPage({
               })}
             </section>
           )}
+          <TodayLog entries={logEntries} total={data.log.length} seeAllHref={hrefWithOpen(base, sp, "log")} />
         </aside>
       </div>
       <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
