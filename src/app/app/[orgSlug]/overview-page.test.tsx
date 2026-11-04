@@ -318,7 +318,7 @@ describe("a Personal space's home", () => {
     expect(html).toContain("Good morning, Viewer");
     // Your organizations always sit under Up next, with a way to join one.
     expect(html).toContain("Your organizations");
-    expect(html).toContain("Join your first organization");
+    expect(html).toContain("not in an organization yet");
     // Nothing about a team: no organization name beside the date, no setup checklist.
     expect(html).not.toContain("Claude Builders Club");
     expect(html).not.toContain("Get your organization started");

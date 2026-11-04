@@ -178,8 +178,16 @@ const BAND_SPAN_XL: Record<number, string> = {
   7: "xl:col-span-7",
   8: "xl:col-span-8",
 };
-function bandSpan(band: { span: number; square: boolean; full: boolean }): string {
+/** Focus time beside the week: three columns of eight until the widest screens. */
+const BESIDE_WEEK_SPAN: Record<number, string> = {
+  2: "lg:col-span-3 xl:col-span-2",
+  6: "lg:col-span-5 xl:col-span-6",
+};
+function bandSpan(band: { name: string; span: number; square: boolean; full: boolean }): string {
   const two = band.full ? "sm:col-span-2" : "sm:col-span-1";
+  if (band.name === "week" && BESIDE_WEEK_SPAN[band.span]) {
+    return cn("col-span-1", two, BESIDE_WEEK_SPAN[band.span]);
+  }
   return band.square
     ? cn("col-span-1", two, band.full ? "lg:col-span-8" : "lg:col-span-4", BAND_SPAN_XL[band.span])
     : cn("col-span-1", two, BAND_SPAN_LG[band.span]);

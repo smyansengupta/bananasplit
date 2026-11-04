@@ -47,6 +47,20 @@ describe("ambientLayout", () => {
     ]);
   });
 
+  it("sits Focus time beside the week, and never widens it", () => {
+    const personal = resolveOverview(null, false, null, true);
+    const { rows } = ambientLayout(personal, {
+      resting: new Set(["my-tasks", "deadlines", "meetings", "events", "polls", "recent"]),
+      compact: new Set(),
+    });
+    expect(spans(rows)).toContain("week:6 focus-time:2");
+    const alone = ambientLayout(personal, {
+      resting: new Set(personal.filter((w) => w.type !== "focus-time").map((w) => w.type)),
+      compact: new Set(),
+    });
+    expect(spans(alone.rows)).toEqual(["focus-time:2"]);
+  });
+
   it("drops a band that has nothing left in it", () => {
     const only: BoardWidget[] = [
       { id: "votes", type: "votes", w: 1, h: 1 },

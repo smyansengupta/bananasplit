@@ -12,7 +12,9 @@ import { LEAD_MIN, NIGHT_MIN, SHARE_MIN, scoreOf, type WidgetScore } from "./pri
  * the member's own arrangement instead (src/components/boards/widget-board.tsx).
  *
  * A band is eight columns on a wide screen. Each widget asks for a width;
- * a compact one (Here now with only you in) takes one column.
+ * a compact one (Here now with only you in) takes one column. Focus time
+ * (Personal) sits beside the week, which gives up its columns, and never
+ * grows: it's a glance, not a page.
  *
  * Your role can promote a widget into You, right after My tasks (a
  * treasurer's Waiting on you, an owner's Decisions): the same bands, but
@@ -46,6 +48,7 @@ const BAND_OF: Record<string, Band> = {
   deadlines: "calendar",
   events: "calendar",
   week: "week",
+  "focus-time": "week",
   "weekly-pulse": "organization",
   apps: "organization",
   decisions: "organization",
@@ -65,9 +68,15 @@ const WANTS: Record<string, number> = {
   polls: 2,
   votes: 2,
   week: 8,
+  "focus-time": 2,
   "weekly-pulse": 8,
 };
 const DEFAULT_WANT = 4;
+
+/** Keeps its own width when its row has room to spare. */
+const NEVER_GROWS = new Set(["focus-time"]);
+/** Sits beside the week, which makes room for it. */
+const BESIDE_WEEK = "focus-time";
 
 export function bandOf(type: string, promoted?: ReadonlySet<string>): Band {
   if (promoted?.has(type)) return "you";
@@ -127,9 +136,12 @@ function packBand(
   const rows: AmbientRow[] = [];
   let row: AmbientItem[] = [];
   let used = 0;
+  const besideWeek = widgets.some((w) => w.type === BESIDE_WEEK)
+    ? (WANTS[BESIDE_WEEK] ?? DEFAULT_WANT)
+    : 0;
   const flush = () => {
     if (row.length === 0) return;
-    const growable = fill ? row.filter((i) => !i.compact) : [];
+    const growable = fill ? row.filter((i) => !i.compact && !NEVER_GROWS.has(i.widget.type)) : [];
     for (let k = 0; used < BAND_COLUMNS && growable.length > 0; k++) {
       growable[k % growable.length].span += 1;
       used += 1;
@@ -140,7 +152,8 @@ function packBand(
   };
   for (const widget of widgets) {
     const small = compact.has(widget.type);
-    const span = small ? 1 : Math.min(BAND_COLUMNS, WANTS[widget.type] ?? DEFAULT_WANT);
+    const want = (WANTS[widget.type] ?? DEFAULT_WANT) - (widget.type === "week" ? besideWeek : 0);
+    const span = small ? 1 : Math.min(BAND_COLUMNS, want);
     if (used + span > BAND_COLUMNS) flush();
     row.push({ widget, span, compact: small });
     used += span;

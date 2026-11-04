@@ -1,12 +1,4 @@
-import {
-  ArrowRight,
-  CalendarDays,
-  Inbox,
-  KeyRound,
-  ListChecks,
-  Plus,
-  UserRound,
-} from "@/components/icons";
+import { ArrowRight, CalendarDays, Plus, UserRound } from "@/components/icons";
 import Link from "next/link";
 
 import { PendingInviteCard } from "@/app/onboarding/pending-invite-card";
@@ -20,35 +12,52 @@ import type { PersonalHomeClub, PersonalHomeData, ProfileGap } from "@/server/pe
 
 /**
  * Personal Home's organizations strip, always right under Up next: one
- * tile per organization you're in (its next meeting, your open tasks there
- * and what's unread, each a way in), then a tile to join one by code or
- * start one. Invitations waiting on you and "Finish your profile" sit under
- * it while they apply. Data: loadPersonalHome (src/server/personal/home.ts).
+ * card with a row for each organization you're in (who you are there, its
+ * next meeting, your open tasks and what's unread, each a way in). Joining
+ * by code or starting one sits on the heading's row; with no organization
+ * yet, it fills the card instead. Invitations waiting on you and "Finish
+ * your profile" sit under it while they apply. Data: loadPersonalHome
+ * (src/server/personal/home.ts).
  */
 export function OrganizationsStrip({ data, now }: { data: PersonalHomeData; now: Date }) {
+  const first = data.clubs.length === 0;
   return (
     <section aria-labelledby="organizations-heading" className="space-y-3">
-      <div className="flex items-baseline gap-3">
-        <h2 id="organizations-heading" className="heading text-[17px] leading-snug">
-          Your organizations
-        </h2>
-        {data.moreClubs > 0 && (
-          <span className="text-muted-foreground text-[13px]">
-            And {data.moreClubs} more in the sidebar
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <div className="flex items-baseline gap-3">
+          <h2 id="organizations-heading" className="heading text-[17px] leading-snug">
+            Your organizations
+          </h2>
+          {data.moreClubs > 0 && (
+            <span className="text-muted-foreground text-[13px]">
+              And {data.moreClubs} more in the sidebar
+            </span>
+          )}
+        </div>
+        {!first && <JoinForm />}
+      </div>
+
+      <div className="bg-card edge rounded-tile p-1.5">
+        {first ? (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-3.5 py-3">
+            <p className="min-w-0 flex-1 text-[14px]">
+              <span className="font-semibold">You&apos;re not in an organization yet.</span>{" "}
+              <span className="text-muted-foreground">
+                Join one with its invite code, or start your own.
+              </span>
+            </p>
+            <JoinForm first />
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {data.clubs.map((club) => (
+              <li key={club.id}>
+                <OrgRow club={club} viewerZone={data.timeZone} now={now} />
+              </li>
+            ))}
+          </ul>
         )}
       </div>
-      {/* A row that scrolls sideways on a phone, like Up next. */}
-      <ul className="-mx-4 flex snap-x [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
-        {data.clubs.map((club) => (
-          <li key={club.id} className="w-[78%] shrink-0 snap-start sm:w-auto">
-            <OrgTile club={club} viewerZone={data.timeZone} now={now} />
-          </li>
-        ))}
-        <li className="w-[78%] shrink-0 snap-start sm:w-auto">
-          <JoinTile first={data.clubs.length === 0} />
-        </li>
-      </ul>
 
       {data.pendingInvites.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2">
@@ -64,15 +73,29 @@ export function OrganizationsStrip({ data, now }: { data: PersonalHomeData; now:
   );
 }
 
-const TILE =
-  "bg-card edge rounded-tile flex h-full min-w-0 flex-col gap-2.5 p-4 transition-[box-shadow,transform] duration-200 hover:shadow-e2 motion-safe:hover:-translate-y-0.5";
-
 function roleLine(club: PersonalHomeClub): string {
   const role = club.role.charAt(0) + club.role.slice(1).toLowerCase();
   return club.title ? `${club.title}, ${role}` : role;
 }
 
-function OrgTile({
+/** A count and what it counts, like the Today strip's; a way further in. */
+function Count({ href, value, label }: { href: string; value: number; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="hover:bg-muted relative z-10 -my-1 flex min-w-0 items-baseline gap-1.5 rounded-[10px] px-2 py-1 transition-colors"
+    >
+      <span
+        className={cn("numeral text-[20px] leading-none", value === 0 && "text-muted-foreground")}
+      >
+        {value}
+      </span>
+      <span className="text-muted-foreground text-[13px]">{label}</span>
+    </Link>
+  );
+}
+
+function OrgRow({
   club,
   viewerZone,
   now,
@@ -81,79 +104,77 @@ function OrgTile({
   viewerZone: string;
   now: Date;
 }) {
-  const logo = orgLogoUrl(club.logo, 64);
+  const logo = orgLogoUrl(club.logo, 96);
   const base = `/app/${club.slug}`;
   return (
-    <div className={cn(TILE, "relative")}>
-      <div className="flex items-center gap-3">
-        {logo ? (
-          // eslint-disable-next-line @next/next/no-img-element -- pre-sized WebP variant
-          <img src={logo} alt="" width={36} height={36} className="size-9 shrink-0 rounded-full" />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="bg-muted grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
-          >
-            {orgInitials(club.name)}
-          </span>
-        )}
-        <span className="min-w-0 flex-1">
-          {/* The whole tile opens the organization; its rows go further in. */}
-          <Link
-            href={base}
-            className="block truncate text-[15px] font-semibold after:absolute after:inset-0 after:rounded-[inherit]"
-          >
-            {club.name}
-          </Link>
-          <span className="text-muted-foreground block truncate text-[13px]">{roleLine(club)}</span>
+    <div className="group hover:bg-muted/60 relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2.5 rounded-[14px] px-3 py-3 transition-colors md:grid-cols-[auto_minmax(0,1.1fr)_minmax(0,1.4fr)_auto_auto] md:gap-x-6">
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- pre-sized WebP variant
+        <img
+          src={logo}
+          alt=""
+          width={44}
+          height={44}
+          className="size-11 rounded-[12px] object-cover"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="bg-foreground text-background grid size-11 place-items-center rounded-[12px] text-[13px] font-semibold"
+        >
+          {orgInitials(club.name)}
         </span>
-        <ArrowRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-      </div>
-      <span className="text-muted-foreground flex min-w-0 items-start gap-1.5 text-[13px]">
-        <CalendarDays className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+      )}
+      <span className="min-w-0">
+        {/* The whole row opens the organization; its counts go further in. */}
+        <Link
+          href={base}
+          className="block truncate text-[15px] font-semibold after:absolute after:inset-0 after:rounded-[inherit]"
+        >
+          {club.name}
+        </Link>
+        <span className="text-muted-foreground block truncate text-[13px]">{roleLine(club)}</span>
+      </span>
+
+      <span className="col-span-3 flex min-w-0 items-center gap-2.5 text-[13px] md:col-span-1">
+        <CalendarDays className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         {club.nextMeeting ? (
           <span className="min-w-0">
-            <span className="text-foreground">{club.nextMeeting.title}</span>
-            {", "}
-            {formatEventWhen(club.nextMeeting, { viewer: viewerZone, org: club.timeZone }, now)}
+            <span className="block truncate font-medium">{club.nextMeeting.title}</span>
+            <span className="text-muted-foreground block truncate">
+              {formatEventWhen(club.nextMeeting, { viewer: viewerZone, org: club.timeZone }, now)}
+            </span>
           </span>
         ) : (
-          <span>No meeting on the calendar</span>
+          <span className="text-muted-foreground">No meeting on the calendar</span>
         )}
       </span>
-      <span className="relative z-10 mt-auto flex flex-wrap items-center gap-2 text-[13px]">
-        <Link
+
+      <span className="col-span-3 -ms-2 flex items-center gap-1 md:col-span-1 md:ms-0">
+        <Count
           href={`${base}/tasks?view=list&scope=mine`}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-        >
-          <ListChecks className="size-3.5" aria-hidden="true" />
-          {club.openTasks === 0
-            ? "No open tasks"
-            : `${club.openTasks} open task${club.openTasks === 1 ? "" : "s"}`}
-        </Link>
-        {club.unread > 0 && (
-          <Link
-            href={`${base}/inbox`}
-            className="bg-muted text-foreground hover:bg-muted/70 inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium"
-          >
-            <Inbox className="size-3.5" aria-hidden="true" />
-            {club.unread} unread
-          </Link>
-        )}
+          value={club.openTasks}
+          label={club.openTasks === 1 ? "open task" : "open tasks"}
+        />
+        <Count href={`${base}/inbox`} value={club.unread} label="unread" />
       </span>
+
+      <ArrowRight
+        className="text-muted-foreground col-start-3 row-start-1 size-4 transition-transform group-hover:translate-x-0.5 md:col-start-auto md:row-start-auto"
+        aria-hidden="true"
+      />
     </div>
   );
 }
 
-/** Join by code, or start one: the strip's last tile. */
-function JoinTile({ first }: { first: boolean }) {
+/** Join by code, or start one. */
+function JoinForm({ first = false }: { first?: boolean }) {
   return (
-    <div className={cn(TILE, "border-dashed hover:shadow-none motion-safe:hover:translate-y-0")}>
-      <label htmlFor="join-code" className="flex items-center gap-2 text-[15px] font-semibold">
-        <KeyRound className="size-4" aria-hidden="true" />
-        {first ? "Join your first organization" : "Join another organization"}
-      </label>
-      <form action="/onboarding/join" method="get" className="flex gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <form action="/onboarding/join" method="get" className="flex items-center gap-2">
+        <label htmlFor="join-code" className="sr-only">
+          Invite code
+        </label>
         <Input
           id="join-code"
           name="code"
@@ -161,16 +182,16 @@ function JoinTile({ first }: { first: boolean }) {
           autoComplete="off"
           spellCheck={false}
           maxLength={20}
-          className="h-8 min-w-0 flex-1 font-mono uppercase placeholder:font-sans placeholder:normal-case"
+          className="h-8 w-32 font-mono uppercase placeholder:font-sans placeholder:normal-case"
         />
         <Button type="submit" size="sm" variant={first ? "default" : "outline"}>
           Join
         </Button>
       </form>
-      <Button asChild size="sm" variant="ghost" className="mt-auto self-start">
+      <Button asChild size="sm" variant="ghost">
         <Link href="/onboarding/organization">
           <Plus aria-hidden="true" />
-          Start an organization
+          Start one
         </Link>
       </Button>
     </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import { Clock } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -16,12 +15,12 @@ import { cn } from "@/lib/utils";
 import type { FocusTimeData } from "@/server/overview/focus-time";
 import { saveFocusAvailability } from "@/server/overview/focus-time-actions";
 
-import { Insight, LinkChips } from "./connections";
-
 /**
  * Focus time (the Personal home's card): the viewer's longest free
  * stretch in the next seven days, the free hours of each day as a strip,
- * and the next tasks they have due (src/server/overview/focus-time.ts).
+ * and when their next tasks are due (src/server/overview/focus-time.ts).
+ * A narrow card beside This week (ambient.ts), so everything in it is a
+ * line or two.
  *
  * Block it off adds the stretch to the viewer's availability as a one-day
  * rule labelled "Focus time" (the same availability the profile saves,
@@ -98,33 +97,31 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
   const tasks = data.tasks;
   const firstDue = tasks[0]?.dueKey;
   return (
-    <div className="space-y-3">
+    <div className="flex h-full flex-col gap-3">
       <div>
-        <p className="heading text-2xl leading-tight tracking-tight">
-          {best
-            ? `${dayWordOfKey(best.key, todayKey)}, ${blockHours(best.start, best.end)}`
-            : "No free hours"}
+        <p className="text-[17px] leading-snug font-semibold">
+          {best ? dayWordOfKey(best.key, todayKey) : "No free hours"}
         </p>
-        <p className="text-muted-foreground mt-1 text-[13px]">
+        <p className="text-muted-foreground text-[13px] leading-snug">
           {best
-            ? `Your longest free block this week, ${hoursWord(best.end - best.start)}`
+            ? `${blockHours(best.start, best.end)}, ${hoursWord(best.end - best.start)} free`
             : "Your next seven days are full."}
         </p>
       </div>
 
-      <ol className="grid grid-cols-7 gap-1.5" aria-label="Free hours each day">
+      <ol className="grid grid-cols-7 gap-1" aria-label="Free hours each day">
         {week.days.map((d) => {
           const isBest = best?.key === d.key;
           return (
             <li
               key={d.key}
-              className="flex min-w-0 flex-col items-center gap-1.5"
+              className="flex min-w-0 flex-col items-center gap-1"
               aria-label={`${dayWordOfKey(d.key, todayKey)}: ${hoursWord(d.free)} free`}
             >
               <span
                 aria-hidden="true"
                 className={cn(
-                  "block h-8 w-full rounded-[8px]",
+                  "block h-5 w-full rounded-[6px]",
                   isBest
                     ? "bg-tint-success-foreground"
                     : d.free === 0
@@ -137,7 +134,7 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
               <span
                 aria-hidden="true"
                 className={cn(
-                  "text-[11.5px] font-semibold",
+                  "text-[11px] font-semibold",
                   isBest ? "text-foreground" : "text-muted-foreground",
                 )}
               >
@@ -148,34 +145,38 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
         })}
       </ol>
 
-      {block && (
-        <Button className="w-full" disabled={pending} onClick={blockOff}>
-          Block off {blockWord}
-        </Button>
-      )}
-
       {tasks.length > 0 && (
-        <div className="space-y-2">
-          <Insight tone="good" icon={Clock}>
-            Your next {tasks.length === 1 ? "task is" : `${tasks.length} tasks are`} due{" "}
-            <b>{andList(tasks.map((t) => midSentence(dayWordOfKey(t.dueKey, todayKey))))}</b>.
-            {best && firstDue && firstDue < best.key && " The first is due before this block."}
-          </Insight>
-          <LinkChips items={data.links} />
-        </div>
+        <p className="text-muted-foreground text-[13px] leading-snug">
+          {tasks.length === 1 ? "Next task due" : `Next ${tasks.length} due`}{" "}
+          <span className="text-foreground">
+            {andList(tasks.map((t) => midSentence(dayWordOfKey(t.dueKey, todayKey))))}
+          </span>
+          {best && firstDue && firstDue < best.key && ", before this block"}
+        </p>
       )}
 
-      {empty && (
-        <p className="text-muted-foreground text-[13px]">
-          From your calendar only.{" "}
+      <div className="mt-auto space-y-2">
+        {block && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={pending}
+            onClick={blockOff}
+            title={`Block off ${blockWord}`}
+          >
+            Block off {blockHours(block.start, block.end)}
+          </Button>
+        )}
+        {empty && (
           <Link
             href={data.availabilityHref}
-            className="text-foreground font-semibold underline underline-offset-4"
+            className="text-muted-foreground hover:text-foreground block text-[12.5px] underline underline-offset-4"
           >
             Add the hours you&apos;re never free
           </Link>
-        </p>
-      )}
+        )}
+      </div>
     </div>
   );
 }
