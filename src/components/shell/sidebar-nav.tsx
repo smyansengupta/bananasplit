@@ -26,6 +26,7 @@ import {
   X,
   type IconComponent,
 } from "@/components/icons";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
@@ -41,13 +42,17 @@ import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
 import { PinButton, usePinTarget } from "@/components/shell/pin-button";
 import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
-import { SidebarEditHeader, SidebarEditRows } from "@/components/shell/sidebar-edit-rows";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
 import { arrangeSections, EMPTY_MY_SIDEBAR } from "@/lib/nav/my-sidebar";
 import { canonicalHref } from "@/lib/pins/pages";
 import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
+
+/** Edit mode, and the drag library with it, loads when someone turns it on: every page has this sidebar. */
+const loadEditRows = () => import("@/components/shell/sidebar-edit-rows");
+const SidebarEditHeader = dynamic(() => loadEditRows().then((m) => m.SidebarEditHeader), { ssr: false });
+const SidebarEditRows = dynamic(() => loadEditRows().then((m) => m.SidebarEditRows), { ssr: false });
 
 export interface SidebarPin {
   id: string;

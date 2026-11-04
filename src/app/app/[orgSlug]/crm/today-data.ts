@@ -22,13 +22,17 @@ export const todayForShell = cache(async (shell: CrmShell, who: CrmScope): Promi
     (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
   );
   const team = who === "team" ? await crmTeam(orgId, shell.user.id) : [];
-  return withOrgTx(orgId, ({ db }) =>
-    todayRows(db, orgId, shell.user.id, shell.roles, {
+  return todayRows(
+    (read) => withOrgTx(orgId, ({ db }) => read(db)),
+    orgId,
+    shell.user.id,
+    shell.roles,
+    {
       everyone: shell.access.personal || who === "all",
       team,
       relationships,
       personal: shell.access.personal,
-    }),
+    },
   );
 });
 

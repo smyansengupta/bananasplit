@@ -22,7 +22,7 @@ export interface RecordExtras {
   knowsBest: { userId: string; strength: number }[];
 }
 
-async function extras(
+export async function extras(
   db: TxClient,
   organizationId: string,
   orgSlug: string,
@@ -39,6 +39,12 @@ async function extras(
 }
 
 export async function loadPerson(db: TxClient, organizationId: string, orgSlug: string, id: string) {
+  const core = await loadPersonCore(db, organizationId, id);
+  return core && { ...core, ...(await extras(db, organizationId, orgSlug, "person", id)) };
+}
+
+/** A person without their timeline and the rest of `extras`, which can load beside it. */
+export async function loadPersonCore(db: TxClient, organizationId: string, id: string) {
   const person = await db.crmPerson.findFirst({
     where: { id, organizationId },
     include: {
@@ -78,7 +84,6 @@ export async function loadPerson(db: TxClient, organizationId: string, orgSlug: 
     person,
     contact,
     deals: person.deals.filter((d) => !d.deal.deletedAt),
-    ...(await extras(db, organizationId, orgSlug, "person", id)),
   };
 }
 

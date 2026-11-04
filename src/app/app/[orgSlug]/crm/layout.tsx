@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import { CrmPendingCard } from "@/components/crm/card/crm-pending-card";
+import { CrmWarmUp } from "@/components/crm/lazy-parts";
 
 /**
  * Every CRM page. Being one shared layout is the point: a navigation inside
@@ -16,6 +17,7 @@ export default function CrmLayout({ children }: LayoutProps<"/app/[orgSlug]/crm"
       <Suspense fallback={null}>
         <CrmPendingCard />
       </Suspense>
+      <CrmWarmUp />
     </>
   );
 }

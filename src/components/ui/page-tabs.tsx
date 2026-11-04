@@ -3,6 +3,7 @@
 import { type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import { SegmentCount, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,12 @@ export interface PageTab {
   active?: boolean;
   /** How many are waiting there (a badge after the label; none at 0). */
   count?: number;
+  /**
+   * Fetch the whole page once the pointer is on the tab, so the click finds it
+   * here. The page renders for that, so never a page that writes on a visit.
+   * It's kept 30 seconds at most (staleTimes in next.config.ts).
+   */
+  warm?: boolean;
 }
 
 export function PageTabs({
@@ -40,6 +47,8 @@ export function PageTabs({
   className?: string;
 }) {
   const pathname = usePathname() ?? "";
+  // The one tab the pointer has reached; the rest prefetch as they always have.
+  const [hovered, setHovered] = useState<string | null>(null);
   const isActive = (t: PageTab) => {
     if (t.active !== undefined) return t.active;
     if (pathname === t.href) return true;
@@ -69,6 +78,8 @@ export function PageTabs({
               <li key={tab.href} className="max-md:flex-auto">
                 <Link
                   href={tab.href}
+                  prefetch={tab.warm && !active && hovered === tab.href ? true : undefined}
+                  onPointerEnter={tab.warm ? () => setHovered(tab.href) : undefined}
                   aria-current={active ? "page" : undefined}
                   ref={
                     active

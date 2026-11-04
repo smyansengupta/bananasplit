@@ -55,7 +55,9 @@ function as<T>(user: U, fn: (ctx: OrgContext) => Promise<T>): Promise<T> {
 async function load(user: U) {
   const access = await as(user, (ctx) => crmAccess(ctx));
   requireUserMock.mockResolvedValue(user);
-  const data = await loadCrmStarted({ organizationId: org, userId: user.id, access });
+  const role = await as(user, async (ctx) => ctx.role);
+  requireUserMock.mockResolvedValue(user);
+  const data = await loadCrmStarted({ organizationId: org, userId: user.id, role, access });
   const viewer = { admin: access.admin, personal: access.personal };
   return { access, data, viewer };
 }

@@ -3,7 +3,7 @@ import { withOrgTx } from "@/server/db/context";
 
 import { SettingsMore } from "../settings-more";
 import { AccessCard, ManagersCard, RoutingCard } from "../team-settings";
-import { HandoverCards } from "./handover";
+import { HandoverCards, preloadHandover } from "./handover";
 import type { SectionProps } from "./types";
 
 /**
@@ -14,7 +14,7 @@ import type { SectionProps } from "./types";
 export async function TeamSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
   if (!shell.access.admin) return <HandoverCards shell={shell} orgSlug={orgSlug} />;
-  const data = await withOrgTx(orgId, async ({ db }) => {
+  const dataP = withOrgTx(orgId, async ({ db }) => {
     const roles = await db.membership.findMany({
       where: { organizationId: orgId },
       select: { userId: true, role: true },
@@ -27,6 +27,8 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
     });
     return { roles, owns, routing: await readOrgRouting(db, orgId) };
   });
+  preloadHandover(shell);
+  const data = await dataP;
   const adminIds = new Set(
     data.roles.filter((r) => r.role === "OWNER" || r.role === "ADMIN").map((r) => r.userId),
   );

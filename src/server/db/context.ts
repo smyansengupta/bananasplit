@@ -34,7 +34,8 @@ import { AppError, mapDbError } from "./errors";
  * same round trip. RLS then enforces tenancy and membership in the database.
  *
  * Semantics shared by every wrapper:
- * - ReadCommitted, maxWait 10s, timeout 10s. No network I/O inside the
+ * - Postgres' default Read Committed (naming it costs a round trip per
+ *   transaction), maxWait 10s, timeout 10s. No network I/O inside the
  *   transaction (email, Blob, Google, Claude, Supabase, Netlify): queue it
  *   with ctx.afterCommit(fn) or enqueue a job (app.enqueue_job runs in the
  *   same transaction, so a rolled-back write never sends anything).
@@ -111,7 +112,6 @@ const als = new AsyncLocalStorage<Store>();
 const TX_OPTIONS = {
   maxWait: 10_000,
   timeout: 10_000,
-  isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
 } as const;
 
 /** The transaction context of the current async call chain, if any. */
@@ -194,12 +194,35 @@ interface RunOptions {
   /** Throw NotFoundError unless set_context returns a Role (non-members). */
   requireMember: boolean;
   retryOnStartFailure: boolean;
+  /**
+   * The transaction's first statement, in place of plain set_context, when
+   * the org is only known from it (getOrgContextBySlug). It must call
+   * app.set_context; organizationId above stays null until it answers.
+   */
+  enter?: (tx: TxClient) => Promise<Entered>;
+}
+
+/** Who the first statement says this transaction is for. */
+interface Entered {
+  role: Role | null;
+  organizationId: string | null;
+}
+
+async function setContext(
+  tx: TxClient,
+  userId: string | null,
+  organizationId: string | null,
+): Promise<Entered> {
+  const rows = await tx.$queryRaw<{ role: Role | null }[]>`
+    SELECT app.set_context(${userId ?? ""}, ${organizationId ?? ""})::text AS role`;
+  return { role: rows[0]?.role ?? null, organizationId };
 }
 
 async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>): Promise<T> {
   const current = als.getStore();
   if (
     current &&
+    !opts.enter &&
     current.client === opts.client &&
     current.ctx.userId === opts.userId &&
     current.ctx.organizationId === opts.organizationId &&
@@ -215,17 +238,17 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
     queue.length = 0;
     navigation = null;
     return opts.client.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<{ role: Role | null }[]>`
-        SELECT app.set_context(${opts.userId ?? ""}, ${opts.organizationId ?? ""})::text AS role`;
-      const role = rows[0]?.role ?? null;
-      if (opts.requireMember && (opts.organizationId === null || role === null)) {
+      const { role, organizationId } = opts.enter
+        ? await opts.enter(tx)
+        : await setContext(tx, opts.userId, opts.organizationId);
+      if (opts.requireMember && (organizationId === null || role === null)) {
         throw new NotFoundError();
       }
       const ctx: TxContext = {
         kind: opts.kind,
         db: tx,
         userId: opts.userId,
-        organizationId: opts.organizationId,
+        organizationId,
         role,
         afterCommit: (cb) => {
           queue.push(cb);
@@ -637,9 +660,62 @@ export interface OrgContextBySlug {
 }
 
 /**
+ * One page-read transaction for the org at `slug`, whose first statement
+ * resolves the slug and sets the context together. A retired slug redirects
+ * to the current one; a slug that doesn't resolve, or a non-member, throws
+ * NotFoundError.
+ */
+function runInSlugTx<T>(
+  userId: string,
+  slug: string,
+  fn: (ctx: TxContext) => Promise<T>,
+): Promise<T> {
+  return runInTx(
+    {
+      client: appDb,
+      kind: "page",
+      userId,
+      organizationId: null,
+      requireMember: true,
+      retryOnStartFailure: true,
+      enter: async (tx) => {
+        const rows = await tx.$queryRaw<
+          { organizationId: string; canonicalSlug: string; isRetired: boolean; role: Role | null }[]
+        >`
+          SELECT r."organizationId", r."canonicalSlug", r."isRetired",
+                 app.set_context(${userId}, r."organizationId")::text AS role
+          FROM app.resolve_org_slug(${slug}) r`;
+        const resolved = rows[0];
+        if (!resolved) return { role: null, organizationId: null };
+        if (resolved.isRetired) redirect(`/app/${resolved.canonicalSlug}`);
+        return { role: resolved.role, organizationId: resolved.organizationId };
+      },
+    },
+    fn,
+  );
+}
+
+/**
+ * withOrgTx for a page that has only the slug yet: it needn't wait for
+ * getOrgContextBySlug and runs beside it (the CRM's shell). The same checks,
+ * by the database, in the same order.
+ */
+export async function withOrgSlugTx<T>(
+  slug: string,
+  fn: (ctx: TxContext & { organizationId: string }) => Promise<T>,
+): Promise<T> {
+  const user = await requireUser();
+  return runInSlugTx(user.id, slug, (ctx) =>
+    fn({ ...ctx, organizationId: ctx.organizationId as string }),
+  );
+}
+
+/**
  * The org layout's per-request context, deduped with React cache(): the
  * session user, the org resolved from its slug, the user's Role in it, the
- * org switcher list, OrgSettings and OrgTheme, in one transaction.
+ * org switcher list, OrgSettings and OrgTheme, in one transaction, whose
+ * first statement resolves the slug and sets the context together (every
+ * page waits for this).
  * - Unauthenticated: redirect to /sign-in (requireUser).
  * - Unknown slug, soft-deleted org, or not a member: notFound().
  * - A retired slug (renamed org): redirect to the canonical slug.
@@ -647,33 +723,11 @@ export interface OrgContextBySlug {
 export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContextBySlug> => {
   const user = await requireUser();
 
-  const resolved = await withUserTx(user.id, async ({ db }) => {
-    const rows = await db.$queryRaw<
-      { organizationId: string; canonicalSlug: string; isRetired: boolean }[]
-    >`SELECT "organizationId", "canonicalSlug", "isRetired" FROM app.resolve_org_slug(${slug})`;
-    return rows[0] ?? null;
-  });
-  if (!resolved) notFound();
-  if (resolved.isRetired) redirect(`/app/${resolved.canonicalSlug}`);
-
   try {
-    return await withOrgTx(resolved.organizationId, async ({ db, role }) => {
-      // Sequential: one connection per transaction.
-      const organization = await db.organization.findUniqueOrThrow({
-        where: { id: resolved.organizationId },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          timezone: true,
-          logo: true,
-          activeOrgChartVersionId: true,
-          kind: true,
-          plan: true,
-          trialEndsAt: true,
-          planAfterTrial: true,
-        },
-      });
+    const load = async ({ db, role, organizationId }: TxContext): Promise<OrgContextBySlug> => {
+      const orgId = organizationId as string;
+      // Sequential: one connection per transaction. The org itself comes
+      // with the switcher list: it's one of those rows.
       const memberships = await db.membership.findMany({
         where: { userId: user.id },
         select: {
@@ -686,17 +740,20 @@ export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContex
               deletedAt: true,
               logo: true,
               kind: true,
+              timezone: true,
+              activeOrgChartVersionId: true,
+              plan: true,
+              trialEndsAt: true,
+              planAfterTrial: true,
             },
           },
         },
         orderBy: { organization: { name: "asc" } },
       });
-      const settings = await db.orgSettings.findUnique({
-        where: { organizationId: resolved.organizationId },
-      });
-      const theme = await db.orgTheme.findUnique({
-        where: { organizationId: resolved.organizationId },
-      });
+      const current = memberships.find((m) => m.organization.id === orgId)?.organization;
+      if (!current) throw new NotFoundError();
+      const settings = await db.orgSettings.findUnique({ where: { organizationId: orgId } });
+      const theme = await db.orgTheme.findUnique({ where: { organizationId: orgId } });
       const summary = (m: (typeof memberships)[number]): MembershipSummary => ({
         organizationId: m.organization.id,
         name: m.organization.name,
@@ -707,14 +764,26 @@ export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContex
       });
       return {
         user,
-        organization,
-        role,
+        organization: {
+          id: current.id,
+          name: current.name,
+          slug: current.slug,
+          timezone: current.timezone,
+          logo: current.logo,
+          activeOrgChartVersionId: current.activeOrgChartVersionId,
+          kind: current.kind,
+          plan: current.plan,
+          trialEndsAt: current.trialEndsAt,
+          planAfterTrial: current.planAfterTrial,
+        },
+        role: role as Role,
         memberships: memberships.filter((m) => m.organization.deletedAt === null).map(summary),
         pendingDeletion: memberships.filter((m) => m.organization.deletedAt !== null).map(summary),
         settings,
         theme,
       };
-    });
+    };
+    return await runInSlugTx(user.id, slug, load);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     throw error;

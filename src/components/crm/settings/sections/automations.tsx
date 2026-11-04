@@ -39,7 +39,7 @@ const ago = (iso: string) => {
  */
 export async function AutomationsSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
-  const [data, { health, sender }, failed] = await Promise.all([
+  const [running, plans, { health, sender }, failed] = await Promise.all([
     withOrgTx(orgId, async ({ db }) => {
       const workflows = await listWorkflows(db, orgId);
       const recipes = workflows.length === 0 ? await listRecipes(db, orgId) : [];
@@ -47,17 +47,20 @@ export async function AutomationsSection({ shell, orgSlug }: SectionProps) {
         where: { organizationId: orgId },
         select: { autonomy: true, dailySendCap: true, sending: true },
       });
-      const plans = await listPlans(db, orgId, shell.user.id, {
+      return { workflows, recipes, settings };
+    }),
+    withOrgTx(orgId, ({ db }) =>
+      listPlans(db, orgId, shell.user.id, {
         relationships: new Map(
           (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
         ),
         members: new Map(shell.members.map((m) => [m.id, m.name])),
-      });
-      return { workflows, recipes, plans, settings };
-    }),
+      }),
+    ),
     loadSendingHealth(orgId),
     failedSends(orgId),
   ]);
+  const data = { ...running, plans };
   const ready = data.recipes.filter((r) => !r.missing).slice(0, 6);
   const row = (p: (typeof data.plans)[number]): SeriesRow => ({
     type: p.type,

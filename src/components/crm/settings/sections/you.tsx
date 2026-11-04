@@ -6,10 +6,10 @@ import { ensureMemberSettings } from "@/server/crm/outreach/member";
 import { ensureStarters } from "@/server/crm/outreach/templates";
 import { withOrgTx } from "@/server/db/context";
 
-import { RecentCalls } from "../recent-calls";
+import { preloadRecentCalls, RecentCalls } from "../recent-calls";
 import { SettingsMore } from "../settings-more";
 import { MailExtrasCard, YourBookingCard, YourMailCard } from "../you-settings";
-import { HandedToYou } from "./handover";
+import { HandedToYou, preloadHanded } from "./handover";
 import type { SectionProps } from "./types";
 
 /**
@@ -20,7 +20,7 @@ import type { SectionProps } from "./types";
  */
 export async function YouSection({ shell, orgSlug, sp }: SectionProps) {
   const orgId = shell.org.id;
-  const data = await withOrgTx(orgId, async (ctx) => {
+  const dataP = withOrgTx(orgId, async (ctx) => {
     const { db, userId } = ctx;
     await ensureStarters(ctx);
     const rows = await db.crmTemplate.findMany({
@@ -56,6 +56,9 @@ export async function YouSection({ shell, orgSlug, sp }: SectionProps) {
       })),
     };
   });
+  preloadHanded(shell, sp.role);
+  preloadRecentCalls(orgId, shell.user.id);
+  const data = await dataP;
   const name = shell.members.find((m) => m.id === shell.user.id)?.name ?? shell.user.name ?? "You";
   return (
     <>

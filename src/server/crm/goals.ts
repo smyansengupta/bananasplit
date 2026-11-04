@@ -51,9 +51,10 @@ export async function goalActual(
   db: TxClient,
   organizationId: string,
   goal: { metric: string; pipelineId: string | null; ownerId: string | null; periodStart: Date; periodEnd: Date },
+  zone?: string,
 ): Promise<number> {
   // The period's days in the organization's timezone, start to end.
-  const tz = await orgTimeZone(db, organizationId);
+  const tz = zone ?? (await orgTimeZone(db, organizationId));
   const range = { gte: dayBounds(day(goal.periodStart), tz).start, lt: dayBounds(day(goal.periodEnd), tz).end };
   const owner = goal.ownerId;
   switch (goal.metric as GoalMetric) {
@@ -121,8 +122,9 @@ export async function listGoals(
     take: options.take ?? 50,
   });
   const out: GoalView[] = [];
+  const tz = rows.length > 0 ? await orgTimeZone(db, organizationId) : undefined;
   for (const g of rows) {
-    const actual = await goalActual(db, organizationId, g);
+    const actual = await goalActual(db, organizationId, g, tz);
     const start = day(g.periodStart);
     const end = day(g.periodEnd);
     const metric = (GOAL_METRICS as readonly string[]).includes(g.metric) ? (g.metric as GoalMetric) : "items_won";

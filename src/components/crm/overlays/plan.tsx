@@ -1,10 +1,9 @@
-import { NewPlanCard } from "@/components/crm/cards/new-plan-card";
-import {
-  PlanCard,
-  type CampaignPlanData,
-  type PlanReply,
-  type SequencePlanData,
+import type {
+  CampaignPlanData,
+  PlanReply,
+  SequencePlanData,
 } from "@/components/crm/cards/plan-card";
+import { NewPlanCard, PlanCard } from "@/components/crm/lazy-parts";
 import {
   audienceChips,
   audienceOffers,

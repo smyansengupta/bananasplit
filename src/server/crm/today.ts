@@ -3,7 +3,7 @@ import type { TxClient } from "@/server/db/context";
 
 import { pendingDuplicates } from "./dedupe";
 import { openCallSteps } from "./phone/queue";
-import { followUpQueue, type QueueItem, type QueueReason } from "./outreach/queue";
+import { followUpQueue, waitingOn, type QueueItem, type QueueReason } from "./outreach/queue";
 import type { RoleOwner } from "./owners";
 import { todayList } from "./queries";
 import { listQueue } from "./review";
@@ -150,8 +150,13 @@ export interface TodayData {
   mine: boolean;
 }
 
+/**
+ * The list's reads run side by side, each in its own transaction: `read`
+ * opens one (a transaction runs one query at a time, so this is the only way
+ * they overlap). The queue is the long one; the rest finish behind it.
+ */
 export async function todayRows(
-  db: TxClient,
+  read: <T>(fn: (db: TxClient) => Promise<T>) => Promise<T>,
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
@@ -166,43 +171,62 @@ export async function todayRows(
   },
 ): Promise<TodayData> {
   const now = options.now ?? new Date();
-  let items = await followUpQueue(db, organizationId, viewerId, roles, {
-    mine: !options.everyone,
-    team: options.team,
-    now,
+  const asked = { mine: !options.everyone, team: options.team, now };
+  // Asked for before the queue, which waits on it (see followUpQueue).
+  const waiting = read((db) => waitingOn(db, organizationId, viewerId, asked));
+  // Read by the queue; if that fails first, nobody is left waiting on it.
+  waiting.catch(() => null);
+  const queueP = read(async (db) => {
+    let items = await followUpQueue(db, organizationId, viewerId, roles, { ...asked, waiting });
+    let mine = !options.everyone;
+    if (mine && items.length === 0) {
+      items = await followUpQueue(db, organizationId, viewerId, roles, {
+        mine: false,
+        limit: 40,
+        now,
+      });
+      mine = false;
+    }
+    const personIds = items.filter((i) => i.targetKind === "person").map((i) => i.id);
+    // The viewer's unsent drafts (the follow-up agent's, an automation's held for review).
+    const drafts = personIds.length
+      ? await db.crmEmailMessage.findMany({
+          where: {
+            organizationId,
+            status: "DRAFT",
+            mailboxUserId: viewerId,
+            personId: { in: personIds },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, personId: true, subject: true, bodyText: true },
+        })
+      : [];
+    return { items, mine, drafts };
   });
-  let mine = !options.everyone;
-  if (mine && items.length === 0) {
-    items = await followUpQueue(db, organizationId, viewerId, roles, {
-      mine: false,
-      limit: 40,
-      now,
-    });
-    mine = false;
-  }
-  const personIds = items.filter((i) => i.targetKind === "person").map((i) => i.id);
+  // The viewer's waiting drafts and changes (To approve).
+  const approveP = read(async (db) => {
+    const suggestions = await listQueue(db, organizationId, viewerId, { mine: true, take: 25 });
+    return { suggestions, draftPeople: await draftRecipients(db, organizationId, suggestions) };
+  });
+  const asideP = read(async (db) => ({
+    callSteps: await openCallSteps(db, organizationId, viewerId),
+    dupes: await pendingDuplicates(db, organizationId, 15),
+  }));
+  // Deals that are stuck or have no next step. They follow the queue's `mine`,
+  // which only changes when nothing is the viewer's: read again then.
+  const dealsFor = (mine: boolean) =>
+    read((db) => todayList(db, organizationId, viewerId, roles, { mine, team: options.team }, now));
+  const firstDealsP = dealsFor(!options.everyone);
+  const [{ items, mine, drafts }, { suggestions, draftPeople }, { callSteps, dupes }, firstDeals] =
+    await Promise.all([queueP, approveP, asideP, firstDealsP]);
   const relationship = new Map(
     items.map((p) => [
       p.id,
       p.relationship ? (options.relationships.get(p.relationship) ?? null) : null,
     ]),
   );
-  // The viewer's unsent drafts (the follow-up agent's, an automation's held for review).
-  const drafts = personIds.length
-    ? await db.crmEmailMessage.findMany({
-        where: {
-          organizationId,
-          status: "DRAFT",
-          mailboxUserId: viewerId,
-          personId: { in: personIds },
-        },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, personId: true, subject: true, bodyText: true },
-      })
-    : [];
-  // The viewer's waiting drafts and changes (To approve). A draft that has a
-  // To approve row is sent from there, not offered again on the person's row.
-  const suggestions = await listQueue(db, organizationId, viewerId, { mine: true, take: 25 });
+  // A draft that has a To approve row is sent from there, not offered again
+  // on the person's row.
   const approving = new Set(
     suggestions
       .map((s) => (s.kind === "DRAFT_EMAIL" ? payloadOf(s.payload).draftId : null))
@@ -212,7 +236,6 @@ export async function todayRows(
   for (const d of drafts) {
     if (d.personId && !approving.has(d.id) && !draftFor.has(d.personId)) draftFor.set(d.personId, d);
   }
-  const callSteps = await openCallSteps(db, organizationId, viewerId);
 
   const rows: TodayRow[] = [];
   for (const item of items) {
@@ -322,8 +345,7 @@ export async function todayRows(
     rows.push({ ...base, group: "due", text: reasonText(item, first), why, actions });
   }
 
-  // Deals that are stuck or have no next step.
-  const deals = await todayList(db, organizationId, viewerId, roles, { mine, team: options.team }, now);
+  const deals = mine === !options.everyone ? firstDeals : await dealsFor(mine);
   const seen = new Set<string>();
   for (const d of [...deals.stuck, ...deals.nostep]) {
     if (seen.has(d.id)) continue;
@@ -352,7 +374,6 @@ export async function todayRows(
   // To approve: drafts that wait for a person to send them (automations,
   // a plan's later steps, the follow-up agent), AI and automation changes,
   // people found in mail, duplicates.
-  const draftPeople = await draftRecipients(db, organizationId, suggestions);
   for (const s of suggestions) {
     const row = s.rows[0];
     const payload = payloadOf(s.payload);
@@ -418,7 +439,6 @@ export async function todayRows(
       person: null,
     });
   }
-  const dupes = await pendingDuplicates(db, organizationId, 15);
   for (const d of dupes) {
     const [a, b] = d.records;
     rows.push({

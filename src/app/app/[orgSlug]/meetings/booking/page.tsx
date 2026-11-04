@@ -46,28 +46,33 @@ export default async function BookingLinksPage({
   const now = new Date();
   // The same rows as Meetings, so the tab's count matches its list.
   const coHosted = isAdmin ? [] : await coHostedEventIds(org.id, user.id, now);
-  const { data, pipelines, meetingCount, findOpen } = await withOrgTx(org.id, async (ctx) => {
-    const data = await loadBookingLinks(ctx, now);
-    const pipelines = data.access.orgLinks
-      ? await ctx.db.crmPipeline.findMany({
-          where: { organizationId: org.id, archivedAt: null },
-          select: { id: true, name: true },
-          orderBy: { createdAt: "asc" },
-        })
-      : [];
-    const meetingCount = await ctx.db.event.count({
-      where: { AND: [meetingsWhere(org.id, user.id, isAdmin, now, coHosted), { endsAt: { gt: now } }] },
-    });
-    // Find a time polls still taking answers, for the tab's count (as on Meetings).
-    const findOpen = await ctx.db.availabilityPoll.count({
-      where: {
-        organizationId: org.id,
-        finalizedEventId: null,
-        OR: [{ closesAt: null }, { closesAt: { gte: now } }],
-      },
-    });
-    return { findOpen, data, pipelines, meetingCount };
-  });
+  const [{ data, pipelines }, { meetingCount, findOpen }] = await Promise.all([
+    withOrgTx(org.id, async (ctx) => {
+      const data = await loadBookingLinks(ctx, now);
+      const pipelines = data.access.orgLinks
+        ? await ctx.db.crmPipeline.findMany({
+            where: { organizationId: org.id, archivedAt: null },
+            select: { id: true, name: true },
+            orderBy: { createdAt: "asc" },
+          })
+        : [];
+      return { data, pipelines };
+    }),
+    // The tabs' counts, beside the links.
+    withOrgTx(org.id, async ({ db }) => ({
+      meetingCount: await db.event.count({
+        where: { AND: [meetingsWhere(org.id, user.id, isAdmin, now, coHosted), { endsAt: { gt: now } }] },
+      }),
+      // Find a time polls still taking answers (as on Meetings).
+      findOpen: await db.availabilityPoll.count({
+        where: {
+          organizationId: org.id,
+          finalizedEventId: null,
+          OR: [{ closesAt: null }, { closesAt: { gte: now } }],
+        },
+      }),
+    })),
+  ]);
   const edit = typeof sp.edit === "string" ? sp.edit : null;
   const upcoming = data.upcoming.length;
   return (

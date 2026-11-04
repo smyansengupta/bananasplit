@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { CALLBACK_HEADER, signInPath } from "@/lib/auth/callback-url";
 import { auth } from "@/lib/auth/config";
@@ -14,7 +15,11 @@ export interface Session {
   user: SessionUser;
 }
 
-export async function getSession(): Promise<Session | null> {
+/**
+ * Once per request (React cache()): every withOrgTx asks for the user, and
+ * auth() decrypts and re-signs the session cookie each time it runs.
+ */
+export const getSession = cache(async (): Promise<Session | null> => {
   const session = await auth();
   if (!session?.user?.id || !session.user.email) {
     return null;
@@ -26,7 +31,7 @@ export async function getSession(): Promise<Session | null> {
       name: session.user.name ?? null,
     },
   };
-}
+});
 
 /**
  * The signed-in user, or a redirect to sign-in that carries a callbackUrl

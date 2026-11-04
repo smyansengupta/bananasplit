@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { appUrl } from "@/lib/app-url";
 import { requirePermission } from "@/lib/auth/permissions";
 import { periodOf } from "@/lib/crm/forecast";
@@ -49,12 +51,20 @@ function shortLink(slug: string): string {
   return appUrl(`/book/${slug}`).replace(/^https?:\/\//, "");
 }
 
-export async function loadCrmStarted(input: {
+export function loadCrmStarted(input: {
   organizationId: string;
   userId: string;
   access: CrmAccess;
 }): Promise<CrmStartedData> {
-  const { organizationId, userId, access } = input;
+  return readCrmStarted(input.organizationId, input.userId, input.access);
+}
+
+/** Once per request (the arguments are the cache's key): Today starts it early, the panel reads the same answer. */
+const readCrmStarted = cache(async (
+  organizationId: string,
+  userId: string,
+  access: CrmAccess,
+): Promise<CrmStartedData> => {
   const read = await withOrgTx(organizationId, async ({ db }) => {
     const member = await db.crmMemberSettings.findFirst({
       where: { organizationId, userId },
@@ -129,7 +139,7 @@ export async function loadCrmStarted(input: {
     signature: read.signature,
     quarter: read.org?.quarter ?? null,
   };
-}
+});
 
 async function writeOwnSkip(ctx: OrgContext, step: CrmStartedKey, skipped: boolean): Promise<void> {
   const { db, organizationId, userId } = ctx;

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cache } from "react";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import { crmRecordHref } from "@/lib/crm/href";
@@ -6,14 +7,9 @@ import { formatDuration, outcomeLabel } from "@/lib/crm/phone";
 import { when } from "@/lib/crm/when";
 import { withOrgTx } from "@/server/db/context";
 
-/**
- * Your recent calls (CRM settings > You; it was on the Calls page): the
- * last ten you made or took, each with who, how it went, how long, when,
- * and its recording when there is one. Nothing shows until you've had a
- * call. A person's own calls are on their card's Timeline.
- */
-export async function RecentCalls({ orgId, orgSlug, userId }: { orgId: string; orgSlug: string; userId: string }) {
-  const calls = await withOrgTx(orgId, ({ db }) =>
+/** Once per request: You starts it beside its own reads. */
+const loadCalls = cache((orgId: string, userId: string) =>
+  withOrgTx(orgId, ({ db }) =>
     db.crmCall.findMany({
       where: { organizationId: orgId, userId },
       orderBy: { startedAt: "desc" },
@@ -27,7 +23,21 @@ export async function RecentCalls({ orgId, orgSlug, userId }: { orgId: string; o
         person: { select: { id: true, name: true } },
       },
     }),
-  );
+  ),
+);
+
+export function preloadRecentCalls(orgId: string, userId: string) {
+  void loadCalls(orgId, userId).catch(() => null);
+}
+
+/**
+ * Your recent calls (CRM settings > You; it was on the Calls page): the
+ * last ten you made or took, each with who, how it went, how long, when,
+ * and its recording when there is one. Nothing shows until you've had a
+ * call. A person's own calls are on their card's Timeline.
+ */
+export async function RecentCalls({ orgId, orgSlug, userId }: { orgId: string; orgSlug: string; userId: string }) {
+  const calls = await loadCalls(orgId, userId);
   if (calls.length === 0) return null;
   return (
     <SettingsCard title="Your recent calls">

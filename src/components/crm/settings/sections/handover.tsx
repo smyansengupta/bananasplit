@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cache } from "react";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import type { CrmSettingsShell } from "@/app/app/[orgSlug]/crm/shell";
@@ -29,11 +30,11 @@ function ownerChoices(shell: CrmSettingsShell): OwnerChoice[] {
   ];
 }
 
-/** Members who left, people with no owner, and handing a member's people over. */
-export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
+/** Once per request: Team starts it beside its own reads, so the cards aren't read after them. */
+const loadHandover = cache((shell: CrmSettingsShell) => {
   const orgId = shell.org.id;
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
-  const data = await withOrgTx(orgId, async ({ db }) => {
+  return withOrgTx(orgId, async ({ db }) => {
     const left = await departedOwners(db, orgId);
     const counts = await db.crmPerson.groupBy({
       by: ["ownerId"],
@@ -54,6 +55,16 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
       unowned: await unowned(db, orgId, shell.roles),
     };
   });
+});
+
+export function preloadHandover(shell: CrmSettingsShell) {
+  void loadHandover(shell).catch(() => null);
+}
+
+/** Members who left, people with no owner, and handing a member's people over. */
+export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
+  const orgId = shell.org.id;
+  const data = await loadHandover(shell);
   const choices = ownerChoices(shell);
   return (
     <div id="handover" className="scroll-mt-24 space-y-4.5">
@@ -85,20 +96,9 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
 }
 
 /** You: the brief on each person handed to you (or your position's, with ?role=). */
-export async function HandedToYou({
-  shell,
-  orgSlug,
-  role: asked,
-}: {
-  shell: CrmSettingsShell;
-  orgSlug: string;
-  role?: string;
-}) {
-  if (shell.access.personal) return null;
-  const orgId = shell.org.id;
-  const userId = shell.user.id;
-  const role = asked && shell.roles.has(asked) ? asked : null;
-  const rows = await withOrgTx(orgId, async ({ db }) => {
+/** Once per request: You starts it beside its own reads. */
+const loadHanded = cache((orgId: string, userId: string, role: string | null) =>
+  withOrgTx(orgId, async ({ db }) => {
     if (role) return briefs(db, orgId, { ownerRoleKey: role });
     // People handed to me in the last 90 days (field history) that I still own.
     const handed = await db.crmFieldHistory.findMany({
@@ -114,7 +114,32 @@ export async function HandedToYou({
     });
     if (handed.length === 0) return [];
     return briefs(db, orgId, { id: { in: [...new Set(handed.map((h) => h.targetId))] }, ownerId: userId });
-  });
+  }),
+);
+
+function askedRole(shell: CrmSettingsShell, asked?: string): string | null {
+  return asked && shell.roles.has(asked) ? asked : null;
+}
+
+export function preloadHanded(shell: CrmSettingsShell, asked?: string) {
+  if (shell.access.personal) return;
+  void loadHanded(shell.org.id, shell.user.id, askedRole(shell, asked)).catch(() => null);
+}
+
+export async function HandedToYou({
+  shell,
+  orgSlug,
+  role: asked,
+}: {
+  shell: CrmSettingsShell;
+  orgSlug: string;
+  role?: string;
+}) {
+  if (shell.access.personal) return null;
+  const orgId = shell.org.id;
+  const userId = shell.user.id;
+  const role = askedRole(shell, asked);
+  const rows = await loadHanded(orgId, userId, role);
   // Nothing handed over lately: no card, unless a link asked for a position's.
   if (rows.length === 0 && !role) return null;
   const title = role

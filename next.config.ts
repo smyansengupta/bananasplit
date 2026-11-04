@@ -17,6 +17,10 @@ import {
 } from "./src/lib/security/csp";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // A tab warmed on hover (PageTabs) shows fresh data, not five minutes' old.
+    staleTimes: { static: 30 },
+  },
   // 0A Fix 13. Static security headers on every route, plus the static
   // (no-nonce) CSP on every route the proxy does not cover; src/proxy.ts sets
   // the per-request nonce policy on /app, /poll, /invite and the auth pages.

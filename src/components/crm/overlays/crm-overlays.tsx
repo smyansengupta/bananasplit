@@ -11,7 +11,6 @@ import {
   type CrmOpenKind,
 } from "@/lib/crm/overlay";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
-import { getOrgMembersForPicker } from "@/server/members";
 
 import { AutomationOverlay, RecipesOverlay, ScoringOverlay } from "./automation";
 import { CompanyOverlay } from "./company";
@@ -43,7 +42,8 @@ import { TextOverlay } from "./text";
  *
  * The create dialogs (New person, company and deal, a new goal) aren't here:
  * what they need comes with every page, for CrmCreateHost, so `?open=` for
- * one opens it at once with no trip to the server.
+ * one opens it at once with no trip to the server. Only their people pickers
+ * fill in after (the members aren't read on every page).
  */
 
 export interface OverlayProps<K extends CrmOpenKind = CrmOpenKind> {
@@ -77,15 +77,15 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
 };
 
 /** What the create dialogs open from: small, and the same for every page. */
-async function createData(shell: CrmShell): Promise<CrmCreateData> {
+function createData(shell: CrmShell): CrmCreateData {
   const today = localDateKey(new Date(), effectiveTimezone(null, shell.org));
   return {
     orgId: shell.org.id,
     viewerId: shell.user.id,
     personal: shell.access.personal,
     canSetGoals: shell.access.manager,
-    // Owner is New task's picker (faces, names, titles); a Personal space doesn't ask.
-    members: shell.access.personal ? [] : await getOrgMembersForPicker(shell.org.id),
+    viewerName: shell.user.name,
+    viewerRole: shell.role,
     pipelines: shell.pipelines.map((p) => ({
       id: p.id,
       name: p.name,
@@ -117,15 +117,12 @@ export async function CrmOverlays({
     open && !opensInstantly(open)
       ? (CRM_CARDS[open.kind] as OverlayLoader<typeof open.kind> | undefined)
       : undefined;
-  const [create, card] = await Promise.all([
-    createData(shell),
-    load
-      ? load({ shell, orgSlug, open, searchParams } as OverlayProps<NonNullable<typeof open>["kind"]>)
-      : null,
-  ]);
+  const card = load
+    ? await load({ shell, orgSlug, open, searchParams } as OverlayProps<NonNullable<typeof open>["kind"]>)
+    : null;
   return (
     <>
-      <CrmCreateHost data={create} />
+      <CrmCreateHost data={createData(shell)} />
       {open && card ? <Fragment key={formatOpen(open)}>{card}</Fragment> : null}
     </>
   );
