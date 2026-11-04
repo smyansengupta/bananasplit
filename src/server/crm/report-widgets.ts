@@ -8,6 +8,7 @@ import { dayBounds, localDateKey } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
 import { listGoals } from "./goals";
+import { readyWidgetPayload } from "./report-ready-widgets";
 
 /**
  * The CRM's outreach and pipeline widgets in Reports (docs/features/crm.md,
@@ -580,6 +581,9 @@ export async function crmWidgetPayload(
         },
       };
     }
+    default:
+      // The ready-made reports' widgets (report-ready-widgets.ts).
+      return readyWidgetPayload(c, type);
   }
 }
 

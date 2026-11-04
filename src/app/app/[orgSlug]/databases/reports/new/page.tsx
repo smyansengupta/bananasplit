@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { ReportWizard } from "@/components/reports/saved/report-wizard";
 import { can } from "@/lib/auth/permissions";
+import { readyReports } from "@/lib/reports/crm-ready";
 import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { reportViewer } from "@/server/reports/run";
@@ -35,6 +36,7 @@ export default async function NewReportPage({
         sources={sources}
         isAdmin={can({ role }, "databases.write")}
         initialSource={initial}
+        ready={readyReports(sources)}
       />
     </div>
   );

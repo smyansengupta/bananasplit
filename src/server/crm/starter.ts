@@ -1,9 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { ME } from "@/lib/crm/templates";
-import { suggestedLayout } from "@/lib/reports/catalog";
+import { ensureReadyReports } from "@/server/reports/ready";
 import { reportViewer } from "@/server/reports/run";
-import { createReport } from "@/server/reports/saved";
-import { listSources } from "@/server/reports/sources";
 import type { TxClient } from "@/server/db/context";
 
 import type { CrmActor } from "./access";
@@ -11,9 +9,9 @@ import type { CrmActor } from "./access";
 /**
  * What setup makes for each pipeline beyond the pipeline itself
  * (docs/features/crm.md, "Organization setup in one step"): its saved
- * views (Stuck, No next step, Mine, Best scores) and a starter report on
- * its database with the pipeline widgets (velocity, conversion, time in
- * stage, sources, goals), plus one Outreach report on People. Run again,
+ * views (Stuck, No next step, Mine, Best scores), and the CRM's
+ * ready-made reports in Databases > Reports: Deals on each pipeline,
+ * People and Outreach on People (src/lib/reports/crm-ready.ts). Run again,
  * it adds only what's missing. A report that can't be made (the
  * organization is at its report limit) is skipped, never failing setup.
  */
@@ -80,32 +78,7 @@ export async function pipelineViews(
   });
 }
 
-/** One starter report per pipeline, and an Outreach report on People. */
+/** The ready-made reports: Deals on each pipeline, People and Outreach on People. */
 export async function ensureStarterReports(actor: CrmActor): Promise<number> {
-  const { db, organizationId } = actor;
-  const v = await reportViewer(actor);
-  const sources = (await listSources(v)).filter((s) => s.crm && (s.crm.kind === "pipeline" || s.crm.kind === "people"));
-  const existing = await db.report.findMany({
-    where: { organizationId, source: { in: sources.map((s) => s.key) } },
-    select: { source: true },
-  });
-  let made = 0;
-  for (const s of sources) {
-    if (existing.some((e) => e.source === s.key)) continue;
-    const widgets = suggestedLayout(s, true).filter((w) => w.type !== "health");
-    await db.$executeRaw`SAVEPOINT crm_starter_report`;
-    try {
-      await createReport(v, {
-        title: s.crm!.kind === "people" ? "Outreach" : `${s.name} report`,
-        source: s.key,
-        access: "ORGANIZATION",
-        widgets,
-      });
-      await db.$executeRaw`RELEASE SAVEPOINT crm_starter_report`;
-      made++;
-    } catch {
-      await db.$executeRaw`ROLLBACK TO SAVEPOINT crm_starter_report`;
-    }
-  }
-  return made;
+  return ensureReadyReports(await reportViewer(actor));
 }

@@ -13,6 +13,7 @@ import { ReportIcon } from "@/components/reports/saved/icons";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { WIDGETS, suggestedWidgets, type SourceKind } from "@/lib/reports/catalog";
+import { readyKindsFor } from "@/lib/reports/crm-ready";
 import {
   formatValue,
   spanPhrase,
@@ -25,6 +26,7 @@ import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { rangeQuery, resolveReportRange } from "@/server/reports/range";
 import { builtInInsights, loadBuiltInReports, reportViewer, runReport } from "@/server/reports/run";
+import { missingReadyReports } from "@/server/reports/ready";
 import { listReports } from "@/server/reports/saved";
 import { listSources } from "@/server/reports/sources";
 import { reportTier } from "@/server/reports/tier";
@@ -152,7 +154,7 @@ export default async function ReportsPage({
   const withRange = (href: string) => (keep ? `${href}?${keep}` : href);
   const isAdmin = can({ role }, "databases.write");
 
-  const { reports, sources, settings } = await withOrgTx(organization.id, async (ctx) => {
+  const { reports, sources, settings, ready } = await withOrgTx(organization.id, async (ctx) => {
     const v = await reportViewer({
       db: ctx.db,
       organizationId: organization.id,
@@ -167,6 +169,7 @@ export default async function ReportsPage({
     return {
       reports: read,
       sources: await listSources(v),
+      ready: await missingReadyReports(v),
       settings: await ctx.db.orgSettings.findUnique({
         where: { organizationId: organization.id },
         select: { reportsDataVersion: true, reportsRefreshSeconds: true, updatedAt: true },
@@ -204,8 +207,11 @@ export default async function ReportsPage({
 
   const sourceBy = new Map(sources.map((s) => [s.key, s]));
   const reported = new Set(reports.map((r) => r.report.source));
-  // Empty ones wait until they have rows: a report on nothing reads nothing.
-  const unreported = sources.filter((s) => !reported.has(s.key) && s.rows > 0);
+  // Empty ones wait until they have rows: a report on nothing reads nothing. The
+  // CRM's databases have ready-made reports instead.
+  const unreported = sources.filter(
+    (s) => !reported.has(s.key) && s.rows > 0 && readyKindsFor(s).length === 0,
+  );
   const base = `/app/${orgSlug}/databases/reports`;
 
   const cards = reports.map(({ report, run }) => {
@@ -364,6 +370,52 @@ export default async function ReportsPage({
                           </span>
                         )}
                       </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          {ready.length > 0 && (
+            <section aria-labelledby="ready-made" className="space-y-3.5">
+              <div className="flex flex-wrap items-baseline gap-2.5">
+                <h2 id="ready-made" className="heading text-[17px]">
+                  Ready-made for your CRM
+                </h2>
+                <span className="text-muted-foreground text-[13.5px]">
+                  Who you talked to, who converted and their biggest issues, then the rest
+                </span>
+              </div>
+              <ul className="bg-card ring-foreground/6 rounded-card edge divide-border divide-y ring-1">
+                {ready.map((r) => {
+                  const s = sourceBy.get(r.source);
+                  return (
+                    <li
+                      key={`${r.kind}:${r.source}`}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
+                    >
+                      <span
+                        className={cn(
+                          "grid size-8 shrink-0 place-items-center rounded-full",
+                          KIND_TINT.custom,
+                        )}
+                      >
+                        <ReportIcon name={s?.icon} className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 basis-56">
+                        <b className="block truncate text-[14.5px]">{r.title}</b>
+                        <span className="text-muted-foreground block truncate text-[12.5px]">
+                          {r.description}
+                        </span>
+                      </span>
+                      <CreateSuggestedButton
+                        orgId={organization.id}
+                        orgSlug={orgSlug}
+                        sourceKey={r.source}
+                        name={r.title}
+                        ready={r.kind}
+                      />
                     </li>
                   );
                 })}

@@ -1,20 +1,19 @@
 import { dealTypeField, dealTypeOf } from "@/lib/crm/deals-tab";
-import { monthKeys, median, type SendCell } from "@/lib/crm/crm-reports";
+import { monthKeys, type SendCell } from "@/lib/crm/crm-reports";
 import { formatMoney } from "@/lib/crm/fields";
 import type { ChoiceColor } from "@/lib/databases/fields";
-import type { CrmStatPayload } from "@/lib/reports/crm-widgets";
 import { dayBounds, localDateKey } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
 import { customFieldsFor } from "./databases";
 import { listGoals } from "./goals";
 import { ownerLabel, type RoleOwner } from "./owners";
-import { crmWidgetPayload } from "./report-widgets";
 
 /**
- * The numbers behind the CRM's reports (/crm/reports): Deals (one
- * pipeline), People and Outreach, over the range the date pills pick, read
- * as the viewer (RLS decides the rows).
+ * The numbers behind the CRM's ready-made reports in Databases > Reports
+ * (Deals on a pipeline, People and Outreach on People): the CRM widgets in
+ * report-widgets.ts read them over the range the date pills pick, as the
+ * viewer (RLS decides the rows).
  */
 
 const DAY = 86_400_000;
@@ -197,8 +196,6 @@ export interface PeopleReport {
   quiet: { count: number; people: { id: string; name: string; days: number; relationship: string | null }[]; ids: string[] };
   byRelationship: { label: string; count: number }[];
   byOwner: { name: string; count: number; nobody: boolean }[];
-  fastest: { id: string; name: string; relationship: string | null; hours: number }[];
-  everyoneHours: number | null;
 }
 
 export async function peopleReport(c: ReportCtx, relationships: ReadonlyMap<string, string>): Promise<PeopleReport> {
@@ -243,36 +240,6 @@ export async function peopleReport(c: ReportCtx, relationships: ReadonlyMap<stri
     owners.set(name, (owners.get(name) ?? 0) + 1);
   }
 
-  // How fast they write back to us: per person, the middle of their replies.
-  const replies = await c.db.crmEmailMessage.findMany({
-    where: {
-      organizationId: c.organizationId,
-      direction: "OUTBOUND",
-      personId: { not: null },
-      sentAt: { gte: b.start, lt: b.end },
-      repliedAt: { not: null },
-    },
-    take: 20_000,
-    select: { personId: true, sentAt: true, repliedAt: true },
-  });
-  const per = new Map<string, number[]>();
-  for (const m of replies) {
-    if (!m.sentAt || !m.repliedAt || m.repliedAt < m.sentAt) continue;
-    const hours = (m.repliedAt.getTime() - m.sentAt.getTime()) / 3_600_000;
-    const list = per.get(m.personId!) ?? [];
-    list.push(hours);
-    per.set(m.personId!, list);
-  }
-  const byId = new Map(people.map((p) => [p.id, p]));
-  const fastest = [...per.entries()]
-    .map(([id, hs]) => ({ id, hours: median(hs)! }))
-    .filter((f) => byId.has(f.id))
-    .sort((x, y) => x.hours - y.hours)
-    .slice(0, 5)
-    .map((f) => ({ ...f, name: byId.get(f.id)!.name, relationship: rel(byId.get(f.id)!.relationship) }));
-  const top = new Set(fastest.map((f) => f.id));
-  const everyone = median([...per.entries()].filter(([id]) => !top.has(id)).flatMap(([, hs]) => hs));
-
   return {
     total: people.length,
     months: keys.map((key) => ({ key, count: perMonth.get(key) ?? 0 })),
@@ -281,7 +248,7 @@ export async function peopleReport(c: ReportCtx, relationships: ReadonlyMap<stri
       count: quiet.length,
       people: [...quiet]
         .reverse()
-        .slice(0, 3)
+        .slice(0, 6)
         .map((p) => ({ id: p.id, name: p.name, days: p.days, relationship: rel(p.relationship) })),
       // Power hour picks these up: the quiet ones with no follow-up set yet.
       ids: quiet.filter((p) => !p.nextFollowUpAt).slice(-25).map((p) => p.id),
@@ -290,8 +257,6 @@ export async function peopleReport(c: ReportCtx, relationships: ReadonlyMap<stri
     byOwner: [...owners.entries()]
       .map(([name, count]) => ({ name, count, nobody: name === "Nobody yet" }))
       .sort((x, y) => Number(x.nobody) - Number(y.nobody) || y.count - x.count),
-    fastest,
-    everyoneHours: everyone,
   };
 }
 
@@ -299,7 +264,6 @@ export async function peopleReport(c: ReportCtx, relationships: ReadonlyMap<stri
 
 export interface OutreachReport {
   sent: { total: number; emails: number; texts: number; bounced: number; previous: number | null };
-  replyRate: CrmStatPayload | null;
   emailRate: number | null;
   byPlan: { name: string; sent: number; replied: number }[];
   cells: SendCell[];
@@ -325,11 +289,6 @@ export async function outreachReport(c: ReportCtx): Promise<OutreachReport> {
   const replied = await c.db.crmEmailMessage.count({ where: { ...sentWhere(b), repliedAt: { not: null } } });
   const texts = await textsIn(b);
   const previous = prev ? (await c.db.crmEmailMessage.count({ where: sentWhere(prev) })) + (await textsIn(prev)) : null;
-
-  const rate = await crmWidgetPayload(
-    { db: c.db, organizationId: org, slug: c.slug, tz: c.tz, range: c.range, crm: { kind: "people" }, now: c.now },
-    "crm-reply-rate",
-  );
 
   const plans = await c.db.$queryRaw<{ name: string; sent: bigint; replied: bigint }[]>`
     SELECT COALESCE(s.name, k.name) AS name, COUNT(*) AS sent, COUNT(m."repliedAt") AS replied
@@ -378,7 +337,6 @@ export async function outreachReport(c: ReportCtx): Promise<OutreachReport> {
 
   return {
     sent: { total: emails + texts, emails, texts, bounced, previous },
-    replyRate: rate && rate.type === "crm-reply-rate" ? (rate.data as CrmStatPayload) : null,
     emailRate: emails ? replied / emails : null,
     byPlan: plans.map((p) => ({ name: p.name, sent: Number(p.sent), replied: Number(p.replied) })),
     cells: cells.map((x) => ({ dow: x.dow, hour: x.hour, sent: Number(x.sent), replied: Number(x.replied) })),
@@ -392,4 +350,24 @@ export async function outreachReport(c: ReportCtx): Promise<OutreachReport> {
 /** "$18,500" or "12" for a deals figure, money where the pipeline has it. */
 export function dealsFigure(report: Pick<DealsReport, "pipeline">, cents: number, count: number): string {
   return report.pipeline.hasAmount ? formatMoney(cents, report.pipeline.currency) : count.toLocaleString("en-US");
+}
+
+/**
+ * One reading per transaction: a report's Deals widgets share one
+ * dealsReport, its People widgets one peopleReport, and so on.
+ */
+const memo = new WeakMap<TxClient, Map<string, Promise<unknown>>>();
+
+export function onceInTx<T>(db: TxClient, key: string, load: () => Promise<T>): Promise<T> {
+  let byKey = memo.get(db);
+  if (!byKey) {
+    byKey = new Map();
+    memo.set(db, byKey);
+  }
+  let found = byKey.get(key) as Promise<T> | undefined;
+  if (!found) {
+    found = load();
+    byKey.set(key, found);
+  }
+  return found;
 }

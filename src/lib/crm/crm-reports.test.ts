@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { daypartOf, durationWords, heatGrid, median, monthKeys, monthLabel, parseReportPath, rangeWords } from "./crm-reports";
+import { daypartOf, heatGrid, monthKeys, monthLabel, parseReportPath } from "./crm-reports";
 
-describe("the CRM reports' path", () => {
+describe("the old CRM report links", () => {
   it("reads which report and which pipeline", () => {
     expect(parseReportPath(undefined)).toEqual({ on: "deals", pipelineId: null });
     expect(parseReportPath(["deals", "p_1"])).toEqual({ on: "deals", pipelineId: "p_1" });
@@ -67,23 +67,3 @@ describe("the best time to send", () => {
   });
 });
 
-describe("words", () => {
-  it("says durations plainly", () => {
-    expect(durationWords(0.66)).toBe("40 min");
-    expect(durationWords(3.2)).toBe("3 hr");
-    expect(durationWords(30)).toBe("30 hr");
-    expect(durationWords(48)).toBe("2 days");
-    expect(durationWords(30 * 24)).toBe("30 days");
-  });
-
-  it("finds the middle", () => {
-    expect(median([])).toBeNull();
-    expect(median([5, 1, 3])).toBe(3);
-    expect(median([4, 1, 3, 2])).toBe(2.5);
-  });
-
-  it("names the range and the one before", () => {
-    expect(rangeWords("quarter")).toEqual({ now: "this quarter", before: "last quarter" });
-    expect(rangeWords("all").before).toBe("");
-  });
-});

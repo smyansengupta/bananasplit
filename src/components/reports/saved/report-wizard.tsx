@@ -32,6 +32,7 @@ import {
   type SourceSummary,
   type WidgetType,
 } from "@/lib/reports/catalog";
+import type { ReadyReport } from "@/lib/reports/crm-ready";
 import { joinedSummary, type ReportJoin } from "@/lib/reports/join";
 import { cn } from "@/lib/utils";
 
@@ -107,12 +108,15 @@ export function ReportWizard({
   sources,
   isAdmin,
   initialSource,
+  ready = [],
 }: {
   orgId: string;
   orgSlug: string;
   sources: SourceSummary[];
   isAdmin: boolean;
   initialSource: string | null;
+  /** The CRM's ready-made reports, offered first: one click starts from their widgets. */
+  ready?: ReadyReport[];
 }) {
   const router = useRouter();
   const first = sources.find((s) => s.key === initialSource) ?? null;
@@ -158,6 +162,18 @@ export function ReportWizard({
       setTitle(s.name);
       setOpen(null);
     }
+  }
+
+  /** A ready-made report: its database, name and widgets, straight to the widgets step. */
+  function pickReady(r: ReadyReport) {
+    const s = sources.find((x) => x.key === r.source);
+    if (!s) return;
+    setSourceKey(s.key);
+    setJoin(null);
+    setPicked(r.widgets);
+    setTitle(r.title);
+    setOpen(null);
+    go(1);
   }
 
   // The widgets at their catalog sizes, in full rows with no gaps.
@@ -312,6 +328,36 @@ export function ReportWizard({
               Pick any database. You choose what to show from it next.
             </p>
           </div>
+          {ready.length > 0 && (
+            <div className="space-y-2.5">
+              <h3 className="text-muted-foreground text-[13px] font-semibold">
+                Ready-made for your CRM
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {ready.map((r) => (
+                  <button
+                    key={`${r.kind}:${r.source}`}
+                    type="button"
+                    onClick={() => pickReady(r)}
+                    className="bg-card focus-glow rounded-card ring-foreground/8 hover:shadow-e2 flex h-full min-w-0 flex-col gap-2 p-4 text-left ring-1 transition-[box-shadow,transform] outline-none hover:-translate-y-0.5"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
+                        <ReportIcon
+                          name={sources.find((s) => s.key === r.source)?.icon}
+                          className="size-4"
+                        />
+                      </span>
+                      <b className="min-w-0 flex-1 leading-snug break-words">{r.title}</b>
+                    </span>
+                    <span className="text-muted-foreground line-clamp-2 text-[13px]">
+                      {r.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {custom.length > 0 && (
             <div className="space-y-2.5">
               <h3 className="text-muted-foreground text-[13px] font-semibold">Your databases</h3>

@@ -26,6 +26,7 @@ import { JOINED } from "@/lib/reports/join";
 import { describeSchedule } from "@/lib/reports/schedule";
 import { listAiConnections } from "@/server/ai/connections";
 import { planGate } from "@/server/billing/plan-gate";
+import { refineTopIssues } from "@/server/crm/issue-groups";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { clampRefreshSeconds } from "@/server/reports/cache";
 import { builtInInsights, reportViewer, runReport } from "@/server/reports/run";
@@ -79,6 +80,8 @@ export default async function SavedReportPage({
   });
   if (!loaded) notFound();
   const { report, run, snapshots, tz } = loaded;
+  // Top issues grouped by meaning with the organization's AI, outside the transaction.
+  await refineTopIssues(organization.id, orgSlug, user.id, run.computed);
   const { source, range, computed } = run;
   const canEdit = canEditReport(report, user.id, role);
   const joinedName = report.joinWith
