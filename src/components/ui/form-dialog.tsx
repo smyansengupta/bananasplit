@@ -21,7 +21,16 @@ import { Label } from "@/components/ui/label";
  * New deal and email plans are built from these, so they read as one.
  */
 
-/** New task's window: 672px wide, as tall as it needs up to the screen. */
+/**
+ * On a phone, a popup fills the screen: full height, no margin round it,
+ * rounded at the top only (Tasks' task dialog keeps its margins; the CRM's
+ * cards, the create dialogs and Calendar's event detail don't). Put it on
+ * a DialogContent after its own size classes.
+ */
+export const PHONE_FULL_SCREEN =
+  "max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-t-card max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]";
+
+/** New task's window: 672px wide, as tall as it needs up to the screen; the whole screen on a phone. */
 export function FormDialog({
   open,
   onOpenChange,
@@ -41,6 +50,7 @@ export function FormDialog({
         showCloseButton={false}
         className={cn(
           "flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl",
+          PHONE_FULL_SCREEN,
           className,
         )}
         onInteractOutside={onInteractOutside}
