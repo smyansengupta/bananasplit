@@ -19,8 +19,7 @@ import { saveFocusAvailability } from "@/server/overview/focus-time-actions";
  * Focus time (the Personal home's card): the viewer's longest free
  * stretch in the next seven days, the free hours of each day as a strip,
  * and when their next tasks are due (src/server/overview/focus-time.ts).
- * A narrow card beside This week (ambient.ts), so everything in it is a
- * line or two.
+ * Never a big card: one slim row when it has the width, stacked on a phone.
  *
  * Block it off adds the stretch to the viewer's availability as a one-day
  * rule labelled "Focus time" (the same availability the profile saves,
@@ -97,84 +96,90 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
   const tasks = data.tasks;
   const firstDue = tasks[0]?.dueKey;
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div>
-        <p className="text-[17px] leading-snug font-semibold">
-          {best ? dayWordOfKey(best.key, todayKey) : "No free hours"}
-        </p>
-        <p className="text-muted-foreground text-[13px] leading-snug">
-          {best
-            ? `${blockHours(best.start, best.end)}, ${hoursWord(best.end - best.start)} free`
-            : "Your next seven days are full."}
-        </p>
-      </div>
+    <div className="@container">
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:gap-8">
+        <div className="shrink-0 @2xl:w-44">
+          <p className="text-[17px] leading-snug font-semibold">
+            {best ? dayWordOfKey(best.key, todayKey) : "No free hours"}
+          </p>
+          <p className="text-muted-foreground text-[13px] leading-snug">
+            {best
+              ? `${blockHours(best.start, best.end)}, ${hoursWord(best.end - best.start)} free`
+              : "Your next seven days are full."}
+          </p>
+        </div>
 
-      <ol className="grid grid-cols-7 gap-1" aria-label="Free hours each day">
-        {week.days.map((d) => {
-          const isBest = best?.key === d.key;
-          return (
-            <li
-              key={d.key}
-              className="flex min-w-0 flex-col items-center gap-1"
-              aria-label={`${dayWordOfKey(d.key, todayKey)}: ${hoursWord(d.free)} free`}
-            >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "block h-5 w-full rounded-[6px]",
-                  isBest
-                    ? "bg-tint-success-foreground"
-                    : d.free === 0
-                      ? "bg-muted-strong"
-                      : d.free / most >= 0.6
-                        ? "bg-tint-success"
-                        : "bg-tint-success/70",
-                )}
-              />
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "text-[11px] font-semibold",
-                  isBest ? "text-foreground" : "text-muted-foreground",
-                )}
+        <ol
+          className="grid grid-cols-7 gap-1 @2xl:w-full @2xl:max-w-80 @2xl:shrink-0"
+          aria-label="Free hours each day"
+        >
+          {week.days.map((d) => {
+            const isBest = best?.key === d.key;
+            return (
+              <li
+                key={d.key}
+                className="flex min-w-0 flex-col items-center gap-1"
+                aria-label={`${dayWordOfKey(d.key, todayKey)}: ${hoursWord(d.free)} free`}
               >
-                {d.letter}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "block h-5 w-full rounded-[6px]",
+                    isBest
+                      ? "bg-tint-success-foreground"
+                      : d.free === 0
+                        ? "bg-muted-strong"
+                        : d.free / most >= 0.6
+                          ? "bg-tint-success"
+                          : "bg-tint-success/70",
+                  )}
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "text-[11px] font-semibold",
+                    isBest ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {d.letter}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="min-w-0 space-y-1 @2xl:flex-1">
+          {tasks.length > 0 && (
+            <p className="text-muted-foreground text-[13px] leading-snug">
+              {tasks.length === 1 ? "Next task due" : `Next ${tasks.length} due`}{" "}
+              <span className="text-foreground">
+                {andList(tasks.map((t) => midSentence(dayWordOfKey(t.dueKey, todayKey))))}
               </span>
-            </li>
-          );
-        })}
-      </ol>
+              {best && firstDue && firstDue < best.key && ", before this block"}
+            </p>
+          )}
 
-      {tasks.length > 0 && (
-        <p className="text-muted-foreground text-[13px] leading-snug">
-          {tasks.length === 1 ? "Next task due" : `Next ${tasks.length} due`}{" "}
-          <span className="text-foreground">
-            {andList(tasks.map((t) => midSentence(dayWordOfKey(t.dueKey, todayKey))))}
-          </span>
-          {best && firstDue && firstDue < best.key && ", before this block"}
-        </p>
-      )}
+          {empty && (
+            <Link
+              href={data.availabilityHref}
+              className="text-muted-foreground hover:text-foreground block text-[12.5px] underline underline-offset-4"
+            >
+              Add the hours you&apos;re never free
+            </Link>
+          )}
+        </div>
 
-      <div className="mt-auto space-y-2">
         {block && (
           <Button
             size="sm"
             variant="outline"
-            className="w-full"
+            className="w-full @2xl:w-auto @2xl:shrink-0"
             disabled={pending}
             onClick={blockOff}
             title={`Block off ${blockWord}`}
           >
             Block off {blockHours(block.start, block.end)}
           </Button>
-        )}
-        {empty && (
-          <Link
-            href={data.availabilityHref}
-            className="text-muted-foreground hover:text-foreground block text-[12.5px] underline underline-offset-4"
-          >
-            Add the hours you&apos;re never free
-          </Link>
         )}
       </div>
     </div>
