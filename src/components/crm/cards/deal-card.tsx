@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { moveDealAction, saveRecordAction } from "@/app/app/[orgSlug]/crm/actions";
 import { makeDealQuoteAction, pushDealStepAction, setDealStepAtAction, setDealTypeAction } from "@/app/app/[orgSlug]/crm/deal-actions";
@@ -22,6 +22,7 @@ import { NeedsDialog, RecordFields } from "@/components/crm/record-fields";
 import { Timeline, type TimelineItem } from "@/components/crm/timeline";
 import { EmptyState } from "@/components/empty-state";
 import { Input } from "@/components/ui/input";
+import { chipClass } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
 import { formatMoney } from "@/lib/crm/fields";
 import { hrefWithOpen } from "@/lib/crm/overlay";
@@ -35,7 +36,8 @@ export type { DealQuoteView };
 /**
  * A deal, as a card over whatever CRM page you're on (?open=deal:<id>):
  * its name, company, amount and type in the header; the pipeline's stages
- * as pills that move it in one click (Undo in the toast); and Overview (the
+ * as chips beside the tabs that move it in one click (Undo right after
+ * them); and Overview (the
  * next step and what it needs, or once won, the invoice), Quote (its lines,
  * total and Send the quote), Timeline and Details. ?tab=quote opens it on
  * the quote.
@@ -191,47 +193,27 @@ export function DealCard({
     </span>
   );
 
-  const strip = (
-    <div role="group" aria-label="Stage" className="flex flex-wrap gap-1.5">
-      {data.stages.map((s, i) => {
-        const on = s.id === data.stageId;
-        const past = !on && i < at && stage?.kind === "OPEN";
-        return (
-          <button
-            key={s.id}
-            type="button"
-            aria-pressed={on}
-            disabled={data.deleted}
-            onClick={() => {
-              setMoved(null);
-              pick(s);
-            }}
-            className={cn(
-              "focus-glow inline-flex h-[30px] items-center rounded-full px-3.5 text-[13px] whitespace-nowrap transition-colors outline-none disabled:opacity-60",
-              on
-                ? s.kind === "WON"
-                  ? "bg-(--chart-3) font-semibold text-white"
-                  : s.kind === "LOST"
-                    ? "bg-destructive font-semibold text-white"
-                    : "bg-foreground text-background font-semibold"
-                : past
-                  ? "bg-muted text-foreground/80 ring-border ring-1"
-                  : "text-muted-foreground ring-border hover:bg-muted ring-1",
-            )}
-          >
-            {s.name}
-          </button>
-        );
-      })}
+  const stages = (
+    <>
+      <StageChips
+        stages={data.stages}
+        stageId={data.stageId}
+        disabled={data.deleted}
+        pastBefore={stage?.kind === "OPEN" ? at : -1}
+        onPick={(s) => {
+          setMoved(null);
+          pick(s);
+        }}
+      />
       {moved && (
-        <span className="ms-1 flex items-center gap-2">
+        <span className="flex items-center gap-2">
           <span className="text-muted-foreground text-[13px]">Moved to {moved.name}.</span>
           <button type="button" className={cn(AMBIENT_BUTTON, UNDO)} onClick={() => void undoMove()}>
             Undo
           </button>
         </span>
       )}
-    </div>
+    </>
   );
 
   return (
@@ -254,7 +236,7 @@ export function DealCard({
             onTrashed={close}
           />
         }
-        strip={strip}
+        tabsAside={stages}
         tabs={[
           { value: "overview", label: "Overview" },
           { value: "quote", label: data.invoice && won ? "Invoice" : "Quote" },
@@ -356,6 +338,104 @@ export function DealCard({
         />
       )}
     </>
+  );
+}
+
+/**
+ * The stages, on the tabs' row: the chips Tasks puts beside its view switch
+ * (Mine / My team / Everyone), the one it's at filled (Won green, Lost red),
+ * one click to move it. They take the rest of the row and slide sideways
+ * when there are more than fit, fading at the edge that has more, with the
+ * one it's at kept in view; on a narrow card they drop under the tabs.
+ */
+function StageChips({
+  stages,
+  stageId,
+  disabled,
+  pastBefore,
+  onPick,
+}: {
+  stages: DealCardData["stages"];
+  stageId: string;
+  disabled: boolean;
+  /** Stages before this index read as done (an open deal's earlier stages). */
+  pastBefore: number;
+  onPick: (stage: DealCardData["stages"][number]) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () =>
+      setMore({
+        left: el.scrollLeft > 1,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      });
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro?.disconnect();
+    };
+  }, []);
+
+  // Keep the stage it's at in view (sideways only: the card mustn't jump).
+  useEffect(() => {
+    const el = ref.current;
+    const on = el?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!el || !on) return;
+    const start = on.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft;
+    if (start < el.scrollLeft || start + on.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollLeft = Math.max(0, start - 24);
+    }
+  }, [stageId]);
+
+  const fade = (side: "left" | "right") =>
+    `linear-gradient(to ${side === "left" ? "right" : "left"}, transparent, black 2rem)`;
+  const mask =
+    more.left && more.right
+      ? "linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent)"
+      : more.left
+        ? fade("left")
+        : more.right
+          ? fade("right")
+          : undefined;
+
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label="Stage"
+      className="flex min-w-[15rem] flex-1 basis-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+    >
+      {stages.map((s, i) => {
+        const on = s.id === stageId;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => onPick(s)}
+            className={cn(chipClass(on), !on && i < pastBefore && "bg-muted", "disabled:opacity-60")}
+            style={
+              on && s.kind === "WON"
+                ? { background: "var(--chart-3)", color: "white" }
+                : on && s.kind === "LOST"
+                  ? { background: "var(--destructive)", color: "white" }
+                  : undefined
+            }
+          >
+            {s.name}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
