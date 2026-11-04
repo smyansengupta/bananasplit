@@ -1,7 +1,11 @@
+import { appUrl } from "@/lib/app-url";
 import { requirePermission } from "@/lib/auth/permissions";
+import { periodOf } from "@/lib/crm/forecast";
+import { bookingSlug } from "@/lib/crm/outreach/booking";
 import {
   canSkipCrmStep,
   crmStartedSteps,
+  isCrmSkipEntry,
   isCrmStartedStep,
   isOwnStartedStep,
   orgSkipEntry,
@@ -11,14 +15,13 @@ import {
   type CrmStartedKey,
   type CrmStartedState,
 } from "@/lib/crm/started";
+import { localDateKey } from "@/lib/tasks/dates";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgTx, type OrgContext } from "@/server/db/context";
-import { resolveActor } from "@/server/integrations/service";
 
 import { CrmError, type CrmAccess } from "./access";
 import { bringInCounts, type BringInCounts } from "./bring-in";
-import { loadOrgKeys } from "./org-keys";
-import { inboundDomain } from "./outreach/mailbox";
+import { orgTimeZone } from "./forecast";
 import { readOrgRouting } from "./outreach/intake";
 
 /**
@@ -31,12 +34,19 @@ import { readOrgRouting } from "./outreach/intake";
 export interface CrmStartedData {
   state: CrmStartedState;
   skipped: CrmStartedKey[];
-  /** What this space can't do, so it isn't asked: AI off the plan, keys it can't read. */
-  without: CrmStartedKey[];
   /** Who could be brought in; null when that step is finished. */
   counts: BringInCounts | null;
-  /** Incoming mail is set up on this server, so a logging address works. */
-  inbound: boolean;
+  /** Your meeting link without its https://. Not made yet: it ends in "…", its last part unknown. */
+  meetingLink: string;
+  /** What your emails could end with: your name, and the organization's. */
+  signature: string;
+  /** This quarter's key in the organization's timezone, for a first goal. */
+  quarter: string | null;
+}
+
+/** A page on /book as it's shown: no https://. */
+function shortLink(slug: string): string {
+  return appUrl(`/book/${slug}`).replace(/^https?:\/\//, "");
 }
 
 export async function loadCrmStarted(input: {
@@ -52,16 +62,32 @@ export async function loadCrmStarted(input: {
     });
     const booking = await db.crmBookingPage.findFirst({
       where: { organizationId, ownerUserId: userId },
-      select: { active: true },
+      select: { active: true, slug: true },
     });
     const own = await db.inboxItemState.findMany({
       where: { organizationId, userId, itemKey: { in: [...OWN_SKIP_KEYS] } },
       select: { itemKey: true },
     });
+    const mailbox = Boolean(member?.signature?.trim());
+    const user =
+      mailbox && booking
+        ? null
+        : await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+    const organization = mailbox
+      ? null
+      : await db.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        });
+    const name = user?.name?.trim() ?? "";
     const base = {
-      mailbox: Boolean(member?.signature?.trim()),
+      mailbox,
       booking: Boolean(booking?.active),
       own: own.map((o) => o.itemKey),
+      meetingLink: shortLink(booking?.slug ?? bookingSlug(name || "meet", "…")),
+      signature: (access.personal ? [name] : [name, organization?.name ?? ""])
+        .filter(Boolean)
+        .join("\n"),
     };
     if (!access.admin) return { ...base, org: null };
     const person = await db.crmPerson.findFirst({
@@ -74,6 +100,7 @@ export async function loadCrmStarted(input: {
       where: { organizationId },
       select: { startedSkipped: true },
     });
+    const today = goal ? null : localDateKey(new Date(), await orgTimeZone(db, organizationId));
     return {
       ...base,
       org: {
@@ -82,44 +109,25 @@ export async function loadCrmStarted(input: {
         routed: Boolean(routing && routing.mode !== "off"),
         skipped: settings?.startedSkipped ?? [],
         counts: person ? null : await bringInCounts(db, organizationId),
+        quarter: today ? periodOf("quarter", today).key : null,
       },
     };
   });
-
-  // Saved keys are the organization's own: only an owner or admin reads them.
-  let ai = false;
-  let phone = false;
-  const without: CrmStartedKey[] = [];
-  if (access.admin) {
-    try {
-      const view = await loadOrgKeys(organizationId, await resolveActor(organizationId));
-      const saved = (group: string) =>
-        view.keys.some((k) => k.group === group && k.status !== "none");
-      ai = saved("ai");
-      phone = view.keys.some(
-        (k) => (k.id === "telnyx" || k.id === "twilio") && k.status !== "none",
-      );
-      if (!view.aiOnPlan) without.push("ai");
-    } catch {
-      without.push("ai", "phone");
-    }
-  }
 
   return {
     state: {
       kinds: Boolean(access.settings?.setupKinds.length),
       people: read.org?.people ?? false,
       owner: read.org?.routed ?? false,
-      mailbox: read.mailbox,
       booking: read.booking,
       goal: read.org?.goal ?? false,
-      ai,
-      phone,
+      mailbox: read.mailbox,
     },
     skipped: readCrmSkipped(read.org?.skipped ?? [], read.own),
-    without,
     counts: read.org?.counts ?? null,
-    inbound: Boolean(inboundDomain()),
+    meetingLink: read.meetingLink,
+    signature: read.signature,
+    quarter: read.org?.quarter ?? null,
   };
 }
 
@@ -188,7 +196,7 @@ export interface CrmStartedSnapshot {
   own: string[];
 }
 
-/** Hides the panel: every step this viewer has is checked off at once. */
+/** Hides the strip: every step this viewer has is checked off at once. */
 export async function hideCrmStarted(
   ctx: OrgContext,
   access: CrmAccess,
@@ -208,7 +216,7 @@ export async function hideCrmStarted(
     const org = steps.filter((s) => !isOwnStartedStep(s)).map(orgSkipEntry);
     await writeOrgEntries(ctx, [...entries, ...org], { hidden: true });
   }
-  return { org: entries.filter((e) => e.startsWith("crm:")), own: own.map((o) => o.itemKey) };
+  return { org: entries.filter(isCrmSkipEntry), own: own.map((o) => o.itemKey) };
 }
 
 /** Undo for hideCrmStarted: what was checked off before, and no more. */
@@ -223,7 +231,7 @@ export async function restoreCrmStarted(
   }
   if (!access.admin) return;
   requirePermission(ctx, "settings.general.write");
-  const others = (await orgEntries(ctx)).filter((e) => !e.startsWith("crm:"));
+  const others = (await orgEntries(ctx)).filter((e) => !isCrmSkipEntry(e));
   const org = keep.filter((k) => !isOwnStartedStep(k)).map(orgSkipEntry);
   await writeOrgEntries(ctx, [...others, ...org], { restored: true });
 }

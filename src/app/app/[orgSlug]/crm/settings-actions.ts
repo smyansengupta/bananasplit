@@ -8,7 +8,6 @@ import { CrmValidationError } from "@/lib/crm/validate";
 import { BookingLinkError, ensurePersonalLink, updateLink } from "@/server/booking/links";
 import { CrmError, requireCrm } from "@/server/crm/access";
 import { fixImportRow, letRowGo } from "@/server/crm/import";
-import { ensureMemberSettings } from "@/server/crm/outreach/member";
 import { saveAutonomy, saveSending } from "@/server/crm/settings";
 import { shareOutOwners } from "@/server/crm/setup";
 import {
@@ -25,7 +24,7 @@ import { SpaceRefusedError, withOrgAction, type OrgContext } from "@/server/db/c
  * src/components/crm/settings/sections): the Sending window and
  * unsubscribe line, how much the CRM may do alone, fixing an import's
  * skipped rows, and "Get your CRM started" (who looks after them, checking
- * a step off, Hide, your booking link and logging address). Each runs in one
+ * a step off, Hide, your booking link). Each runs in one
  * withOrgAction transaction as the member (RLS decides) and answers
  * { ok: true, ... } or { ok: false, error }.
  */
@@ -115,8 +114,3 @@ export const turnOnBookingAction = settingsAction(async (ctx) => {
     throw error;
   }
 });
-
-/** Your logging address, made the first time you ask for it. */
-export const myLoggingAddressAction = settingsAction(async (ctx) => ({
-  address: (await ensureMemberSettings(ctx.db, ctx.organizationId, ctx.userId)).bccAddress,
-}));

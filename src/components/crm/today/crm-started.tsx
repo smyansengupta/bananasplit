@@ -1,29 +1,15 @@
 "use client";
 
-import {
-  CalendarClock,
-  Check,
-  Copy,
-  FileSpreadsheet,
-  Handshake,
-  Loader2,
-  Mail,
-  Phone,
-  Sparkles,
-  Target,
-  UserPlus,
-  Users,
-  type IconComponent,
-} from "@/components/icons";
+import { Check, FileSpreadsheet, X } from "@/components/icons";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { bringInAction, runSetupAction, startImportAction } from "@/app/app/[orgSlug]/crm/actions";
-import { saveOrgKeyAction } from "@/app/app/[orgSlug]/crm/org-keys-actions";
+import { saveGoalAction } from "@/app/app/[orgSlug]/crm/goal-actions";
 import { saveMemberSettingsAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import {
   hideCrmStartedAction,
-  myLoggingAddressAction,
   restoreCrmStartedAction,
   setCrmStepSkippedAction,
   shareOutOwnersAction,
@@ -31,62 +17,72 @@ import {
 } from "@/app/app/[orgSlug]/crm/settings-actions";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { useSheetUpload, type DroppedSheet } from "@/components/crm/settings/sheet-drop";
-import {
-  STARTED_FIELD,
-  STARTED_RING,
-  STARTED_SOLID,
-  StartedBlock,
-  StartedChips,
-  StartedExtra,
-  StartedHide,
-  StartedSkip,
-  StartedTile,
-} from "@/components/overview/started-block";
 import { toast } from "@/components/ui/toaster";
-import { crmImportHref } from "@/lib/crm/href";
-import { orgKeyInfo } from "@/lib/crm/org-keys";
-import { crmSettingsHref } from "@/lib/crm/settings-sections";
-import { OWNER_MODES, startingKinds, type OwnerMode } from "@/lib/crm/setup-owners";
+import { GOAL_WHAT, parseTarget } from "@/lib/crm/goal-pace";
+import { OWNER_MODES, startingKinds } from "@/lib/crm/setup-owners";
 import {
   bringInChoices,
+  canOpenCrmStep,
+  canSkipCrmStep,
   crmStartedHref,
   crmStartedProgress,
+  nextCrmStep,
   type BringInChoice,
   type CrmStartedKey,
-  type CrmStartedState,
   type CrmStartedViewer,
 } from "@/lib/crm/started";
 import { setupKindInfo, setupKindsFor, type SetupKind } from "@/lib/crm/templates";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
-import type { BringInCounts } from "@/server/crm/bring-in";
+import type { CrmStartedData } from "@/server/crm/started";
 
 /**
- * "Get your CRM started" (docs/features/crm.md, "Getting started"): Home's
- * block across the top of Today. Every tile does its job right there: chips
- * to pick from, one-click buttons, a field. With no CRM yet, the first tile
- * is the only one, because its answer makes the CRM the others work in; the
- * rest appear once that's done. "Not needed" checks a step off, and Hide
- * checks off the rest, with Undo in the toast.
+ * "Get your CRM started" (docs/features/crm.md, "Getting started"): one strip
+ * across the top of Today asking one question at a time, its controls right
+ * there and a default picked, so one click usually answers it. An answer moves
+ * on at once: the steps' saves run behind the strip, one after another, because
+ * the first answer makes the CRM the others are saved in. One that fails brings
+ * its question back with the reason. Skip is the step's "not needed", the
+ * segments jump to any step, and Hide checks off the rest with Undo in the
+ * toast. The last answer says the CRM is ready, and the strip leaves.
  */
 
-const STEP_ICON: Record<CrmStartedKey, IconComponent> = {
-  kinds: Handshake,
-  people: UserPlus,
-  owner: Users,
-  mailbox: Mail,
-  booking: CalendarClock,
-  goal: Target,
-  ai: Sparkles,
-  phone: Phone,
-};
+const FOCUS =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+
+/** The step's main button. */
+const SOLID = cn(
+  "bg-block-goal-foreground text-block-goal inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-60",
+  FOCUS,
+);
+
+/** The step's other buttons. */
+const RING = cn(
+  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold ring-1 ring-current/30 transition-colors hover:ring-current/60 disabled:cursor-default disabled:opacity-60",
+  FOCUS,
+);
+
+/** Skip and Hide: there when wanted, never competing with the question. */
+const QUIET = cn(
+  "text-block-goal-meta hover:text-block-goal-foreground cursor-pointer rounded-full px-2 py-0.5 text-[12.5px] font-semibold transition-colors",
+  FOCUS,
+);
+
+const FIELD =
+  "placeholder:text-current/55 min-w-0 rounded-[12px] bg-current/10 px-3 text-[14px] ring-1 ring-current/25 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-current/60";
+
+const ROW = "flex flex-wrap items-center gap-2";
+
+/** The first number offered as a goal: enough to mean something, easy to change. */
+const FIRST_GOAL = "25";
 
 type Outcome = { ok: boolean; error?: string };
-type Run = <T extends Outcome>(
+type Answer = <T extends Outcome>(
   step: CrmStartedKey,
   call: () => Promise<T>,
-  done?: string | ((result: Extract<T, { ok: true }>) => string),
+  done?: (result: Extract<T, { ok: true }>) => void,
 ) => void;
+type Answers = Partial<Record<CrmStartedKey, "done" | "skipped">>;
 
 function queuedLine(added: number, queued: number): string {
   if (queued > 0) return `${queued.toLocaleString("en-US")} are coming in the background.`;
@@ -99,73 +95,106 @@ export function CrmStarted({
   viewer,
   state,
   skipped,
-  without,
   counts,
-  inbound,
-}: {
-  orgId: string;
-  orgSlug: string;
-  viewer: CrmStartedViewer;
-  state: CrmStartedState;
-  skipped: CrmStartedKey[];
-  without: CrmStartedKey[];
-  counts: BringInCounts | null;
-  inbound: boolean;
-}) {
+  meetingLink,
+  signature,
+  quarter,
+}: CrmStartedData & { orgId: string; orgSlug: string; viewer: CrmStartedViewer }) {
   const router = useRouter();
   const { setOpen } = useCrmOpen();
-  const [pending, start] = useTransition();
-  const [busy, setBusy] = useState<CrmStartedKey | null>(null);
+  // Answers given here, shown before the server has them.
+  const [answers, setAnswers] = useState<Answers>({});
+  // The step last answered, which the next one follows, and a step jumped to.
+  const [after, setAfter] = useState<CrmStartedKey | null>(null);
+  const [jump, setJump] = useState<CrmStartedKey | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shownSkipped, setShownSkipped] = useOptimistic(
-    skipped as string[],
-    (current: string[], change: { step: string; skip: boolean }) =>
-      change.skip ? [...current, change.step] : current.filter((s) => s !== change.step),
-  );
-  const progress = crmStartedProgress(viewer, state, shownSkipped, without);
-  const working = (step: CrmStartedKey) => pending && busy === step;
+  const [ready, setReady] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const moved = useRef(false);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const waiting = useRef(0);
+  const failed = useRef(false);
 
-  const run: Run = (step, call, done) => {
-    setError(null);
-    setBusy(step);
-    start(async () => {
-      const result = await runAction(call);
-      setBusy(null);
-      if (!result) return;
-      if (!result.ok) {
-        setError(result.error ?? "That didn't work. Try again.");
-        return;
-      }
-      const line =
-        typeof done === "function" ? done(result as Extract<typeof result, { ok: true }>) : done;
-      if (line) toast({ title: line });
-      router.refresh();
-    });
-  };
+  const shown = (given: Answers) =>
+    crmStartedProgress(
+      viewer,
+      { ...state, ...Object.fromEntries(Object.entries(given).map(([k, v]) => [k, v === "done"])) },
+      [
+        ...skipped,
+        ...Object.keys(given).filter((key) => given[key as CrmStartedKey] === "skipped"),
+      ],
+    );
+  const progress = shown(answers);
+  const current = jump ?? nextCrmStep(progress.steps, after);
 
-  function toggle(step: CrmStartedKey, skip: boolean) {
-    setError(null);
-    setBusy(step);
-    start(async () => {
-      setShownSkipped({ step, skip });
-      const result = await runAction(() => setCrmStepSkippedAction(orgId, step, skip));
-      setBusy(null);
-      if (!result) return;
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
+  // The button that was pressed has gone with its step: keep the keyboard here.
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    heading.current?.focus({ preventScroll: true });
+  }, [current]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = setTimeout(() => setReady(false), 2200);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  /** Saves in the order things were answered; the page catches up when the last is in. */
+  function enqueue(save: () => Promise<void>) {
+    waiting.current += 1;
+    queue.current = queue.current.then(save).then(() => {
+      waiting.current -= 1;
+      if (waiting.current > 0) return;
+      failed.current = false;
       router.refresh();
     });
   }
 
+  function settle<T extends Outcome>(
+    step: CrmStartedKey,
+    status: "done" | "skipped",
+    call: () => Promise<T>,
+    done?: (result: Extract<T, { ok: true }>) => void,
+  ) {
+    const given = { ...answers, [step]: status };
+    moved.current = true;
+    setAnswers(given);
+    setError(null);
+    setJump(null);
+    setAfter(step);
+    setReady(nextCrmStep(shown(given).steps, step) === null);
+
+    const takeBack = () => setAnswers(({ [step]: _taken, ...rest }) => rest);
+    enqueue(async () => {
+      // Whatever follows a failed save waits for that question to be answered again.
+      if (failed.current) return takeBack();
+      const result = await runAction(call);
+      if (result?.ok) {
+        done?.(result as Extract<T, { ok: true }>);
+        return;
+      }
+      failed.current = true;
+      takeBack();
+      setReady(false);
+      setJump(step);
+      if (result) setError(result.error ?? "That didn't work. Try again.");
+    });
+  }
+
+  const answer: Answer = (step, call, done) => settle(step, "done", call, done);
+  const skip = (step: CrmStartedKey) =>
+    settle(step, "skipped", () => setCrmStepSkippedAction(orgId, step, true));
+
   function hideAll() {
     setError(null);
-    start(async () => {
+    setHidden(true);
+    enqueue(async () => {
       const result = await runAction(() => hideCrmStartedAction(orgId));
-      if (!result) return;
-      if (!result.ok) {
-        setError(result.error);
+      if (!result?.ok) {
+        setHidden(false);
+        if (result) setError(result.error);
         return;
       }
       toast({
@@ -175,191 +204,242 @@ export function CrmStarted({
           run: async () => {
             const undone = await restoreCrmStartedAction(orgId, result.previous);
             if (!undone.ok) return undone.error;
+            setHidden(false);
             router.refresh();
           },
         },
       });
-      router.refresh();
     });
   }
 
-  function pickOwner(mode: OwnerMode) {
-    run(
-      "owner",
-      () => shareOutOwnersAction(orgId, mode, new Date(0).toISOString()),
-      (r) => (r.shared ? `Shared out ${r.shared.toLocaleString("en-US")} people.` : "Saved."),
+  if (hidden) return null;
+  if (ready) {
+    return (
+      <div className="mb-6">
+        <p
+          role="status"
+          className="bg-block-goal text-block-goal-foreground rounded-block animate-in fade-in-0 m-0 flex items-center gap-2.5 px-6 py-4 text-[15px] font-semibold duration-200 motion-reduce:animate-none"
+        >
+          <span
+            aria-hidden="true"
+            className="bg-block-goal-foreground text-block-goal grid size-5 place-items-center rounded-full"
+          >
+            <Check className="size-3" strokeWidth={3} />
+          </span>
+          Your CRM is ready
+        </p>
+      </div>
     );
   }
+  if (progress.complete || !current) return null;
 
-  const todo = progress.steps.filter((step) => step.status === "todo");
-  const finished = progress.steps.filter((step) => step.status !== "todo");
-  // Only an owner or admin can answer the first step; everyone else starts on their own.
-  const made = state.kinds || !viewer.admin;
-
-  function skip(step: CrmStartedKey) {
-    return <StartedSkip working={working(step)} onClick={() => toggle(step, true)} />;
-  }
+  const position = progress.steps.findIndex((step) => step.key === current);
+  const step = progress.steps[position]!;
+  // Hide checks off what can be, so it can't end the strip before the first answer.
+  const canHide = canOpenCrmStep(progress.steps, "mailbox");
+  // "Leave them for now" already is the owner step's way of skipping it.
+  const canSkip = step.status === "todo" && canSkipCrmStep(step.key) && step.key !== "owner";
+  const choices = counts ? bringInChoices(counts, viewer.personal) : [];
+  const hint =
+    step.status === "done"
+      ? "Done. You can change this any time."
+      : step.key === "people" && choices.length === 0
+        ? "Nobody's waiting to come in yet. Add someone, or drop a spreadsheet."
+        : step.hint;
 
   return (
-    <StartedBlock
-      title="Get your CRM started"
-      steps={progress.steps.map((step) => ({ ...step, icon: STEP_ICON[step.key] }))}
-      error={error}
-      finished={
-        <StartedChips
-          steps={finished.map((step) => ({ ...step, href: crmStartedHref(orgSlug, step.key) }))}
-          busy={pending ? busy : null}
-          onUndo={(key) => toggle(key as CrmStartedKey, false)}
-        />
-      }
-      foot={
-        made ? (
-          <>
-            {viewer.admin && (
+    <div className="mb-6">
+      <section
+        aria-label="Get your CRM started"
+        className="bg-block-goal text-block-goal-foreground rounded-block flex flex-col gap-3 overflow-hidden p-5 sm:px-6 lg:min-h-38 lg:flex-row lg:gap-10"
+      >
+        <div
+          key={step.key}
+          className={cn(
+            "min-w-0 flex-1",
+            (after || jump) &&
+              "animate-in fade-in-0 slide-in-from-right-2 duration-200 motion-reduce:animate-none",
+          )}
+        >
+          <h2
+            ref={heading}
+            tabIndex={-1}
+            className="display-title m-0 text-[clamp(1.25rem,1.1rem+0.5vw,1.5rem)] leading-[1.15] outline-none"
+          >
+            {step.question}
+          </h2>
+          {error ? (
+            <p role="alert" className="mt-1 text-[14px] font-semibold">
+              {error}
+            </p>
+          ) : (
+            <p className="text-block-goal-meta mt-1 text-[14px]">{hint}</p>
+          )}
+          <div className="mt-3">
+            {step.status === "done" ? (
+              <Link href={crmStartedHref(orgSlug, step.key)} className={RING}>
+                Change it
+              </Link>
+            ) : (
               <>
-                <StartedExtra
-                  href={crmSettingsHref(orgSlug, "automations")}
-                  label="Turn on automations"
-                />
-                <StartedExtra href={crmImportHref(orgSlug)} label="Import from another CRM" />
+                {step.key === "kinds" && (
+                  <KindsStep
+                    orgId={orgId}
+                    personal={viewer.personal}
+                    hasPartners={(counts?.sponsors ?? 0) > 0}
+                    answer={answer}
+                  />
+                )}
+                {step.key === "people" && (
+                  <PeopleStep
+                    orgId={orgId}
+                    orgSlug={orgSlug}
+                    choices={choices}
+                    answer={answer}
+                    addOne={() => setOpen({ kind: "new", what: "person" })}
+                  />
+                )}
+                {step.key === "owner" && (
+                  <div className={ROW}>
+                    {OWNER_MODES.map((mode, i) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        title={mode.text}
+                        onClick={() =>
+                          mode.id === "none"
+                            ? skip("owner")
+                            : answer(
+                                "owner",
+                                () =>
+                                  shareOutOwnersAction(orgId, mode.id, new Date(0).toISOString()),
+                                (r) => {
+                                  if (r.shared) {
+                                    toast({
+                                      title: `Shared out ${r.shared.toLocaleString("en-US")} people.`,
+                                    });
+                                  }
+                                },
+                              )
+                        }
+                        className={i === 0 ? SOLID : RING}
+                      >
+                        {mode.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {step.key === "booking" && (
+                  <div className={ROW}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        answer(
+                          "booking",
+                          () => turnOnBookingAction(orgId),
+                          (r) =>
+                            toast({
+                              title: "Your meeting link is on",
+                              action: {
+                                label: "Copy link",
+                                run: () => navigator.clipboard.writeText(r.url),
+                              },
+                            }),
+                        )
+                      }
+                      className={SOLID}
+                    >
+                      Turn it on
+                    </button>
+                    <span
+                      title={meetingLink}
+                      className="flex h-9 max-w-full min-w-0 items-center rounded-full bg-current/12 px-3.5 text-[13px] font-medium"
+                    >
+                      <span className="truncate">{meetingLink}</span>
+                    </span>
+                  </div>
+                )}
+                {step.key === "goal" && quarter && (
+                  <GoalStep orgId={orgId} quarter={quarter} answer={answer} />
+                )}
+                {step.key === "mailbox" && (
+                  <SignatureStep orgId={orgId} signature={signature} answer={answer} />
+                )}
               </>
             )}
-            <StartedHide disabled={pending} onClick={hideAll} />
-          </>
-        ) : undefined
-      }
-    >
-      {!made ? (
-        <KindsTile
-          orgId={orgId}
-          personal={viewer.personal}
-          hasPartners={(counts?.sponsors ?? 0) > 0}
-          working={working("kinds")}
-          run={run}
-        />
-      ) : (
-        todo.map((step) => {
-          const common = { icon: STEP_ICON[step.key], label: step.label, hint: step.hint };
-          switch (step.key) {
-            case "kinds":
-              return null;
-            case "people":
-              return (
-                <PeopleTile
-                  key={step.key}
-                  orgId={orgId}
-                  orgSlug={orgSlug}
-                  choices={counts ? bringInChoices(counts, viewer.personal) : []}
-                  working={working("people")}
-                  run={run}
-                  skip={skip("people")}
-                  addOne={() => setOpen({ kind: "new", what: "person" })}
-                />
-              );
-            case "owner":
-              return (
-                <StartedTile key={step.key} {...common}>
-                  {OWNER_MODES.filter((m) => m.id !== "none").map((m, i) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      title={m.text}
-                      disabled={working("owner")}
-                      onClick={() => pickOwner(m.id)}
-                      className={i === 0 ? STARTED_SOLID : STARTED_RING}
-                    >
-                      {m.title}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    disabled={working("owner")}
-                    title="Nobody owns them yet. Today reminds managers to hand them out."
-                    onClick={() => toggle("owner", true)}
-                    className={STARTED_RING}
-                  >
-                    Leave them for now
-                  </button>
-                </StartedTile>
-              );
-            case "mailbox":
-              return (
-                <MailTile
-                  key={step.key}
-                  orgId={orgId}
-                  inbound={inbound}
-                  working={working("mailbox")}
-                  run={run}
-                  skip={skip("mailbox")}
-                />
-              );
-            case "booking":
-              return (
-                <StartedTile key={step.key} {...common}>
-                  <button
-                    type="button"
-                    disabled={working("booking")}
-                    onClick={() =>
-                      run("booking", () => turnOnBookingAction(orgId), "Your booking link is on.")
-                    }
-                    className={STARTED_SOLID}
-                  >
-                    Turn it on
-                  </button>
-                  {skip("booking")}
-                </StartedTile>
-              );
-            case "goal":
-              return (
-                <StartedTile key={step.key} {...common}>
-                  <button
-                    type="button"
-                    onClick={() => setOpen({ kind: "goal", id: null })}
-                    className={STARTED_SOLID}
-                  >
-                    Set a goal
-                  </button>
-                  {skip("goal")}
-                </StartedTile>
-              );
-            case "ai":
-              return (
-                <KeyTile
-                  key={step.key}
-                  orgId={orgId}
-                  working={working("ai")}
-                  run={run}
-                  skip={skip("ai")}
-                />
-              );
-            case "phone":
-              return (
-                <StartedTile key={step.key} {...common} href={crmStartedHref(orgSlug, "phone")}>
-                  {skip("phone")}
-                </StartedTile>
-              );
-          }
-        })
-      )}
-    </StartedBlock>
+          </div>
+        </div>
+
+        <div className="order-first flex flex-col gap-1 lg:order-none lg:w-52 lg:flex-none">
+          <div className="flex h-6 items-center justify-between gap-3">
+            <span className="text-[13px] font-semibold tabular-nums">
+              Step {position + 1} of {progress.total}
+            </span>
+            {canHide && (
+              <button type="button" onClick={hideAll} className={cn(QUIET, "-me-2")}>
+                Hide
+              </button>
+            )}
+          </div>
+          <ol aria-label="Steps" className="m-0 flex list-none gap-1 p-0">
+            {progress.steps.map((s, i) => (
+              <li key={s.key} className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  title={s.question}
+                  aria-label={`Step ${i + 1}: ${s.question}${
+                    s.status === "done" ? " (done)" : s.status === "skipped" ? " (skipped)" : ""
+                  }`}
+                  aria-current={s.key === current ? "step" : undefined}
+                  disabled={!canOpenCrmStep(progress.steps, s.key)}
+                  onClick={() => {
+                    setError(null);
+                    setJump(s.key);
+                  }}
+                  className={cn(
+                    "flex h-6 w-full cursor-pointer items-center rounded-sm disabled:cursor-default",
+                    FOCUS,
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "w-full rounded-full transition-colors",
+                      s.key === current ? "h-1.5" : "h-1",
+                      s.status === "done" && "bg-current",
+                      s.status === "skipped" && "bg-current/50",
+                      s.status === "todo" && "bg-current/20",
+                    )}
+                  />
+                </button>
+              </li>
+            ))}
+          </ol>
+          {canSkip && (
+            <div className="flex justify-end lg:mt-auto">
+              <button type="button" onClick={() => skip(step.key)} className={cn(QUIET, "-me-2")}>
+                Skip
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
-/** The first answer: what you mostly reach out to, filled in already, then one click. */
-function KindsTile({
+/** The first answer: chips picked for you, then one button. This one makes the CRM. */
+function KindsStep({
   orgId,
   personal,
   hasPartners,
-  working,
-  run,
+  answer,
 }: {
   orgId: string;
   personal: boolean;
   hasPartners: boolean;
-  working: boolean;
-  run: Run;
+  answer: Answer;
 }) {
-  const offered = setupKindsFor(personal);
   const [kinds, setKinds] = useState<Set<SetupKind>>(
     () => new Set(startingKinds(personal, [], hasPartners)),
   );
@@ -371,81 +451,61 @@ function KindsTile({
       return next;
     });
   return (
-    <StartedTile
-      wide
-      icon={STEP_ICON.kinds}
-      label="Pick what you mostly reach out to"
-      hint="It makes your pipelines and lists. You can add more later."
-    >
-      <div
-        className="flex flex-wrap gap-1.5"
-        role="group"
-        aria-label="What you mostly reach out to"
+    <div className={ROW} role="group" aria-label="Who you mostly reach out to">
+      {setupKindsFor(personal).map((kind) => {
+        const info = setupKindInfo(kind, personal);
+        const on = kinds.has(kind);
+        return (
+          <button
+            key={kind}
+            type="button"
+            aria-pressed={on}
+            title={info.hint}
+            onClick={() => flip(kind)}
+            className={cn(RING, "h-8 px-3", on && "bg-current/18 ring-current/70")}
+          >
+            {on && <Check className="size-3.5" aria-hidden="true" />}
+            {info.label}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        disabled={kinds.size === 0}
+        onClick={() => answer("kinds", () => runSetupAction(orgId, [...kinds]))}
+        className={SOLID}
       >
-        {offered.map((kind) => {
-          const info = setupKindInfo(kind, personal);
-          const on = kinds.has(kind);
-          return (
-            <button
-              key={kind}
-              type="button"
-              aria-pressed={on}
-              title={info.hint}
-              onClick={() => flip(kind)}
-              className={cn(STARTED_RING, on && "bg-current/18 ring-current/70")}
-            >
-              {on && <Check className="size-3.5" aria-hidden="true" />}
-              {info.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-1.5 basis-full">
-        <button
-          type="button"
-          disabled={working || kinds.size === 0}
-          onClick={() =>
-            run("kinds", () => runSetupAction(orgId, [...kinds]), "Your CRM is ready.")
-          }
-          className={cn(STARTED_SOLID, "h-9 px-4 text-[13px]")}
-        >
-          {working && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-          {working ? "Setting up" : "Set up the CRM"}
-        </button>
-      </div>
-    </StartedTile>
+        Set up the CRM
+      </button>
+    </div>
   );
 }
 
-/** Who's already here, one click each (or all at once), or a spreadsheet dropped on the tile. */
-function PeopleTile({
+/** Everyone Bananasplit knows in one click, or a spreadsheet dropped beside it. */
+function PeopleStep({
   orgId,
   orgSlug,
   choices,
-  working,
-  run,
-  skip,
+  answer,
   addOne,
 }: {
   orgId: string;
   orgSlug: string;
   choices: BringInChoice[];
-  working: boolean;
-  run: Run;
-  skip: React.ReactNode;
+  answer: Answer;
   addOne: () => void;
 }) {
   const [sheet, setSheet] = useState<DroppedSheet | null>(null);
   const upload = useSheetUpload(orgSlug, setSheet);
   const total = choices.reduce((n, c) => n + c.n, 0);
 
-  const bring = (sources: BringInChoice[]) =>
-    run(
+  const bringEveryone = () =>
+    answer(
       "people",
       async () => {
         let added = 0;
         let queued = 0;
-        for (const source of sources) {
+        for (const source of choices) {
           const r = await bringInAction(orgId, source.id);
           if (!r.ok) return r;
           added += r.added + r.linked;
@@ -453,11 +513,11 @@ function PeopleTile({
         }
         return { ok: true as const, added, queued };
       },
-      (r) => queuedLine(r.added, r.queued),
+      (r) => toast({ title: queuedLine(r.added, r.queued) }),
     );
 
   const bringSheet = (dropped: DroppedSheet) =>
-    run(
+    answer(
       "people",
       () =>
         startImportAction(orgId, dropped.importId, {
@@ -465,217 +525,136 @@ function PeopleTile({
           mapping: dropped.mapping,
         }),
       (r) =>
-        r.log.status === "done"
-          ? queuedLine(r.log.created + r.log.updated, 0)
-          : queuedLine(0, dropped.total),
+        toast({
+          title:
+            r.log.status === "done"
+              ? queuedLine(r.log.created + r.log.updated, 0)
+              : queuedLine(0, dropped.total),
+        }),
     );
 
-  return (
-    <StartedTile
-      wide
-      icon={STEP_ICON.people}
-      label="Bring people in"
-      hint={
-        sheet
-          ? `${sheet.fileName}, ${sheet.total.toLocaleString("en-US")} rows. Columns are matched for you.`
-          : "Pick who's already here, or drop a spreadsheet on this tile."
-      }
-      highlighted={upload.over}
-      {...upload.zone}
-    >
-      {sheet ? (
-        <>
+  if (sheet) {
+    return (
+      <div className={ROW}>
+        <button type="button" onClick={() => bringSheet(sheet)} className={SOLID}>
+          Bring in {sheet.total.toLocaleString("en-US")} {sheet.total === 1 ? "row" : "rows"}
+        </button>
+        <span className="flex h-9 max-w-full min-w-0 items-center gap-1 rounded-full bg-current/12 ps-3.5 pe-1.5 text-[13px] font-medium">
+          <span className="truncate">{sheet.fileName}</span>
           <button
             type="button"
-            disabled={working}
-            onClick={() => bringSheet(sheet)}
-            className={STARTED_SOLID}
+            aria-label="Remove the file"
+            onClick={() => setSheet(null)}
+            className={cn(
+              "grid size-6 flex-none cursor-pointer place-items-center rounded-full transition-colors hover:bg-current/15",
+              FOCUS,
+            )}
           >
-            Bring in {sheet.total.toLocaleString("en-US")} rows
+            <X className="size-3.5" aria-hidden="true" />
           </button>
-          <button type="button" onClick={() => setSheet(null)} className={STARTED_RING}>
-            Remove the file
-          </button>
-        </>
-      ) : (
-        <>
-          {choices.length > 1 && (
-            <button
-              type="button"
-              disabled={working}
-              onClick={() => bring(choices)}
-              className={STARTED_SOLID}
-            >
-              Bring in all {total.toLocaleString("en-US")}
-            </button>
-          )}
-          {choices.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              disabled={working}
-              onClick={() => bring([choice])}
-              className={choices.length === 1 ? STARTED_SOLID : STARTED_RING}
-            >
-              {choice.label} {choice.n.toLocaleString("en-US")}
-            </button>
-          ))}
-          <button
-            type="button"
-            disabled={upload.busy}
-            onClick={upload.pick}
-            className={choices.length === 0 ? STARTED_SOLID : STARTED_RING}
-          >
-            <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-            {upload.busy ? "Reading" : "Choose a spreadsheet"}
-          </button>
-          {choices.length === 0 && (
-            <button type="button" onClick={addOne} className={STARTED_RING}>
-              Add someone
-            </button>
-          )}
-          {skip}
-        </>
-      )}
-      {upload.input}
-    </StartedTile>
-  );
-}
-
-/** Your signature, right on the tile, and your logging address when this server takes mail in. */
-function MailTile({
-  orgId,
-  inbound,
-  working,
-  run,
-  skip,
-}: {
-  orgId: string;
-  inbound: boolean;
-  working: boolean;
-  run: Run;
-  skip: React.ReactNode;
-}) {
-  const [signature, setSignature] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  async function copyAddress() {
-    const result = await runAction(() => myLoggingAddressAction(orgId));
-    if (!result) return;
-    if (!result.ok || !result.address) {
-      toast({ title: "Your address isn't ready yet. Try again.", tone: "error" });
-      return;
-    }
-    await navigator.clipboard.writeText(result.address).catch(() => undefined);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+        </span>
+      </div>
+    );
   }
 
   return (
-    <StartedTile
-      icon={STEP_ICON.mailbox}
-      label="Set up your mail"
-      hint="Add your signature. Gmail and Outlook connect here once they arrive."
-    >
-      <form
-        className="flex w-full flex-col gap-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!signature.trim()) return;
-          run("mailbox", () => saveMemberSettingsAction(orgId, { signature }), "Signature saved.");
-        }}
+    <div className={ROW} {...upload.zone}>
+      {choices.length > 0 ? (
+        <button type="button" onClick={bringEveryone} className={SOLID}>
+          Bring in {total.toLocaleString("en-US")} {total === 1 ? "person" : "people"}
+        </button>
+      ) : (
+        <button type="button" onClick={addOne} className={SOLID}>
+          Add someone
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={upload.busy}
+        onClick={upload.pick}
+        className={cn(
+          "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-current/45 px-3.5 text-[13px] font-medium transition-colors hover:bg-current/10 disabled:cursor-default disabled:opacity-60",
+          FOCUS,
+          upload.over && "border-current bg-current/15",
+        )}
       >
-        <textarea
-          rows={2}
-          value={signature}
-          onChange={(e) => setSignature(e.target.value)}
-          placeholder="Your signature"
-          aria-label="Your signature"
-          className={cn(STARTED_FIELD, "w-full resize-none")}
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="submit"
-            disabled={working || !signature.trim()}
-            className={STARTED_SOLID}
-          >
-            Save
-          </button>
-          {inbound && (
-            <button
-              type="button"
-              title="BCC it, or forward mail to it, and the CRM logs that mail."
-              onClick={() => void copyAddress()}
-              className={STARTED_RING}
-            >
-              {copied ? (
-                <Check className="size-3.5" aria-hidden="true" />
-              ) : (
-                <Copy className="size-3.5" aria-hidden="true" />
-              )}
-              {copied ? "Copied" : "Copy your logging address"}
-            </button>
-          )}
-          {skip}
-        </div>
-      </form>
-    </StartedTile>
+        <FileSpreadsheet className="size-3.5" aria-hidden="true" />
+        {upload.busy ? "Reading" : "or drop a spreadsheet"}
+      </button>
+      {upload.input}
+    </div>
   );
 }
 
-/** Paste a Claude key right on the tile; it's tested as it saves. */
-function KeyTile({
+/** One number: how many people to reach this quarter. Any other goal is set on its card. */
+function GoalStep({ orgId, quarter, answer }: { orgId: string; quarter: string; answer: Answer }) {
+  const [text, setText] = useState(FIRST_GOAL);
+  const target = parseTarget(text);
+  return (
+    <form
+      className={ROW}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (target === null) return;
+        answer("goal", () =>
+          saveGoalAction(orgId, {
+            metric: "people_reached",
+            ownerId: null,
+            periodKey: quarter,
+            target: Math.ceil(target),
+            name: GOAL_WHAT.people_reached.label,
+          }),
+        );
+      }}
+    >
+      <label className="flex items-center gap-2 text-[14px] font-medium">
+        <input
+          inputMode="numeric"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          aria-label="How many people to reach"
+          className={cn(FIELD, "h-9 w-20 tabular-nums")}
+        />
+        people to reach
+      </label>
+      <button type="submit" disabled={target === null} className={SOLID}>
+        Set goal
+      </button>
+    </form>
+  );
+}
+
+/** Your signature, filled in from your name, and Save. */
+function SignatureStep({
   orgId,
-  working,
-  run,
-  skip,
+  signature,
+  answer,
 }: {
   orgId: string;
-  working: boolean;
-  run: Run;
-  skip: React.ReactNode;
+  signature: string;
+  answer: Answer;
 }) {
-  const [key, setKey] = useState("");
-  const info = orgKeyInfo("anthropic");
+  const [text, setText] = useState(signature);
   return (
-    <StartedTile
-      icon={STEP_ICON.ai}
-      label="Add your AI key"
-      hint="Writes drafts and summaries. Nothing sends by itself."
+    <form
+      className="flex flex-wrap items-end gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        answer("mailbox", () => saveMemberSettingsAction(orgId, { signature: text }));
+      }}
     >
-      <form
-        className="flex w-full flex-col gap-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!key.trim()) return;
-          run(
-            "ai",
-            () => saveOrgKeyAction(orgId, "anthropic", { apiKey: key.trim() }),
-            "Your key works. AI is on.",
-          );
-        }}
-      >
-        <input
-          type="password"
-          autoComplete="off"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="sk-ant-…"
-          aria-label="Your Claude API key"
-          className={cn(STARTED_FIELD, "w-full")}
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button type="submit" disabled={working || !key.trim()} className={STARTED_SOLID}>
-            {working ? "Testing" : "Save key"}
-          </button>
-          {info && (
-            <a href={info.keyUrl} target="_blank" rel="noreferrer" className={STARTED_RING}>
-              Get a key
-            </a>
-          )}
-          {skip}
-        </div>
-      </form>
-    </StartedTile>
+      <textarea
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Your signature"
+        aria-label="Your signature"
+        className={cn(FIELD, "max-w-xl flex-[1_1_16rem] resize-none py-1.5 leading-[1.35]")}
+      />
+      <button type="submit" disabled={!text.trim()} className={SOLID}>
+        Save
+      </button>
+    </form>
   );
 }

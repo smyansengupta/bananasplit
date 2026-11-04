@@ -1,18 +1,17 @@
 import { ArrowUpRight, Check, Loader2, type IconComponent } from "@/components/icons";
 import Link from "next/link";
-import type { DragEventHandler, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Gauge } from "@/components/ui/meters";
 import { cn } from "@/lib/utils";
 
 /**
- * The "get started" block, shared by Home's "Get your organization started"
- * and the CRM's "Get your CRM started": a Progress block across the page. On
- * the left, the title, the gauge and a rail of one segment per step (solid
- * when done, dashed when not needed). On the right, only what's left, each
- * step a tile with its own icon; what's finished folds into a row of small
- * checked chips under them, each with Undo when it was only checked off.
- * Each page says what its steps are and what its tiles do.
+ * The block behind Home's "Get your organization started": a Progress block
+ * across the page. On the left, the title, the gauge and a rail of one segment
+ * per step (solid when done, dashed when not needed). On the right, only
+ * what's left, each step a tile with its own icon; what's finished folds into
+ * a row of small checked chips under them, each with Undo when it was only
+ * checked off.
  */
 
 export type StartedStatus = "done" | "skipped" | "todo";
@@ -29,12 +28,8 @@ export const STARTED_SOLID =
   "text-block-goal inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full bg-white px-2.5 text-[12px] font-semibold transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-60";
 
 /** The outlined pill on a block: a tile's other buttons. */
-export const STARTED_RING =
+const STARTED_RING =
   "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold ring-1 ring-current/25 transition-colors hover:ring-current/60 disabled:cursor-default disabled:opacity-60";
-
-/** A field on a block. */
-export const STARTED_FIELD =
-  "placeholder:text-current/55 min-w-0 rounded-[12px] bg-current/10 px-3 py-1.5 text-[13px] ring-1 ring-current/20 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-current/60";
 
 export function StartedBlock({
   title,
@@ -157,39 +152,17 @@ export function StartedTile({
   label,
   hint,
   href,
-  wide = false,
   children,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  highlighted = false,
 }: {
   icon: IconComponent;
   label: string;
   hint: string;
   href?: string;
-  /** Takes the whole row: a step with more to choose from. */
-  wide?: boolean;
   /** The tile's buttons, under the label. */
   children?: ReactNode;
-  onDragOver?: DragEventHandler<HTMLLIElement>;
-  onDragLeave?: DragEventHandler<HTMLLIElement>;
-  onDrop?: DragEventHandler<HTMLLIElement>;
-  /** A file is being held over it. */
-  highlighted?: boolean;
 }) {
   return (
-    <li
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={cn(
-        "rounded-tile group/step relative flex flex-col gap-3 bg-[color-mix(in_oklab,currentColor_10%,transparent)] p-4 transition-colors hover:bg-[color-mix(in_oklab,currentColor_15%,transparent)]",
-        wide && "sm:col-span-2",
-        highlighted &&
-          "bg-[color-mix(in_oklab,currentColor_22%,transparent)] ring-2 ring-current/50",
-      )}
-    >
+    <li className="rounded-tile group/step relative flex flex-col gap-3 bg-[color-mix(in_oklab,currentColor_10%,transparent)] p-4 transition-colors hover:bg-[color-mix(in_oklab,currentColor_15%,transparent)]">
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"

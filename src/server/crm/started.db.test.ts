@@ -102,7 +102,10 @@ describe("Get your CRM started", () => {
     expect(access.settings).toBeNull();
     expect(data.state.kinds).toBe(false);
     expect(data.counts?.members).toBe(2);
-    expect(crmStartedProgress(viewer, data.state, data.skipped, data.without).finished).toBe(0);
+    expect(crmStartedProgress(viewer, data.state, data.skipped).finished).toBe(0);
+    expect(data.signature).toBe("started-owner\nStarted Test");
+    expect(data.meetingLink).toMatch(/^[^/]+\/book\/started-owner-…$/);
+    expect(data.quarter).toMatch(/^\d{4}-Q[1-4]$/);
     expect(await ownerDb.crmSettings.findUnique({ where: { organizationId: org } })).toBeNull();
     expect(await ownerDb.crmMemberSettings.count({ where: { organizationId: org } })).toBe(0);
     expect(await ownerDb.crmBookingPage.count({ where: { organizationId: org } })).toBe(0);
@@ -116,7 +119,7 @@ describe("Get your CRM started", () => {
     expect(data.state.kinds).toBe(true);
   });
 
-  it("finishes your mail and booking steps when they exist, for a member too", async () => {
+  it("finishes your signature and meeting link steps when they exist, for a member too", async () => {
     if (!reachable) return;
     const before = await load(member);
     expect(before.data.state).toMatchObject({ mailbox: false, booking: false });
@@ -124,7 +127,8 @@ describe("Get your CRM started", () => {
       crmStartedProgress(before.viewer, before.data.state, before.data.skipped).steps.map(
         (s) => s.key,
       ),
-    ).toEqual(["mailbox", "booking"]);
+    ).toEqual(["booking", "mailbox"]);
+    expect(before.data.quarter).toBeNull();
     await as(member, (ctx) => saveMemberSettings(ctx, { signature: "Sam" }));
     await as(member, async (ctx) => {
       const link = await ensurePersonalLink(ctx);
@@ -158,32 +162,37 @@ describe("Get your CRM started", () => {
   it("keeps an owner's checked-off steps beside Home's, and a member doesn't see them", async () => {
     if (!reachable) return;
     const { access } = await load(owner);
-    await as(owner, (ctx) => setCrmStepSkipped(ctx, access, "phone", true));
+    await as(owner, (ctx) => setCrmStepSkipped(ctx, access, "goal", true));
     const row = await ownerDb.orgSettings.findUnique({
       where: { organizationId: org },
       select: { startedSkipped: true },
     });
-    expect(row?.startedSkipped.sort()).toEqual(["crm:phone", "database"]);
-    expect((await load(owner)).data.skipped).toEqual(["phone"]);
+    expect(row?.startedSkipped.sort()).toEqual(["crm:goal", "database"]);
+    expect((await load(owner)).data.skipped).toEqual(["goal"]);
     expect((await load(member)).data.skipped).toEqual([]);
   });
 
   it("hides everything, and Undo puts back exactly what was there", async () => {
     if (!reachable) return;
+    // A step that has left the list keeps its entry through all of this.
+    await ownerDb.orgSettings.update({
+      where: { organizationId: org },
+      data: { startedSkipped: { push: "crm:phone" } },
+    });
     const { access, viewer } = await load(owner);
     const previous = await as(owner, (ctx) => hideCrmStarted(ctx, access));
-    expect(previous).toEqual({ org: ["crm:phone"], own: [] });
+    expect(previous).toEqual({ org: ["crm:goal"], own: [] });
     const hidden = await load(owner);
     expect(crmStartedProgress(viewer, hidden.data.state, hidden.data.skipped).complete).toBe(true);
 
     await as(owner, (ctx) => restoreCrmStarted(ctx, access, previous));
     const back = await load(owner);
-    expect(back.data.skipped).toEqual(["phone"]);
+    expect(back.data.skipped).toEqual(["goal"]);
     const row = await ownerDb.orgSettings.findUnique({
       where: { organizationId: org },
       select: { startedSkipped: true },
     });
-    expect(row?.startedSkipped.sort()).toEqual(["crm:phone", "database"]);
+    expect(row?.startedSkipped.sort()).toEqual(["crm:goal", "crm:phone", "database"]);
   });
 
   it("finishes who looks after them once new people have somewhere to go", async () => {

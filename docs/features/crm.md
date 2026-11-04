@@ -2215,33 +2215,50 @@ named by one search param (`src/lib/crm/overlay.ts`):
   (`/crm/export?kind=all`, `&notes=1` adds the timeline).
 - **Getting started** (`src/components/crm/today/crm-started.tsx`, read by
   `src/server/crm/started.ts`, logic in `src/lib/crm/started.ts`): "Get your
-  CRM started", Home's block (`src/components/overview/started-block.tsx`,
-  shared with "Get your organization started") across the top of Today. There
-  is no setup page: `/crm/setup` redirects to Today. Each tile does its job in
-  place: what you mostly reach out to (chips, picked for you), bring people in
-  (members, event guests, form answers, one click each or all at once, or a
-  spreadsheet dropped on the tile), who looks after them (`planOwners` in
-  `src/lib/crm/setup-owners.ts`, which also sets the routing for new people),
-  your mail (a signature and your logging address; Gmail and Outlook aren't
-  built, so this is the step that stands in for connecting a mailbox), your
-  booking link (made and turned on in one click), your first goal (its card
-  over Today), your AI key (pasted and tested on the tile), and calls and texts
-  (optional, the one tile that links to Connections).
-  A step is done when the thing exists, read fresh each time. "Not needed"
-  checks it off, Hide checks off the rest with Undo in the toast, and the panel
-  leaves once every step is one or the other. A Personal space gets a shorter
-  list with no owner step; members who aren't owners or admins get only their
-  own two steps. What's checked off: the organization's steps in
+  CRM started", one strip across the top of Today in the goal block colour,
+  asking one question at a time. There is no setup page: `/crm/setup` redirects
+  to Today. The strip shows the next step only, as a plain question with its
+  controls and a default picked, so one click usually answers it. In order:
+  who you mostly reach out to (chips picked for you, then Set up the CRM), who
+  to bring in (one button for everyone Bananasplit knows, or a spreadsheet
+  dropped beside it), who looks after new people (`planOwners` in
+  `src/lib/crm/setup-owners.ts`, which also sets the routing for new people;
+  Leave them for now is the step's skip), your meeting link (made and turned on
+  in one click, its address shown beside the button; "…" stands for the part
+  that's made when it's turned on), your goal this quarter (a number of people
+  to reach, filled in; any other goal is set on its card), and what your emails
+  end with (your signature, filled in from your name and the organization's).
+  The AI key and calls and texts aren't steps: they're in settings under
+  Connections.
+  The right edge has "Step 2 of 6", a segment per step (filled when done, faint
+  when skipped; clicking one jumps there, and a finished step offers Change it,
+  its place in settings) and Skip, the step's "not needed". Hide, in the corner,
+  checks off the rest with Undo in the toast.
+  An answer moves on at once, with a short slide that respects reduced motion:
+  the saves run behind the strip one after another, because the first answer
+  makes the CRM the others are saved in, and the page refreshes when the last is
+  in. One that fails brings its question back with the reason, and whatever
+  followed it waits to be answered again. The next step is the one after the
+  step answered, coming back round to any left behind (`nextCrmStep`).
+  A step is done when the thing exists, read fresh each time. Once every step is
+  done or checked off, the strip says "Your CRM is ready" and leaves. It stays
+  mounted for that (`CrmStartedSection` always renders it, and it draws nothing
+  when there's nothing left), and the page's two branches keep it in the same
+  place, so the first answer doesn't remount it. A Personal space has no owner
+  step; members who aren't owners or admins get only their meeting link and
+  signature. What's checked off: the organization's steps in
   `OrgSettings.startedSkipped` as `crm:<step>`, beside Home's, which is why
   Home's Hide and Undo keep those entries; a member's own in their
   `InboxItemState` rows as `crm:started-<step>` (a check constraint only takes
   `crm:<id>` shaped keys there), since only owners and admins
-  can write OrgSettings. No migration.
+  can write OrgSettings. A step keeps its key when its wording changes; entries
+  for steps that left the list (`crm:ai`, `crm:phone`) are ignored and left
+  alone. No migration.
   **Before the CRM's settings exist:** Today lets an owner or admin through
-  (`crmShell(slug, { setup: true })`) and shows only the header and the panel
-  with its first tile, because that answer makes the settings row
-  (`runSetupAction`) the other tiles work in; they appear once it's done.
-  Nothing is written on the page load. Everyone else, and every other CRM page,
+  (`crmShell(slug, { setup: true })`) and shows only the header and the strip
+  on its first question, with no Skip or Hide and the other segments shut,
+  because that answer makes the settings row (`runSetupAction`) the other steps
+  work in. Nothing is written on the page load. Everyone else, and every other CRM page,
   gets the gate, which links to Today. Sharing people out covers anyone with
   no owner since setup, and people you brought in over the last two hours
   (`shareOutOwners`), since this step can come days after bringing them in.

@@ -56,7 +56,10 @@ export default async function CrmTodayPage({
     return (
       <div>
         <CrmHeader orgSlug={orgSlug} create={false} />
-        <CrmStartedSection shell={shell} orgSlug={orgSlug} />
+        {/* In a Suspense like the page below, so the first answer doesn't remount the strip. */}
+        <Suspense fallback={null}>
+          <CrmStartedSection shell={shell} orgSlug={orgSlug} />
+        </Suspense>
       </div>
     );
   }

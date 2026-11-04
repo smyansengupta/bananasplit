@@ -2,7 +2,7 @@ import { splitAmong, type Routing, type RoutingRule } from "./outreach/assign";
 import { setupKindsFor, type SetupKind } from "./templates";
 
 /**
- * "Pick who looks after them" in Get your CRM started (docs/features/crm.md,
+ * "Who looks after new people?" in Get your CRM started (docs/features/crm.md,
  * "Getting started"): split the people brought in evenly among the members,
  * give each relationship type to one member, or leave them with nobody for
  * now. The same choice becomes the routing for people who come in later
@@ -19,7 +19,7 @@ export const OWNER_MODES: readonly { id: OwnerMode; title: string; text: string 
   },
   {
     id: "rel",
-    title: "By relationship",
+    title: "By type of person",
     text: "Clients to one person, partners to another. Change it later in settings.",
   },
   {
