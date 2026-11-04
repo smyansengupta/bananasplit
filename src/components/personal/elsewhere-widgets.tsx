@@ -8,7 +8,7 @@ import { rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { setTaskStatus, takeTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { markNotificationRead } from "@/app/app/notifications-actions";
 import { AmbientButton } from "@/components/ambient/ambient-button";
-import { Check, UserPlus, X } from "@/components/icons";
+import { Bell, Check, UserPlus, X } from "@/components/icons";
 import { TaskCheck } from "@/components/overview/task-check";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
@@ -338,7 +338,12 @@ export function OrgInbox({ updates, now }: { updates: UpdateItem[]; now: Date })
             n.actor ? (
               <UserAvatar user={n.actor} size="sm" className="size-7" />
             ) : (
-              <span aria-hidden="true" className="bg-muted size-7 shrink-0 rounded-full" />
+              <span
+                aria-hidden="true"
+                className="bg-muted text-muted-foreground grid size-7 shrink-0 place-items-center rounded-full [&_svg]:size-3.5"
+              >
+                <Bell />
+              </span>
             )
           }
           href={n.href}
