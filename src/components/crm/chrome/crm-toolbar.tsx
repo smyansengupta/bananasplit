@@ -260,7 +260,7 @@ export function CrmToolbar({
           </div>
         )}
         {children}
-        {hasFilters && <FiltersMenu count={filterCount} items={filters!} />}
+        {filters && filters.length > 0 && <FiltersMenu count={filterCount} items={filters} />}
         <span aria-hidden="true" className="min-w-0 flex-1" />
         {right}
         {search && <CrmSearch placeholder={search.placeholder} param={param} />}
