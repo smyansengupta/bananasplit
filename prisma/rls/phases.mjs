@@ -563,6 +563,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "CRM_REPLY",
           "CRM_REVIEW",
           "CRM_HANDOVER",
+          // The CRM in the Inbox (20261106090000_crm_inbox_kinds).
+          "CRM_NEW",
+          "CRM_BOOKED",
+          "CRM_DEAL",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         // Home's Decisions (20261102100000_home_widgets).

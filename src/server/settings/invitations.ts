@@ -11,6 +11,7 @@ import {
 import { writeOrgAuditLog } from "@/server/audit";
 import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
+import { crmMemberJoined } from "@/server/crm/inbox-notify";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { notifyUser } from "@/server/notifications";
 import { ownPreferredTitle } from "@/server/onboarding/title";
@@ -169,6 +170,8 @@ export async function acceptInvitation(
       await db.membership.create({
         data: { userId: user.id, organizationId: orgId, role: row.role, title },
       });
+      // The CRM's managers hear about a new member (only once the CRM is set up).
+      await crmMemberJoined(db, orgId, user.id);
     }
     await db.invitation.update({ where: { id: row.id }, data: { acceptedAt: new Date() } });
     await writeOrgAuditLog(db, {

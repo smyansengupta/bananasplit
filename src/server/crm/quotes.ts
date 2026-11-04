@@ -26,6 +26,7 @@ import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 import { CrmError, type CrmActor } from "./access";
 import { logActivity, type ActivityTarget } from "./activity";
 import { moveDeal } from "./deals";
+import { crmQuoteEvent } from "./inbox-notify";
 
 /**
  * Quotes and invoices (docs/features/crm.md, CrmQuote): built on a pipeline
@@ -451,6 +452,9 @@ export async function loadPublicQuote(token: string): Promise<PublicQuote | null
     const status = effectiveStatus({ status: q.status, validUntil: q.validUntil });
     if (status === "EXPIRED" && q.status === "SENT") {
       await db.crmQuote.update({ where: { id: q.id }, data: { status: "EXPIRED" } });
+    } else if (q.status === "SENT") {
+      // Opened: whoever looks after the deal hears it once.
+      await crmQuoteEvent(db, parsed.orgId, q, "opened");
     }
     const company = q.companyId
       ? await db.crmCompany.findFirst({ where: { id: q.companyId, organizationId: parsed.orgId }, select: { name: true } })
@@ -521,6 +525,7 @@ export async function respondToQuote(
         data: { status: "ACCEPTED", acceptedName: name, acceptedAt: new Date(), acceptedIpHash: hashIp(parsed.orgId, input.ip) },
       });
       await logQuote(db, parsed.orgId, q, "accepted", null, `Accepted by ${name}.`);
+      await crmQuoteEvent(db, parsed.orgId, q, "accepted", name);
       const actor: CrmActor = { db, organizationId: parsed.orgId, userId: null as unknown as string, role: "MEMBER" as Role };
       const moved = await moveToWon(actor, q);
       if (moved.note) {
@@ -540,6 +545,7 @@ export async function respondToQuote(
       data: { status: "DECLINED", declinedAt: new Date(), declineReason: reason },
     });
     await logQuote(db, parsed.orgId, q, "declined", null, reason ? `Declined: ${reason}` : "Declined.");
+    await crmQuoteEvent(db, parsed.orgId, q, "declined");
     return { ok: true as const, message: "Thanks for letting us know." };
   });
 }

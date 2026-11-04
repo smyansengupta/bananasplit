@@ -108,8 +108,21 @@ export const TRUST_LEVELS: readonly { value: TrustLevel; label: string }[] = [
 
 export type TrustItem = "emails" | "merges" | "signatures" | "stages";
 
-export const TRUST_ITEMS: readonly { id: TrustItem; label: string; fallback: TrustLevel }[] = [
-  { id: "emails", label: "Emails from plans and automations", fallback: "tell" },
+export interface TrustItemInfo {
+  id: TrustItem;
+  label: string;
+  fallback: TrustLevel;
+  /** Fixed at this level, with the one-line reason shown in its place. */
+  locked?: { level: TrustLevel; why: string };
+}
+
+export const TRUST_ITEMS: readonly TrustItemInfo[] = [
+  {
+    id: "emails",
+    label: "Emails and texts from plans and automations",
+    fallback: "suggest",
+    locked: { level: "suggest", why: "Always waits for you: nothing goes out until a person sends it." },
+  },
   { id: "merges", label: "Merging exact duplicates", fallback: "tell" },
   { id: "signatures", label: "Changing details from email signatures", fallback: "suggest" },
   { id: "stages", label: "Moving deals between stages", fallback: "suggest" },
@@ -119,20 +132,21 @@ export type Autonomy = Record<TrustItem, TrustLevel>;
 
 const isLevel = (v: unknown): v is TrustLevel => v === "suggest" || v === "tell" || v === "auto";
 
-/** A stored autonomy value, cleaned; each missing item takes its fallback. */
+/** A stored autonomy value, cleaned; each missing item takes its fallback, and a locked one its level. */
 export function readAutonomy(raw: unknown): Autonomy {
   const a = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return Object.fromEntries(
-    TRUST_ITEMS.map((t) => [t.id, isLevel(a[t.id]) ? a[t.id] : t.fallback]),
+    TRUST_ITEMS.map((t) => [t.id, t.locked ? t.locked.level : isLevel(a[t.id]) ? a[t.id] : t.fallback]),
   ) as Autonomy;
 }
 
 /**
- * Whether an automation's email step drafts for review instead of sending:
- * the step says so, or the organization said Suggest for automation email.
+ * Whether an automation's email drafts for a person to send instead of
+ * sending: always. No setting, step or stored value lets an automation,
+ * a plan's later step or an agent email or text anyone on its own.
  */
-export function automationEmailReview(stepReview: boolean, autonomy: Autonomy): boolean {
-  return stepReview || autonomy.emails === "suggest";
+export function automationEmailReview(): true {
+  return true;
 }
 
 // ---- When sending is paused -------------------------------------------------------------------

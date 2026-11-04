@@ -16,8 +16,6 @@ import type { OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { notifyUsers } from "@/server/notifications";
 import { createTask, loadTaskEnv, type TaskEnv } from "@/server/tasks/service";
-import { AUTOMATION_WINDOW, nextInWindow } from "@/lib/crm/outreach/schedule";
-import { automationEmailReview, readAutonomy } from "@/lib/crm/settings-prefs";
 
 import type { CrmActor } from "./access";
 import { CrmError } from "./access";
@@ -26,7 +24,7 @@ import { updateCompany } from "./companies";
 import { effectiveOwnerId, type RoleOwner } from "./owners";
 import { updatePerson } from "./people";
 import { inviteLink } from "./outreach/campaigns";
-import { contactable, queueEmail, renderFor, saveDraft } from "./outreach/send";
+import { contactable, renderFor, saveDraft } from "./outreach/send";
 import { enroll } from "./outreach/sequences";
 import { proposeChange } from "./review";
 import type { WorkflowTarget } from "./workflow-target";
@@ -43,14 +41,13 @@ import { targetPath } from "./workflow-target";
  * never happen inside a transaction.
  *
  * Three steps go through outreach (Phase 2), one function each:
- * - sendTemplateAction: the template, merged by outreach's renderer, sent
- *   through queueEmail and the crm-send job from the owner's name (so
- *   do-not-contact, unsubscribes, bounces, the daily cap and waking hours
- *   apply); a step set to "review" leaves an unsent draft in the owner's
- *   compose and a Review suggestion instead.
- * - enrollInSequenceAction: outreach's enroll, from the owner's mailbox.
+ * - sendTemplateAction: the template, merged by outreach's renderer, as an
+ *   unsent draft in the owner's compose with a To approve row: nothing an
+ *   automation writes goes out until a person sends it.
+ * - enrollInSequenceAction: outreach's enroll, from the owner's mailbox,
+ *   marked as an automation's, so even its first email waits as a draft.
  * - inviteToEventAction: a member joins the event's invitees; anyone else
- *   gets its RSVP link by email the same way (or a draft, set to review).
+ *   gets a draft with its RSVP link the same way.
  */
 
 export interface ActionContext {
@@ -178,21 +175,16 @@ async function senderFor(ctx: ActionContext): Promise<string> {
   return ctx.actor.userId;
 }
 
-/** Null when it's waking hours in the organization's timezone; else when they start. */
-function whenToSend(ctx: ActionContext): Date | null {
-  const at = nextInWindow(ctx.now, AUTOMATION_WINDOW, ctx.tz);
-  return at.getTime() > ctx.now.getTime() + 60_000 ? at : null;
-}
-
 /**
- * An automation's email, through outreach's one send path (queueEmail and
- * the crm-send job, so do-not-contact, unsubscribes, bounces, the daily cap
- * and waking hours all apply), or, with `review`, an unsent draft in the
- * sender's compose with a Review suggestion to send it.
+ * An automation's email: always an unsent draft in the sender's compose,
+ * with a To approve row (Today, Power hour) and an Inbox line. Nothing an
+ * automation writes goes out until a person sends it; sending it then goes
+ * through outreach's one send path (do-not-contact, unsubscribes, bounces,
+ * the daily cap). A step's old "review" setting no longer changes anything.
  */
 async function automationEmail(
   ctx: ActionContext,
-  input: { personId: string; name: string; subject: string; body: string; templateId?: string | null; review: boolean; title: string },
+  input: { personId: string; name: string; subject: string; body: string; templateId?: string | null; title: string },
 ): Promise<OutreachResult> {
   const { db, organizationId } = ctx.actor;
   const senderId = await senderFor(ctx);
@@ -203,60 +195,37 @@ async function automationEmail(
     if (error instanceof CrmError) return { ok: false, detail: error.message };
     throw error;
   }
-  // CRM settings > Automations: "Suggest" for automation email drafts every one.
-  const prefs = await db.crmSettings.findUnique({ where: { organizationId }, select: { autonomy: true } });
-  if (automationEmailReview(input.review, readAutonomy(prefs?.autonomy))) {
-    if (ctx.dryRun) return { ok: true, detail: `Would draft "${rendered.subject}" to ${input.name} for review.` };
-    const draft = await saveDraft(db, {
-      organizationId,
-      ownerId: senderId,
-      personId: input.personId,
+  if (ctx.dryRun) return { ok: true, detail: `Would draft "${rendered.subject}" to ${input.name} for you to send.` };
+  const draft = await saveDraft(db, {
+    organizationId,
+    ownerId: senderId,
+    personId: input.personId,
+    subject: rendered.subject,
+    body: rendered.body,
+    createdById: null,
+    workflowId: ctx.workflow.id,
+    templateId: input.templateId ?? null,
+  });
+  const person = await db.crmPerson.findFirst({ where: { id: input.personId, organizationId }, select: { primaryEmail: true } });
+  await proposeChange(db, {
+    organizationId,
+    kind: "DRAFT_EMAIL",
+    source: "AUTOMATION",
+    title: input.title,
+    summary: rendered.subject,
+    payload: {
+      to: person?.primaryEmail ? [person.primaryEmail] : [],
       subject: rendered.subject,
       body: rendered.body,
-      createdById: null,
-    });
-    const person = await db.crmPerson.findFirst({ where: { id: input.personId, organizationId }, select: { primaryEmail: true } });
-    await proposeChange(db, {
-      organizationId,
-      kind: "DRAFT_EMAIL",
-      source: "AUTOMATION",
-      title: input.title,
-      summary: rendered.subject,
-      payload: {
-        to: person?.primaryEmail ? [person.primaryEmail] : [],
-        subject: rendered.subject,
-        body: rendered.body,
-        why: `From the automation "${ctx.workflow.name}".`,
-        draftId: draft.draftId,
-      },
-      target: { kind: "person", id: input.personId },
-      citation: { kind: "automation", id: ctx.workflow.id, label: ctx.workflow.name },
-      assigneeId: senderId,
-      proposedById: null,
-    });
-    return { ok: true, detail: `Drafted "${rendered.subject}" to ${input.name}; it waits in Review.` };
-  }
-  const later = whenToSend(ctx);
-  if (ctx.dryRun) {
-    return { ok: true, detail: `Would send "${rendered.subject}" to ${input.name}${later ? " at 8 AM" : ""}.` };
-  }
-  try {
-    await queueEmail(db, {
-      organizationId,
-      senderId,
-      createdById: null,
-      personId: input.personId,
-      subject: rendered.subject,
-      body: rendered.body,
-      templateId: input.templateId ?? null,
-      workflowId: ctx.workflow.id,
-      scheduledFor: later,
-    });
-  } catch (error) {
-    if (error instanceof CrmError) return { ok: false, detail: error.message };
-    throw error;
-  }
-  return { ok: true, detail: later ? `"${rendered.subject}" goes to ${input.name} at 8 AM.` : `Sending "${rendered.subject}" to ${input.name}.` };
+      why: `From the automation "${ctx.workflow.name}". It goes out when you send it.`,
+      draftId: draft.draftId,
+    },
+    target: { kind: "person", id: input.personId },
+    citation: { kind: "automation", id: ctx.workflow.id, label: ctx.workflow.name },
+    assigneeId: senderId,
+    proposedById: null,
+  });
+  return { ok: true, detail: `Drafted "${rendered.subject}" to ${input.name}; it waits for you to send it.` };
 }
 
 /** The person, and why they can't be emailed (null when they can). */
@@ -271,7 +240,7 @@ async function reachable(ctx: ActionContext, personId: string) {
   return { person, reason: can.ok ? null : `${person.name}: ${can.reason!.charAt(0).toLowerCase()}${can.reason!.slice(1)}` };
 }
 
-/** Sends a template to a person (or, set to review, drafts it for the owner). */
+/** Drafts a template to a person for the owner to send. */
 export async function sendTemplateAction(
   ctx: ActionContext,
   input: { templateId: string; personId: string; review?: boolean },
@@ -291,7 +260,6 @@ export async function sendTemplateAction(
     subject: template.subject?.trim() || template.name,
     body: template.body,
     templateId: template.id,
-    review: input.review === true,
     title: `Send "${template.name}" to ${r.person.name}`,
   });
 }
@@ -318,7 +286,7 @@ export async function enrollInSequenceAction(
   });
   if (active) return { ok: true, detail: `${r.person.name} is already in "${sequence.name}".` };
   if (ctx.dryRun) return { ok: true, detail: `Would enroll ${r.person.name} in "${sequence.name}".` };
-  const result = await enroll(ctx.actor, sequence.id, [r.person.id], { senderId: await senderFor(ctx) }, ctx.now);
+  const result = await enroll(ctx.actor, sequence.id, [r.person.id], { senderId: await senderFor(ctx), byAutomation: true }, ctx.now);
   if (result.enrolled === 0) {
     return { ok: false, detail: `${r.person.name} wasn't enrolled: ${result.skipped[0]?.reason ?? "they can't be emailed."}` };
   }
@@ -378,7 +346,6 @@ export async function inviteToEventAction(
     name: person.name,
     subject: `You're invited: ${event.title}`,
     body: `Hi {{first_name|there}},\n\nWe'd love to see you at ${event.title}, ${when}.\n\nSay you're coming here: ${link}\n\n{{my_first_name}}\n{{organization}}`,
-    review: input.review === true,
     title: `Invite ${person.name} to ${event.title}`,
   });
 }

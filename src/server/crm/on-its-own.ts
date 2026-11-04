@@ -103,6 +103,8 @@ export async function onItsOwn(
       createdAt: { gte: since },
       status: { in: ["SENT", "QUEUED", "FAILED"] },
       OR: [{ workflowId: { not: null } }, { enrollmentId: { not: null } }],
+      // A draft a person approved and sent is theirs, not done on its own.
+      createdById: null,
     },
     orderBy: { createdAt: "desc" },
     take: 150,

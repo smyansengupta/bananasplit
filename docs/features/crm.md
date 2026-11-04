@@ -1939,9 +1939,12 @@ named by one search param (`src/lib/crm/overlay.ts`):
   queue, duplicates and the viewer's call steps. Each row carries at most
   two ambient buttons with the reason beside them; a done row shrinks to a
   line, with Undo where there is one (a held send, an accepted
-  suggestion). Mine and Everyone's are round buttons; Filters picks a
-  group; search narrows by name. Goals and Coming up (meetings in the next
-  week) sit on the right. Power hour is one light strip; Snooze hides it
+  suggestion). The bar is in Tasks' order: Mine and Everyone's as round
+  buttons, Filters (picks a group), then search. Goals, Coming up
+  (meetings in the next week) and Done on its own (the latest five with
+  when, the week's count, See all opens `?open=log`;
+  `src/components/crm/today/today-log.tsx`) sit on the right. Power hour
+  is one light strip; Snooze hides it
   until 2 PM, or 8 AM the next day, where the member is
   (`src/lib/crm/power-hour.ts`, an `InboxItemState` row keyed
   `crm-power-hour`), with Undo.
@@ -2124,9 +2127,11 @@ one person: people, companies, deals and outreach, nobody else sees it.
 - **Kept on CrmSettings**: `sending` (the hours group mail goes out,
   weekends, the unsubscribe line; `readSending` in
   `src/lib/crm/settings-prefs.ts`, applied in `send.ts`'s prepare once set)
-  and `autonomy` (how much it may do alone; "Suggest" for automation email
-  makes every automation email a draft for review). Merges, signature
-  changes and stage moves keep their level but don't read it yet.
+  and `autonomy` (how much it may do alone). "Emails and texts from plans
+  and automations" is locked at Suggest with its reason in place of the
+  switch (`TRUST_ITEMS[].locked`; `readAutonomy` ignores a stored value):
+  see "Nothing sends unapproved". Merges, signature changes and stage
+  moves keep their level but don't read it yet.
 - **Sending is paused** (`SendingPausedBanner` in
   `src/components/crm/settings/sending-paused.tsx`, one line on any page):
   the spending cap reached, or bulk email with no verified sender; a
@@ -2195,3 +2200,73 @@ one person: people, companies, deals and outreach, nobody else sees it.
   logo, then one card with who you're meeting and how long, a month
   calendar of open days, that day's times, a short form, Book, and a
   booked state with Pick again.
+
+## Nothing sends unapproved
+
+Built 2026-11-03 on `claude/crm-inbox`. No email or text leaves the CRM
+unless a person pressed Send for it (or pressed Start on the plan it opens).
+Everything else waits as a draft in the sender's compose, with a To approve
+row on Today (Send, Don't send), a place in Power hour and a `CRM_REVIEW`
+line in their Inbox. Send goes through `composeEmail` with the draft, which
+keeps it the plan's or the automation's (its thread, footer and daily cap)
+and closes the To approve row. Don't send (`rejectSuggestion`) throws the
+draft away.
+
+| Path | Before | Now |
+| --- | --- | --- |
+| Automation "Send a template" (`workflow-actions.ts`) | Sent from the owner's mailbox unless the step said review or Automations said Suggest | Always a draft for the owner; the step's review switch is gone from the builder |
+| Automation "Invite to an event", someone outside the organization | Emailed the RSVP link | A draft with the link for the owner; members still just join the invitees |
+| Automation "Enroll in a sequence" | First email went on its own | Enrolled with no `enrolledById`, so even the first email is a draft |
+| Plan or sequence, first step, a person pressed Start / Enroll / their share | Sent | Still sent: pressing it is the OK (`approvedByStart`) |
+| Plan or sequence, every later email step | Sent when due | A draft when due; the rest of the plan waits while it waits, and the next wait counts from when it was sent; a reply, booking or bounce withdraws it |
+| Plan or sequence, later text step | Texted on the organization's number | A to-do in the sender's queue with the words ready (send from the card) |
+| Follow-up agent (`agents.ts`) | Drafts only | Unchanged |
+| Booking confirmation to the guest (`booking.ts`) | Sent | Kept: the receipt for what the guest just did, to them alone |
+| Form receipts, RSVP confirmations (outside the CRM) | Sent | Kept: the same kind of receipt |
+| One-to-one email, Power hour, a text from the card, bulk email, a campaign share, Send later | A person pressed Send (Send later included) | Unchanged |
+| Quotes and invoices | Sent only from Send; no reminders exist | Unchanged |
+| CRM settings > Automations, "How much it may do alone" | Emails could be Suggest, Do and tell me, Just do it | Locked: "Always waits for you: nothing goes out until a person sends it." |
+
+Tests: `src/server/crm/approval.db.test.ts` (a plan's later steps, an
+automation's enrollment, Don't send, a reply withdrawing a draft, the
+locked setting), the first case of `integration.db.test.ts` (an
+automation's template), `src/lib/crm/settings.test.ts`.
+
+## The CRM in the Inbox
+
+Built 2026-11-03 on `claude/crm-inbox` (`src/server/crm/inbox-notify.ts`).
+What comes into the CRM for someone is a line in their Inbox's Updates,
+under one CRM chip, linked to the card (`crmRecordHref`, `?open=`):
+
+| What | Type | Who | Where it's written |
+| --- | --- | --- | --- |
+| Someone new (a person, company or deal) from anywhere but an import: a form, a booking, email, texts, the API, an automation, a member adding them for you | `CRM_NEW` (`CRM_DEAL` for a deal) | The owner, else the managers; never whoever added them | crm-event listener |
+| A form answer from someone already in the CRM | `CRM_NEW` | Owner, else managers | crm-event listener |
+| Given to you (owner changed) | `CRM_ASSIGNED` (`CRM_DEAL` for a deal) | The new owner | crm-event listener; People's Change owner writes one line itself |
+| A deal won or lost | `CRM_DEAL` | Owner, else managers | crm-event listener |
+| An import finished | `CRM_NEW` | Whoever started it, one line | `runImportTurn` |
+| A new member joined | `CRM_NEW` | The managers | invitation accept and join code |
+| A reply | `CRM_REPLY` | The member it answers | `ingestEmail` (as before) |
+| A booking | `CRM_BOOKED` | The host | `book` |
+| A quote or invoice opened, accepted or declined | `CRM_DEAL` | The deal's owner, else whoever made it, else managers | `/q/{token}` |
+| A draft or change waiting for your OK | `CRM_REVIEW` | Its assignee | `proposeChange` |
+| Mail that didn't go; what an automation held back | `CRM_REVIEW` | The sender; the automation's member | `send.ts` `markFailed`, `runWorkflowOn` |
+| Sending paused (the spending cap, no sender) | `CRM_REVIEW` | The sender and managers, once a day | `markFailed` |
+
+- **Bursts are one row.** A second line of the same group for the same
+  member within 30 minutes, while the first is unread, rewrites that row
+  ("3 new people in the CRM", the latest name under it). Rewriting needs
+  the service path; a member's own action adds a row instead. Something
+  already said about a record in the last ten minutes (a routed form
+  answer, a booking) isn't said again.
+- **Events.** `emitCrmEvent` now also queues a `crm-event` job when the
+  Inbox could want it (`inboxMayWant`, then `inboxWants` in the caller's
+  transaction), so a member's edits to their own records still queue
+  nothing, and a bulk edit's batch never does.
+- **Email copies.** The notify-email job reads each member's preference as
+  for any type. `CRM_NEW` is off until they turn it on (`DEFAULT_OFF_TYPES`).
+- **Migration** `20261106090000_crm_inbox_kinds` adds `CRM_NEW`,
+  `CRM_BOOKED` and `CRM_DEAL` to `NotificationType`.
+- **Not yet.** A quote opened by the sender themselves counts as opened.
+  Text sends that fail don't write a line. A bring-in (members, event
+  guests) is quiet like an import but writes no summary line yet.

@@ -14,12 +14,13 @@ import {
 } from "@/lib/crm/outreach/booking";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 import { createEvent } from "@/server/events/service";
-import { notifyUser } from "@/server/notifications";
+import { crmRecordHref } from "@/lib/crm/href";
 
 import { CrmError, requireMember, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { createDeal } from "../deals";
 import { emitCrmEvent } from "../events";
+import { crmInbox } from "../inbox-notify";
 import { createPerson } from "../people";
 import { advanceTargets, stopEnrollments } from "./inbound";
 import { publicTarget } from "./public";
@@ -329,14 +330,20 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
       timeZone: org?.timezone ?? "UTC",
       timeZoneName: "short",
     });
-    await notifyUser(db, orgId, hostId, {
-      type: "EVENT_INVITE",
+    // The host's Inbox, linked to the person's card (the meeting is on it).
+    await crmInbox(db, orgId, [hostId], {
+      type: "CRM_BOOKED",
+      group: "booked",
       title: `${name} booked ${page.title}`,
       body: when,
-      linkUrl: org ? `/app/${org.slug}/meetings/${event.id}` : null,
-      dedupeKey: `crm-booking:${event.id}`,
+      linkUrl: org ? crmRecordHref(org.slug, "person", personId) : null,
+      many: (n) => ({ title: `${n} new bookings`, linkUrl: org ? `/app/${org.slug}/meetings` : null }),
+      latest: `Latest: ${name}, ${when}`,
+      key: `booking-${event.id}`,
     });
-    // The guest's confirmation, from the host.
+    // The guest's confirmation, from the host. Kept automatic: it's the
+    // receipt for what the guest just did themselves, to them alone, and
+    // says only what they booked (no outreach goes out without a person).
     await queueEmail(db, {
       organizationId: orgId,
       senderId: hostId,

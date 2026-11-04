@@ -229,7 +229,7 @@ export const ACTION_INFO: Record<ActionType, { label: string; hint: string; netw
   "stage.move": { label: "Move to a stage", hint: "Items only" },
   "owner.assign": { label: "Assign an owner", hint: "Round-robin, fewest open, or one member" },
   "deal.create": { label: "Add to a pipeline", hint: "A new item for this person or company" },
-  "template.send": { label: "Send a template", hint: "An email template, to the person" },
+  "template.send": { label: "Draft a template", hint: "An email template, for the owner to send" },
   "sequence.enroll": { label: "Enroll in a sequence", hint: "Timed emails that stop on reply" },
   "event.invite": { label: "Invite to an event", hint: "A meeting or event in Bananasplit" },
   notify: { label: "Notify someone", hint: "In their Inbox" },
@@ -300,7 +300,7 @@ export const actionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("template.send"),
-      /** review: the email waits as a draft in Review for the owner instead of sending. */
+      /** review: kept for saved automations; every automation email waits as a draft now. */
       params: z.object({ templateId: id, review: z.boolean().optional() }).strict(),
     })
     .strict(),

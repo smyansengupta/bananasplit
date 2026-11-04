@@ -102,12 +102,16 @@ export function TrustCard({ orgId, initial }: { orgId: string; initial: Autonomy
           {TRUST_ITEMS.map((item) => (
             <li key={item.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0">
               <span className="min-w-0 flex-[1_1_15rem] text-[15px]">{item.label}</span>
-              <Segmented
-                label={item.label}
-                value={levels[item.id]}
-                onSelect={(v) => setLevels((cur) => ({ ...cur, [item.id]: v as TrustLevel }))}
-                options={TRUST_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
-              />
+              {item.locked ? (
+                <span className="text-muted-foreground min-w-0 flex-[1_1_15rem] text-sm">{item.locked.why}</span>
+              ) : (
+                <Segmented
+                  label={item.label}
+                  value={levels[item.id]}
+                  onSelect={(v) => setLevels((cur) => ({ ...cur, [item.id]: v as TrustLevel }))}
+                  options={TRUST_LEVELS.map((l) => ({ value: l.value, label: l.label }))}
+                />
+              )}
             </li>
           ))}
         </ul>
