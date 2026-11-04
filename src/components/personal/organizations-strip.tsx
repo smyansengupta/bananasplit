@@ -1,9 +1,8 @@
-import { ArrowRight, CalendarDays, Plus, UserRound } from "@/components/icons";
+import { ArrowRight, CalendarDays, UserRound } from "@/components/icons";
 import Link from "next/link";
 
 import { PendingInviteCard } from "@/app/onboarding/pending-invite-card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { formatEventWhen } from "@/lib/calendar/format";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { orgInitials } from "@/lib/theme/logo";
@@ -13,41 +12,33 @@ import type { PersonalHomeClub, PersonalHomeData, ProfileGap } from "@/server/pe
 /**
  * Personal Home's organizations strip, always right under Up next: one
  * card with a row for each organization you're in (who you are there, its
- * next meeting, your open tasks and what's unread, each a way in). Joining
- * by code or starting one sits on the heading's row; with no organization
- * yet, it fills the card instead. Invitations waiting on you and "Finish
- * your profile" sit under it while they apply. Data: loadPersonalHome
+ * next meeting, your open tasks and what's unread, each a way in).
+ * Joining or starting one is the organization switcher's, not Home's.
+ * Invitations waiting on you and "Finish your profile" sit under it while
+ * they apply. Data: loadPersonalHome
  * (src/server/personal/home.ts).
  */
 export function OrganizationsStrip({ data, now }: { data: PersonalHomeData; now: Date }) {
   const first = data.clubs.length === 0;
   return (
     <section aria-labelledby="organizations-heading" className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-        <div className="flex items-baseline gap-3">
-          <h2 id="organizations-heading" className="heading text-[17px] leading-snug">
-            Your organizations
-          </h2>
-          {data.moreClubs > 0 && (
-            <span className="text-muted-foreground text-[13px]">
-              And {data.moreClubs} more in the sidebar
-            </span>
-          )}
-        </div>
-        {!first && <JoinForm />}
+      <div className="flex items-baseline gap-3">
+        <h2 id="organizations-heading" className="heading text-[17px] leading-snug">
+          Your organizations
+        </h2>
+        {data.moreClubs > 0 && (
+          <span className="text-muted-foreground text-[13px]">
+            And {data.moreClubs} more in the sidebar
+          </span>
+        )}
       </div>
 
       <div className="bg-card edge rounded-tile p-1.5">
         {first ? (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-3.5 py-3">
-            <p className="min-w-0 flex-1 text-[14px]">
-              <span className="font-semibold">You&apos;re not in an organization yet.</span>{" "}
-              <span className="text-muted-foreground">
-                Join one with its invite code, or start your own.
-              </span>
-            </p>
-            <JoinForm first />
-          </div>
+          <p className="px-3.5 py-3 text-[14px]">
+            <span className="font-semibold">You&apos;re not in an organization yet.</span>{" "}
+            <span className="text-muted-foreground">When you join one, it shows here.</span>
+          </p>
         ) : (
           <ul className="space-y-1">
             {data.clubs.map((club) => (
@@ -163,37 +154,6 @@ function OrgRow({
         className="text-muted-foreground col-start-3 row-start-1 size-4 transition-transform group-hover:translate-x-0.5 md:col-start-auto md:row-start-auto"
         aria-hidden="true"
       />
-    </div>
-  );
-}
-
-/** Join by code, or start one. */
-function JoinForm({ first = false }: { first?: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <form action="/onboarding/join" method="get" className="flex items-center gap-2">
-        <label htmlFor="join-code" className="sr-only">
-          Invite code
-        </label>
-        <Input
-          id="join-code"
-          name="code"
-          placeholder="Invite code"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={20}
-          className="h-8 w-32 font-mono uppercase placeholder:font-sans placeholder:normal-case"
-        />
-        <Button type="submit" size="sm" variant={first ? "default" : "outline"}>
-          Join
-        </Button>
-      </form>
-      <Button asChild size="sm" variant="ghost">
-        <Link href="/onboarding/organization">
-          <Plus aria-hidden="true" />
-          Start one
-        </Link>
-      </Button>
     </div>
   );
 }
