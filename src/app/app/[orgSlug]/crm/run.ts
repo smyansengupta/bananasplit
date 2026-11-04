@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { CrmValidationError } from "@/lib/crm/validate";
 import { CrmError, requireCrm, requireManager, type CrmAccess } from "@/server/crm/access";
@@ -14,6 +16,16 @@ import { SpaceRefusedError, withOrgAction, type OrgContext } from "@/server/db/c
  * `crmGate` is the same check on its own, for actions that call a provider
  * (Telnyx, Twilio) between short transactions: never with one open.
  */
+
+/**
+ * An action's input, checked against its schema; anything else is refused
+ * in plain words (a CrmError) instead of reaching the database.
+ */
+export function checkInput<S extends z.ZodType>(schema: S, value: unknown, message = "That didn't look right. Reload and try again."): z.infer<S> {
+  const r = schema.safeParse(value);
+  if (!r.success) throw new CrmError(message);
+  return r.data;
+}
 
 export type CrmResult<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string; fields?: string[] };
 

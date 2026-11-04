@@ -77,13 +77,24 @@ export function TodayList({
     new Map<string, { timer: ReturnType<typeof setTimeout>; fire: () => Promise<void> }>(),
   );
   // Anything still held goes out when you leave Today.
+  // A held send goes when the list goes, or the tab is hidden or left.
   useEffect(() => {
     const pending = held.current;
-    return () => {
-      for (const h of pending.values()) {
+    const fireAll = () => {
+      for (const h of [...pending.values()]) {
         clearTimeout(h.timer);
         void h.fire();
       }
+    };
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") fireAll();
+    };
+    window.addEventListener("pagehide", fireAll);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", fireAll);
+      document.removeEventListener("visibilitychange", onHidden);
+      fireAll();
     };
   }, []);
   const left = rows.filter((r) => !done[r.key]).length;
@@ -146,7 +157,12 @@ export function TodayList({
             held.current.set(row.key, { timer: setTimeout(() => void fire(), HOLD_MS), fire });
             mark(row.key, `Email to ${first} goes out in 10 seconds.`, async () => {
               const h = held.current.get(row.key);
-              if (h) clearTimeout(h.timer);
+              // Sent early (the tab was hidden or left): it's gone, say so.
+              if (!h) {
+                toast({ title: `The email to ${first} already went.` });
+                return;
+              }
+              clearTimeout(h.timer);
               held.current.delete(row.key);
             });
             return {};

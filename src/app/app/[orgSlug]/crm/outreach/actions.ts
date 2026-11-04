@@ -1,5 +1,7 @@
 "use server";
 
+import { z } from "zod";
+
 import type { CrmShareMode, CrmTargetStatus } from "@/generated/prisma/client";
 import { SNOOZES, type SnoozeKey } from "@/lib/crm/outreach/schedule";
 import type { CrmDestination } from "@/lib/crm/outreach/form-map";
@@ -154,7 +156,11 @@ export const stopEnrollmentAction = outreachAction(async (ctx, _a, enrollmentId:
 // ---- Plans (a sequence as the Outreach tab shows it) ---------------------------------
 
 /** A new plan: a draft sequence with an email and a follow-up, ready to edit. */
-export const createPlanAction = outreachAction(async (ctx, _a, name?: string) => createSequence(ctx, name?.trim() || "New plan"));
+export const createPlanAction = outreachAction(async (ctx, _a, name?: string) => {
+  const parsed = z.string().max(120).optional().safeParse(name);
+  if (!parsed.success) throw new CrmError("Keep the name under 120 characters.", ["name"]);
+  return createSequence(ctx, parsed.data?.trim() || "New plan");
+});
 
 export interface PlanSettingsInput {
   from?: PlanFrom;

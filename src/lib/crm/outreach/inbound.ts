@@ -23,6 +23,12 @@ export interface InboundMessage {
   date: Date | null;
   /** Lowercased header names: auto-submitted, x-autoreply, precedence, content-type... */
   headers: Record<string, string>;
+  /**
+   * The From address is really the sender's: SPF, DKIM or DMARC passed for
+   * it where the mail came in (the Worker's verdict). Anything else is
+   * unverified, and ingestEmail never acts on it as that person or member.
+   */
+  senderVerified?: boolean;
 }
 
 /** "Ada Lovelace <Ada@Example.org>" -> "ada@example.org"; null when there's no address. */

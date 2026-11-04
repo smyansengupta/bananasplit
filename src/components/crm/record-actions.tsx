@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { mergeAction, restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
+import { undoMergeAction } from "@/app/app/[orgSlug]/crm/people-actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -190,10 +191,19 @@ export function RecordActions({
                     toast({ title: r && !r.ok ? r.error : "That didn't merge.", tone: "error" });
                     return;
                   }
+                  const undoId = r.undoId;
                   toast({
                     title: r.conflicts
                       ? `Merged. ${r.conflicts} values differed; this one's were kept and the others are in its history.`
                       : `Merged ${dup.label} into ${name}.`,
+                    action: {
+                      label: "Undo",
+                      run: async () => {
+                        const u = await undoMergeAction(orgId, undoId).catch(() => null);
+                        if (u?.ok) router.refresh();
+                        return u && !u.ok ? u.error : u ? undefined : "That didn't undo. Try again.";
+                      },
+                    },
                   });
                   setMerging(false);
                   router.refresh();

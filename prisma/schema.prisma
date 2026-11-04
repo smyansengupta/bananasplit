@@ -3832,6 +3832,13 @@ model CrmEmailMessage {
   scheduledFor      DateTime?
   sentAt            DateTime?
   createdById       String?
+  /// Who said it may go: the member who pressed Send, or who pressed Start
+  /// for a plan's first email. Checked again just before it leaves.
+  approvedById      String?
+  /// send (a person pressed Send) | start (a plan's first email, Start) |
+  /// receipt (a booking confirmation to the guest). Null: nobody approved it,
+  /// so the send job turns it into a draft.
+  approval          String?
   createdAt         DateTime       @default(now())
 
   thread CrmEmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
@@ -4313,6 +4320,9 @@ model CrmTextMessage {
   status            String       @default("queued")
   sentAt            DateTime     @default(now())
   activityId        String?
+  /// Who said it may go (pressed Send, or Start on a plan). Null: the send
+  /// job holds it for the sender instead of texting.
+  approvedById      String?
 
   person CrmPerson? @relation(fields: [personId], references: [id], onDelete: SetNull)
 

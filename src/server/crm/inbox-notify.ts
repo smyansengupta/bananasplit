@@ -54,7 +54,8 @@ export type CrmInboxGroup =
   | "booked"
   | "quote"
   | "approve"
-  | "held";
+  | "held"
+  | "reply";
 
 export interface CrmInboxItem {
   type: NotificationType;
@@ -283,7 +284,8 @@ const WORD = { person: ["person", "people"], company: ["company", "companies"], 
 
 /** The crm-event listener: turns record events into Inbox lines. */
 export async function inboxListener(organizationId: string, event: CrmEventPayload, meta: { jobKey: string }): Promise<void> {
-  if (!inboxMayWant(event)) return;
+  // A bulk edit's own line already covers every record in it.
+  if (event.batchId || !inboxMayWant(event)) return;
   const roles = await rolePositions(organizationId);
   await withSystemOrgTx(organizationId, async ({ db }) => {
     const crm = await db.crmSettings.findUnique({ where: { organizationId }, select: { setupDoneAt: true } });

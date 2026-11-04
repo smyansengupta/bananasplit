@@ -45,7 +45,10 @@ export interface OnItsOwnEntry {
   send: OnItsOwnSend | null;
 }
 
-const NOT_HELD = new Set(["cancelled", "discarded", "untracked"]);
+const NOT_HELD = new Set(["cancelled", "discarded", "untracked", "sent", "failed", "sending"]);
+/** A draft taken for sending, or withdrawn by a reply: not something held back. */
+const notHeld = (error: string | null) =>
+  NOT_HELD.has(error ?? "") || Boolean(error?.startsWith("sending:") || error?.startsWith("withdrawn:"));
 const RUN_STEPS = new Set([
   "task.create",
   "deal.create",
@@ -319,7 +322,7 @@ export async function onItsOwn(
         undo: null,
         send: null,
       });
-    } else if (!NOT_HELD.has(m.error ?? "")) {
+    } else if (!notHeld(m.error)) {
       out.push({
         id: `mail:${m.id}`,
         kind: "held",

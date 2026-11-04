@@ -17,6 +17,8 @@ export async function queueIssueRefresh(
   organizationId: string,
   personIds: readonly string[],
   userId: string | null,
+  /** At most one refresh per person an hour (mail coming in: anyone can send it). */
+  options: { hourly?: boolean } = {},
 ): Promise<void> {
   const ids = [...new Set(personIds)].filter((id) => ID.test(id)).slice(0, 20);
   if (ids.length === 0) return;
@@ -28,13 +30,16 @@ export async function queueIssueRefresh(
     select: { setupDoneAt: true },
   });
   if (!crm?.setupDoneAt) return;
+  const hour = Math.floor(Date.now() / 3_600_000).toString(36);
   for (const personId of ids) {
     await enqueueJob(db, {
       orgId: organizationId,
       kind: "crm-ai",
-      key: `issue:${personId}`,
+      // Hourly: one key per person per hour, and `once` refuses it after it ran.
+      key: options.hourly ? `issue:${personId}:h${hour}` : `issue:${personId}`,
       payload: { action: "issue", personId, ...(userId && ID.test(userId) ? { userId } : {}) },
       runAt: new Date(Date.now() + SETTLE_MS),
+      ...(options.hourly ? { once: true } : {}),
     });
   }
 }

@@ -99,7 +99,8 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
         body: body.trim(),
         draftId: who.draft?.id ?? null,
         replyToMessageId: who.reply?.messageId ?? null,
-        sendAt: new Date(Date.now() + HOLD_MS + 2000).toISOString(),
+        // Held on the server's clock (a wrong clock here can't skip Undo).
+        holdSeconds: HOLD_MS / 1000 + 2,
         confirmConflict: true,
       }),
     );

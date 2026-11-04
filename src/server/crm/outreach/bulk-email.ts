@@ -128,6 +128,9 @@ export async function sendBulk(
       templateId: input.templateId ?? null,
       campaignId: campaign.id,
       createdById: userId,
+      // The member pressed Send on the whole list (checked again as each goes).
+      approval: "send",
+      approvedById: userId,
     })),
   });
   await db.crmCampaignTarget.createMany({

@@ -16,14 +16,15 @@ import {
 } from "@/lib/crm/outreach/inbound";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
-import { notifyUser } from "@/server/notifications";
+import { crmBase } from "@/lib/crm/href";
 
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
+import { crmInbox } from "../inbox-notify";
 import { queueIssueRefresh } from "../issue-queue";
 import { proposeChange } from "../review";
 import { inboundDomain } from "./mailbox";
-import { SOURCE_KIND } from "./send";
+import { SOURCE_KIND, WITHDRAWN } from "./send";
 
 /**
  * The ONE way mail comes into the CRM (docs/features/crm.md, "Email
@@ -127,7 +128,7 @@ export async function stopEnrollments(
   if (status !== "PAUSED" && rows.length) {
     const ids = rows.map((r) => r.id);
     await db.crmEmailMessage.updateMany({
-      where: { organizationId, status: "QUEUED", enrollmentId: { in: ids } },
+      where: { organizationId, status: { in: ["QUEUED", "SCHEDULED"] }, enrollmentId: { in: ids } },
       data: { status: "FAILED", error: `stopped: ${reason}` },
     });
     const drafts = await db.crmEmailMessage.findMany({
@@ -135,9 +136,10 @@ export async function stopEnrollments(
       select: { id: true },
     });
     if (drafts.length) {
+      // Marked withdrawn, so Send on it later says why instead of sending.
       await db.crmEmailMessage.updateMany({
         where: { organizationId, id: { in: drafts.map((d) => d.id) } },
-        data: { status: "FAILED", error: "discarded" },
+        data: { status: "FAILED", error: `${WITHDRAWN} ${reason}` },
       });
       for (const d of drafts) {
         await db.crmSuggestion.updateMany({
@@ -184,7 +186,9 @@ async function handleBounce(
 ): Promise<IngestResult> {
   const b = bounceOf(m);
   let original = ours;
-  if (!original && b.recipient) {
+  // Found by address only when the bounce itself checks out: anyone can
+  // write a bounce naming an address, and it flags that address for good.
+  if (!original && b.recipient && m.senderVerified === true) {
     original = await db.crmEmailMessage.findFirst({
       where: { organizationId, direction: "OUTBOUND", toAddresses: { has: b.recipient }, status: "SENT" },
       orderBy: { sentAt: "desc" },
@@ -256,6 +260,9 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
     // Who's on it, minus us and the organization's own members.
     const domain = inboundDomain();
     const from = bareAddress(m.from);
+    // Anyone can write any From line: only a sender whose mail checked out
+    // (SPF, DKIM or DMARC, the Worker's verdict) is taken as who it says.
+    const verified = m.senderVerified === true;
     const all = addressList([m.from, ...m.to, ...m.cc, ...(m.envelopeTo ?? [])]);
     const members = await db.membership.findMany({
       where: { organizationId },
@@ -264,8 +271,15 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
     });
     const memberEmails = new Map(members.map((x) => [x.user.email.toLowerCase(), x.userId]));
     const isOurs = (a: string) => (domain ? domainOfAddress(a) === domain : false) || memberEmails.has(a);
-    const direction = from && memberEmails.has(from) ? "OUTBOUND" : "INBOUND";
-    const counterpart = (direction === "OUTBOUND" ? all.filter((a) => a !== from) : from ? [from, ...addressList(m.cc)] : [])
+    const fromMember = Boolean(from && memberEmails.has(from));
+    // Never logged as a member's own email unless it really is from them.
+    if (fromMember && !verified) return { status: "ignored", reason: "the sender couldn't be verified" };
+    const direction = fromMember ? "OUTBOUND" : "INBOUND";
+    // A member's own mail (BCC'd) is about everyone on it. Mail coming in is
+    // about its sender alone, and only when the sender checks out: a Cc'd
+    // contact's timeline, sequences and issue are never touched by someone
+    // else's mail, and nothing is done for an address that may be forged.
+    const counterpart = (direction === "OUTBOUND" ? all.filter((a) => a !== from) : from && verified ? [from] : [])
       .filter((a) => !isOurs(a))
       .filter((a) => !neverLogged(a, neverLog));
 
@@ -292,8 +306,18 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
         if (c && !companyIds.includes(c.id)) companyIds.push(c.id);
       }
     }
-    const replyPerson = ours ? await personOfMessage(db, organizationId, ours.activityId) : null;
-    if (replyPerson && !peopleIds.includes(replyPerson)) peopleIds.push(replyPerson);
+    // The person our email went to counts only when it's really them writing
+    // back (their checked address is one of theirs, so they matched above).
+    // Someone a checked sender Cc'd who isn't in the CRM yet may still be
+    // suggested (Review decides); nothing is written about them.
+    if (direction === "INBOUND" && verified) {
+      for (const a of addressList(m.cc).slice(0, 20)) {
+        const e = normalizeEmail(a);
+        if (!e || isOurs(e) || neverLogged(e, neverLog) || unknown.includes(e)) continue;
+        const known = await db.crmPersonEmail.findFirst({ where: { organizationId, email: e }, select: { id: true } });
+        if (!known) unknown.push(e);
+      }
+    }
 
     // Suggest the people we don't know (from what they signed), never silently making them.
     const suggest = unknown.filter((a) => !isRobot(a) && (source.kind === "bcc" || companyIds.length > 0 || direction === "INBOUND"));
@@ -330,6 +354,7 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
       });
     }
     if (peopleIds.length === 0 && companyIds.length === 0) {
+      if (direction === "INBOUND" && !verified) return { status: "ignored", reason: "the sender couldn't be verified" };
       return { status: suggest.length ? "suggested" : "ignored", reason: "nobody the CRM knows" };
     }
 
@@ -397,11 +422,13 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
         meta: { messageId: created.id, threadId, via: source.kind, shared: shareMode, ...(ours ? { inReplyTo: ours.id } : {}) },
       });
       await db.crmEmailMessage.update({ where: { id: created.id }, data: { activityId } });
-      // What they wrote may change their biggest issue.
-      if (direction === "INBOUND") await queueIssueRefresh(db, organizationId, peopleIds, mailboxUserId ?? null);
+      // What they wrote may change their biggest issue (at most once an hour each).
+      if (direction === "INBOUND") {
+        await queueIssueRefresh(db, organizationId, peopleIds, mailboxUserId ?? null, { hourly: true });
+      }
     }
 
-    if (isReply) {
+    if (isReply && peopleIds.length) {
       if (ours) await db.crmEmailMessage.updateMany({ where: { id: ours.id, organizationId, repliedAt: null }, data: { repliedAt: now } });
       for (const p of peopleIds) {
         await stopEnrollments(db, organizationId, p, "REPLIED", "they replied");
@@ -414,16 +441,21 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
           source: "system",
         });
       }
-      // The reply came to our Reply-To: the member hears about it (and gets the words).
+      // The reply came to our Reply-To: the member hears about it, a burst of
+      // replies folding into one Inbox row (crmInbox's grouping).
       if (source.kind === "reply" && mailboxUserId && peopleIds[0]) {
         const person = await db.crmPerson.findFirst({ where: { id: peopleIds[0], organizationId }, select: { name: true } });
         const org = await db.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
-        await notifyUser(db, organizationId, mailboxUserId, {
+        const who = person?.name ?? "Someone";
+        await crmInbox(db, organizationId, [mailboxUserId], {
           type: "CRM_REPLY",
-          title: `${person?.name ?? "Someone"} replied: ${m.subject}`.slice(0, 300),
+          group: "reply",
+          title: `${who} replied: ${m.subject}`.slice(0, 300),
           body: text.slice(0, 1800) || null,
           linkUrl: org ? crmRecordHref(org.slug, "person", peopleIds[0]) : null,
-          dedupeKey: `crm-reply:${m.messageId ?? messageId ?? now.getTime()}`,
+          many: (n) => ({ title: `${n} new replies`, linkUrl: org ? crmBase(org.slug) : null }),
+          latest: `Latest: ${who}, ${m.subject}`.slice(0, 300),
+          key: `reply-${m.messageId ?? messageId ?? now.getTime()}`,
         });
       }
     }

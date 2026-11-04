@@ -40,7 +40,7 @@ export async function usageThisMonth(db: TxClient, organizationId: string): Prom
   const since = monthStart();
   const rows = await db.aiUsage.groupBy({
     by: ["feature", "userId", "paidBy", "provider"],
-    where: { organizationId, createdAt: { gte: since } },
+    where: { organizationId, createdAt: { gte: since }, feature: { not: "crm.reserve" } },
     _count: { _all: true },
     _sum: { costMicros: true },
   });

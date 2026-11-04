@@ -28,6 +28,8 @@ export interface MeterInput {
   provider: string;
   what: PerUse;
   units?: number;
+  /** Whose account carried it (default the organization's key; PLATFORM rows stay outside its cap). */
+  paidBy?: "ORG_KEY" | "PLATFORM";
 }
 
 /** One meter row in an open service-path transaction. */
@@ -42,7 +44,7 @@ export async function meterUseIn(db: TxClient, input: MeterInput): Promise<void>
       provider: input.provider,
       model: units === 1 ? input.what : `${input.what} x${Math.round(units)}`,
       costMicros: costOf(input.what, units),
-      paidBy: "ORG_KEY",
+      paidBy: input.paidBy ?? "ORG_KEY",
     },
   });
 }

@@ -47,7 +47,7 @@ export async function loadIssueInputs(
 ): Promise<IssueInputs | null> {
   const person = await db.crmPerson.findFirst({
     where: { id: personId, organizationId, deletedAt: null },
-    select: { id: true, name: true, title: true, company: { select: { name: true } } },
+    select: { id: true, name: true, title: true, ownerId: true, createdById: true, company: { select: { name: true } } },
   });
   if (!person) return null;
   const org = await db.organization.findUnique({
@@ -63,7 +63,7 @@ export async function loadIssueInputs(
       kinds: ["NOTE", "CALL", "MEETING", "EMAIL", "TEXT"],
     },
   );
-  const sources = issueSources(entries);
+  const sources = issueSources(await everyViewerSees(db, organizationId, person, entries));
   const enrichment = await readEnrichment(db, organizationId, { kind: "person", id: personId });
   return {
     person: {
@@ -78,6 +78,37 @@ export async function loadIssueInputs(
     seen: (enrichment as Record<string, unknown>)[ISSUE_SEEN_KEY],
     today: zonedDateKey(new Date(), safeTimeZone(org?.timezone)),
   };
+}
+
+/**
+ * The entries everyone who can see this person can see too, so the line on
+ * their card never tells a viewer about activity hidden from them (the job
+ * reads on the service path, which sees everything). Never a private entry.
+ * When members see everything (CrmSettings.memberAccess ALL), that's all the
+ * rest. When they see only their own (OWN), the person is seen by its owner,
+ * whoever added it, and the managers, and an entry by member A is seen only
+ * by A and the managers: so only entries every one of those can see count
+ * (by the owner, when the owner added them; none of a third member's).
+ */
+export async function everyViewerSees(
+  db: TxClient,
+  organizationId: string,
+  person: { ownerId: string | null; createdById: string | null },
+  entries: TimelineEntry[],
+): Promise<TimelineEntry[]> {
+  if (entries.length === 0) return entries;
+  const rows = await db.crmActivity.findMany({
+    where: { organizationId, id: { in: entries.map((e) => e.id) } },
+    select: { id: true, privateToId: true },
+  });
+  const shared = new Set(rows.filter((r) => r.privateToId === null).map((r) => r.id));
+  const access = await db.crmSettings.findUnique({ where: { organizationId }, select: { memberAccess: true } });
+  const viewers = [...new Set([person.ownerId, person.createdById].filter((u): u is string => Boolean(u)))];
+  return entries.filter((e) => {
+    if (!shared.has(e.id)) return false;
+    if (access?.memberAccess !== "OWN") return true;
+    return viewers.every((v) => e.actorId === v || e.createdById === v);
+  });
 }
 
 const KIND_WORD: Record<string, string> = {

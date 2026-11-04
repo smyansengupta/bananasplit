@@ -6,6 +6,7 @@ import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { sendOrgSms } from "@/server/sms";
 import { deleteBlobs, getBlob, putBlob, randomKeyId } from "@/server/storage";
 
+import { crmHeldBack } from "../inbox-notify";
 import { AUDIO_EXT, sniffAudio } from "./audio";
 import { syncCallActivity } from "./calls";
 import { deepgramKey, loadPhoneConnection, phoneWebhookUrls } from "./connection";
@@ -58,6 +59,12 @@ export const crmTextSendJob: JobHandler<{ textId: string }> = async (run) => {
     await setTextStatus(orgId, text.id, "cancelled");
     return;
   }
+  // Nothing is texted without a person's OK, checked again now: a text
+  // nobody approved (or whose approver left) waits for its sender instead.
+  if (!(await textApproved(orgId, text.approvedById))) {
+    await holdText(orgId, text);
+    return;
+  }
   const conn = await loadPhoneConnection(orgId, text.provider === "twilio" ? "twilio" : "telnyx");
   if (!conn) {
     await setTextStatus(orgId, text.id, "failed");
@@ -104,6 +111,40 @@ export const crmTextSendJob: JobHandler<{ textId: string }> = async (run) => {
     permanentIf(error);
   }
 };
+
+async function textApproved(orgId: string, approvedById: string | null): Promise<boolean> {
+  if (!approvedById) return false;
+  const m = await withSystemOrgTx(orgId, ({ db }) =>
+    db.membership.findFirst({ where: { organizationId: orgId, userId: approvedById }, select: { userId: true } }),
+  );
+  return Boolean(m);
+}
+
+/** Status of a text nobody approved: it stays on the timeline, not sent, and its sender hears. */
+export const TEXT_HELD = "held-for-ok";
+
+async function holdText(
+  orgId: string,
+  text: { id: string; userId: string | null; personId: string | null; activityId: string | null; body: string },
+): Promise<void> {
+  await withSystemOrgTx(orgId, async ({ db }) => {
+    await db.crmTextMessage.updateMany({ where: { id: text.id, organizationId: orgId }, data: { status: TEXT_HELD } });
+    if (text.activityId) {
+      await db.crmActivity.updateMany({
+        where: { id: text.activityId, organizationId: orgId },
+        data: { subject: "Text not sent: waiting for your OK", meta: { textId: text.id, status: TEXT_HELD } as Prisma.InputJsonObject },
+      });
+    }
+    const person = text.personId
+      ? await db.crmPerson.findFirst({ where: { id: text.personId, organizationId: orgId }, select: { name: true } })
+      : null;
+    await crmHeldBack(db, orgId, [text.userId], {
+      title: `Didn't text ${person?.name ?? "someone"}`,
+      why: "Nobody approved it. Nothing is texted without a person: send it from their card if it should go.",
+      key: `text-${text.id}`,
+    });
+  });
+}
 
 async function setTextStatus(orgId: string, textId: string, status: string) {
   await withSystemOrgTx(orgId, ({ db }) =>

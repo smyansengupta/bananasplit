@@ -279,7 +279,7 @@ export const restoreToPointAction = crmAction(
 
 export const mergeAction = crmAction(async (ctx, kind: "person" | "company", keepId: string, dropId: string) => {
   const r = kind === "person" ? await mergePeople(ctx, keepId, dropId) : await mergeCompanies(ctx, keepId, dropId);
-  return { conflicts: r.conflicts.length, moved: r.moved };
+  return { conflicts: r.conflicts.length, moved: r.moved, undoId: r.undoId };
 });
 
 export const resolveDuplicateAction = crmAction(
