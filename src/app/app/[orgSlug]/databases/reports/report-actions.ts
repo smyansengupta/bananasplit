@@ -15,6 +15,7 @@ import {
   type ReportWidget,
   type WidgetConfig,
 } from "@/lib/reports/catalog";
+import type { ReadyKind } from "@/lib/reports/crm-ready";
 import { appUrl } from "@/lib/app-url";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { resolveAiCredentials } from "@/server/ai/connections";
@@ -54,6 +55,7 @@ import {
   setReportLink,
   type ReportSharing,
 } from "@/server/reports/share";
+import { readyReportId } from "@/server/reports/ready";
 import { listSources } from "@/server/reports/sources";
 
 /**
@@ -127,6 +129,32 @@ export async function createSuggestedReport(
         widgets: fillRows(widgets),
       });
       return made.id;
+    })(organizationId);
+    return { ok: true, id };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * One of the CRM's ready-made reports (Deals, People, Outreach): the one
+ * there is, or made now (Reports home, and the CRM's Report buttons the
+ * first time).
+ */
+export async function openReadyReport(
+  organizationId: string,
+  kind: ReadyKind,
+  sourceKey: string,
+): Promise<ReportResult<{ id: string }>> {
+  try {
+    const id = await reportsAction(async (ctx) => {
+      requirePermission(ctx, "reports.view");
+      if (!(["deals", "people", "outreach"] as const).includes(kind)) {
+        throw new ReportInputError("That report isn't one the CRM has.");
+      }
+      const found = await readyReportId(await reportViewer(ctx), kind, sourceKey, { make: true });
+      if (!found) throw new ReportInputError("That database isn't there, or you can't see it.");
+      return found;
     })(organizationId);
     return { ok: true, id };
   } catch (error) {

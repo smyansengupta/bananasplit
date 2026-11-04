@@ -49,7 +49,8 @@ export type CrmAiFeature =
   | "crm.ai_field"
   | "crm.research"
   | "crm.enrich"
-  | "crm.follow_up_agent";
+  | "crm.follow_up_agent"
+  | "crm.issues";
 
 type Tier = "fast" | "strong";
 
@@ -66,6 +67,7 @@ export const CRM_AI_JOBS: Record<CrmAiFeature, { label: string; tier: Tier; maxO
   "crm.research": { label: "Research agent", tier: "strong", maxOutputTokens: 3_000 },
   "crm.enrich": { label: "Enrichment", tier: "fast", maxOutputTokens: 1_000 },
   "crm.follow_up_agent": { label: "Follow-up agent", tier: "strong", maxOutputTokens: 2_000 },
+  "crm.issues": { label: "Top issues in reports", tier: "fast", maxOutputTokens: 2_000 },
 };
 
 export function featureLabel(feature: string): string {

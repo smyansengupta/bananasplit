@@ -1,7 +1,8 @@
 /**
- * The CRM's reports (docs/features/crm.md, "Redesign"): Deals, People and
- * Outreach at /crm/reports. Pure helpers the server and the tests share:
- * which months a chart shows, the send-time grid, and durations in words.
+ * The CRM's ready-made reports (Deals, People and Outreach, in Databases >
+ * Reports). Pure helpers the server and the tests share: which report an
+ * old /crm/reports link means, which months a chart shows, and the
+ * send-time grid.
  */
 
 export type CrmReportOn = "deals" | "people" | "outreach";
@@ -97,36 +98,4 @@ export function heatGrid(cells: readonly SendCell[], min = 5): HeatGrid {
     }),
   }));
   return { rows, best, max };
-}
-
-/** "40 min", "3 hr", "2 days". */
-export function durationWords(hours: number): string {
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  if (hours < 36) return `${Math.round(hours)} hr`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? "1 day" : `${days} days`;
-}
-
-/** The middle value (null for none). */
-export function median(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const s = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
-}
-
-/** "this quarter" for the range's own words; "these dates" for a custom one. */
-export function rangeWords(preset: string): { now: string; before: string } {
-  switch (preset) {
-    case "quarter":
-      return { now: "this quarter", before: "last quarter" };
-    case "year":
-      return { now: "this year", before: "last year" };
-    case "30d":
-      return { now: "in the last 30 days", before: "the 30 days before" };
-    case "all":
-      return { now: "so far", before: "" };
-    default:
-      return { now: "in these dates", before: "the same span before" };
-  }
 }

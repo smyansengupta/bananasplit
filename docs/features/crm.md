@@ -1206,15 +1206,49 @@ round-robin turns come from `CrmWorkflow.runCount`.
 
 ### Reports (module 7)
 
-Thirteen widgets on reports of the CRM's databases
-(`src/lib/reports/crm-widgets.ts`, computed as the viewer in
-`src/server/crm/report-widgets.ts`, drawn in `widget-bodies.tsx`): people
-reached, reply rate, time to first reply, follow-ups overdue,
-relationships going cold, pipeline velocity, outreach by member, campaign
-progress, stage-to-stage conversion, time in stage, conversion by source,
-amounts raised by source, goals. `SourceSummary.crm` marks a CRM source.
-They read the timeline, `CrmEmailMessage`, campaigns and field history
-directly, and say so when there's nothing yet.
+The CRM's reports live in Databases > Reports, not in the CRM: People,
+Companies and each pipeline are databases, so their reports are saved
+reports on them like any other (arranged, shared, scheduled, kept).
+
+- Ready-made reports (`src/lib/reports/crm-ready.ts`): Deals on each
+  pipeline (Won, Still open, Won over time, By stage, By owner, By type),
+  People (New people by month, Going quiet with Add to Power hour, By
+  relationship, By owner) and Outreach on People (Sent, Reply rate,
+  Replies by plan, Best day and time, Unsubscribes). Setup makes them
+  (`ensureStarterReports`, then `src/server/reports/ready.ts`), once each:
+  one already there, archived too, is left alone. Reports home lists the
+  ones not made yet with Make this report, and the New report walkthrough
+  offers them first; that's how organizations that had the CRM before get
+  them (a saved report has a maker and counts toward the report limits,
+  so they're not made behind anyone's back, and a deleted one doesn't
+  come back on its own).
+- The classics open Deals and People, right under Insights
+  (`src/server/crm/report-classics.ts`): People talked to (different
+  people who wrote back, took a call that connected or met with you, in
+  the dates picked, and their share of People), Converted (of those, the
+  ones who are a member, client or partner now, or have a won deal, or
+  joined from a campaign: the count, the rate and the funnel Talked to >
+  Interested > Converted, Interested being met, booked or on a deal) and
+  Top issues (each person's `enrichment._issue`, the five most common with
+  links to the people; grouped by exact text, then by meaning with the
+  organization's AI on the report page when it has a key,
+  `src/server/crm/issue-groups.ts`, cached a day).
+- Access: the Deals tab's Report button and the old `/crm/reports`,
+  `/crm/reports/deals/<pipeline>`, `/crm/reports/people` and
+  `/crm/reports/outreach` links go to the matching report (made the
+  first time if it isn't there), keeping the dates.
+- The widgets (`src/lib/reports/crm-widgets.ts`, computed as the viewer in
+  `src/server/crm/report-widgets.ts` and `report-ready-widgets.ts`, drawn
+  in `widget-bodies.tsx`): the classics and the ready-made reports' cards
+  above (their numbers from `src/server/crm/crm-reports.ts`, read once per
+  report), plus people reached, reply rate, time to first reply,
+  follow-ups overdue, relationships going cold, pipeline velocity,
+  outreach by member, campaign progress, stage-to-stage conversion, time
+  in stage, conversion by source, amounts raised by source, goals.
+  `SourceSummary.crm` marks a CRM source. Each can add a sentence to the
+  report's built-in Insights. They read the timeline, `CrmEmailMessage`,
+  campaigns and field history directly, and say so when there's nothing
+  yet.
 
 ### Forecasting and goals (module 8)
 
@@ -1249,8 +1283,8 @@ before). Goals also show on the CRM's home and as a Reports widget.
 ### Setup
 
 Each pipeline gets saved views (Stuck, No next step, Mine, Best scores,
-shown above its board) and a starter report with the pipeline widgets;
-People gets an Outreach report (`src/server/crm/starter.ts`).
+shown above its board) and its ready-made Deals report; People gets the
+People and Outreach reports (`src/server/crm/starter.ts`, "Reports").
 
 ### Jobs
 
@@ -1830,8 +1864,8 @@ email and recipe workflow.
 
 The CRM is four tabs now: Today (`/crm`), People (`/crm/people`, with a
 People | Companies switch), Deals (`/crm/deals`) and Outreach
-(`/crm/outreach`), plus Settings (the round button in the header), Setup
-and Reports. `src/lib/crm/nav.ts` holds the four tabs; each stays lit on
+(`/crm/outreach`), plus Settings (the round button in the header) and
+Setup. Reports are in Databases > Reports ("Reports (module 7)"). `src/lib/crm/nav.ts` holds the four tabs; each stays lit on
 the older pages it now holds (`also`) until those move or redirect.
 
 Every CRM tab page is laid out like Tasks: `CrmHeader` (the "CRM" title,

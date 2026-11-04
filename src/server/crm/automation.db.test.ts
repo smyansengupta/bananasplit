@@ -113,7 +113,7 @@ afterAll(async () => {
 describe("CRM automation and numbers against the local database", () => {
   let clients: { id: string; won: string; lead: string };
 
-  it("makes each pipeline's saved views and starter report at setup", async () => {
+  it("makes each pipeline's saved views and the ready-made reports at setup", async () => {
     if (!reachable) return;
     await as(owner, (ctx) => runSetup(ctx, ["clients", "donors"]));
     const pipelines = await ownerDb.crmPipeline.findMany({ where: { organizationId: org }, include: { stages: true } });
@@ -122,12 +122,16 @@ describe("CRM automation and numbers against the local database", () => {
     const views = await ownerDb.crmView.findMany({ where: { organizationId: org, objectKind: "deals", pipelineId: c.id } });
     expect(views.map((v) => v.name).sort()).toEqual(["Best scores", "Mine", "No next step", "Stuck"]);
     const reports = await ownerDb.report.findMany({ where: { organizationId: org }, select: { title: true, widgets: true } });
-    expect(reports.map((r) => r.title).sort()).toEqual(["Clients report", "Donations report", "Outreach"]);
-    const clientReport = reports.find((r) => r.title === "Clients report")!;
-    expect((clientReport.widgets as { type: string }[]).map((w) => w.type)).toEqual(expect.arrayContaining(["crm-velocity", "crm-conversion"]));
+    expect(reports.map((r) => r.title).sort()).toEqual(["Clients", "Donations", "Outreach", "People"]);
+    const types = (title: string) => (reports.find((r) => r.title === title)!.widgets as { type: string }[]).map((w) => w.type);
+    // The classics lead Deals and People.
+    expect(types("Clients").slice(0, 4)).toEqual(["insights", "crm-talked-to", "crm-converted", "crm-top-issues"]);
+    expect(types("Clients")).toEqual(expect.arrayContaining(["crm-won", "crm-open", "crm-deals-by-stage"]));
+    expect(types("People")).toEqual(expect.arrayContaining(["crm-talked-to", "crm-quiet", "crm-people-months"]));
+    expect(types("Outreach")).toEqual(expect.arrayContaining(["crm-sent", "crm-reply-rate", "crm-best-time"]));
     // Again: nothing more.
     await as(owner, (ctx) => runSetup(ctx, ["clients"]));
-    expect(await ownerDb.report.count({ where: { organizationId: org } })).toBe(3);
+    expect(await ownerDb.report.count({ where: { organizationId: org } })).toBe(4);
   });
 
   it("runs a recipe from a real stage move: a won client starts a project", async () => {

@@ -107,7 +107,7 @@ export async function runSetup(actor: CrmActor, kindsInput: readonly string[]): 
     });
   }
 
-  // Each pipeline's saved views and starter report, and the Outreach report on People.
+  // Each pipeline's saved views, and the ready-made reports (Deals, People, Outreach).
   await ensurePipelineViews(actor);
   await ensureStarterReports(actor);
 
