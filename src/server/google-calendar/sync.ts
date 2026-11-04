@@ -29,8 +29,8 @@ import { clearAccessToken, getAccessToken, GoogleReauthError } from "./token";
  *              integration.
  *   2. push    no transaction open: token refresh, then delete / patch /
  *              insert against the Google REST API.
- *                - PUBLIC -> publicCalendarId; INTERNAL -> internalCalendarId
- *                  if configured, otherwise it is removed / never created;
+ *                - PUBLIC -> publicCalendarId, INTERNAL -> internalCalendarId,
+ *                  each if configured, otherwise it is removed / never created;
  *                  a visibility change moves the event between calendars
  *                  (delete from the old one first).
  *                - insert uses the deterministic id; 409 -> get + patch.

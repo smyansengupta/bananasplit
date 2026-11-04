@@ -1477,6 +1477,44 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     { value: { member: 0, treasurer: 1 } },
   );
 
+  await tcase(
+    "T23b",
+    "finance rows: a member reads only their own expenses, never the audit log; an ADMIN reads them all",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_transactions = await count(q, `SELECT count(*) n FROM "Transaction"`);
+      s.member_others = await count(
+        q,
+        `SELECT count(*) n FROM "Transaction" WHERE "submittedById" <> 'u_memberA'`,
+      );
+      s.member_audit = await count(q, `SELECT count(*) n FROM "FinanceAuditLog"`);
+      // Budget amounts too: no category rows, only the names to file under.
+      s.member_categories = await count(q, `SELECT count(*) n FROM "BudgetCategory"`);
+      s.member_category_names = (
+        await q(`SELECT "id", "name" FROM app.expense_categories()`)
+      ).rows.map((r) => `${r.id}:${r.name}`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_transactions = await count(q, `SELECT count(*) n FROM "Transaction"`);
+      s.admin_audit = await count(q, `SELECT count(*) n FROM "FinanceAuditLog"`);
+      s.admin_categories = await count(q, `SELECT count(*) n FROM "BudgetCategory"`);
+      return s;
+    },
+    {
+      value: {
+        member_transactions: 2,
+        member_others: 0,
+        member_audit: 0,
+        member_categories: 0,
+        member_category_names: ["bc_A:Food A"],
+        admin_transactions: 4,
+        admin_audit: 1,
+        admin_categories: 1,
+      },
+    },
+  );
+
   // 0C closed the strangler window: app_legacy held FOR ALL USING(true)
   // policies on 23 tables, so row-level security was effectively off for
   // it. The role now holds nothing here, and nothing connects as it.
@@ -2047,6 +2085,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     {
       value: [
         "active_org_ids",
+        // Org chart second managers: same version and org (P3-06).
+        "assert_also_reports_to",
         "assert_member_of_parent_org",
         "assert_org_active_chart",
         "assert_org_member",
@@ -2076,14 +2116,23 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "cancel_job",
         "claim_jobs",
         "clear_ics_token_hash",
+        // AI connectors: the caller's own spaces with each club's switch
+        // (OrgSettings is readable only in the current org).
+        "connector_spaces",
         "enqueue_job",
         "event_defaults",
+        // Budgets for finance: a member's category list, without the amounts.
+        "expense_categories",
         "explode_ballot",
         "finish_job",
         "folder_in_same_org",
+        // The public form page: which org a live form's slug opens, ids only.
+        "form_page",
         "ics_token_created_at",
         "invitation_by_token_hash",
         "issue_org_creation_code",
+        // The public invite-code page: which org a live code opens, nothing else.
+        "join_code_org_id",
         "list_org_creation_codes",
         "lock_org",
         "log_org_deletion",
@@ -2123,6 +2172,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "refresh_contact_rollups",
         "refresh_lapsed",
         "resolve_org_slug",
+        // AI connectors: the identity plane's revoke (app_auth only), for a
+        // password reset and the Google sign-in gate.
+        "revoke_connector_grants",
         // A bring list claim's item and sign-up are on the same event.
         "rsvp_claim_same_event",
         // Public RSVP pages: the org and event behind a live page's code.
@@ -2132,6 +2184,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "secret_delete",
         "secret_read",
         "secret_write",
+        // Publishing the org chart: moves Organization.activeOrgChartVersionId
+        // (and nothing else) to a PUBLISHED version of the caller's member org.
+        "set_active_org_chart",
         "set_ics_token_hash",
         "slug_available",
         // Moonstone: the nightly counter repair (service path, its org only).
@@ -2224,17 +2279,38 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // tenant-only (it pins createdById and a new task is always readable
       // by its creator).
       value: [
+        // Announcements: any member posts (authorId pinned); each member
+        // marks only their own sightings (userId pinned).
+        "Announcement:INSERT",
+        "AnnouncementSeen:INSERT",
         "AvailabilityPoll:DELETE",
         "AvailabilityPoll:INSERT",
         "AvailabilityPoll:UPDATE",
+        // AI connectors: a user's own grants (userId pinned, no org involved).
+        "ConnectorGrant:DELETE",
+        "ConnectorGrant:INSERT",
+        "ConnectorGrant:UPDATE",
         // Club-made database rows: app.can_edit_database is the role check.
         "DatabaseRecord:INSERT",
         "DatabaseRecord:UPDATE",
+        // Decisions: any member raises one (createdById pinned).
+        "Decision:INSERT",
         "EventAttendee:DELETE",
         "EventAttendee:INSERT",
         "EventAttendee:UPDATE",
+        // Inbox: what each member snoozed or finished, own rows only.
+        "InboxItemState:DELETE",
+        "InboxItemState:INSERT",
+        "InboxItemState:UPDATE",
+        // Links between things: any member links two things in their org
+        // (createdById pinned) and any member unlinks them.
+        "ItemLink:DELETE",
+        "ItemLink:INSERT",
         "MemberPrefs:INSERT",
         "MemberPrefs:UPDATE",
+        // Who's online: each member marks only themselves here.
+        "MemberPresence:INSERT",
+        "MemberPresence:UPDATE",
         "Note:INSERT",
         // Note comments and versions: app.can_view_note, app.can_edit_note
         // and app.can_share_note are the role checks (Moonstone).
@@ -2252,6 +2328,14 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "NoteVersion:UPDATE",
         "Notification:INSERT",
         "Notification:UPDATE",
+        // Every member edits the org chart (org_chart_member_edits): versions
+        // pin createdById, positions are deleted only from a DRAFT, and there
+        // is no version DELETE.
+        "OrgChartPosition:DELETE",
+        "OrgChartPosition:INSERT",
+        "OrgChartPosition:UPDATE",
+        "OrgChartVersion:INSERT",
+        "OrgChartVersion:UPDATE",
         "OrgFile:INSERT",
         "Pin:DELETE",
         "Pin:INSERT",
@@ -2268,6 +2352,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "RecentVisit:DELETE",
         "RecentVisit:INSERT",
         "RecentVisit:UPDATE",
+        "Report:INSERT",
+        "ReportSnapshot:INSERT",
         "Task:INSERT",
         "TaskActivity:INSERT",
         "TaskAssignee:DELETE",
@@ -2280,6 +2366,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "TaskMention:DELETE",
         "TaskMention:INSERT",
         "TaskMention:UPDATE",
+        // Each member hides and un-hides cards on their own Overview; the
+        // policies pin userId to the actor, a stronger test than a role check.
+        "UpNextDismissal:DELETE",
+        "UpNextDismissal:INSERT",
         "User:UPDATE",
         "UserAvailability:INSERT",
         "UserAvailability:UPDATE",
@@ -2303,6 +2393,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       ).rows.map((r) => r.relname),
     {
       value: [
+        "DemoRequest",
         "OrgCreationCode",
         "OrgDeletionLog",
         "OrgSecret",
@@ -2324,10 +2415,12 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       claim_jobs: "s",
       ctx_valid: "usa",
       enqueue_job: "usa",
+      expense_categories: "u",
       finish_job: "s",
       ics_token_created_at: "u",
       immutable_columns: "",
       invitation_by_token_hash: "s",
+      join_code_org_id: "s",
       is_finance: "us",
       is_org_admin: "us",
       is_org_owner: "us",
@@ -2352,6 +2445,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       purge_unverified_users: "a",
       rsvp_page: "s",
       rsvp_ticket: "s",
+      form_page: "s",
       my_rsvp_registrations: "u",
       rsvp_claim_same_event: "",
       rate_limit_hit: "sa",
@@ -2382,6 +2476,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       log_org_deletion: "s",
       // Phase 3
       assert_org_active_chart: "",
+      // Org chart second managers (a trigger; nobody executes it directly).
+      assert_also_reports_to: "",
+      // Any member publishes the org chart (member path only).
+      set_active_org_chart: "u",
       // Phase 4a
       term_of: "us",
       event_defaults: "",
@@ -2438,11 +2536,22 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       note_cycle_guard: "",
       note_parent_visible: "",
       note_comment_guard: "",
+      // Home widgets: who puts a removed announcement back, and what a
+      // decision's UPDATE may change (trigger functions, no grant).
+      announcement_guard: "",
+      decision_guard: "",
       // The nightly job's counter repair (service path, its org context only).
       storage_reconcile: "s",
       // Moonstone gaps: "Free now" asks whether availability was shared at
       // all (member path only).
       member_availability_shared: "u",
+      // A CHECK on the reminder offsets (meetings): both roles insert rows
+      // the constraint has to evaluate.
+      reminder_offsets_ok: "us",
+      // AI connectors: every space's switch for the member path; the revoke
+      // for the identity plane alone.
+      connector_spaces: "u",
+      revoke_connector_grants: "a",
     };
     await tcase(
       "T27f",

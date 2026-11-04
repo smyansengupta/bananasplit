@@ -108,7 +108,7 @@ describe("shapePulseData", () => {
     ]);
   });
 
-  it("keeps next week to the seven days after the send day, dated in the club's zone", () => {
+  it("keeps next week to the seven days after the send day, dated in the organization's zone", () => {
     expect(data.nextWeek).toEqual([
       { kind: "event", id: "n1", title: "Officer meeting", date: "2026-10-13", ownerId: null },
       { kind: "event", id: "n2", title: "General meeting", date: "2026-10-15", ownerId: null },
@@ -129,7 +129,7 @@ describe("shapePulseData", () => {
   });
 
   it("reads as the guide's issue", () => {
-    expect(pulseHeadline(data)).toBe("6 things done · 32 at the General meeting · 3 new members");
+    expect(pulseHeadline(data)).toBe("6 things done, 32 at the General meeting, 3 new members");
     const rows = pulseRows(data).map((r) => r.title);
     expect(rows).toEqual([
       "Spring kickoff is done",
@@ -144,7 +144,7 @@ describe("shapePulseData", () => {
 });
 
 describe("the week's instants", () => {
-  it("runs midnight to midnight in the club's zone and never reaches past now", () => {
+  it("runs midnight to midnight in the organization's zone and never reaches past now", () => {
     const now = at("2026-10-09T21:00:00Z"); // Fri 5pm in New York
     const { start, end } = rangeInstants(range, "America/New_York", now);
     expect(start.toISOString()).toBe("2026-10-03T04:00:00.000Z");
@@ -191,7 +191,7 @@ describe("money in the pulse", () => {
   it("is for finance roles only", () => {
     expect(seesPulseFinance("OWNER")).toBe(true);
     expect(seesPulseFinance("TREASURER")).toBe(true);
-    expect(seesPulseFinance("ADMIN")).toBe(false);
+    expect(seesPulseFinance("ADMIN")).toBe(true);
     expect(seesPulseFinance("MEMBER")).toBe(false);
   });
 

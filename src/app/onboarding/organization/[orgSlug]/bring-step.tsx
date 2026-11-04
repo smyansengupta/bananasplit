@@ -4,8 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 
 import {
   ContinuePill,
-  PreviewHeader,
-  PreviewTile,
   SetupCard,
   StepBody,
   StepError,
@@ -19,17 +17,16 @@ import { bringIntoClubAction, finishBringAction } from "./bring-actions";
 
 /**
  * B7 · Bring anything in? The creator's Personal event pages, calendar
- * events, polls and open tasks, none ticked (except the one they came to
- * move, from Move to a club or an upgrade prompt). "Move N items into
- * <club>" moves the ticked ones one way, keeping their links, sign-ups,
- * tickets and responses; then Finish opens the club.
+ * events, polls, open tasks, folders, notes and files, none ticked (except
+ * the one they came to move, from Move to a club or an upgrade prompt).
+ * "Move N items into <club>" moves the ticked ones one way, keeping their
+ * links, sign-ups, tickets and responses (notes and files arrive private to
+ * the mover); then Finish opens the club.
  */
 export function BringStep({
   orgId,
   orgSlug,
   clubName,
-  index,
-  total,
   backHref,
   sections,
   preselected,
@@ -38,8 +35,6 @@ export function BringStep({
   orgId: string;
   orgSlug: string;
   clubName: string;
-  index: number;
-  total: number;
   backHref: string | null;
   sections: BringSection[];
   /** Ticked to start with (only ids that are in `sections`). */
@@ -84,17 +79,8 @@ export function BringStep({
         setError(result.error);
         return;
       }
-      // What moved leaves the list; what's left can still come.
-      setShown(
-        shown
-          .map((s) => ({
-            ...s,
-            groups: s.groups
-              .map((g) => ({ ...g, items: g.items.filter((i) => !ticked.has(i.id)) }))
-              .filter((g) => g.items.length > 0),
-          }))
-          .filter((s) => s.groups.length > 0),
-      );
+      // What moved leaves the list, with what came along; what's left can still come.
+      setShown(result.sections);
       setMoved([...moved, result.summary]);
       setTicked(new Set());
     });
@@ -104,43 +90,14 @@ export function BringStep({
   const nothingLeft = items.length === 0;
 
   return (
-    <SetupCard
-      preview={
-        <>
-          <PreviewHeader meta={clubName} label="Coming with you" />
-          {count === 0 && moved.length === 0 && (
-            <p className="text-muted-foreground m-0 text-[13px] leading-normal">
-              Nothing picked yet. Anything you leave stays in Personal, and you can move it later.
-            </p>
-          )}
-          {items
-            .filter((i) => ticked.has(i.id))
-            .slice(0, 6)
-            .map((i) => (
-              <PreviewTile key={i.id}>
-                <span className="truncate text-[14px] font-semibold">{i.title}</span>
-                <span className="text-muted-foreground text-[12px]">{i.meta}</span>
-              </PreviewTile>
-            ))}
-          {count > 6 && <p className="text-muted-foreground m-0 text-[12px]">and {count - 6} more</p>}
-          {moved.length > 0 && (
-            <p className="text-muted-foreground m-0 mt-auto text-[13px] leading-normal">
-              Already in {clubName}: {moved.join("; ")}.
-            </p>
-          )}
-        </>
-      }
-    >
-      <StepIntro index={index} total={total} title="Bring anything in?">
-        Move events, polls and tasks from Personal into {clubName}. Links, RSVPs, tickets and poll
-        responses keep working. Moving is one way.
-      </StepIntro>
+    <SetupCard>
+      <StepIntro title="Bring anything in?">Private items stay private.</StepIntro>
 
       <StepBody className="gap-6">
         {moved.length > 0 && (
           <p
             role="status"
-            className="bg-tint-success text-tint-success-foreground m-0 rounded-field px-3.5 py-2.5 text-[14px] font-semibold"
+            className="bg-tint-success text-tint-success-foreground rounded-field m-0 px-3.5 py-2.5 text-[14px] font-semibold"
           >
             Moved {moved[moved.length - 1]} into {clubName}.
           </p>
@@ -180,7 +137,7 @@ export function BringStep({
                       <li key={item.id}>
                         <label
                           className={cn(
-                            "bg-card border-foreground/10 hover:border-foreground/25 flex min-h-10 cursor-pointer items-center gap-3 rounded-field border px-4 py-2.5",
+                            "bg-card border-foreground/10 hover:border-foreground/25 rounded-field flex min-h-10 cursor-pointer items-center gap-3 border px-4 py-2.5",
                             ticked.has(item.id) && "border-foreground/40",
                           )}
                         >
@@ -193,7 +150,9 @@ export function BringStep({
                           />
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-[15px] font-semibold">{item.title}</span>
-                            <span className="text-muted-foreground truncate text-[13px]">{item.meta}</span>
+                            <span className="text-muted-foreground truncate text-[13px]">
+                              {item.meta}
+                            </span>
                           </span>
                         </label>
                       </li>
@@ -222,7 +181,7 @@ export function BringStep({
         ) : (
           <ContinuePill
             pending={finishing}
-            pendingLabel="Opening your club…"
+            pendingLabel="Opening your organization…"
             disabled={busy}
             onClick={finish}
           >

@@ -39,6 +39,11 @@ export async function resetPasswordAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Choose a different password." };
   }
+  // One field now (with Show password); an older form still sends two.
+  const confirm = formData.get("confirmPassword");
+  if (confirm !== null && confirm !== parsed.data) {
+    return { error: "The passwords don't match." };
+  }
 
   const result = await resetPassword(typeof token === "string" ? token : "", parsed.data);
   if (!result.ok) {

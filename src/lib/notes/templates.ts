@@ -7,7 +7,7 @@ export interface NoteTemplate {
   id: string;
   title: string;
   description: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   html: (today: string) => string;
 }
@@ -18,7 +18,7 @@ export const NOTE_TEMPLATES: readonly NoteTemplate[] = [
     title: "Meeting notes",
     description: "Attendees, agenda, decisions, action items.",
     icon: "Users",
-    html: (today) => `<h2>Meeting · ${today}</h2>
+    html: (today) => `<h2>Meeting, ${today}</h2>
 <p><strong>Attendees:</strong> </p>
 <h3>Agenda</h3><ol><li><p></p></li></ol>
 <h3>Notes</h3><ul><li><p></p></li></ul>

@@ -1,7 +1,7 @@
 Claude Builders Club, Fall 2026
 
 President — Jackson Lamoureux
-  - Sets semester vision, goals, and priorities for the club
+  - Sets semester vision, goals, and priorities for the organization
   - Owns all partnerships: Anthropic, Khoury, faculty advisor, sponsors, guest speakers
   - Leads funding asks with Anthony
   - Final say on budget, Anthropic brand use, new partnerships, and board changes
@@ -11,7 +11,7 @@ President — Jackson Lamoureux
     - Sounding board for Jackson on strategy and tough calls
     - Answers questions from Jackson as needed
     - Optional technical input on the ops suite and workshops
-    - Provides continuity from the club's founding
+    - Provides continuity from the organization's founding
   VP Ops & Programs — Oliver Ward
     - Runs the weekly exec sync agenda and owns the task board
     - Collects Sunday updates from all leads and flags blockers to Jackson
@@ -34,8 +34,8 @@ President — Jackson Lamoureux
       - Technical QA on workshop materials and starter code
       - Hands off current partnership contacts and threads to Jackson
   VP Growth — Lucas Salzgeber
-    - Owns member growth, event turnout, and club brand on campus
-    - Builds relationships with other clubs and campus orgs
+    - Owns member growth, event turnout, and organization brand on campus
+    - Builds relationships with other organizations on campus
     - Manages the designer and sets priority across all design requests
     - Signs off on brand consistency for posts, flyers, and decks
     - Leads recruitment for the next board application round

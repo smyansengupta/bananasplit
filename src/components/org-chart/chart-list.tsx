@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The accessible list view of a chart: a nested list, top-down, with each
- * position's advisors listed under it. Server-rendered (?view=list), and
- * the fallback while the canvas loads. Every name links to the side panel
- * (?position=key) when `hrefFor` is given.
+ * position's advisors listed under it and its extra managers named on it.
+ * Server-rendered (?view=list), and the fallback while the canvas loads.
+ * Every name links to the side panel (?position=key) when `hrefFor` is given.
  */
 
 export function ChartList({
@@ -30,9 +30,17 @@ export function ChartList({
     const advisors = index.advisorsOf(node.id);
     return (
       <li className="space-y-1">
-        <Row node={node} hrefFor={hrefFor} selected={node.key === selectedKey} />
+        <Row
+          node={node}
+          hrefFor={hrefFor}
+          selected={node.key === selectedKey}
+          alsoReportsTo={index.alsoManagersOf(node.id).map((m) => m.title)}
+        />
         {advisors.length > 0 && (
-          <ul aria-label={`Advisors to ${node.title}`} className="border-muted ml-5 space-y-1 border-l border-dashed pl-4">
+          <ul
+            aria-label={`Advisors to ${node.title}`}
+            className="border-muted ml-5 space-y-1 border-l border-dashed pl-4"
+          >
             {advisors.map((a) => (
               <li key={a.id}>
                 <Row node={a} hrefFor={hrefFor} selected={a.key === selectedKey} />
@@ -64,10 +72,13 @@ function Row({
   node,
   hrefFor,
   selected,
+  alsoReportsTo = [],
 }: {
   node: ChartNodeDTO;
   hrefFor?: (key: string) => string;
   selected: boolean;
+  /** Titles of its extra managers. */
+  alsoReportsTo?: string[];
 }) {
   const variant = nodeVariant(node);
   const body = (
@@ -83,11 +94,12 @@ function Row({
         </span>
       )}
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium">{personLabel(node)}</span>
-        <span className="text-muted-foreground block truncate text-xs">
+        <span className="block text-sm font-medium break-words">{personLabel(node)}</span>
+        <span className="text-muted-foreground block text-xs break-words">
           {node.title}
-          {node.isAdvisor && " · Advisor"}
-          {variant === "placeholder" && " · Not on the portal"}
+          {node.isAdvisor && ", advisor"}
+          {variant === "placeholder" && ", not a member yet"}
+          {alsoReportsTo.length > 0 && `, also reports to ${alsoReportsTo.join(", ")}`}
         </span>
       </span>
     </>
@@ -98,7 +110,12 @@ function Row({
     hrefFor && "hover:bg-muted focus-visible:ring-ring outline-none focus-visible:ring-2",
   );
   return hrefFor ? (
-    <Link href={hrefFor(node.key)} scroll={false} className={cls} aria-current={selected ? "true" : undefined}>
+    <Link
+      href={hrefFor(node.key)}
+      scroll={false}
+      className={cls}
+      aria-current={selected ? "true" : undefined}
+    >
       {body}
     </Link>
   ) : (

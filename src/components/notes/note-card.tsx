@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { CalendarDays, Lock, Users } from "lucide-react";
+import { CalendarDays, Lock, Users } from "@/components/icons";
 import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -25,14 +25,14 @@ export function NoteCard({ note, orgSlug }: { note: NoteCardData; orgSlug: strin
       className="bg-card hover:border-foreground/20 focus-visible:ring-ring flex flex-col gap-2 rounded-xl border p-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="line-clamp-1 font-medium">{note.title || "Untitled note"}</p>
+        <p className="font-medium break-words">{note.title || "Untitled note"}</p>
         <Badge variant={note.visibility === "PRIVATE" ? "outline" : "secondary"} className="gap-1">
           {note.visibility === "PRIVATE" ? (
             <Lock className="size-3" aria-hidden="true" />
           ) : (
             <Users className="size-3" aria-hidden="true" />
           )}
-          {note.visibility === "PRIVATE" ? "Only you" : "Club"}
+          {note.visibility === "PRIVATE" ? "Only you" : "Org"}
         </Badge>
       </div>
 

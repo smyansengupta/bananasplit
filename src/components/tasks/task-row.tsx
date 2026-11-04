@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { MessageSquare } from "@/components/icons";
 
 import { PinToggle } from "@/components/pins/pins-context";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
 } from "./task-badges";
 import { TaskItemMenu } from "./task-item-menu";
 import { ProgressBar, TaskTypeChip } from "./task-type";
+import { TaskTitle } from "./task-title";
 import { accessSubjectOf, useTasks } from "./tasks-context";
 import type { TaskItem } from "./types";
 
@@ -98,13 +99,14 @@ export function TaskRow({
         <span className="flex min-w-0 items-center gap-1.5">
           {priv && <PrivateMark />}
           {task.type === "STORY" && <TaskTypeChip type="STORY" iconOnly />}
-          <span className="min-w-0 truncate text-[15px] leading-snug">
+          {/* Two lines on a phone, where one cut most titles off. */}
+          <span className="min-w-0 truncate text-[15px] leading-snug max-md:line-clamp-2 max-md:whitespace-normal">
             {/* The story it's in (its epic is the chip below). */}
             {showParent && task.parentTask && task.parentTask.type !== "EPIC" && (
               <span className="text-muted-foreground">{task.parentTask.title} / </span>
             )}
             <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
-              {task.title}
+              <TaskTitle>{task.title}</TaskTitle>
             </span>
           </span>
           {flagged && <FlagBadge />}

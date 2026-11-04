@@ -1,28 +1,41 @@
+import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { AlreadySignedIn } from "@/components/auth/already-signed-in";
 import { BrandGoogleButton } from "@/components/auth/google-sign-in-button";
-import { AuthCard, AuthHeadline } from "@/components/brand/auth-card";
+import { AuthCard } from "@/components/brand/auth-card";
 import { OrDivider } from "@/components/brand/fields";
-import { JoinSteps } from "@/components/brand/join-steps";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { auth } from "@/lib/auth/config";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 import { onboardingHref } from "@/lib/onboarding/steps";
+import { shareMetadata } from "@/lib/metadata/share";
 
 import { SignUpForm } from "./sign-up-form";
 
-export const metadata = { title: "Create your account · Bananasplit" };
+// The drawn card beside this file, sign-up/opengraph-image.png.
+export const metadata: Metadata = {
+  ...shareMetadata({
+    title: "Create your account",
+    description: "Start your workspace: fourteen days of everything, free, no card.",
+  }),
+};
 
 /**
- * Sign up: one account for everyone (design: App screens, 02), free
- * forever for your own things. Next comes "Your profile" (/onboarding),
- * then the Personal dashboard, unless they came from somewhere specific
- * (?callbackUrl=, e.g. an invite link), where step 1 of the profile
- * returns them. Already signed in: say so, with Continue and Sign out.
+ * Sign up: a personal account, one for everyone, its Personal space on a
+ * 14-day trial of Personal Plus. Next comes "What are you here for?"
+ * (/onboarding), unless they came from somewhere specific (?callbackUrl=,
+ * e.g. an invite link or "Get started"), which they go straight back to.
+ * Already signed in: straight in, or (with a destination) say so first.
  */
 export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">) {
-  const callbackUrl = safeCallbackUrl((await searchParams).callbackUrl);
+  const query = await searchParams;
+  const callbackUrl = safeCallbackUrl(query.callbackUrl);
+  // Arriving from Request a demo: say it went.
+  const demoSent = query.demo === "sent";
   const session = await auth();
   if (session?.user?.email) {
+    // A plain visit goes straight in; one carrying a destination asks first.
+    if (!callbackUrl) redirect("/app");
     return (
       <AlreadySignedIn
         email={session.user.email}
@@ -36,16 +49,12 @@ export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">
   const googleEnabled = googleSignInEnabled();
 
   return (
-    <AuthCard
-      tall
-      formClassName="gap-[18px] lg:py-9"
-      panel={
-        <div className="flex flex-col gap-6">
-          <AuthHeadline />
-          <JoinSteps current={1} />
-        </div>
-      }
-    >
+    <AuthCard tall formClassName="gap-[18px] lg:py-9">
+      {demoSent && (
+        <p role="status" className="bg-muted rounded-field m-0 px-4 py-3 text-[14px] font-medium">
+          Demo request sent. We&apos;ll email you.
+        </p>
+      )}
       <SignUpForm
         callbackUrl={callbackUrl}
         google={

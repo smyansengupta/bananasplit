@@ -1,7 +1,16 @@
 import { TransactionStatus } from "@/generated/prisma/enums";
 
 export type ExpenseTransition =
-  "SUBMIT" | "WITHDRAW" | "APPROVE" | "REJECT" | "REIMBURSE" | "MARK_NOT_APPLICABLE";
+  | "SUBMIT"
+  | "WITHDRAW"
+  | "APPROVE"
+  | "REJECT"
+  | "REIMBURSE"
+  | "MARK_NOT_APPLICABLE"
+  /** Approve and mark paid in one step: SUBMITTED straight to REIMBURSED. */
+  | "APPROVE_AND_PAY"
+  /** The submitter fixes a rejected request and sends it again. */
+  | "RESUBMIT";
 
 export interface TransitionContext {
   currentStatus: TransactionStatus;
@@ -55,7 +64,7 @@ export function nextExpenseStatus(ctx: TransitionContext): TransitionResult {
         return { error: "Only a submitted expense can be approved." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can approve expenses." };
+        return { error: "Only an owner, admin or treasurer can approve expenses." };
       }
       if (isSubmitter) return { error: "You can't approve your own expense." };
       return { status: TransactionStatus.APPROVED };
@@ -68,17 +77,34 @@ export function nextExpenseStatus(ctx: TransitionContext): TransitionResult {
         return { error: "Only a submitted or approved expense can be rejected." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can reject expenses." };
+        return { error: "Only an owner, admin or treasurer can reject expenses." };
       }
       if (isSubmitter) return { error: "You can't reject your own expense." };
       return { status: TransactionStatus.REJECTED };
+
+    case "APPROVE_AND_PAY":
+      if (ctx.currentStatus !== TransactionStatus.SUBMITTED) {
+        return { error: "Only a submitted expense can be approved and paid." };
+      }
+      if (!ctx.actorHasFinanceAccess) {
+        return { error: "Only an owner, admin or treasurer can approve expenses." };
+      }
+      if (isSubmitter) return { error: "You can't approve your own expense." };
+      return { status: TransactionStatus.REIMBURSED };
+
+    case "RESUBMIT":
+      if (ctx.currentStatus !== TransactionStatus.REJECTED) {
+        return { error: "Only a rejected expense can be sent again." };
+      }
+      if (!isSubmitter) return { error: "Only the submitter can send this expense again." };
+      return { status: TransactionStatus.SUBMITTED };
 
     case "REIMBURSE":
       if (ctx.currentStatus !== TransactionStatus.APPROVED) {
         return { error: "Only an approved expense can be marked reimbursed." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can mark expenses reimbursed." };
+        return { error: "Only an owner, admin or treasurer can mark expenses reimbursed." };
       }
       if (isSubmitter) return { error: "You can't reimburse your own expense." };
       return { status: TransactionStatus.REIMBURSED };

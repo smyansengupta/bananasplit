@@ -105,9 +105,11 @@ fallback model.
 ### Google Calendar
 
 Press **Connect Google Calendar** and sign in with the Google account that owns your club's
-calendars (for CBC, the club Gmail). The portal asks only to manage the events it creates and
-to list your calendars. Then choose the calendar for public events and, optionally, one for
-internal events. **Test and refresh calendars** checks the connection. **Import existing
+calendars (for CBC, the club Gmail). The portal asks to manage events on the calendars the
+account owns and to list your calendars. It adds and changes only the events it mirrors, and
+reads other events only when you run the import, on the public calendar. Then choose the
+calendar for public events (until you do, or with *Don't mirror public events*, nothing public
+is mirrored or imported) and, optionally, one for internal events. **Test and refresh calendars** checks the connection. **Import existing
 Google events** is the same card as on Calendar > Sync: **Dry run** previews bringing the
 events already on Google in, the card shows its numbers once the job has run, and **Apply
 import** writes it (see calendar.md). **Disconnect** stops mirroring and revokes the access

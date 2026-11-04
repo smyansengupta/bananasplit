@@ -1,4 +1,4 @@
-import { CalendarCheck, Lock } from "lucide-react";
+import { CalendarCheck, Lock } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";

@@ -1,8 +1,8 @@
-import { BookOpenText, ChevronLeft, Cpu, LayoutTemplate } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { DropZone } from "@/components/org-chart/drop-zone";
 import { AutoRefresh } from "@/components/org-chart/editor/parse-status";
 import { StartDraftButton } from "@/components/org-chart/start-draft-button";
@@ -11,13 +11,8 @@ import { can } from "@/lib/auth/permissions";
 import { claudeModelLabel, estimateParseCostUsd, formatUsd } from "@/lib/org-chart/models";
 import { STARTER_ROLE_COUNT } from "@/lib/org-chart/starter";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { readClaudeSettings } from "@/server/org-chart/claude";
-import {
-  ACTIVE_PARSE_STATUSES,
-  hasClaudeKey,
-  listVersions,
-  UPLOADS_PER_DAY,
-} from "@/server/org-chart/service";
+import { getClaudeKeyStatus } from "@/server/org-chart/claude";
+import { ACTIVE_PARSE_STATUSES, listVersions } from "@/server/org-chart/service";
 import { planGate } from "@/server/billing/plan-gate";
 
 export const metadata: Metadata = { title: "Import org chart" };
@@ -38,10 +33,10 @@ const READER_LABEL: Record<string, string> = {
 };
 
 /**
- * Import a document (OWNER/ADMIN): the drop zone, the starter structure for
+ * Import a document (any member): the drop zone, the starter structure for
  * an org with nothing to upload, recent imports and what reads best.
  *
- * No Claude API key is needed. The portal's own parser reads the document
+ * No Claude API key is needed. Bananasplit's own parser reads the document
  * when the upload arrives; a key only buys a second opinion on a document it
  * cannot make sense of.
  */
@@ -52,22 +47,11 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
 
-  const { keySaved, versions, canSeeIntegrations, model } = await withOrgTx(
-    organization.id,
-    async (ctx) => {
-      const integration = await ctx.db.orgIntegration.findUnique({
-        where: { organizationId_provider: { organizationId: organization.id, provider: "CLAUDE" } },
-        select: { config: true },
-      });
-      return {
-        keySaved: await hasClaudeKey(ctx.db, organization.id),
-        versions: (await listVersions(ctx)).filter((v) => v.source === "UPLOAD").slice(0, 10),
-        canSeeIntegrations: can(ctx, "integrations.view"),
-        model: readClaudeSettings((integration?.config as Record<string, unknown> | null) ?? {})
-          .model,
-      };
-    },
+  const versions = await withOrgTx(organization.id, async (ctx) =>
+    (await listVersions(ctx)).filter((v) => v.source === "UPLOAD").slice(0, 10),
   );
+  const { saved: keySaved, model } = await getClaudeKeyStatus(organization.id);
+  const canSeeIntegrations = can({ role }, "integrations.view");
   const base = `/app/${orgSlug}/org-chart`;
   const active = versions.some(
     (v) =>
@@ -81,128 +65,61 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
     <div className="max-w-3xl space-y-6">
       <AutoRefresh active={active} />
       <div className="space-y-1">
-        <Link
-          href={base}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
-        >
-          <ChevronLeft className="size-4" aria-hidden="true" />
-          Org Chart
-        </Link>
+        <BackLink href={base} label="Org chart" />
         <h1 className="page-title">Import an org chart</h1>
-        <p className="text-muted-foreground text-sm">
-          The portal reads your document into a draft. Nothing changes for members until you review
-          the draft and publish it.
-        </p>
       </div>
 
       <DropZone orgId={organization.id} orgSlug={orgSlug} />
 
-      <section className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5 rounded-lg border p-4 text-sm">
-          <p className="flex items-center gap-1.5 font-medium">
-            <BookOpenText className="size-4" aria-hidden="true" />
-            Read here first, free
-          </p>
-          <p className="text-muted-foreground">
-            The portal understands indented outlines, drawn trees, a section per role with a
-            &ldquo;Reports to&rdquo; line, heading hierarchies and simple tables. No API key, no
-            cost, and the draft is ready as soon as the upload finishes.
-          </p>
-        </div>
-        <div className="space-y-1.5 rounded-lg border p-4 text-sm">
-          <p className="flex items-center gap-1.5 font-medium">
-            <Cpu className="size-4" aria-hidden="true" />
-            Claude as the backup
-          </p>
-          {keySaved ? (
-            <p className="text-muted-foreground">
-              A document the portal cannot make sense of is sent to {claudeModelLabel(model)} under
-              your own API key.
-              {perParse !== null ? ` That costs about ${formatUsd(perParse)} per import.` : ""}{" "}
-              {canSeeIntegrations && (
-                <Link
-                  href={`/app/${orgSlug}/settings/integrations/claude`}
-                  className="underline underline-offset-4"
-                >
-                  Change the model
-                </Link>
-              )}
-            </p>
-          ) : (
-            <p className="text-muted-foreground">
-              Your org has no Claude API key, which is fine: uploads still work. A key only helps
-              with a document the portal cannot make sense of on its own, and with PDFs.{" "}
-              {canSeeIntegrations && (
-                <Link
-                  href={`/app/${orgSlug}/settings/integrations/claude`}
-                  className="underline underline-offset-4"
-                >
-                  Add a key in the Admin panel
-                </Link>
-              )}
-            </p>
-          )}
-        </div>
-      </section>
+      <p className="text-muted-foreground text-sm">
+        Word, text or Markdown read free; PDFs need a Claude key.
+        {keySaved && perParse !== null
+          ? ` A document Bananasplit can't read goes to ${claudeModelLabel(model)}, about ${formatUsd(perParse)} each.`
+          : ""}{" "}
+        {canSeeIntegrations && (
+          <Link
+            href={`/app/${orgSlug}/integrations/claude`}
+            className="text-foreground underline underline-offset-4"
+          >
+            {keySaved ? "Change the model" : "Add a key"}
+          </Link>
+        )}
+      </p>
 
-      <section className="space-y-2 rounded-lg border p-4">
-        <p className="flex items-center gap-1.5 text-sm font-medium">
-          <LayoutTemplate className="size-4" aria-hidden="true" />
+      <section aria-labelledby="start-heading" className="space-y-2.5">
+        <h2 id="start-heading" className="heading text-[15px]">
           Nothing to upload?
-        </p>
-        <p className="text-muted-foreground text-sm">
-          Type it: write or paste an outline, one position per line (&ldquo;Title — @Name&rdquo;), indented
-          under who each reports to, and the chart draws itself as you go. Or start from members: positions are
-          drafted from the titles members already have.
-        </p>
+        </h2>
         <div className="flex flex-wrap gap-2">
-          <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="blank" variant="default">
-            Type or paste an outline
+          <StartDraftButton
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            from="blank"
+            variant="outline"
+          >
+            Type it
           </StartDraftButton>
-          <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="members" variant="outline">
-            Start from members
+          <StartDraftButton
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            from="members"
+            variant="outline"
+          >
+            From members
           </StartDraftButton>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          Start from the club template: {STARTER_ROLE_COUNT} roles a student club usually has
-          (President, VPs, Heads, an advisor and an open hire), already laid out with
-          responsibilities written in. Fill in the people, change what does not fit and delete the
-          rest.
-        </p>
-        <div className="flex flex-wrap gap-2">
           <StartDraftButton
             orgId={organization.id}
             orgSlug={orgSlug}
             from="starter"
             variant="outline"
           >
-            Start from the club template
+            Template
           </StartDraftButton>
         </div>
-      </section>
-
-      <section className="space-y-2 text-sm">
-        <h2 className="font-medium">Tips</h2>
-        <ul className="text-muted-foreground list-disc space-y-1 pl-5">
-          <li>
-            What reads best: one section per role with its title, the person, a &ldquo;Reports
-            to&rdquo; line, then bullets, and a &ldquo;Decides alone&rdquo; line. Mark vacancies
-            (&ldquo;Open hire&rdquo;) and advisors.
-          </li>
-          <li>
-            From Google Docs, use File &gt; Download &gt; Microsoft Word (.docx) or PDF. A .docx or
-            text file reads here for free; a PDF needs a Claude key, because its text cannot be read
-            in the portal.
-          </li>
-          <li>
-            Each import is a new draft version. Your org can send {UPLOADS_PER_DAY} documents a day
-            to Claude.
-          </li>
-          <li>
-            Every draft shows which reader produced it and which lines it could not place, and
-            nothing is published until you review it.
-          </li>
-        </ul>
+        <p className="text-muted-foreground text-[13px]">
+          Template: {STARTER_ROLE_COUNT} common roles to fill in. Nothing changes for members until
+          you publish.
+        </p>
       </section>
 
       <section className="space-y-2">
@@ -218,10 +135,10 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">
-                    v{v.number} · {v.sourceFilename ?? "document"}
+                    v{v.number}, {v.sourceFilename ?? "document"}
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {v.createdBy ?? "Someone"} ·{" "}
+                    {v.createdBy ?? "Someone"},{" "}
                     {v.createdAt.toLocaleString("en-US", {
                       month: "short",
                       day: "numeric",
@@ -230,9 +147,9 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
                       timeZone: organization.timezone,
                     })}
                     {v.parseMethod === "BUILTIN" && v.parseConfidence !== null
-                      ? ` · ${Math.round(v.parseConfidence * 100)}% understood`
+                      ? `, ${Math.round(v.parseConfidence * 100)}% understood`
                       : ""}
-                    {v.parseStatus === "FAILED" && v.parseError ? ` · ${v.parseError}` : ""}
+                    {v.parseStatus === "FAILED" && v.parseError ? `, ${v.parseError}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

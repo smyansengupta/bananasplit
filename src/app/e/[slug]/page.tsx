@@ -9,7 +9,7 @@ import {
   MapPin,
   Mic,
   Video,
-} from "lucide-react";
+} from "@/components/icons";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -32,6 +32,8 @@ import { PublicThemeRoot } from "@/components/theme/public-theme-root";
 import { Gauge } from "@/components/ui/meters";
 import { avatarTint } from "@/components/user-avatar";
 import { appUrl } from "@/lib/app-url";
+import { clubIcons } from "@/lib/metadata/share";
+import { orgLogoVariants } from "@/lib/org-logo";
 import {
   googleCalendarUrl,
   initials,
@@ -50,6 +52,7 @@ import {
   type RsvpPageData,
 } from "@/server/rsvp/page";
 import { readRsvpManageKey, rsvpCookieName } from "@/server/rsvp/token";
+import { getSession } from "@/lib/auth/session";
 
 /**
  * A public RSVP page (docs/features/rsvp.md): anyone with the link sees the
@@ -99,18 +102,40 @@ export async function generateMetadata({
   if (!page) return { title: "Event not found", robots: { index: false } };
   const when = `${dateLine(page.startsAt, page.timeZone)}, ${timeLine(page.startsAt, page.endsAt, page.timeZone, page.allDay)}`;
   const description = `${when}. Hosted by ${page.org.name}.`;
-  return {
+  // The cover first; failing that the host club's logo, so an event with no
+  // picture still previews as that club's; failing both, the main card
+  // (src/app/opengraph-image.png), inherited by setting no openGraph at all:
+  // any openGraph here would drop it, and a file beside this page would
+  // outrank the cover.
+  const club = await clubTheme(slug);
+  const logo = orgLogoVariants(club?.logo);
+  const picture = page.cover
+    ? { url: page.cover.s960, width: 960, height: 960 }
+    : logo
+      ? { url: logo.s512, width: 512, height: 512 }
+      : null;
+  const base: Metadata = {
     title: `${page.title}, hosted by ${page.org.name}`,
     description,
     robots: { index: false, follow: false },
+    // The tab wears the host club's picture, like the club's own pages.
+    ...(logo ? { icons: clubIcons(club?.logo) } : {}),
+  };
+  if (!picture) return base;
+  return {
+    ...base,
     openGraph: {
       title: page.title,
       description,
       url: appUrl(`/e/${slug}`),
-      ...(page.cover ? { images: [{ url: page.cover.s960, width: 960, height: 960 }] } : {}),
+      images: [picture],
     },
-    // Without this, X shows the site-wide card instead of the event's cover.
-    ...(page.cover ? { twitter: { card: "summary_large_image", images: [page.cover.s960] } } : {}),
+    // Without this, X shows the site-wide card instead of the cover or logo.
+    // A logo is square, so it takes the small card.
+    twitter: {
+      card: page.cover ? "summary_large_image" : "summary",
+      images: [picture.url],
+    },
   };
 }
 
@@ -124,6 +149,12 @@ export default async function RsvpPage({ params, searchParams }: PageProps<"/e/[
   const modeLocked = club ? Boolean(themeProviderMode(club.theme).forcedTheme) : false;
 
   const viewer = page.viewer;
+  // Signed in: they register in one click as themselves.
+  const session = viewer ? null : await getSession();
+  const me =
+    session?.user.name && session.user.email
+      ? { name: session.user.name, email: session.user.email }
+      : null;
   const going = viewer?.status === "GOING";
   const open = !page.closed && !viewer;
   const pageUrl = appUrl(`/e/${page.slug}`);
@@ -194,14 +225,7 @@ export default async function RsvpPage({ params, searchParams }: PageProps<"/e/[
                 {page.title}
               </h1>
             </div>
-            <WhenBlock
-              page={page}
-              open={open}
-              going={going}
-              registerLabel={registerLabel}
-              calendarUrl={calendarUrl}
-              pageUrl={pageUrl}
-            />
+            <WhenBlock page={page} going={going} calendarUrl={calendarUrl} pageUrl={pageUrl} />
           </div>
 
           <div className="flex min-w-0 flex-col gap-[18px] max-md:order-4">
@@ -211,6 +235,7 @@ export default async function RsvpPage({ params, searchParams }: PageProps<"/e/[
                 <RegistrationCard
                   slug={page.slug}
                   viewer={page.viewer}
+                  me={me}
                   closed={page.closed}
                   waitlistOnly={page.waitlistOnly}
                   spotsLeft={page.spotsLeft}
@@ -361,16 +386,12 @@ function StatusChip({ page }: { page: RsvpPageData }) {
  */
 function WhenBlock({
   page,
-  open,
   going,
-  registerLabel,
   calendarUrl,
   pageUrl,
 }: {
   page: RsvpPageData;
-  open: boolean;
   going: boolean;
-  registerLabel: string;
   calendarUrl: string;
   pageUrl: string;
 }) {
@@ -422,15 +443,7 @@ function WhenBlock({
 
       {!page.ended && (
         <div className="flex flex-wrap items-center gap-2.5">
-          {open ? (
-            <a
-              id="hero-cta"
-              href="#register"
-              className="bg-block-quiet-foreground text-block-quiet inline-flex h-12 flex-1 items-center justify-center rounded-full px-8 text-[16px] font-semibold transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.97] sm:flex-none"
-            >
-              {registerLabel}
-            </a>
-          ) : going ? (
+          {going ? (
             <span className="bg-block-goal text-block-goal-foreground inline-flex h-12 items-center gap-2.5 rounded-full pr-6 pl-3 text-[16px] font-semibold">
               <span className="grid size-7 place-items-center rounded-full bg-white/20">
                 <CheckMark />
@@ -464,8 +477,7 @@ function DateTile({ start, timeZone }: { start: Date; timeZone: string }) {
 }
 
 /**
- * Add to calendar: one pill that opens a small menu (Google, or a file for
- * Apple Calendar and Outlook). A <details>, so it works without scripts.
+ * Add to calendar: Google, or a file for Apple Calendar and Outlook.
  */
 function CalendarMenu({
   googleUrl,
@@ -476,33 +488,22 @@ function CalendarMenu({
   icsUrl: string;
   className?: string;
 }) {
-  const item =
-    "hover:bg-muted flex h-10 items-center gap-2.5 rounded-[12px] px-3 text-[14px] font-medium";
+  // Two buttons, not a menu: each calendar is one click.
+  const pillClass = cn(
+    "inline-flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-semibold transition-[background-color,transform] duration-150 active:scale-[0.97]",
+    className,
+  );
   return (
-    <details className="group relative">
-      <summary
-        className={cn(
-          "inline-flex h-12 cursor-pointer list-none items-center gap-2 rounded-full px-5 text-[15px] font-semibold transition-[background-color,transform] duration-150 select-none active:scale-[0.97] [&::-webkit-details-marker]:hidden",
-          className,
-        )}
-      >
+    <>
+      <a href={googleUrl} target="_blank" rel="noopener noreferrer" className={pillClass}>
         <CalendarPlus className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
-        Add to calendar
-        <ChevronDown
-          className="size-4 transition-transform duration-200 group-open:rotate-180"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="bg-popover text-popover-foreground shadow-e2 rounded-tile absolute top-full left-0 z-20 mt-2 flex w-60 flex-col p-1.5">
-        <a href={googleUrl} target="_blank" rel="noopener noreferrer" className={item}>
-          Google Calendar
-        </a>
-        <a href={icsUrl} className={item}>
-          Apple Calendar or Outlook
-        </a>
-      </div>
-    </details>
+        Google
+      </a>
+      <a href={icsUrl} className={pillClass}>
+        <CalendarPlus className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+        Apple / Outlook
+      </a>
+    </>
   );
 }
 
@@ -655,18 +656,16 @@ function People({ page }: { page: RsvpPageData }) {
       {count !== null && count > 0 && page.guests && <GuestList page={page} guests={guests} />}
       {count === 0 && (
         <p className="text-muted-foreground m-0 px-4 pt-3 text-[14px]">
-          {page.ended ? "No one signed up." : "No one yet. Be the first to sign up."}
+          {page.ended ? "No one signed up." : "No one yet."}
         </p>
       )}
 
       <div className="flex flex-col gap-3 px-4 pt-4 pb-4">
-        <h2 className="text-muted-foreground m-0 text-[13px] font-medium">Hosted by</h2>
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           <li className="flex items-center gap-3">
             <OrgMark page={page} />
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-[15px] font-semibold">{page.org.name}</span>
-              <span className="text-muted-foreground text-[13px]">Club</span>
+              <span className="text-[15px] font-semibold break-words">{page.org.name}</span>
             </span>
           </li>
           {page.host && (
@@ -675,7 +674,7 @@ function People({ page }: { page: RsvpPageData }) {
                 <Mic className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
               </IconChip>
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[15px] font-semibold">{page.host}</span>
+                <span className="text-[15px] font-semibold break-words">{page.host}</span>
                 <span className="text-muted-foreground text-[13px]">Host</span>
               </span>
             </li>
@@ -689,9 +688,19 @@ function People({ page }: { page: RsvpPageData }) {
 /** Faces in the stack before "+N". */
 const AVATARS = 5;
 
-/** Who's going: a face stack that opens into the full list. */
+/** Who's going: a face stack that opens into the full list, or just the list when it's short. */
 function GuestList({ page, guests }: { page: RsvpPageData; guests: RsvpGuest[] }) {
   const count = page.going ?? guests.length;
+  // A dozen or fewer: the names, right there, no click to see them.
+  if (count <= 12 && guests.length === count) {
+    return (
+      <ul className="divide-border m-0 flex list-none flex-col divide-y px-4 pb-1">
+        {guests.map((g, i) => (
+          <GuestRow key={i} guest={g} />
+        ))}
+      </ul>
+    );
+  }
   return (
     <details className="group">
       <summary className="hover:bg-muted/60 rounded-tile flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -816,7 +825,7 @@ function GuestRow({ guest }: { guest: RsvpGuest }) {
   return (
     <li className="flex min-h-12 items-center gap-3 py-1.5">
       <Avatar name={guest.name} label={guest.initials} />
-      <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{guest.name}</span>
+      <span className="min-w-0 flex-1 text-[15px] font-medium break-words">{guest.name}</span>
       {guest.instagramUrl && <InstagramLink url={guest.instagramUrl} name={guest.name} />}
     </li>
   );

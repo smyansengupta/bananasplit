@@ -117,6 +117,13 @@ export function momentLabel(at: Date, timeZone: string): string {
   );
 }
 
+/** "Oct 2" in `timeZone` (a phone's short form of momentLabel). */
+export function momentDayLabel(at: Date, timeZone: string): string {
+  return plain(
+    new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone }).format(at),
+  );
+}
+
 /**
  * A zone as people say it: "Eastern Time (New York)", or "UTC". Falls back
  * to the IANA name where the runtime has no generic name for it.

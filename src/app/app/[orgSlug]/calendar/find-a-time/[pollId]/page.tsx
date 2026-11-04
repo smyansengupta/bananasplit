@@ -18,8 +18,12 @@ import { AvailabilityPollActions } from "./poll-actions";
  */
 export default async function FindATimePollPage({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/calendar/find-a-time/[pollId]">) {
   const { orgSlug, pollId } = await params;
+  // From a card's "Book best time".
+  const { book } = await searchParams;
+  const bookBest = (Array.isArray(book) ? book[0] : book) === "1";
   const planLock = await planGate(orgSlug, "polls");
   if (planLock) return planLock;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
@@ -40,7 +44,22 @@ export default async function FindATimePollPage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <BackLink href={`/app/${orgSlug}/calendar/find-a-time`} label="Find a time" />
+      {/* On a phone the poll's actions are one menu, on this row (the title gets the width). */}
+      <div className="flex items-center justify-between gap-2">
+        <BackLink href={`/app/${orgSlug}/calendar/find-a-time`} label="Find a time" />
+        <div className="md:hidden">
+          <AvailabilityPollActions
+            orgId={org.id}
+            orgSlug={orgSlug}
+            pollId={poll.id}
+            title={poll.title}
+            isOpen={isOpen}
+            canDelete={canDelete}
+            scheduled={Boolean(poll.finalizedEventId)}
+            compact
+          />
+        </div>
+      </div>
       {/* The answer first: the best times and who can make them. */}
       <PollResultsHero poll={view} />
       <PollResponder
@@ -49,6 +68,7 @@ export default async function FindATimePollPage({
         orgId={org.id}
         orgSlug={orgSlug}
         canFinalize={canFinalize}
+        bookBest={bookBest}
         actions={
           <AvailabilityPollActions
             orgId={org.id}

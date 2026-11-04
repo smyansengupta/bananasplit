@@ -18,7 +18,7 @@ const FRIDAY = 5;
 const SUNDAY = 0;
 
 describe("pulseSendFor (hourly)", () => {
-  it("fires in the club's 5pm hour on its day, and not an hour either side", () => {
+  it("fires in the organization's 5pm hour on its day, and not an hour either side", () => {
     // Fri Oct 9 2026, 5:20pm EDT = 21:20Z.
     const send = pulseSendFor(new Date("2026-10-09T21:20:00Z"), NY, FRIDAY, 17, "hourly");
     expect(send).toMatchObject({ sendKey: "2026-10-09", weekStart: "2026-10-03" });

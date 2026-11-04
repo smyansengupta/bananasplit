@@ -1,10 +1,10 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import { type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { SegmentCount, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,13 +13,21 @@ import { cn } from "@/lib/utils";
  * for its layouts, so every set of tabs in the app looks and works alike.
  * A tab is active on its own URL, or on anything below it unless `exact`;
  * pass `active` to decide yourself.
+ *
+ * On a phone the bar spans the width and the tabs share it. When there are
+ * too many to fit (Finance's five), the bar scrolls sideways instead of
+ * hiding the rest behind a menu: every tab stays one tap away, and the one
+ * you're on is scrolled into view.
  */
+
 export interface PageTab {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   exact?: boolean;
   active?: boolean;
+  /** How many are waiting there (a badge after the label; none at 0). */
+  count?: number;
 }
 
 export function PageTabs({
@@ -48,25 +56,36 @@ export function PageTabs({
   };
 
   return (
-    <nav aria-label={label} className={cn("max-w-full overflow-x-auto", className)}>
-      <ul className={cn(segmentedTrack, "min-w-max")}>
-        {tabs.map((tab) => {
-          const active = isActive(tab);
-          const Icon = tab.icon;
-          return (
-            <li key={tab.href}>
-              <Link
-                href={tab.href}
-                aria-current={active ? "page" : undefined}
-                className={segmentedItem(active)}
-              >
-                {Icon && <Icon aria-hidden="true" />}
-                {tab.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <>
+      <nav
+        aria-label={label}
+        className={cn("max-w-full [scrollbar-width:none] overflow-x-auto", className)}
+      >
+        <ul className={cn(segmentedTrack, "min-w-max max-md:flex max-md:w-max max-md:min-w-full")}>
+          {tabs.map((tab) => {
+            const active = isActive(tab);
+            const Icon = tab.icon;
+            return (
+              <li key={tab.href} className="max-md:flex-auto">
+                <Link
+                  href={tab.href}
+                  aria-current={active ? "page" : undefined}
+                  ref={
+                    active
+                      ? (el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })
+                      : undefined
+                  }
+                  className={cn(segmentedItem(active), "max-md:w-full max-md:justify-center")}
+                >
+                  {Icon && <Icon aria-hidden="true" />}
+                  {tab.label}
+                  {tab.count ? <SegmentCount n={tab.count} active={active} /> : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </>
   );
 }

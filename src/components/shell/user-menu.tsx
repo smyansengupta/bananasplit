@@ -1,12 +1,14 @@
 "use client";
 
-import { LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { LogOut, Monitor, Moon, SlidersHorizontal, Sun, UserRound } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 
 import { capsuleButtonClass } from "@/components/shell/capsule";
+import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
+import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
 import type { ShellUser } from "@/components/shell/types";
 import {
   DropdownMenu,
@@ -30,7 +32,21 @@ import { cn } from "@/lib/utils";
  */
 export type UserMenuUser = ShellUser & { avatar?: unknown };
 
-export function UserMenu({ user, className }: { user: UserMenuUser; className?: string }) {
+export function UserMenu({
+  user,
+  variant = "capsule",
+  className,
+}: {
+  user: UserMenuUser;
+  /**
+   * capsule: a round avatar button; row: a sidebar row (your picture and
+   * name), opening upwards (the phone menu's foot); corner: your picture
+   * alone beside the organization menu at the top of the sidebar, opening
+   * downwards.
+   */
+  variant?: "capsule" | "row" | "corner";
+  className?: string;
+}) {
   const displayName = user.name ?? user.email;
   // Each member's Light/Dark/System choice overrides the org's default mode,
   // unless the org locks the mode (Settings > Theme), which next-themes
@@ -39,19 +55,74 @@ export function UserMenu({ user, className }: { user: UserMenuUser; className?: 
   const locked = Boolean(forcedTheme);
   const params = useParams<{ orgSlug?: string }>();
   const orgSlug = typeof params?.orgSlug === "string" ? params.orgSlug : null;
+  const { rail, chrome, holdPeek } = useSidebarMode();
+  const tone = surfaceTone(chrome);
+  const row = variant === "row";
+  const corner = variant === "corner";
+  // Edit sidebar lives in your menu beside the sidebar (not the phone's).
+  const edit = useSidebarEdit();
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={row || corner ? holdPeek : undefined}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(capsuleButtonClass, className)}
-          aria-label={`Open user menu for ${displayName}`}
-        >
-          <UserAvatar user={user} size="md" />
-        </button>
+        {corner ? (
+          <button
+            type="button"
+            title={displayName}
+            className={cn(
+              "focus-glow grid shrink-0 place-items-center rounded-full outline-none",
+              rail ? "size-10" : "size-7",
+              "transition-[background-color,scale,width,height] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+              tone.hover,
+              chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
+              className,
+            )}
+            aria-label={`Open user menu for ${displayName}`}
+          >
+            <UserAvatar
+              user={user}
+              size="md"
+              className={cn(
+                "transition-[width,height] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                // On the rail, as big as the circles under it.
+                rail ? "size-10 text-sm" : "size-7 text-xs",
+              )}
+            />
+          </button>
+        ) : row ? (
+          <button
+            type="button"
+            title={rail ? displayName : undefined}
+            className={cn(
+              "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[10px] px-1 text-left text-[14.5px] font-medium whitespace-nowrap outline-none",
+              "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
+              rail ? "w-8" : "w-full",
+              tone.text,
+              tone.hover,
+              chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
+              className,
+            )}
+            aria-label={`Open user menu for ${displayName}`}
+          >
+            <UserAvatar user={user} size="sm" className="shrink-0" />
+            <span className={cn("min-w-0 flex-1 truncate", fadeLabel(rail))}>{displayName}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(capsuleButtonClass, className)}
+            aria-label={`Open user menu for ${displayName}`}
+          >
+            <UserAvatar user={user} size="md" />
+          </button>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={8} className="w-60">
+      <DropdownMenuContent
+        align={row ? "start" : "end"}
+        side={row ? "top" : "bottom"}
+        sideOffset={8}
+        className="w-60"
+      >
         <DropdownMenuLabel className="flex items-center gap-3">
           <UserAvatar user={user} size="lg" />
           <span className="flex min-w-0 flex-col">
@@ -70,9 +141,15 @@ export function UserMenu({ user, className }: { user: UserMenuUser; className?: 
             </DropdownMenuItem>
           </>
         )}
+        {corner && edit && (
+          <DropdownMenuItem onSelect={edit.startEditing}>
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Edit sidebar
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          {locked ? "Theme (set by your club)" : "Theme"}
+          {locked ? "Theme (set by your organization)" : "Theme"}
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={forcedTheme ?? theme ?? "system"} onValueChange={setTheme}>
           <DropdownMenuRadioItem value="light" disabled={locked}>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ export function Stat({
   chip,
   className,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   /** A number counts up the first time it scrolls into view. */
   value: ReactNode;
   label: ReactNode;
@@ -60,7 +60,7 @@ export function IconChip({
   size = "sm",
   className,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {

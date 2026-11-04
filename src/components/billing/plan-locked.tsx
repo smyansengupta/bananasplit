@@ -1,6 +1,7 @@
-import { Lock } from "lucide-react";
+import { Lock } from "@/components/icons";
 import Link from "next/link";
 
+import { PlusUpgradeButton } from "@/components/billing/plus-upgrade-button";
 import { Button } from "@/components/ui/button";
 import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
 import {
@@ -17,7 +18,7 @@ import {
  * What a page shows when the space doesn't include it (planGate, on the
  * server, so typing the URL shows this too):
  * - Personal, a Personal Plus feature (themes, calendar sync, AI): what it
- *   does and the way to Personal Plus (Settings › Plan and storage).
+ *   does and one button that starts Personal Plus right here.
  * - Personal, a club feature: it is for clubs; start one or join one. No price.
  * - A club: the feature, one line on what it does, the plan that has it,
  *   and the way there (Settings › Plan and storage for the owner and admins;
@@ -25,6 +26,7 @@ import {
  */
 export function PlanLocked({
   feature,
+  orgId,
   orgSlug,
   kind = "CLUB",
   plan,
@@ -32,6 +34,7 @@ export function PlanLocked({
   title,
 }: {
   feature: PlanFeature;
+  orgId: string;
   orgSlug: string;
   kind?: OrgKind;
   /** The space's current plan. */
@@ -50,18 +53,13 @@ export function PlanLocked({
       <div className="max-w-2xl space-y-6">
         <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
         <div className={card}>
-          <p className="eyebrow flex items-center gap-1.5">
-            <Lock className="size-3.5" aria-hidden="true" />
-            {PLAN_NAMES.PERSONAL_PLUS}
-          </p>
-          <p className="heading">
+          <p className="heading flex items-center gap-2">
+            <Lock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
             {FEATURE_LABELS[feature]} {plural ? "come" : "comes"} with {PLAN_NAMES.PERSONAL_PLUS}.
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
-            <Button asChild size="sm">
-              <Link href={`${base}/settings/plan`}>See plans</Link>
-            </Button>
+            <PlusUpgradeButton orgId={orgId} />
           </div>
         </div>
       </div>
@@ -74,18 +72,15 @@ export function PlanLocked({
         <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
         <div className={card}>
           <p className="heading">
-            {FEATURE_LABELS[feature]} {plural ? "are" : "is"} for clubs.
+            {FEATURE_LABELS[feature]} {plural ? "are" : "is"} for organizations.
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
-          <p className="text-muted-foreground max-w-prose text-sm">
-            Personal is just for you. Join your club, or start one, to use this with others.
-          </p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
             <Button asChild size="sm">
-              <Link href="/onboarding/join">Join a club</Link>
+              <Link href="/onboarding/join">Join an organization</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/onboarding/organization">Start a club</Link>
+              <Link href="/onboarding/organization">Start an organization</Link>
             </Button>
           </div>
         </div>
@@ -98,18 +93,15 @@ export function PlanLocked({
     <div className="max-w-2xl space-y-6">
       <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
       <div className={card}>
-        <p className="eyebrow flex items-center gap-1.5">
-          <Lock className="size-3.5" aria-hidden="true" />
-          {needs} plan
-        </p>
-        <p className="heading">
+        <p className="heading flex items-center gap-2">
+          <Lock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           {FEATURE_LABELS[feature]} {plural ? "come" : "comes"} with the {needs} plan.
         </p>
         <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
         <p className="text-muted-foreground max-w-prose text-sm">
           {canSeePlans
-            ? `Your club is on the ${PLAN_NAMES[plan]} plan. Nothing you already made is lost when you switch.`
-            : "Your club's plan doesn't include this. Ask your club's owner if you need it."}
+            ? `You're on ${PLAN_NAMES[plan]}. Switching keeps everything.`
+            : "Ask an owner if you need it."}
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1.5">
           {canSeePlans && (

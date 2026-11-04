@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PersonalHomeData } from "@/server/personal/home";
 
+// Up next is a client component: hiding a card redraws the Overview.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 /**
  * The Personal dashboard as rendered: each section with data, and the empty
  * states that teach what goes there and how to start.
@@ -10,6 +13,7 @@ import type { PersonalHomeData } from "@/server/personal/home";
 
 vi.mock("@/app/onboarding/actions", () => ({ joinPendingInvitationAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({ setTaskStatus: vi.fn() }));
+vi.mock("@/server/overview/focus-time-actions", () => ({ saveFocusAvailability: vi.fn() }));
 
 const { PersonalHome } = await import("./personal-home");
 
@@ -62,7 +66,7 @@ describe("PersonalHome", () => {
   it("greets by name and teaches every empty section", () => {
     const html = render(empty);
     expect(html).toContain("Good morning, Maya");
-    expect(html).toContain("Only you can see Personal");
+    expect(html).not.toContain("Only you can see Personal");
     // No clubs: why to join, a code field right here, and Start a club.
     expect(html).toContain("Joining is always free");
     expect(html).toMatch(/<form[^>]*action="\/onboarding\/join"[^>]*method="get"/);
@@ -71,7 +75,7 @@ describe("PersonalHome", () => {
     expect(html).toContain("Nothing in the next 14 days");
     expect(html).toContain("Nothing due this week");
     expect(html).toContain("No RSVPs yet");
-    expect(html).toContain('href="/app/me-abc/calendar/rsvp"');
+    expect(html).toContain('href="/app/me-abc/meetings"');
     expect(html).toContain("No polls waiting");
     expect(html).toContain('href="/app/me-abc/calendar/find-a-time/new"');
     expect(html).not.toContain("Finish your profile");
@@ -87,22 +91,23 @@ describe("PersonalHome", () => {
           organizationId: "c9",
           role: "MEMBER",
           expiresAt: new Date("2026-10-20T00:00:00Z"),
+          orgLogoUrl: null,
           orgName: "Debate Society",
         },
       ],
       profileGaps: ["bio", "availability"],
       finishProfileHref: "/onboarding/profile/bio",
     });
-    expect(html).toContain("You&#x27;re invited to a club");
+    expect(html).toContain("You&#x27;re invited to an organization");
     expect(html).toContain("Debate Society");
     expect(html).toContain(">Join<");
     expect(html).toContain("Finish your profile");
     expect(html).toContain("Add your bio and links and when you can&#x27;t meet.");
     expect(html).toContain('href="/onboarding/profile/bio"');
-    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("clubs-heading"));
+    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("organizations-heading"));
   });
 
-  it("renders club cards that open the club, with role, next meeting, tasks and unread", () => {
+  it("renders organization cards that open the organization, with role, next meeting, tasks and unread", () => {
     const html = render({
       ...empty,
       clubs: [
@@ -122,7 +127,6 @@ describe("PersonalHome", () => {
           },
           openTasks: 3,
           unread: 2,
-          paused: false,
           timeZone: "America/Chicago",
         },
         {
@@ -135,20 +139,19 @@ describe("PersonalHome", () => {
           nextMeeting: null,
           openTasks: 0,
           unread: 0,
-          paused: true,
           timeZone: "America/Chicago",
         },
       ],
       moreClubs: 1,
     });
     expect(html).toContain('href="/app/robotics"');
-    expect(html).toContain("Treasurer · Admin");
+    expect(html).toContain("Treasurer, Admin");
     expect(html).toContain("General meeting");
     expect(html).toContain("Tomorrow, 6:00 PM – 7:00 PM");
     expect(html).toContain("3 open tasks");
     expect(html).toContain("2 unread");
     expect(html).toContain('href="/app/chess"');
-    expect(html).toContain("Paused");
+    expect(html).not.toContain("Paused");
     expect(html).toContain("No meeting on the calendar");
     expect(html).toContain("And 1 more");
     expect(html).not.toContain("Joining is always free");
@@ -217,7 +220,7 @@ describe("PersonalHome", () => {
           going: 7,
           waitlist: 2,
           capacity: 20,
-          manageHref: "/app/me-abc/calendar/h1/rsvp",
+          manageHref: "/app/me-abc/meetings/h1/rsvp",
           pageHref: "/e/bday1234",
         },
       ],
@@ -274,7 +277,13 @@ describe("PersonalHome", () => {
         },
       ],
       dueSoonTotal: 1,
-      yourWeek: { done: 5, bySpace: [{ space: robotics, done: 3 }, { space: personal, done: 2 }] },
+      yourWeek: {
+        done: 5,
+        bySpace: [
+          { space: robotics, done: 3 },
+          { space: personal, done: 2 },
+        ],
+      },
       recentFiles: [
         {
           id: "f1",

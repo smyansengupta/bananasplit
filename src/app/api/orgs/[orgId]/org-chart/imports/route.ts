@@ -16,10 +16,10 @@ import {
   SourceRejectedError,
 } from "@/server/org-chart/extract";
 import { BUILTIN_CONFIDENCE_THRESHOLD, parseOrgChartText } from "@/server/org-chart/parse";
+import { getClaudeKeyStatus } from "@/server/org-chart/claude";
 import {
   assertUploadAllowed,
   createUploadVersion,
-  hasClaudeKey,
   newVersionId,
   OrgChartError,
 } from "@/server/org-chart/service";
@@ -28,7 +28,7 @@ import { readUpload, UploadError } from "@/server/storage/upload";
 import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
- * POST /api/orgs/{orgId}/org-chart/imports (ADMIN+): multipart form with
+ * POST /api/orgs/{orgId}/org-chart/imports (any member): multipart form with
  * `file`. Uploads go through a route handler because Server Actions take
  * 1 MB bodies; the cap is 4 MB, checked from Content-Length before the body
  * is read and again while it streams (readUpload).
@@ -43,8 +43,10 @@ import { isCrossSite } from "@/lib/http/cross-site";
  *      document it understands is ready to review the moment the upload
  *      finishes. A PDF has no text to read locally, so it has no built-in
  *      reading;
- *   4. a read transaction checks the quota (only when Claude will be asked)
- *      so a refused upload stores nothing;
+ *   4. whether the org has a Claude key is read on the service path
+ *      (members cannot read OrgIntegration), then a read transaction checks
+ *      the quota (only when Claude will be asked) so a refused upload stores
+ *      nothing;
  *   5. the original goes to the PRIVATE store at
  *      org-chart/{orgId}/{versionId}/{random}.{ext}, outside any transaction;
  *   6. a short transaction creates the version under the org lock: READY
@@ -86,7 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     throw error;
   }
   if (!access.allowed)
-    return json(403, { error: "Only owners and admins can import an org chart." });
+    return json(403, { error: "You don't have permission to import an org chart." });
 
   const limited = await checkRateLimit(
     rateLimitKey("orgchart-upload", session.user.id),
@@ -131,13 +133,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
 
   // Claude is only asked about a document the parser could not read well.
   // Its quota is checked before anything is stored, so a refusal is clean.
-  let claudeAvailable = false;
+  const claudeAvailable = (await getClaudeKeyStatus(orgId)).saved;
   try {
-    claudeAvailable = await withOrgTx(orgId, async (ctx) => {
-      const hasKey = await hasClaudeKey(ctx.db, orgId);
-      if (!accepted && hasKey) await assertUploadAllowed(ctx.db, orgId);
-      return hasKey;
-    });
+    if (!accepted && claudeAvailable)
+      await withOrgTx(orgId, (ctx) => assertUploadAllowed(ctx.db, orgId));
   } catch (error) {
     if (error instanceof OrgChartError) return json(error.status, { error: error.message });
     throw error;

@@ -1,11 +1,14 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import type { ContrastWarning } from "@/lib/theme/contrast";
 import { buildThemeRecord } from "@/lib/theme/record";
+import { DEFAULT_RESOLVED_THEME } from "@/lib/theme/resolve";
+import { LOGO_DISPLAYS } from "@/lib/theme/types";
 import { themeInputSchema } from "@/lib/theme/validate";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
@@ -85,7 +88,8 @@ export const saveOrgTheme = themesAction(async (ctx, input: unknown): Promise<Sa
     targetType: "OrgTheme",
     targetId: ctx.organizationId,
     diff: {
-      from: previous ?? { preset: "default" },
+      // Nothing saved means the unthemed default, which is Graphite.
+      from: previous ?? { preset: "graphite" },
       to: {
         preset: record.preset,
         mode: record.mode,
@@ -100,6 +104,65 @@ export const saveOrgTheme = themesAction(async (ctx, input: unknown): Promise<Sa
   afterThemeChange(ctx);
   return { ok: true, warnings: record.contrastWarnings };
 });
+
+/**
+ * Just how the logo shows (Admin panel › General, beside the picture), so
+ * it saves on its own without the rest of the theme. With no theme saved
+ * yet, the default theme is saved with this one choice.
+ */
+export const updateLogoDisplay = themesAction(
+  async (ctx, value: unknown): Promise<SaveThemeResult> => {
+    if (!can(ctx, "theme.write")) return { ok: false, error: NO_ACCESS };
+    const parsed = z.enum(LOGO_DISPLAYS).safeParse(value);
+    if (!parsed.success) return { ok: false, error: "Pick one of the options." };
+    const logoDisplay = parsed.data;
+
+    const previous = await ctx.db.orgTheme.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: { logoDisplay: true },
+    });
+    if (previous) {
+      await ctx.db.orgTheme.update({
+        where: { organizationId: ctx.organizationId },
+        data: { logoDisplay, updatedById: ctx.userId },
+      });
+    } else {
+      const d = DEFAULT_RESOLVED_THEME;
+      const record = buildThemeRecord({
+        preset: d.preset,
+        mode: d.mode,
+        lockMode: d.lockMode,
+        logoDisplay,
+        light: d.light,
+        dark: d.dark ?? null,
+        style: d.style,
+      });
+      await ctx.db.orgTheme.create({
+        data: {
+          organizationId: ctx.organizationId,
+          preset: record.preset,
+          mode: record.mode,
+          lockMode: record.lockMode,
+          logoDisplay: record.logoDisplay,
+          light: record.light,
+          dark: record.dark ?? Prisma.DbNull,
+          tokens: { ...record.tokens, style: record.style } as unknown as Prisma.InputJsonValue,
+          contrastWarnings: record.contrastWarnings as unknown as Prisma.InputJsonValue,
+          updatedById: ctx.userId,
+        },
+      });
+    }
+    await writeOrgAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "theme.updated",
+      targetType: "OrgTheme",
+      targetId: ctx.organizationId,
+      diff: { from: { logoDisplay: previous?.logoDisplay ?? null }, to: { logoDisplay } },
+    });
+    afterThemeChange(ctx);
+    return { ok: true, warnings: [] };
+  },
+);
 
 /** Back to the default theme: deleting the row is the reset (RLS allows it to admins only). */
 export const resetOrgTheme = themesAction(async (ctx): Promise<SaveThemeResult> => {

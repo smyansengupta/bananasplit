@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 
 export const KIND_LABELS: Record<TransactionKind, string> = {
-  EXPENSE: "Expense (reimbursement)",
+  EXPENSE: "Expense",
   SPONSORSHIP: "Sponsorship",
   ALLOCATION: "Allocation",
   OTHER_INCOME: "Other income",

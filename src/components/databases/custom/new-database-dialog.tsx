@@ -11,10 +11,10 @@ import {
   Table2,
   Upload,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { createDatabaseAction } from "@/app/app/[orgSlug]/databases/custom-actions";
 import { Button } from "@/components/ui/button";
@@ -40,18 +40,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toaster";
+import { FieldSelect } from "@/components/ui/field-select";
 import { DATABASE_TEMPLATES } from "@/lib/databases/templates";
 import { readTableFile, SpreadsheetError, type SheetData } from "@/lib/finance/import/sheet";
 import { cn } from "@/lib/utils";
 import type { ImportSummary } from "@/server/databases/custom";
 
-import { StepPills } from "../step-pills";
-import { nativeSelectClass, notice } from "../styles";
+import { notice } from "../styles";
 import { TableFrame } from "../table-frame";
 
-const IMPORT_STEPS = ["Choose a file", "Check the preview", "Import"] as const;
-
-const TEMPLATE_ICONS: Record<string, LucideIcon> = {
+const TEMPLATE_ICONS: Record<string, IconComponent> = {
   Table2,
   Sheet,
   Users,
@@ -75,6 +73,20 @@ const IMPORT_ACCEPT = [
 
 const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
 
+/** Reads a spreadsheet in the browser for the preview (the server reads it again to import). */
+async function readSheets(f: File): Promise<{ sheets: SheetPreview[] } | { error: string }> {
+  if (f.size > MAX_IMPORT_BYTES)
+    return { error: "That file is over 4 MB. Split it, or export fewer columns." };
+  try {
+    return { sheets: readTableFile(f.name, new Uint8Array(await f.arrayBuffer())).map(previewOf) };
+  } catch (e) {
+    return {
+      error:
+        e instanceof SpreadsheetError ? e.message : "That file couldn't be read as a spreadsheet.",
+    };
+  }
+}
+
 /** A sheet of the chosen file, read in the browser for the preview. */
 interface SheetPreview {
   name: string;
@@ -96,12 +108,15 @@ function previewOf(sheet: SheetData): SheetPreview {
 }
 
 /**
- * New database: start from a template (a blank spreadsheet among them), or
- * bring in a spreadsheet (an Excel workbook, CSV or TSV) and get a database
- * with a field per column. The file is read here first, for a preview and,
- * for a workbook with several tabs, the choice of which one. Either way it's
- * stored in Bananasplit: nothing to connect or host. Personal gets only the
- * templates that aren't about running a club.
+ * New database: click a template (a blank spreadsheet among them) and it's
+ * made at once (rename it on its own title), or bring in a spreadsheet (an
+ * Excel workbook, CSV or TSV) and get a database with a field per column.
+ * The file is read here first, for a preview and, for a workbook with
+ * several tabs, the choice of which one. Personal gets only the templates
+ * that aren't about running a club.
+ *
+ * The Databases page also opens it on a file: one dropped anywhere on the
+ * page, or one from Files ("Make a database"), via `open` and `file`.
  */
 export function NewDatabaseDialog({
   orgId,
@@ -110,17 +125,30 @@ export function NewDatabaseDialog({
   defaultMode = "template",
   defaultTemplateId = "blank",
   personal = false,
+  open: controlledOpen,
+  onOpenChange,
+  file: givenFile,
 }: {
   orgId: string;
   orgSlug: string;
-  trigger?: React.ReactNode;
+  /** The button that opens it; `null` for none (opened by `open`). */
+  trigger?: React.ReactNode | null;
   defaultMode?: "template" | "import";
   defaultTemplateId?: string;
   /** A Personal space: its owner's alone, and no club templates. */
   personal?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** A spreadsheet to import (a drop, or a file from Files): opens on its preview. */
+  file?: File | null;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (o: boolean) => {
+    setOwnOpen(o);
+    onOpenChange?.(o);
+  };
   const [mode, setMode] = useState<"template" | "import">(defaultMode);
   const [templateId, setTemplateId] = useState(defaultTemplateId);
   const [name, setName] = useState("");
@@ -134,6 +162,36 @@ export function NewDatabaseDialog({
   const templates = personal ? DATABASE_TEMPLATES.filter((t) => t.personal) : DATABASE_TEMPLATES;
   const template = templates.find((t) => t.id === templateId) ?? templates[0]!;
   const sheet = sheets?.find((s) => s.name === sheetName) ?? sheets?.[0] ?? null;
+
+  // A file handed in (dropped on the page, or from Files) goes straight to its
+  // preview: reset during render when it changes, then read it.
+  const [handed, setHanded] = useState<File | null>(null);
+  if (givenFile && givenFile !== handed) {
+    setHanded(givenFile);
+    setMode("import");
+    setName(givenFile.name.replace(/\.[^.]+$/, ""));
+    setFile(givenFile);
+    setSheets(null);
+    setError(null);
+    setReading(true);
+  }
+  useEffect(() => {
+    if (!givenFile) return;
+    let stale = false;
+    void readSheets(givenFile).then((read) => {
+      if (stale) return;
+      setReading(false);
+      if ("error" in read) {
+        setError(read.error);
+        return;
+      }
+      setSheets(read.sheets);
+      setSheetName((read.sheets.find((x) => !x.hidden) ?? read.sheets[0])?.name ?? null);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [givenFile]);
 
   /** Reads the chosen file for the preview; the server reads it again to import. */
   async function choose(f: File | null) {
@@ -159,6 +217,25 @@ export function NewDatabaseDialog({
     } finally {
       setReading(false);
     }
+  }
+
+  /** A template is made the moment it's clicked; its name is changed on its page. */
+  function createFrom(id: string) {
+    setTemplateId(id);
+    const picked = templates.find((t) => t.id === id) ?? templates[0]!;
+    setError(null);
+    start(async () => {
+      const result = await createDatabaseAction(orgId, {
+        name: picked.defaultName,
+        templateId: id,
+      });
+      if (result.error || !result.data) {
+        setError(result.error ?? "That didn't work.");
+        return;
+      }
+      setOpen(false);
+      router.push(`/app/${orgSlug}/databases/${result.data.key}`);
+    });
   }
 
   function create() {
@@ -203,8 +280,11 @@ export function NewDatabaseDialog({
       }
       const { rows = 0, fields = 0, skippedCells = 0, key } = result;
       toast({
-        title: `Imported ${rows.toLocaleString()} rows`,
-        description: `${fields} fields${skippedCells ? `; ${skippedCells} values didn't fit their column and were left empty` : ""}.`,
+        title: `Imported ${rows.toLocaleString()} rows, ${fields} fields`,
+        description: skippedCells
+          ? `${skippedCells} values didn't fit their column and were left empty.`
+          : undefined,
+        tone: "success",
       });
       setOpen(false);
       router.push(`/app/${orgSlug}/databases/${key}`);
@@ -216,28 +296,28 @@ export function NewDatabaseDialog({
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
-        if (o) {
+        if (o && !givenFile) {
           setMode(defaultMode);
           setTemplateId(defaultTemplateId);
           setError(null);
         }
       }}
     >
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant="create">
-            <Plus aria-hidden="true" />
-            New database
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger !== null && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant="create">
+              <Plus aria-hidden="true" />
+              New database
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New database</DialogTitle>
-          <DialogDescription>
-            {personal
-              ? "Stored in Bananasplit and saved as you type. Only you can see it."
-              : "Stored in Bananasplit and saved as you type. Only your club can see it, and you choose which members."}
+          <DialogDescription className="sr-only">
+            Pick a template, or import a spreadsheet.
           </DialogDescription>
         </DialogHeader>
 
@@ -246,8 +326,8 @@ export function NewDatabaseDialog({
           value={mode}
           onSelect={(v) => setMode(v as "template" | "import")}
           options={[
-            { value: "template", label: "Start from a template", icon: Table2 },
-            { value: "import", label: "Import a spreadsheet", icon: FileSpreadsheet },
+            { value: "template", label: "Template", icon: Table2 },
+            { value: "import", label: "Import", icon: FileSpreadsheet },
           ]}
         />
 
@@ -262,7 +342,8 @@ export function NewDatabaseDialog({
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  onClick={() => setTemplateId(t.id)}
+                  disabled={pending}
+                  onClick={() => createFrom(t.id)}
                   className={cn(
                     "rounded-tile focus-visible:outline-foreground flex items-start gap-3 p-3.5 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
                     active ? "bg-card ring-foreground ring-2" : "bg-muted/60 hover:bg-muted",
@@ -277,8 +358,8 @@ export function NewDatabaseDialog({
                     <span className="text-muted-foreground block text-xs leading-relaxed">
                       {t.description}
                     </span>
-                    <span className="text-muted-foreground block truncate pt-0.5 text-xs">
-                      {t.fields.map((f) => f.name).join(" · ")}
+                    <span className="text-muted-foreground block pt-0.5 text-xs">
+                      {t.fields.map((f) => f.name).join(", ")}
                     </span>
                   </span>
                 </button>
@@ -287,11 +368,6 @@ export function NewDatabaseDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            <StepPills
-              steps={IMPORT_STEPS}
-              current={pending ? 2 : sheet ? 1 : 0}
-              label="Import steps"
-            />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -305,15 +381,13 @@ export function NewDatabaseDialog({
               <IconChip icon={Upload} />
               <span className="text-sm font-semibold">
                 {reading
-                  ? "Reading it…"
+                  ? "Reading it"
                   : file
                     ? file.name
                     : "Choose a spreadsheet, or drop it here"}
               </span>
               <span className="text-muted-foreground text-xs">
-                Excel (.xlsx), CSV or TSV, from Excel, Google Sheets or Numbers. The first row is
-                the field names; each field&apos;s type is worked out from its values. Up to 10,000
-                rows and 4 MB.
+                Excel, CSV or TSV; first row = field names. Up to 10,000 rows, 4 MB.
               </span>
             </button>
             <input
@@ -330,61 +404,50 @@ export function NewDatabaseDialog({
             {sheets && sheets.length > 1 && (
               <div className="space-y-1.5">
                 <Label htmlFor="new-db-sheet">Sheet</Label>
-                <select
+                <FieldSelect
                   id="new-db-sheet"
                   value={sheet?.name ?? ""}
                   onChange={(e) => setSheetName(e.target.value)}
-                  className={nativeSelectClass}
+                  className="w-full"
                 >
                   {sheets.map((s) => (
                     <option key={s.name} value={s.name}>
                       {s.name}
-                      {s.hidden ? " (hidden)" : ""} · {s.rowCount.toLocaleString()} rows
+                      {s.hidden ? " (hidden)" : ""}, {s.rowCount.toLocaleString()} rows
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </div>
             )}
             {sheet && <SheetPreviewTable sheet={sheet} />}
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="new-db-name">Name</Label>
-          <Input
-            id="new-db-name"
-            value={name}
-            maxLength={60}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={
-              mode === "template" ? template.defaultName : "Name it after the spreadsheet"
-            }
-          />
-        </div>
+        {mode === "import" && (
+          <div className="space-y-1.5">
+            <Label htmlFor="new-db-name">Name</Label>
+            <Input
+              id="new-db-name"
+              value={name}
+              maxLength={60}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name it after the spreadsheet"
+            />
+          </div>
+        )}
 
         {error && (
           <p className={notice.error} role="alert">
             {error}
           </p>
         )}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={create}
-            disabled={pending || reading || (mode === "import" && (!file || !sheet))}
-          >
-            {pending
-              ? mode === "import"
-                ? "Importing…"
-                : "Creating…"
-              : mode === "import"
-                ? "Import"
-                : "Create database"}
-          </Button>
-        </DialogFooter>
+        {mode === "import" && (
+          <DialogFooter>
+            <Button type="button" onClick={create} disabled={pending || reading || !file || !sheet}>
+              {pending ? "Importing" : "Import"}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -400,7 +463,7 @@ function SheetPreviewTable({ sheet }: { sheet: SheetPreview }) {
   return (
     <div className="space-y-1.5">
       <p className="text-muted-foreground text-xs">
-        {sheet.rowCount.toLocaleString()} {sheet.rowCount === 1 ? "row" : "rows"} ·{" "}
+        {sheet.rowCount.toLocaleString()} {sheet.rowCount === 1 ? "row" : "rows"},{" "}
         {sheet.columnCount} {sheet.columnCount === 1 ? "field" : "fields"}
         {sheet.columnCount > 60 && " (the first 60 come in)"}
       </p>

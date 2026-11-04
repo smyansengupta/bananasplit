@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";

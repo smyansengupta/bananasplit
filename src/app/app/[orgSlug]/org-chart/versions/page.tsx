@@ -31,7 +31,7 @@ const SOURCE: Record<string, string> = {
 const READER: Record<string, string> = {
   BUILTIN: "read here",
   CLAUDE: "read by Claude",
-  TEMPLATE: "club template",
+  TEMPLATE: "starter template",
   MANUAL: "by hand",
 };
 
@@ -47,7 +47,7 @@ function statusBadge(v: VersionSummary) {
   return <Badge variant="outline">Archived</Badge>;
 }
 
-/** Every version of the chart (OWNER/ADMIN), newest first, with view, compare and restore. */
+/** Every version of the chart (any member), newest first, with view, compare and restore. */
 export default async function VersionsPage({
   params,
 }: PageProps<"/app/[orgSlug]/org-chart/versions">) {
@@ -103,7 +103,7 @@ export default async function VersionsPage({
                 <TableCell className="font-medium">
                   v{v.number}
                   {v.sourceFilename && (
-                    <span className="text-muted-foreground block max-w-48 truncate text-xs font-normal">
+                    <span className="text-muted-foreground block max-w-48 text-xs font-normal break-words">
                       {v.sourceFilename}
                     </span>
                   )}

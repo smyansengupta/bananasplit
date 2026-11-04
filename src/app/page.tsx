@@ -1,49 +1,27 @@
 import type { Metadata } from "next";
 
-import { checkoutAvailable } from "@/app/checkout/availability";
-import { BrandRoot } from "@/components/brand/brand-root";
-import { Faq } from "@/components/marketing/faq";
-import { FeatureBoard } from "@/components/marketing/feature-board";
-import { FinalCta } from "@/components/marketing/final-cta";
-import { Finance } from "@/components/marketing/finance";
-import { Hero } from "@/components/marketing/hero";
-import { Pricing } from "@/components/marketing/pricing";
-import { Ripeness } from "@/components/marketing/ripeness";
-import { SiteFooter } from "@/components/marketing/site-footer";
-import { SiteHeader } from "@/components/marketing/site-header";
+import { HomePage } from "@/components/marketing/home/home-page";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Bananasplit: the workspace for student clubs",
+  title: "Bananasplit: the workspace that runs itself",
   description:
-    "Tasks, availability polls, RSVPs, notes, databases and the club budget in one workspace for your club's board.",
+    "Your team's work keeps itself up to date. Bananasplit listens where you already work, handles the busywork, and texts you only when something needs you.",
 };
 
 /**
- * The marketing home page (the design handoff's "Bananasplit Home"), in its
- * cream-and-banana look, with the Moonstone glass header and the four plans.
- * It is the home page for everyone, signed in or not; signed-in visitors get
- * an "Open your club" way into the app (/app) instead of Log in.
- *
- * `overflow-x-clip` keeps wide decoration from scrolling the page sideways
- * without breaking the sticky header, as `hidden` would.
+ * The marketing home page: "The workspace that runs itself", the idea of an
+ * ambient workplace (docs/AMBIENT-WORKPLACE.md), its sections in
+ * src/components/marketing/home/home-page.tsx. Pricing and its questions
+ * live on /pricing (in the nav).
  */
 export default async function Home() {
   const signedIn = Boolean(await getSession());
 
   return (
-    <BrandRoot look="cream" className="overflow-x-clip">
-      <SiteHeader signedIn={signedIn} />
-      <main id="top">
-        <Hero />
-        <FeatureBoard />
-        <Ripeness />
-        <Finance />
-        <Pricing signedIn={signedIn} checkout={checkoutAvailable()} />
-        <Faq />
-        <FinalCta />
-      </main>
-      <SiteFooter signedIn={signedIn} />
-    </BrandRoot>
+    <MarketingShell signedIn={signedIn}>
+      <HomePage signedIn={signedIn} />
+    </MarketingShell>
   );
 }

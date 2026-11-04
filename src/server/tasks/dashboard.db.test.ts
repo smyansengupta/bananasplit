@@ -175,7 +175,7 @@ describe.skipIf(!seeded)("task dashboard against the local database (seeded CBC)
     expect(attention).not.toContain(ids.done);
   });
 
-  it("covers the whole club without a team", () => {
+  it("covers the whole organization without a team", () => {
     expect(after.club.totals.open - before.club.totals.open).toBe(3);
     expect(after.club.totals.dueSoon - before.club.totals.dueSoon).toBe(1);
     const kristine = row(after.club, p.kristine.id)!;

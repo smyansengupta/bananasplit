@@ -1,4 +1,4 @@
-import { Check, Clock, KeyRound } from "lucide-react";
+import { Check, Clock, KeyRound } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -78,10 +78,7 @@ export function StepPanel({
         </header>
 
         {view.status === "skipped" ? (
-          <p className="rounded-tile bg-muted/60 text-muted-foreground p-3 text-sm">
-            You passed over this one. Nothing has been lost — connect it now and it stops counting
-            as skipped, or put it back on the list at the bottom of this page.
-          </p>
+          <p className="rounded-tile bg-muted/60 text-muted-foreground p-3 text-sm">Skipped.</p>
         ) : null}
 
         {reconnecting && view.lastError ? (
@@ -184,7 +181,7 @@ export function StepPanel({
           </p>
         )}
         <Link
-          href={`/app/${orgSlug}/settings/integrations/${step.settingsSegment}`}
+          href={`/app/${orgSlug}/integrations/${step.settingsSegment}`}
           className="text-muted-foreground hover:text-foreground focus-glow ml-auto rounded-full text-[13px] font-medium underline-offset-4 hover:underline"
         >
           Full settings for this

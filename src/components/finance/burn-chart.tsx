@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartColumn } from "lucide-react";
+import { ChartColumn } from "@/components/icons";
 
 import { BarsChart } from "@/components/reports/charts/bars-chart";
 import { IconChip } from "@/components/ui/stat";

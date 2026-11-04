@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSpreadsheet, ListChecks, Plus, Receipt } from "lucide-react";
+import { FileSpreadsheet, Plus, Receipt } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -40,10 +40,15 @@ export function FinanceActions({
   categories: { id: string; name: string; budgetPeriodId: string }[];
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState<Create | null>(null);
   const base = `/app/${orgSlug}/finance`;
   const primary: Create =
     !isFinance || pathname === `${base}/my-reimbursements` ? "request" : "transaction";
+  // New › New expense (and Ctrl K) land here with ?new=1: the form is open.
+  const [open, setOpen] = useState<Create | null>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1"
+      ? primary
+      : null,
+  );
   const other: Create = primary === "request" ? "transaction" : "request";
   const PrimaryIcon = CREATE[primary].icon;
   const OtherIcon = CREATE[other].icon;
@@ -58,10 +63,6 @@ export function FinanceActions({
       >
         {isFinance && (
           <>
-            <DropdownMenuItem onSelect={() => setOpen(primary)}>
-              <PrimaryIcon className="size-4" aria-hidden="true" />
-              {CREATE[primary].label}
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setOpen(other)}>
               <OtherIcon className="size-4" aria-hidden="true" />
               {CREATE[other].label}
@@ -70,13 +71,7 @@ export function FinanceActions({
             <DropdownMenuItem asChild>
               <Link href={`${base}/import`}>
                 <FileSpreadsheet className="size-4" aria-hidden="true" />
-                Import a spreadsheet
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`${base}/setup`}>
-                <ListChecks className="size-4" aria-hidden="true" />
-                Setup guide
+                Import
               </Link>
             </DropdownMenuItem>
           </>

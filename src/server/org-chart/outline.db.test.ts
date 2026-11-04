@@ -23,7 +23,6 @@ vi.mock("@/lib/auth/session", () => ({
   },
 }));
 
-import { ForbiddenError } from "@/lib/auth/errors";
 import type { DraftPosition } from "@/lib/org-chart/draft";
 import { applyOutline, parseOutline, serializeOutline } from "@/lib/org-chart/outline";
 import { authDb, disconnectAll } from "@/server/db/clients";
@@ -123,8 +122,13 @@ describe.skipIf(!seeded)("the typed org chart against the local database", () =>
     expect(serializeOutline(asDraft, list)).toBe(text);
   });
 
-  it("refuses a member who may not edit the chart", async () => {
+  it("lets any member start a draft, as themselves", async () => {
     sessionUser.current = s.kristine;
-    await expect(withOrgAction((ctx) => startDraft(ctx, "members"))(s.cbcId)).rejects.toBeInstanceOf(ForbiddenError);
+    const versionId = await withOrgAction((ctx) => startDraft(ctx, "members"))(s.cbcId);
+    created.push(versionId);
+    const row = await withOrgTx(s.cbcId, ({ db }) =>
+      db.orgChartVersion.findUnique({ where: { id: versionId }, select: { createdById: true, status: true } }),
+    );
+    expect(row).toEqual({ createdById: s.kristine.id, status: "DRAFT" });
   });
 });

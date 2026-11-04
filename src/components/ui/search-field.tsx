@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { Search, X } from "@/components/icons";
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,7 @@ export function SearchField({
           onChange?.(e);
         }}
         className={cn(
-          "h-10 rounded-full ps-10 pe-9 text-sm [&::-webkit-search-cancel-button]:appearance-none",
+          "h-10 rounded-full ps-10 pe-9 text-base md:text-sm [&::-webkit-search-cancel-button]:appearance-none",
           inputClassName,
         )}
       />

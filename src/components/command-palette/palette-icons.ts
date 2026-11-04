@@ -12,6 +12,7 @@ import {
   CalendarSync,
   ChartColumn,
   CheckSquare,
+  ClipboardList,
   Columns3,
   Command,
   Database,
@@ -62,14 +63,16 @@ import {
   User,
   UserRound,
   Users,
+  Video,
+  Vote,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import type { SearchKind } from "@/lib/search/types";
 
 /** The icon of each kind of search result. */
-export const KIND_ICONS: Record<SearchKind, LucideIcon> = {
+export const KIND_ICONS: Record<SearchKind, IconComponent> = {
   page: FileText,
   action: Command,
   note: NotebookText,
@@ -80,6 +83,8 @@ export const KIND_ICONS: Record<SearchKind, LucideIcon> = {
   label: Tag,
   event: CalendarDays,
   poll: CalendarCheck,
+  form: ClipboardList,
+  budget: PiggyBank,
   person: User,
   position: Network,
   database: Database,
@@ -88,7 +93,7 @@ export const KIND_ICONS: Record<SearchKind, LucideIcon> = {
 };
 
 /** Icons the page catalog names (catalog.ts, the sidebar sections, settings-nav). */
-export const NAMED_ICONS: Record<string, LucideIcon> = {
+export const NAMED_ICONS: Record<string, IconComponent> = {
   ArrowLeftRight,
   ArrowRightLeft,
   Bell,
@@ -101,6 +106,7 @@ export const NAMED_ICONS: Record<string, LucideIcon> = {
   CalendarSync,
   ChartColumn,
   CheckSquare,
+  ClipboardList,
   Columns3,
   Database,
   DatabaseZap,
@@ -145,5 +151,7 @@ export const NAMED_ICONS: Record<string, LucideIcon> = {
   Upload,
   UserRound,
   Users,
+  Video,
+  Vote,
   Wallet,
 };

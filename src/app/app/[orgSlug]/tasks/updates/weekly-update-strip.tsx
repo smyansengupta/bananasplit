@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, NotebookPen } from "lucide-react";
+import { CheckCircle2, NotebookPen } from "@/components/icons";
 import Link from "next/link";
 
 import { useTasks } from "@/components/tasks/tasks-context";
@@ -45,8 +45,8 @@ export function WeeklyUpdateStrip({ status }: { status: WeeklyStatus }) {
         <span className="font-medium">Weekly update</span>{" "}
         <span className="text-muted-foreground">
           {status.posted
-            ? "· posted for this week"
-            : `· due ${formatDueKey(dueKey, status.todayKey)}${late ? " (late)" : ""}. Done, next and blocked are drafted from your tasks.`}
+            ? "posted for this week"
+            : `due ${formatDueKey(dueKey, status.todayKey)}${late ? " (late)" : ""}. Done, next and blocked are drafted from your tasks.`}
         </span>
       </p>
       <Button asChild size="sm" variant={status.posted ? "ghost" : "default"}>

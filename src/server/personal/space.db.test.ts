@@ -150,7 +150,7 @@ describe("ensurePersonalSpace against the local database", () => {
   });
 });
 
-describe("a paused club against the local database", () => {
+describe("a paused organization against the local database", () => {
   it("refuses writes through withOrgAction, and lets reads and the plan choice run", async () => {
     if (!reachable) return;
     requireUserMock.mockResolvedValue(other);
@@ -158,15 +158,11 @@ describe("a paused club against the local database", () => {
     await expect(withOrgAction(write)(pausedOrgId)).rejects.toBeInstanceOf(SpaceRefusedError);
     expect(write).not.toHaveBeenCalled();
 
-    await expect(
-      withOrgAction(async () => "read", { whenPaused: "allow" })(pausedOrgId),
-    ).resolves.toBe("read");
+    await expect(withOrgAction(async () => "read")(pausedOrgId)).resolves.toBe("read");
 
     // The owner chooses Club: the club is no longer paused.
-    await withOrgAction(
-      async ({ db }) =>
-        db.organization.update({ where: { id: pausedOrgId }, data: { plan: "CLUB" } }),
-      { whenPaused: "allow" },
+    await withOrgAction(async ({ db }) =>
+      db.organization.update({ where: { id: pausedOrgId }, data: { plan: "CLUB" } }),
     )(pausedOrgId);
     await expect(withOrgAction(write)(pausedOrgId)).resolves.toBe("wrote");
   });

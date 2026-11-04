@@ -7,8 +7,9 @@ import { mergeSessionsAction } from "@/app/app/[orgSlug]/databases/actions";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { nativeSelectClass, notice } from "./styles";
+import { notice } from "./styles";
 import { useViewParams } from "./view-params";
 
 /**
@@ -47,9 +48,11 @@ export function MergeSessionPicker({
   const [pending, start] = useTransition();
 
   if (!open) {
+    // One likely match: say which, so it's one click to start.
+    const only = candidates?.length === 1 ? candidates[0] : null;
     return (
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Merge into another session…
+        {only ? `Merge into ${only.label}` : "Merge into another session"}
       </Button>
     );
   }
@@ -60,18 +63,18 @@ export function MergeSessionPicker({
         Merge <strong className="font-semibold">{loserTitle}</strong> into:
       </p>
       {candidates && candidates.length > 0 ? (
-        <select
+        <FieldSelect
           value={survivor}
           onChange={(e) => setSurvivor(e.target.value)}
           aria-label="Session to keep"
-          className={nativeSelectClass}
+          className="w-full"
         >
           {candidates.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       ) : (
         <Input
           value={survivor}

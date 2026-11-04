@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { ChevronRight, CircleAlert, Plus } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -11,6 +11,7 @@ import {
   setSignupSuppressedAction,
 } from "@/app/app/[orgSlug]/databases/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { exclusionLabel } from "@/server/databases/ballot-definitions";
 import type {
@@ -34,7 +35,8 @@ import {
 import { cn } from "@/lib/utils";
 import { signupLabel } from "@/server/sync/supabase-map";
 
-import { ActionButton, ActionMenu } from "./action-button";
+import { ActionButton, ActionMenu, ActionSwitch } from "./action-button";
+import { AddAttendanceDialog } from "./add-row-dialogs";
 import { notice } from "./styles";
 import { ContactActions } from "./contact-actions";
 import { NameOverrideForm } from "./name-override-form";
@@ -71,10 +73,22 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  /** A button beside the heading (Add check-in). */
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="space-y-3">
-      <h3 className="heading text-[15px]">{title}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="heading text-[15px]">{title}</h3>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -87,11 +101,11 @@ function PersonHeader({ panel }: { panel: ContactPanel }) {
     <div className="flex items-center gap-3">
       <UserAvatar user={c.user ?? { name }} size="lg" />
       <div className="min-w-0">
-        <p className="heading truncate text-[15px]">{name}</p>
+        <p className="heading text-[15px] break-words">{name}</p>
         <p className="text-muted-foreground text-xs">
           {c.emails[0]?.emailNormalized ?? c.emailMasked ?? "No email on file"}
-          {c.userId && " · member account"}
-          {c.unsubscribedAt && " · unsubscribed"}
+          {c.userId && ", member account"}
+          {c.unsubscribedAt && ", unsubscribed"}
         </p>
       </div>
     </div>
@@ -107,13 +121,13 @@ export function StampStrip({
   timezone: string;
 }) {
   if (strip.length === 0)
-    return <p className="text-muted-foreground text-sm">No sessions this term yet.</p>;
+    return <p className="text-muted-foreground text-sm">No sessions yet.</p>;
   return (
     <ol className="flex flex-wrap gap-2" aria-label="Stamp card">
       {strip.map((s, i) => (
         <li
           key={`${s.slot}-${i}`}
-          title={`${s.title} · ${fmtDate(s.startsAt, timezone)}`}
+          title={`${s.title}, ${fmtDate(s.startsAt, timezone)}`}
           className={
             s.stamped
               ? "bg-block-goal text-block-goal-foreground flex size-9 items-center justify-center rounded-full text-xs font-semibold tabular-nums"
@@ -136,15 +150,15 @@ function History({ panel, ctx }: { panel: ContactPanel; ctx: PanelContext }) {
       {panel.history.map((h) => (
         <li key={h.id} className={cn(ROW, h.suppressed && "opacity-60")}>
           <Link
-            className="min-w-0 truncate font-medium underline-offset-4 hover:underline"
+            className="min-w-0 font-medium break-words underline-offset-4 hover:underline"
             href={`/app/${ctx.orgSlug}/databases/sessions?row=${encodeURIComponent(h.eventId)}`}
           >
             {h.eventTitle}
           </Link>
           <span className="text-muted-foreground shrink-0 text-xs">
-            {fmtDate(h.checkedInAt, ctx.timezone)} · {METHOD_LABELS[h.method] ?? h.method}
-            {h.stampNumber ? ` · stamp ${h.stampNumber}` : ""}
-            {h.suppressed ? " · suppressed" : ""}
+            {fmtDate(h.checkedInAt, ctx.timezone)}, {METHOD_LABELS[h.method] ?? h.method}
+            {h.stampNumber ? `, stamp ${h.stampNumber}` : ""}
+            {h.suppressed ? ", suppressed" : ""}
           </span>
         </li>
       ))}
@@ -197,74 +211,26 @@ export function SessionPanel({
   const e = detail.event;
   return (
     <>
-      <dl className="divide-border/70 divide-y">
-        <Field label="Type">{EVENT_KIND_LABELS[e.kind] ?? e.kind}</Field>
-        <Field label="When">
-          {fmtDateTime(e.startsAt, ctx.timezone)} – {fmtDateTime(e.endsAt, ctx.timezone)}
-        </Field>
-        <Field label="Location">{e.location}</Field>
-        <Field label="Host">
-          {e.host ? (
-            <span className="inline-flex items-center gap-2">
-              <UserAvatar user={e.host} size="xs" />
-              {e.host.name}
-            </span>
-          ) : (
-            e.hostName
-          )}
-        </Field>
-        <Field label="Visibility">
-          {e.visibility === "PUBLIC" ? "Public (website)" : "Internal"}
-        </Field>
-        <Field label="Term">{termLabel(e.term)}</Field>
-        <Field label="Stamp slot">{e.stampSlot}</Field>
-        <Field label="RSVP">
-          {e.rsvpUrl && (
-            <a href={e.rsvpUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
-              {e.rsvpUrl}
-            </a>
-          )}
-        </Field>
-        <Field label="Calendar event">
-          <Link className={LINK} href={`/app/${ctx.orgSlug}/calendar/${e.id}`}>
-            Open in Calendar
-          </Link>
-          {e.googleHtmlLink && (
-            <>
-              {" · "}
-              <a href={e.googleHtmlLink} target="_blank" rel="noopener noreferrer" className={LINK}>
-                Google Calendar
-              </a>
-            </>
-          )}
-        </Field>
-        <Field label="Website session">
-          {e.sourceSessionId ? "Linked (synced)" : "Not linked"}
-        </Field>
-        {e.description && <Field label="Description">{e.description}</Field>}
-      </dl>
-      {e.needsReview && (
-        <p className="bg-muted/60 rounded-tile flex items-start gap-2 p-3 text-sm">
-          <CircleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            The website sync found more than one possible match for this session. Merge it into the
-            right one (in the … menu), or mark it as not a duplicate.
-          </span>
-        </p>
-      )}
-      {ctx.canEdit && (
-        <SessionRowActions
-          organizationId={ctx.organizationId}
-          timezone={ctx.timezone}
-          members={ctx.members}
-          initial={formInitial}
-          needsReview={e.needsReview}
-          mergeCandidates={mergeCandidates}
-        />
-      )}
-      <Section title={`Attendees (${detail.attendees.filter((a) => !a.suppressedAt).length})`}>
+      <Section
+        title={`Attendees (${detail.attendees.filter((a) => !a.suppressedAt).length})`}
+        action={
+          ctx.canEdit ? (
+            <AddAttendanceDialog
+              organizationId={ctx.organizationId}
+              sessions={[{ id: e.id, label: e.title }]}
+              sessionId={e.id}
+              trigger={
+                <Button size="sm" variant="outline">
+                  <Plus aria-hidden="true" />
+                  Add check-in
+                </Button>
+              }
+            />
+          ) : undefined
+        }
+      >
         {detail.attendees.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No check-ins visible to you.</p>
+          <p className="text-muted-foreground text-sm">No check-ins yet.</p>
         ) : (
           <ul className="divide-border/70 -mx-3 divide-y text-sm">
             {detail.attendees.map((a) => {
@@ -281,12 +247,12 @@ export function SessionPanel({
                     className="flex min-w-0 items-center gap-2.5 font-medium underline-offset-4 hover:underline"
                   >
                     <UserAvatar user={a.contact.user ?? { name }} size="sm" />
-                    <span className="truncate">{name}</span>
+                    <span className="min-w-0 break-words">{name}</span>
                   </Link>
                   <span className="text-muted-foreground shrink-0 text-xs">
-                    {fmtDateTime(a.checkedInAt, ctx.timezone)} ·{" "}
+                    {fmtDateTime(a.checkedInAt, ctx.timezone)},{" "}
                     {METHOD_LABELS[a.method] ?? a.method}
-                    {a.stampNumber ? ` · stamp ${a.stampNumber}` : ""}
+                    {a.stampNumber ? `, stamp ${a.stampNumber}` : ""}
                   </span>
                 </li>
               );
@@ -294,13 +260,87 @@ export function SessionPanel({
           </ul>
         )}
       </Section>
+      {e.needsReview && (
+        <p className="bg-muted/60 rounded-tile flex items-start gap-2 p-3 text-sm">
+          <CircleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>Possible duplicate from the website. Merge it, or mark it as not a duplicate.</span>
+        </p>
+      )}
+      {ctx.canEdit && (
+        <SessionRowActions
+          organizationId={ctx.organizationId}
+          timezone={ctx.timezone}
+          members={ctx.members}
+          initial={formInitial}
+          needsReview={e.needsReview}
+          mergeCandidates={mergeCandidates}
+        />
+      )}
+      <details className="group">
+        <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1.5 py-1 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            className="size-4 transition-transform group-open:rotate-90"
+            aria-hidden="true"
+          />
+          Details
+        </summary>
+        <dl className="divide-border/70 divide-y">
+          <Field label="Type">{EVENT_KIND_LABELS[e.kind] ?? e.kind}</Field>
+          <Field label="When">
+            {fmtDateTime(e.startsAt, ctx.timezone)} – {fmtDateTime(e.endsAt, ctx.timezone)}
+          </Field>
+          <Field label="Location">{e.location}</Field>
+          <Field label="Host">
+            {e.host ? (
+              <span className="inline-flex items-center gap-2">
+                <UserAvatar user={e.host} size="xs" />
+                {e.host.name}
+              </span>
+            ) : (
+              e.hostName
+            )}
+          </Field>
+          <Field label="Visibility">
+            {e.visibility === "PUBLIC" ? "Public (website)" : "Internal"}
+          </Field>
+          <Field label="Term">{termLabel(e.term)}</Field>
+          <Field label="Stamp slot">{e.stampSlot}</Field>
+          <Field label="RSVP">
+            {e.rsvpUrl && (
+              <a href={e.rsvpUrl} target="_blank" rel="noopener noreferrer" className={LINK}>
+                {e.rsvpUrl}
+              </a>
+            )}
+          </Field>
+          <Field label="Calendar event">
+            <Link className={LINK} href={`/app/${ctx.orgSlug}/calendar/${e.id}`}>
+              Open in Calendar
+            </Link>
+            {e.googleHtmlLink && (
+              <>
+                {", "}
+                <a
+                  href={e.googleHtmlLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={LINK}
+                >
+                  Google Calendar
+                </a>
+              </>
+            )}
+          </Field>
+          {e.sourceSessionId && <Field label="Website session">Linked (synced)</Field>}
+          {e.description && <Field label="Description">{e.description}</Field>}
+        </dl>
+      </details>
       {detail.links.length > 0 && (
         <Section title="Import links">
           <ul className="text-muted-foreground space-y-1 text-xs">
             {detail.links.map((l) => (
               <li key={l.id}>
-                {l.source} · {l.method}
-                {l.score !== null ? ` (score ${l.score})` : ""} ·{" "}
+                {l.source}, {l.method}
+                {l.score !== null ? ` (score ${l.score})` : ""},{" "}
                 {fmtDateTime(l.createdAt, ctx.timezone)}
               </li>
             ))}
@@ -365,7 +405,7 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
                     label: "Delete check-in",
                     action: deleteAttendanceAction,
                     args: [ctx.organizationId, r.id],
-                    confirm: "Delete this check-in?",
+                    undoLabel: "Deleted",
                     destructive: true,
                   },
                 ]}
@@ -422,9 +462,11 @@ export function SignupPanel({ detail, ctx }: { detail: SignupDetail; ctx: PanelC
         <Field label="Meet days">{answerList(s.answers, "meet_days")}</Field>
         <Field label="Interests">{answerList(s.answers, "interests")}</Field>
         <Field label="Submissions">{s.submissions}</Field>
-        <Field label="Added to list">
-          {s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}
-        </Field>
+        {!ctx.canEdit && (
+          <Field label="On the list">
+            {s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}
+          </Field>
+        )}
         <Field label="First attended">
           {s.firstAttendedAt
             ? `${fmtDate(s.firstAttendedAt, ctx.timezone)} (${s.daysToFirstAttendance ?? 0} days after signing up)`
@@ -438,13 +480,14 @@ export function SignupPanel({ detail, ctx }: { detail: SignupDetail; ctx: PanelC
         <Field label="Record">{SOURCE_LABELS[s.recordSource] ?? s.recordSource}</Field>
       </dl>
       {ctx.canEdit && (
-        <div className="flex flex-wrap items-start gap-2">
-          <ActionButton
+        <div className="space-y-2">
+          <ActionSwitch
+            label="On the list"
             action={setSignupsAddedAction}
-            args={[ctx.organizationId, [s.id], !s.addedToListAt]}
-          >
-            {s.addedToListAt ? "Mark not on the list" : "Mark added to list"}
-          </ActionButton>
+            checked={Boolean(s.addedToListAt)}
+            argsOn={[ctx.organizationId, [s.id], true]}
+            argsOff={[ctx.organizationId, [s.id], false]}
+          />
           <ActionMenu
             label="More actions for this signup"
             items={[
@@ -525,9 +568,7 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
       </p>
       <dl className="divide-border/70 divide-y">
         <Field label="Poll">{b.ballotDefinition?.title ?? b.pollSlug}</Field>
-        <Field label="Cast at">
-          {fmtDateTime(b.castAt, ctx.timezone)} (rounded to the hour at the source)
-        </Field>
+        <Field label="Cast at">{fmtDateTime(b.castAt, ctx.timezone)}</Field>
         <Field label="Voter">{voter}</Field>
         <Field label="Source">{SOURCE_LABELS[b.source] ?? b.source}</Field>
         {b.excludedReason && <Field label="Not counted">{exclusionLabel(b.excludedReason)}</Field>}
@@ -549,16 +590,13 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
         </dl>
       </Section>
       {ctx.canEdit && (
-        <div className="flex flex-wrap gap-2">
-          <ActionButton
-            action={setBallotSuppressedAction}
-            args={[ctx.organizationId, b.id, b.excludedReason !== "suppressed"]}
-          >
-            {b.excludedReason === "suppressed"
-              ? "Count this ballot again"
-              : "Don't count this ballot"}
-          </ActionButton>
-        </div>
+        <ActionSwitch
+          label="Counted"
+          action={setBallotSuppressedAction}
+          checked={b.excludedReason !== "suppressed"}
+          argsOn={[ctx.organizationId, b.id, false]}
+          argsOff={[ctx.organizationId, b.id, true]}
+        />
       )}
     </>
   );

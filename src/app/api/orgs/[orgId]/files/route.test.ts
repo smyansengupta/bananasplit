@@ -44,7 +44,15 @@ function post(bytes: number, headers: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  org = { id: "org_1", slug: "me", name: "Me", kind: "PERSONAL", plan: "FREE", trialEndsAt: null, storageUsedBytes: BigInt(0) };
+  org = {
+    id: "org_1",
+    slug: "me",
+    name: "Me",
+    kind: "PERSONAL",
+    plan: "FREE",
+    trialEndsAt: null,
+    storageUsedBytes: BigInt(0),
+  };
   resetFake({
     role: "OWNER",
     db: { organization: { findUnique: vi.fn(async () => org) } },
@@ -61,11 +69,11 @@ describe("POST /api/orgs/[orgId]/files", () => {
     expect(fake.db.organization.findUnique).toHaveBeenCalled();
   });
 
-  it("refuses a paused club before the body is read", async () => {
+  it("holds an ended trial to Team Free's largest file, before the body is read", async () => {
     org = { ...org, kind: "CLUB", plan: "TRIAL", trialEndsAt: new Date(Date.now() - 1000) };
-    const res = await post(1024);
-    expect(res.status).toBe(403);
-    expect((await res.json()).code).toBe("SPACE_PAUSED");
+    const res = await post(1024, { "content-length": String(120 * MB) });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ code: "FILE_TOO_LARGE", maxFileBytes: 100 * MB });
     expect(storeMock).not.toHaveBeenCalled();
   });
 

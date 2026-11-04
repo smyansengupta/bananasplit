@@ -8,7 +8,7 @@ import {
   Loader2,
   TriangleAlert,
   Upload,
-} from "lucide-react";
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FieldSelect } from "@/components/ui/field-select";
 import { TransactionKind } from "@/generated/prisma/enums";
 import {
   inferKind,
@@ -47,15 +48,7 @@ import { formatCents } from "@/lib/finance/money";
 import { cn } from "@/lib/utils";
 
 import type { ImportSummary } from "./import-done";
-import {
-  ErrorNotice,
-  fieldSelect,
-  fieldSelectSm,
-  HatchProgress,
-  ImportPanel,
-  ReadNotes,
-  WarningNotice,
-} from "./panel";
+import { ErrorNotice, HatchProgress, ImportPanel, ReadNotes, WarningNotice } from "./panel";
 
 /**
  * Every proposed row, editable, before anything is saved: tick what goes
@@ -101,7 +94,7 @@ function Figure({
 }) {
   return (
     <div className="bg-muted/60 rounded-tile min-w-28 px-4 py-3">
-      <dt className="eyebrow text-muted-foreground">{label}</dt>
+      <dt className="text-muted-foreground text-[13px] font-medium">{label}</dt>
       <dd className={cn("numeral mt-1.5 text-[22px]", className)}>{children}</dd>
     </div>
   );
@@ -333,10 +326,6 @@ export function ImportReview({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-xl min-w-0 space-y-1">
             <h2 className="heading text-[17px]">Check the rows</h2>
-            <p className="text-muted-foreground text-sm">
-              Nothing is saved until you import. Untick anything that shouldn&apos;t go in, and fix
-              what looks wrong.
-            </p>
           </div>
           <dl className="flex flex-wrap gap-2">
             <Figure label="Importing">{chosen.length.toLocaleString()}</Figure>
@@ -466,7 +455,7 @@ export function ImportReview({
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-muted-foreground text-xs">
                         {r.source}
-                        {r.counterparty ? ` · ${r.counterparty}` : ""}
+                        {r.counterparty ? `, ${r.counterparty}` : ""}
                       </span>
                       {dup && (
                         <Badge variant="info">
@@ -521,18 +510,18 @@ export function ImportReview({
                     </Button>
                   </TableCell>
                   <TableCell>
-                    <select
-                      className={fieldSelectSm}
+                    <FieldSelect
                       value={r.kind}
                       onChange={(e) => patch(r.key, { kind: e.target.value as TransactionKind })}
                       aria-label={`Type, ${r.source}`}
+                      size="sm"
                     >
                       {KINDS.filter((k) => !r.direction || kindFits(k, r.direction)).map((k) => (
                         <option key={k} value={k}>
                           {KIND_LABEL[k]}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -750,19 +739,19 @@ export function BudgetReview({
         <ReadNotes readBy={readBy} notes={notes} />
         <label className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-muted-foreground">Put it in</span>
-          <select
-            className={cn(fieldSelect, "w-auto min-w-56")}
+          <FieldSelect
+            className="w-auto min-w-56"
             value={periodId}
             onChange={(e) => setPeriodId(e.target.value)}
           >
-            {!active && <option value="">This school year (new)</option>}
+            {!active && <option value="">This year (new)</option>}
             {periods.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
                 {p.isActive ? " (current)" : ""}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         </label>
         <ul className="divide-border/70 -mx-2 divide-y">
           {lines.map((l) => (

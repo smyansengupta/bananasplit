@@ -28,10 +28,11 @@ export const BACKFILL_LIMIT = 500;
 
 /**
  * Queues gcal for every event whose mirror is not where it should be:
- * live PUBLIC (and, with an internal calendar, INTERNAL) events that are not
- * SYNCED to their calendar, plus any mirror left PENDING or FAILED
- * (deletions and moves included), plus INTERNAL mirrors when there is no
- * longer an internal calendar. Returns how many were queued.
+ * live PUBLIC and INTERNAL events, each with a calendar configured, that
+ * are not SYNCED to their calendar, plus any mirror left PENDING or FAILED
+ * (deletions and moves included), plus PUBLIC or INTERNAL mirrors whose
+ * kind no longer has a calendar (the gcal job removes them). Returns how
+ * many were queued.
  */
 export async function enqueueGoogleBackfill(
   db: TxClient,
@@ -43,15 +44,19 @@ export async function enqueueGoogleBackfill(
   const live = { deletedAt: null, mergedIntoId: null, endsAt: { gte: since } } satisfies Prisma.EventWhereInput;
   const or: Prisma.EventWhereInput[] = [
     {
-      ...live,
-      visibility: EventVisibility.PUBLIC,
-      NOT: { googleSyncState: CalendarSyncState.SYNCED, googleCalendarId: config.publicCalendarId },
-    },
-    {
       googleEventId: { not: null },
       googleSyncState: { in: [CalendarSyncState.PENDING, CalendarSyncState.FAILED] },
     },
   ];
+  if (config.publicCalendarId) {
+    or.push({
+      ...live,
+      visibility: EventVisibility.PUBLIC,
+      NOT: { googleSyncState: CalendarSyncState.SYNCED, googleCalendarId: config.publicCalendarId },
+    });
+  } else {
+    or.push({ visibility: EventVisibility.PUBLIC, googleEventId: { not: null } });
+  }
   if (config.internalCalendarId) {
     or.push({
       ...live,
@@ -88,6 +93,9 @@ export interface RequestContext {
 
 export type RequestResult = { ok: true; queued?: number } | { ok: false; error: string };
 
+export const NO_PUBLIC_CALENDAR =
+  "Choose a public events calendar in Admin panel › Integrations › Google Calendar first: the import reads from it.";
+
 function usable(status: IntegrationStatus): string | null {
   if (status === IntegrationStatus.CONNECTED || status === IntegrationStatus.ERROR) return null;
   if (status === IntegrationStatus.NEEDS_REAUTH) return "Reconnect Google Calendar in Admin panel › Integrations first.";
@@ -123,6 +131,9 @@ export async function requestGoogleImport(
   if (!integration) return { ok: false, error: "Connect Google Calendar in Admin panel › Integrations first." };
   const blocked = usable(integration.status);
   if (blocked) return { ok: false, error: blocked };
+  // The import reads the public calendar; with none chosen (or "Don't mirror
+  // public events") there is nothing it may read.
+  if (!integration.config.publicCalendarId) return { ok: false, error: NO_PUBLIC_CALENDAR };
   if (mode === "apply") {
     const last = integration.rawConfig.import as Partial<ImportRecord> | undefined;
     if (!last || last.mode !== "dry-run" || last.status === "failed") {
@@ -171,7 +182,7 @@ export interface GoogleSyncStatus {
   google: {
     status: IntegrationStatus;
     lastError: string | null;
-    publicCalendarId: string;
+    publicCalendarId: string | null;
     internalCalendarId: string | null;
     lastSyncRequestAt: string | null;
     import: ImportState | null;

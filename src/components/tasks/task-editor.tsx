@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
@@ -17,7 +17,6 @@ import { useModKey } from "@/components/command-palette/use-mod-key";
 import { PinToggle } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { Segmented } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
@@ -33,6 +32,8 @@ import { canChangeVisibility, namedAudienceIds } from "@/lib/tasks/visibility";
 import { cn } from "@/lib/utils";
 
 import { MentionTextarea } from "./mention-textarea";
+import { TaskTitle } from "./task-title";
+import { TitleTextarea } from "./task-title-field";
 import { useConfirmFlagged } from "./prompts";
 import { Subtasks } from "./subtasks";
 import { TaskActivity } from "./task-activity";
@@ -52,7 +53,6 @@ import {
   VISIBILITY_OPTIONS,
 } from "./task-fields";
 import { TaskMarkdown } from "./task-markdown";
-import { TaskSentence } from "./task-sentence";
 import { TaskTypeChip, TYPE_OPTIONS } from "./task-type";
 import { HashTagHint } from "./tag-menu";
 import { useHashTags } from "./use-hash-tags";
@@ -65,7 +65,7 @@ import { AudienceList } from "./visibility-control";
  * the task drawer design has it: the title and description set straight on
  * the panel, then labelled fields (dropdown wells, and segments for status,
  * priority and who can see it), with Cancel and Create (⌘↵) along the
- * bottom. A new task can also be written as one sentence (Sentence mode).
+ * bottom.
  * Create and edit:
  * title, description with @mentions, status (a reason when Blocked),
  * priority, due date (and a start date for epics and stories), what it's
@@ -119,7 +119,6 @@ export function TaskEditor({
   const hashTags = useHashTags();
   const mod = useModKey();
   const saving = useRef(false);
-  const [view, setView] = useState<"form" | "sentence">("form");
 
   const isNew = task === null;
   const initialParentId = task?.parentTaskId ?? defaults?.parentTaskId ?? null;
@@ -367,8 +366,8 @@ export function TaskEditor({
   const heading = isNew ? `New ${typeLabel(type).toLowerCase()}` : typeLabel(type);
   const visibilityHint =
     visibility === TaskVisibility.PRIVATE
-      ? "Only the people on it, plus the club's owners and admins, can see this task."
-      : "Anyone in the club can find and open this task.";
+      ? "Only the people on it, plus the organization's owners and admins, can see this task."
+      : "Anyone in the organization can find and open this task.";
 
   const footer = (
     <div
@@ -420,19 +419,26 @@ export function TaskEditor({
         <label htmlFor="task-title" className="sr-only">
           Title
         </label>
-        <textarea
-          id="task-title"
-          rows={1}
-          value={title}
-          disabled={readOnly}
-          autoFocus={isNew}
-          placeholder="Untitled task"
-          onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
-          }}
-          className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
-        />
+        {readOnly ? (
+          // Nothing to type into: the title reads as text, and its file
+          // references are the links through to the files.
+          <p className="text-[26px] leading-[1.25] font-semibold tracking-[-0.015em]">
+            <TaskTitle linked>{title || "Untitled task"}</TaskTitle>
+          </p>
+        ) : (
+          <TitleTextarea
+            id="task-title"
+            rows={1}
+            value={title}
+            autoFocus={isNew}
+            placeholder="Untitled task"
+            onChange={(next) => setTitle(next.replace(/\n/g, " "))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
+            }}
+            className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
+          />
+        )}
         {!readOnly && <HashTagHint title={title} />}
         <label htmlFor="task-description" className="sr-only">
           Description
@@ -447,11 +453,12 @@ export function TaskEditor({
           <MentionTextarea
             id="task-description"
             audience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
+            linkFrom={task ? { kind: "task", id: task.id } : null}
             value={description}
             onChange={setDescription}
             onSubmitShortcut={() => void save()}
             rows={2}
-            placeholder="Add a description. Markdown and @mentions work."
+            placeholder="Add a description. Markdown, @mentions and /file links work."
             className="text-foreground/80 placeholder:text-muted-foreground/70 field-sizing-content min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-[1.55] shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           />
         )}
@@ -662,7 +669,7 @@ export function TaskEditor({
             />
             <p className="text-muted-foreground mt-2 text-xs">
               {audience.length === 1
-                ? "Only you, and the club owners and admins."
+                ? "Only you, and the organization's owners and admins."
                 : `${audience.length} people plus owners and admins.`}{" "}
               Comments, history and @mentions on it are hidden too. To mention somebody else, add
               them here first.
@@ -797,7 +804,7 @@ export function TaskEditor({
         mode === "dialog" ? "h-full" : "bg-background rounded-xl border",
       )}
       onKeyDown={(e) => {
-        // A field that already handled ⌘↵ (the description, Sentence's title) marks it.
+        // A field that already handled ⌘↵ (the description) marks it.
         if (e.defaultPrevented) return;
         if (
           (e.metaKey || e.ctrlKey) &&
@@ -830,17 +837,6 @@ export function TaskEditor({
           {task && isTaskPrivate(task) && <PrivateBadge />}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {isNew && (
-            <Segmented
-              label="Editor style"
-              value={view}
-              onSelect={(v) => setView(v as "form" | "sentence")}
-              options={[
-                { value: "form", label: "Form" },
-                { value: "sentence", label: "Sentence" },
-              ]}
-            />
-          )}
           {task && <PinToggle path={`/tasks/${task.id}`} label={task.title} />}
           {task && mode === "dialog" && (
             <Button asChild variant="ghost" size="icon-sm">
@@ -880,29 +876,7 @@ export function TaskEditor({
         )}
       >
         {notices}
-        {isNew && view === "sentence" ? (
-          <TaskSentence
-            title={title}
-            onTitle={setTitle}
-            ownerId={ownerId}
-            onOwner={setOwnerId}
-            dueDate={dueDate}
-            onDue={setDueDate}
-            parentTaskId={parentTaskId}
-            onParent={setParentTaskId}
-            priority={priority}
-            onPriority={setPriority}
-            status={status}
-            onStatus={setStatus}
-            visibility={visibility}
-            onVisibility={setVisibility}
-            visibilityLocked={!canSetVisibility}
-            onMore={() => setView("form")}
-            onSubmit={() => void save()}
-          />
-        ) : (
-          form
-        )}
+        {form}
         {error && (
           <p className="text-destructive text-sm" role="alert">
             {error}

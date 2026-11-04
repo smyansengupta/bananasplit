@@ -21,12 +21,12 @@ From there:
   Finalizing a poll creates an event, so an admin does it.
 - **Type:** workshop, info session, hackathon, social, board meeting or
   other. The website uses the type for its colors and labels.
-- **Visibility:** *Internal* (the default) or *Public*. Choosing Public shows
+- **Visibility:** _Internal_ (the default) or _Public_. Choosing Public shows
   a warning: the title, description, location and RSVP link become
   world-readable on the website, the public feed and the public Google
   Calendar. Invited members and meeting links are never published.
 - **Public events also carry:** the RSVP link (the website's RSVP button),
-  *Full* (the website greys the event out and hides the button), *Featured*
+  _Full_ (the website greys the event out and hides the button), _Featured_
   (the website emphasizes it), a short public note, and the stamp-card slot.
 - **Host:** a member, or a guest's name for an outside speaker.
 - **All-day events** are whole days in the org's timezone (Settings >
@@ -41,12 +41,12 @@ From there:
 Four views, switched in the header and remembered in the URL, so a link to
 a particular month or week is shareable.
 
-| View | What it is for |
-|---|---|
-| **Month** (default) | The term at a glance. Days that carry something take a tonal step; each event is a chip with its time, title and type. |
-| **Week** | One column per day with an hour axis, for spotting clashes and gaps. It opens on the hours that have something in them rather than on midnight. |
-| **Day** | One day's hour column. Reached from the switcher, or from a month cell's "+N more". |
-| **List** | Every day in the window that has something, in order, with the type, place, your RSVP and (for admins) the Google sync state on the row. This is the planning view. |
+| View                | What it is for                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Month** (default) | The term at a glance. Days that carry something take a tonal step; each event is a chip with its time, title and type.                                              |
+| **Week**            | One column per day with an hour axis, for spotting clashes and gaps. It opens on the hours that have something in them rather than on midnight.                     |
+| **Day**             | One day's hour column. Reached from the switcher, or from a month cell's "+N more".                                                                                 |
+| **List**            | Every day in the window that has something, in order, with the type, place, your RSVP and (for admins) the Google sync state on the row. This is the planning view. |
 
 - **Filters:** the type chips and the visibility menu narrow every view at
   once, and are part of the URL. The header says how many events the
@@ -61,8 +61,11 @@ a particular month or week is shareable.
 - **Moving one:** drag a chip to another day in the month grid (admins, on
   a computer). The time of day and the length are kept.
 - **On a phone:** the month grid fits the screen, with events as colour
-  bars you tap; the week shows one day at a time under a strip of the
-  seven days, marked with a dot where something is scheduled.
+  bars you tap, and the month's events follow it as a list you can read;
+  the week shows one day at a time under a strip of the seven days, marked
+  with a dot where something is scheduled. **New event** sits at the top
+  right, beside the title; Find a time, RSVPs, Sync and Today are left to
+  the menu and the arrows.
 - **Colours** come from the org's theme (Settings > Theme), so each club's
   calendar matches the rest of its workspace. Colour is never the only
   cue: every event names its type, public events carry a globe, internal
@@ -88,20 +91,20 @@ only kind of poll: a question needs members to vote.
   length, how finely people mark their time, and optionally when it stops
   taking answers. The form shows how many slots that makes before you create
   it.
-- **Inviting guests:** *Invite guests* on an open poll's page (or *Copy guest
-  link* in the Find a time list) copies the link for people outside the club. They
+- **Inviting guests:** _Invite guests_ on an open poll's page (or _Copy guest
+  link_ in the Find a time list) copies the link for people outside the club. They
   type a name and mark their times: no account, no sign-up and no
   onboarding. Members answer as themselves, in the app or on the link (a
   member who isn't signed in can sign in from it). The poll's in-app address
   works too: anyone who isn't a member of the club, signed in or not, is
   sent to the guest page instead of sign-in.
-- **Answering** (*Your availability*): pick *Available*, *If needed* or
-  *Unavailable*, then click a time or drag a rectangle across several (mouse
+- **Answering** (_Your availability_): pick _Available_, _If needed_ or
+  _Unavailable_, then click a time or drag a rectangle across several (mouse
   or touch; on a phone, drag the time column to scroll). Starting on a time
   you have already marked undoes it. With the keyboard, the grid is one tab
   stop: arrows move, Space marks, Shift+arrow marks as you move. Answers save
   as you go.
-- **Reading it** (*Everyone*): each time shows how many people can make it,
+- **Reading it** (_Everyone_): each time shows how many people can make it,
   shaded one colour from few to many, with a corner mark where some of them
   said "if needed". Point at a time, tab to it or tap it to see who is
   available, who only if needed, who can't and who hasn't answered. Members
@@ -111,7 +114,7 @@ only kind of poll: a question needs members to vote.
   switch to the poll's.
 - **Best times** lists up to five non-overlapping windows of the meeting's
   length that suit the most people. An owner or admin schedules one (or any
-  time, from the *Everyone* read-out) after a confirmation: that creates an
+  time, from the _Everyone_ read-out) after a confirmation: that creates an
   internal event, invites the members who can make its start and closes the
   poll. Guests can't be invited; the confirmation says how many there are.
 - The poll's creator, or an owner or admin, can delete it; an event it
@@ -127,22 +130,22 @@ options people vote on. Members only: there is no guest link.
   two the same, ignoring case and spacing). Blank option rows are ignored;
   Enter moves to the next row or adds one, and pasting a list (one per line,
   bullets and numbers stripped) fills several rows at once. Settings:
-  - *Allow more than one choice*: people tick several options instead of one.
-  - *Anonymous voting*: only the counts are ever shown. Nobody, not the
+  - _Allow more than one choice_: people tick several options instead of one.
+  - _Anonymous voting_: only the counts are ever shown. Nobody, not the
     creator and not an owner or admin, can see who voted for what, and the
-    setting can't be changed afterwards (see *Anonymity* below).
-  - *Members can add options*: anyone can add an option while it is open
+    setting can't be changed afterwards (see _Anonymity_ below).
+  - _Members can add options_: anyone can add an option while it is open
     (the creator and admins always can).
-  - *Hide results until the poll closes*: voters see only their own choice
+  - _Hide results until the poll closes_: voters see only their own choice
     until then; the creator and admins see the counts all along. The number
     of people who voted is always shown.
-  - *When it closes*: no end, 1 day, 3 days, 1 week, or a date and time.
+  - _When it closes_: no end, 1 day, 3 days, 1 week, or a date and time.
 - **Voting:** pick an option (or several). The vote shows at once and is
   saved a moment later; change it or **Clear my vote** any time while the
   poll is open. Each option shows its share of the voters as a bar, its count
   and, unless the poll is anonymous, the faces of who picked it (hover for
   the names). The leading option is highlighted, your own choices are marked
-  *You voted*, and a closed poll marks its *Top choice*.
+  _You voted_, and a closed poll marks its _Top choice_.
 - **Closing:** at its closing time, or by hand: its creator or an owner/admin
   closes and reopens it from the poll's "…" menu (reopening a poll whose
   closing time has passed drops that time). A closed poll takes no votes and
@@ -152,8 +155,8 @@ options people vote on. Members only: there is no guest link.
 - **Deleting:** the creator or an owner/admin deletes a poll from its "…"
   menu or from the Polls list, after a confirmation. Its votes go with it.
 - **Where else it shows:** the Polls page lists question polls, newest
-  first, split into open and closed (Find a time lists the other kind); the Overview's *Open polls* widget; *Pin
-  something*; pins and *Recently visited* (under the poll's question). The
+  first, split into open and closed (Find a time lists the other kind); the Overview's _Open polls_ widget; _Pin
+  something_; pins and _Recently visited_ (under the poll's question). The
   org export (Settings > Danger zone) includes `Poll`, `PollOption` and
   `PollVote`, the votes without who cast them.
 
@@ -181,8 +184,11 @@ same poll, while it is open. The RLS cases are `P-QPOLL-01`..`06` in
 1. **Settings > Integrations > Google Calendar > Connect**, signed in to
    Google as the account that owns the club's public calendar (for CBC: the
    club Gmail). Only owners and admins can connect or disconnect.
-2. Pick the **public calendar** (where public events go). Optionally pick a
-   separate **internal calendar** for board-only events; without one,
+2. Pick the **public calendar** (where public events go, and the only one
+   the import reads). Until one is picked, or with _Don't mirror public
+   events_, public events are not on Google and there is nothing to import:
+   the portal never falls back to the account's primary calendar. Optionally
+   pick a separate **internal calendar** for board-only events; without one,
    internal events are simply not on Google. The internal calendar can never
    be the public one.
 3. Open **Calendar > Sync and website feed** and run the **import** (next
@@ -210,8 +216,9 @@ Calendar > Sync and website feed > **Import existing Google events** (the
 same card is on Settings > Integrations > Google Calendar while Google is
 connected):
 
-1. **Dry run** reads the public Google calendar (six months back to about a
-   year ahead) and reports *N linked, M new, K ambiguous*, with sample
+1. **Dry run** reads the public Google calendar you picked, and no other
+   (six months back to about a year ahead; with no public calendar picked
+   the import is refused), and reports _N linked, M new, K ambiguous_, with sample
    titles. Nothing is written.
 2. **Apply import** writes it:
    - an event the suite already has (created here, or synced from the
@@ -227,7 +234,7 @@ Running the import again changes nothing: everything is already linked.
 
 ### 4. Publish events on the website
 
-1. **Turn the feed on:** Settings > Privacy > *Public events feed* (an owner
+1. **Turn the feed on:** Settings > Privacy > _Public events feed_ (an owner
    or admin). Until then the feed answers 404, exactly like an unknown club.
 2. **The feed URLs** are shown on Calendar > Sync and website feed:
    - `https://<portal>/api/public/<org-slug>/events` — JSON: upcoming public
@@ -240,6 +247,7 @@ Running the import again changes nothing: everything is already linked.
    five minutes at the CDN (and served stale for up to a day if the portal
    is down). A change in the suite reaches the feed right away; the CDN copy
    within five minutes. If the org's slug is renamed, the old URL redirects.
+
 3. **Point the website at it** (claudeneu.com; any static site can do the
    same). Set `SUITE_EVENTS_URL` to the JSON URL in **two** places:
    - **Netlify > Site configuration > Environment variables** (scope:
@@ -247,7 +255,7 @@ Running the import again changes nothing: everything is already linked.
      runs the site's `prebuild` event fetch; without the variable there, a
      hook-triggered build silently falls back to Google Calendar.
    - **GitHub > Settings > Secrets and variables > Actions > Variables**, for
-     the hourly *Refresh events* workflow.
+     the hourly _Refresh events_ workflow.
 4. **Rebuild the website when events change:** create a build hook in
    Netlify (Site configuration > Build & deploy > Build hooks) and save its
    URL in **Settings > Integrations > Website build hook** (it is encrypted
@@ -309,13 +317,13 @@ the website's "Add to your calendar" link can keep pointing at it.
 
 ## For the platform operator
 
-| What | Where |
-|---|---|
-| Google OAuth client for Calendar (separate from sign-in) | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`. In Google Cloud: enable the Google Calendar API; create a *Web application* OAuth client; add the portal's Calendar callback URL (shown in Settings > Integrations) as an authorized redirect URI. |
-| Consent screen | Scopes `openid`, `email`, `calendar.events.owned`, `calendar.calendarlist.readonly` (`calendar.events` only if `.owned` cannot write the chosen calendar). It needs an authorized domain, a homepage and a privacy-policy URL, and must be **published and verified**: in Testing mode authorizations expire after about seven days. The sign-in client keeps `openid email profile` only. |
-| Background jobs | `gcal` (mirror one event; runs right after the save), `site-rebuild` (one minute after public changes), `google-import` (heavy; kicked to `/api/cron/jobs`), `google-revoke`. All need the job drain (`/api/cron/jobs` with `CRON_SECRET`; RUNBOOK step 8). |
-| Per-org secrets | The Google refresh token and the Netlify hook URL are encrypted OrgSecrets (Settings > Integrations); never env vars. |
-| Public feed | `/api/public/[orgSlug]/events` and `.ics` sit outside the nonce-CSP proxy and send `Cache-Control: public, s-maxage=300, stale-while-revalidate=86400`, an ETag (304s) and `Access-Control-Allow-Origin: *`. The data is an `unstable_cache` entry tagged `org:{orgId}:public-events`, invalidated after every commit that touches a public event. |
+| What                                                     | Where                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Google OAuth client for Calendar (separate from sign-in) | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`. In Google Cloud: enable the Google Calendar API; create a _Web application_ OAuth client; add the portal's Calendar callback URL (shown in Settings > Integrations) as an authorized redirect URI.                                                                                                                           |
+| Consent screen                                           | Scopes `openid`, `email`, `calendar.events.owned`, `calendar.calendarlist.readonly` (`calendar.events` only if `.owned` cannot write the chosen calendar). It needs an authorized domain, a homepage and a privacy-policy URL, and must be **published and verified**: in Testing mode authorizations expire after about seven days. The sign-in client keeps `openid email profile` only. |
+| Background jobs                                          | `gcal` (mirror one event; runs right after the save), `site-rebuild` (one minute after public changes), `google-import` (heavy; kicked to `/api/cron/jobs`), `google-revoke`. All need the job drain (`/api/cron/jobs` with `CRON_SECRET`; RUNBOOK step 8).                                                                                                                                |
+| Per-org secrets                                          | The Google refresh token and the Netlify hook URL are encrypted OrgSecrets (Settings > Integrations); never env vars.                                                                                                                                                                                                                                                                      |
+| Public feed                                              | `/api/public/[orgSlug]/events` and `.ics` sit outside the nonce-CSP proxy and send `Cache-Control: public, s-maxage=300, stale-while-revalidate=86400`, an ETag (304s) and `Access-Control-Allow-Origin: *`. The data is an `unstable_cache` entry tagged `org:{orgId}:public-events`, invalidated after every commit that touches a public event.                                         |
 
 ## Local development
 
@@ -352,13 +360,29 @@ Two rules worth knowing when changing them:
   the viewer's own day on hydration (`useTodayKey`), so the first paint
   cannot mismatch.
 
-Event type colours are theme tokens (`--chart-1` … `--chart-5`, and
-`--muted-foreground` for *Other*), listed in
-`src/components/calendar/kinds.ts`. That palette is derived per org and is
-already checked for a lightness band, a chroma floor, colour-blind
-separation between adjacent slots and 3:1 against both surfaces
-(`src/lib/theme/chart.ts`), which is the guarantee a row of event types
-needs. Nothing in the calendar carries a fixed colour value.
+Event kind colours come from the tag palette, NOT from the org's theme:
+`--tag-navy`, `--tag-plum`, `--tag-burgundy`, `--tag-rust`, `--tag-ochre`,
+`--tag-forest`, `--tag-teal`, and `--muted-foreground` for _Other_. The
+names live in `src/lib/tag-colors.ts`, the light and dark values in
+`globals.css`, and the mapping from kind to colour in
+`src/components/calendar/kinds.ts`. A club theme deliberately does not
+override them: a kind is a label, and it keeps the colour it was given.
+Note folders and epics take the same palette.
+
+They were the derived chart slots until 2026-10-27. Under a monochrome
+theme those are nearly grey, and under any theme they moved when the theme
+moved, which is wrong for something somebody picked. Folder rows saved
+before the change still hold `chart-1` … `chart-5`; `tagColorOf()` reads
+those onto the nearest name, so nothing had to be migrated.
+
+`src/lib/tag-colors.test.ts` holds the palette honest: every colour clears
+4.5:1 on the page, on a card and on its own 15% tint, in both modes and
+under every preset the app ships, keeps a chroma floor so no name reads as
+grey, and keeps adjacent hues apart. `--chart-1..5` are untouched and
+still belong to charts and meters, with their own guarantees in
+`src/lib/theme/chart.ts`. Everything in the calendar still paints from
+`--kind`, so a chip, a dot, a bar and a time-grid block follow one
+variable.
 
 FullCalendar is still a dependency (the task calendar uses it) but the org
 calendar no longer loads it.

@@ -15,7 +15,7 @@ import {
 } from "./color";
 
 describe("colour math", () => {
-  it("measures the club website's documented ratios", () => {
+  it("measures the organization website's documented ratios", () => {
     // DESIGN.md: coral fails as text; terracotta is the readable coral.
     expect(contrastRatio("#d97757", "#ffffff")).toBeCloseTo(3.12, 2);
     expect(contrastRatio("#a34a2a", "#faf9f5")).toBeCloseTo(5.58, 2);

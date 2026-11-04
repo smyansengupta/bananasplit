@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { UserPlus } from "lucide-react";
+import { UserPlus } from "@/components/icons";
 import { memo, type CSSProperties } from "react";
 
 import { UserAvatar } from "@/components/user-avatar";
@@ -48,22 +48,42 @@ export function subtitleFor(node: ChartNodeDTO, flagUnknown = false): string {
   const variant = nodeVariant(node);
   if (variant === "open") return node.isAdvisor ? "Open advisor role" : "Open role";
   const who = personLabel(node);
-  if (variant === "placeholder") return flagUnknown ? `${who} · not a member yet` : `${who} · not on the portal`;
-  if (variant === "empty") return node.isAdvisor ? "Advisor · unfilled" : "Unfilled";
-  return node.isAdvisor ? `${who} · advisor` : who;
+  if (variant === "placeholder")
+    return flagUnknown ? `${who}, not a member yet` : `${who}, not a member yet`;
+  if (variant === "empty") return node.isAdvisor ? "Advisor, unfilled" : "Unfilled";
+  return node.isAdvisor ? `${who}, advisor` : who;
 }
 
 export const PositionNode = memo(function PositionNode({ data }: NodeProps<PositionFlowNode>) {
   const { node, selected, color, descendants, collapsed, onToggle, flagUnknown } = data;
   const variant = nodeVariant(node);
   const subtitle = subtitleFor(node, flagUnknown);
-  const dashed = variant === "open" || variant === "empty" || node.isAdvisor || (variant === "placeholder" && !flagUnknown);
+  const dashed =
+    variant === "open" ||
+    variant === "empty" ||
+    node.isAdvisor ||
+    (variant === "placeholder" && !flagUnknown);
   const warn = flagUnknown && variant === "placeholder";
 
   return (
-    <div className="relative" style={{ width: NODE_WIDTH, height: NODE_HEIGHT, "--team": color ?? "var(--muted-foreground)" } as CSSProperties}>
+    <div
+      className="relative"
+      style={
+        {
+          width: NODE_WIDTH,
+          height: NODE_HEIGHT,
+          "--team": color ?? "var(--muted-foreground)",
+        } as CSSProperties
+      }
+    >
       <Handle type="target" position={Position.Top} className="!opacity-0" isConnectable={false} />
-      <Handle type="target" id="side" position={Position.Left} className="!opacity-0" isConnectable={false} />
+      <Handle
+        type="target"
+        id="side"
+        position={Position.Left}
+        className="!opacity-0"
+        isConnectable={false}
+      />
       <button
         type="button"
         aria-label={`${node.title}: ${subtitle}`}
@@ -78,7 +98,11 @@ export const PositionNode = memo(function PositionNode({ data }: NodeProps<Posit
         )}
       >
         {variant === "member" && node.user ? (
-          <UserAvatar user={node.user} size="lg" className="shrink-0 ring-2 ring-(--team) ring-offset-2 ring-offset-card" />
+          <UserAvatar
+            user={node.user}
+            size="lg"
+            className="ring-offset-card shrink-0 ring-2 ring-(--team) ring-offset-2"
+          />
         ) : variant === "open" || variant === "empty" ? (
           <span className="bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-full">
             <UserPlus className="size-[18px]" aria-hidden="true" />
@@ -90,7 +114,14 @@ export const PositionNode = memo(function PositionNode({ data }: NodeProps<Posit
         )}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm leading-tight font-semibold">{node.title}</span>
-          <span className={cn("block truncate text-[13px]", warn ? "text-tint-danger-foreground" : "text-muted-foreground")}>{subtitle}</span>
+          <span
+            className={cn(
+              "block truncate text-[13px]",
+              warn ? "text-tint-danger-foreground" : "text-muted-foreground",
+            )}
+          >
+            {subtitle}
+          </span>
         </span>
       </button>
       {descendants > 0 && onToggle && (
@@ -107,8 +138,19 @@ export const PositionNode = memo(function PositionNode({ data }: NodeProps<Posit
           {collapsed ? `+${descendants}` : "−"}
         </button>
       )}
-      <Handle type="source" position={Position.Bottom} className="!opacity-0" isConnectable={false} />
-      <Handle type="source" id="side" position={Position.Right} className="!opacity-0" isConnectable={false} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!opacity-0"
+        isConnectable={false}
+      />
+      <Handle
+        type="source"
+        id="side"
+        position={Position.Right}
+        className="!opacity-0"
+        isConnectable={false}
+      />
     </div>
   );
 });

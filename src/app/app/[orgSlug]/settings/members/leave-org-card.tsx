@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,13 @@ export function LeaveOrgCard({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // The club menu's Leave links here (#leave): open the confirm straight away
+  // rather than leaving them to find the button.
+  useEffect(() => {
+    if (window.location.hash !== "#leave" || isLastOwner) return;
+    const id = window.setTimeout(() => setOpen(true));
+    return () => window.clearTimeout(id);
+  }, [isLastOwner]);
 
   return (
     <SettingsCard
@@ -36,21 +43,20 @@ export function LeaveOrgCard({
       description={
         isLastOwner
           ? "You're the only owner. Transfer ownership to another member first."
-          : "You lose access to this club. An admin can invite you again."
+          : "An admin can invite you back."
       }
       footer={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" disabled={isLastOwner}>
-              Leave club
+              Leave
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Leave {orgName}?</DialogTitle>
               <DialogDescription>
-                Your task assignments and event invitations here are removed and open tasks you own
-                become unowned. Notes and comments you wrote stay.
+                Your assignments and invitations here go. Your notes and comments stay.
               </DialogDescription>
             </DialogHeader>
             {error && (

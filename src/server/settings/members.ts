@@ -1,4 +1,5 @@
 import {
+  DecisionStatus,
   OrgChartVersionStatus,
   PositionMatchState,
   Role,
@@ -86,13 +87,15 @@ export function outstandingExpensesMessage(n: number, self: boolean): string {
  *     their ICS feed);
  *   - ownership of open tasks (they become unowned and anyone can claim
  *     them; completed tasks keep their owner as history), epics included;
+ *   - ownership of open decisions, the same way (decided and dropped ones
+ *     keep theirs);
  *   - org chart positions revert to placeholders (the title stays), and the
  *     member drops out of draft match suggestions.
  * Their notes, comments and past events stay, authored by a former member.
  *
- * Runs on app_user: an ADMIN's removal can do all of it. A MEMBER who
- * leaves cannot update org chart rows (admin-only RLS), so
- * cleanupAfterDeparture repeats the org-chart step on the service path.
+ * Runs on app_user: an ADMIN's removal, or a member leaving, can do all of
+ * it. cleanupAfterDeparture repeats the org-chart step on the service path
+ * anyway (it is idempotent).
  */
 export async function untieDepartingMember(
   db: TxClient,
@@ -110,6 +113,10 @@ export async function untieDepartingMember(
       deletedAt: null,
     },
     data: { ownerId: null, ownerRelation: null, ownerFlagged: false, ownerAssignedById: null },
+  });
+  await db.decision.updateMany({
+    where: { organizationId, ownerId: userId, status: DecisionStatus.OPEN },
+    data: { ownerId: null, updatedAt: new Date() },
   });
   await untieOrgChart(db, organizationId, userId);
 }
@@ -132,8 +139,7 @@ async function untieOrgChart(db: TxClient, organizationId: string, userId: strin
 /**
  * The service-path half of a departure, after the Membership delete has
  * committed: the member's notifications from this org (app_user can only
- * read and mark its OWN notifications), the notes shared with them, and the org-chart step (for a member
- * who left on their own, whose RLS cannot touch the chart). Idempotent.
+ * read and mark its OWN notifications), the notes shared with them, and the org-chart step again. Idempotent.
  * `actorId` is recorded as app.user_id().
  */
 export async function cleanupAfterDeparture(

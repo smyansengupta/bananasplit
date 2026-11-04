@@ -250,12 +250,12 @@ describe("finance setup and imports (db)", () => {
       createCategories: true,
       reconciled: false,
     });
-    expect(res.error).toMatch(/owners and treasurers/);
-    expect((await setStartingBalance(orgId, { cents: 100, asOf: day(thisYear, "09-01") })).error).toMatch(/owners and treasurers/);
+    expect(res.error).toMatch(/owners, admins and treasurers/);
+    expect((await setStartingBalance(orgId, { cents: 100, asOf: day(thisYear, "09-01") })).error).toMatch(/owners, admins and treasurers/);
     expect((await importFinanceBudget(orgId, { periodId: null, lines: [{ name: "X", allocatedCents: 1 }] })).error).toMatch(
-      /owners and treasurers/,
+      /owners, admins and treasurers/,
     );
-    expect((await checkImportDuplicates(orgId, [])).error).toMatch(/owners and treasurers/);
-    expect((await undoFinanceImport(orgId, "abcdefgh12345678")).error).toMatch(/owners and treasurers/);
+    expect((await checkImportDuplicates(orgId, [])).error).toMatch(/owners, admins and treasurers/);
+    expect((await undoFinanceImport(orgId, "abcdefgh12345678")).error).toMatch(/owners, admins and treasurers/);
   });
 });

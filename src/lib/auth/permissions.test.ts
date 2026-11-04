@@ -37,7 +37,7 @@ describe("permissions matrix", () => {
     ["audit.view", [OWNER, ADMIN]],
     ["members.invite", [OWNER, ADMIN]],
     ["events.write", [OWNER, ADMIN]],
-    ["finance.manage", [OWNER, TREASURER]],
+    ["finance.manage", [OWNER, ADMIN, TREASURER]],
     ["notes.manageAll", [OWNER, ADMIN]],
     ["reports.view", [OWNER, ADMIN, TREASURER, MEMBER]],
   ];

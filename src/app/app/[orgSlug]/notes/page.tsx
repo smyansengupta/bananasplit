@@ -12,15 +12,16 @@ import { isPersonalSpace, spaceLimits } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
-import { listFolders } from "@/server/notes/folders";
+import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
 import { noteVisibleWhere } from "@/server/notes/visibility";
+import { clubsUserRuns } from "@/server/personal/move";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
 import { storageBreakdown } from "@/server/storage/usage";
 
-import { NotesListFilters } from "./notes-list-filters";
+import { NotesFilterChoices, NotesListFilters } from "./notes-list-filters";
 import {
   countDeleted,
   getDeletedNotes,
@@ -33,8 +34,8 @@ import {
 export const metadata: Metadata = { title: "Files" };
 
 /**
- * Files (at /notes): the club's notes and uploaded files in one list, filed
- * in shared folders. "New" starts a blank note or a template, turns a Word
+ * Files (at /notes): the organization's notes and uploaded files in one
+ * list, filed in shared folders, with All, Notes and Uploads as its tabs. "New" starts a blank note or a template, turns a Word
  * document or Google Doc into a note (previewed first), uploads a file, or
  * makes a folder. In Personal they're all its owner's, with no sharing.
  */
@@ -51,6 +52,8 @@ export default async function NotesPage({
   const kind = query.tab === "files" || query.tab === "notes" ? query.tab : "all";
   const isAdmin = can({ role }, "settings.view");
   const personal = isPersonalSpace(org);
+  // In Personal, each card's menu can move it to an organization you run.
+  const moveTargets = personal ? await clubsUserRuns(user.id) : [];
 
   const str = (v: unknown) => (typeof v === "string" && v !== "all" ? v : undefined);
   const visibility = str(query.visibility) as "PRIVATE" | "ORGANIZATION" | "SHARED" | undefined;
@@ -58,15 +61,23 @@ export default async function NotesPage({
   const inTrash = query.folder === "trash";
   const folderId = inTrash ? undefined : str(query.folder);
   const q = str(query.q);
+  // Everything is the root of the Files tree: its folders at the top, then
+  // only what is in no folder. It used to list every item wherever it was
+  // filed, so moving a file into a folder left it showing in Everything as
+  // well - which looked exactly like the move had made a copy. A search still
+  // looks everywhere, folders included.
+  const atRoot = !inTrash && !folderId && !q;
+  const listFolderId = atRoot ? "none" : folderId;
   const sort = (NOTE_SORTS as readonly string[]).includes(String(query.sort))
     ? (query.sort as NoteSort)
     : "edited";
 
   const data = await withOrgTx(org.id, async ({ db }) => {
+    const folders = await listFolders(db, org.id, user.id);
     const notes = await getNotesForList(db, org.id, user.id, {
       visibility,
       authorId: author,
-      folderId,
+      folderId: listFolderId,
       q,
       sort,
     });
@@ -77,9 +88,18 @@ export default async function NotesPage({
         org.id,
         notes.map((n) => n.id),
       ),
-      files: await listNoteFiles(db, org.id, { folderId, q }),
+      files: await listNoteFiles(db, org.id, { folderId: listFolderId, q }),
       memberships: await getOrgMembersForFilter(db, org.id),
-      folders: await listFolders(db, org.id, user.id),
+      folders,
+      // What each folder card names, only where the cards are drawn.
+      peeks: atRoot
+        ? await folderPeeks(
+            db,
+            org.id,
+            user.id,
+            folders.map((f) => f.id),
+          )
+        : new Map(),
       pins: await listPins(db, org.id, org.slug, user.id),
       trash: inTrash
         ? {
@@ -149,7 +169,7 @@ export default async function NotesPage({
               maxFileBytes={storage.maxFileBytes}
               parts={storageParts}
               personal={personal}
-              href={storage.canManage ? `/app/${orgSlug}/settings/plan/storage` : null}
+              href={storage.canManage ? `/app/${orgSlug}/settings/plan` : null}
             />
             <NotesNewMenu
               orgId={org.id}
@@ -163,16 +183,11 @@ export default async function NotesPage({
         }
       />
       <SpaceStorageBanner orgSlug={orgSlug} />
-      {/* Notes-only view and the trash take no uploads. */}
-      {kind !== "notes" && !inTrash && (
-        <FilesDropZone
-          orgId={org.id}
-          folderId={uploadFolder}
-          storage={storage}
-          personal={personal}
-        />
-      )}
+      {/* The page's uploader: the whole page takes dropped files (in the
+          trash too, where they land in no folder rather than in the trash). */}
+      <FilesDropZone orgId={org.id} folderId={uploadFolder} storage={storage} personal={personal} />
       <NotesLibrary
+        moveTargets={moveTargets}
         orgId={org.id}
         orgSlug={orgSlug}
         kind={kind}
@@ -182,6 +197,7 @@ export default async function NotesPage({
           color: f.color,
           noteCount: f.noteCount,
           fileCount: f.fileCount,
+          peek: data.peeks.get(f.id) ?? [],
           canEdit: isAdmin || f.createdById === user.id,
         }))}
         notes={data.notes.map((n) => ({
@@ -227,7 +243,9 @@ export default async function NotesPage({
           }
         }
         filters={<NotesListFilters members={members} personal={personal} />}
+        sheetFilters={<NotesFilterChoices members={members} personal={personal} />}
         personal={personal}
+        canEmptyTrash={storage.canManage}
       />
     </div>
   );

@@ -100,9 +100,14 @@ model User {
   notificationsActed     Notification[]       @relation("NotificationActor")
   createdJoinCodes       OrgJoinCode[]        @relation("OrgJoinCodeCreatedBy")
   availability           UserAvailability?
+  reminderSends          EventReminderSend[]
+  upNextDismissals       UpNextDismissal[]
+  inboxItemStates        InboxItemState[]
+  memberPresence         MemberPresence[]
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
+  connectorGrants        ConnectorGrant[]
   uploadedFiles          OrgFile[]            @relation("OrgFileUploadedBy")
   noteFolders            NoteFolder[]         @relation("NoteFolderCreatedBy")
   noteShares             NoteShare[]          @relation("NoteShareUser")
@@ -110,6 +115,14 @@ model User {
   noteComments           NoteComment[]        @relation("NoteCommentAuthor")
   noteCommentsResolved   NoteComment[]        @relation("NoteCommentResolvedBy")
   noteVersions           NoteVersion[]        @relation("NoteVersionCreatedBy")
+  itemLinksMade          ItemLink[]
+  announcements          Announcement[]       @relation("AnnouncementAuthor")
+  announcementsRemoved   Announcement[]       @relation("AnnouncementDeletedBy")
+  announcementsSeen      AnnouncementSeen[]
+  decisionsOwned         Decision[]           @relation("DecisionOwner")
+  decisionsCreated       Decision[]           @relation("DecisionCreatedBy")
+  reportsCreated         Report[]             @relation("ReportCreatedBy")
+  reportSnapshotsTaken   ReportSnapshot[]     @relation("ReportSnapshotTakenBy")
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -182,7 +195,11 @@ model MemberPrefs {
   financeWidgets  Json?
   /// Overview widget layout, same shape (src/lib/overview/widgets.ts).
   overviewWidgets Json?
-  updatedAt       DateTime @default(now()) @updatedAt
+  /// When they last opened Home, and the visit before that: "Since you were
+  /// here" counts what changed after homePrevVisitAt.
+  homeVisitAt     DateTime?
+  homePrevVisitAt DateTime?
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -313,6 +330,23 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+/// A "Get a 15-minute walkthrough" request from /demo, kept so none is lost
+/// when mail fails; it is also emailed (DEMO_REQUEST_INBOX). Platform data:
+/// written by app_auth (insert only), read by the owner role (Supabase).
+model DemoRequest {
+  id           String    @id @default(cuid())
+  name         String
+  email        String
+  organization String
+  teamSize     String
+  message      String?
+  /// When the email to the inbox went out; null if it didn't.
+  emailedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
 // --- Organizations, membership, invitations ---
 
 enum Role {
@@ -350,10 +384,15 @@ model Organization {
   /// only between FREE and PERSONAL_PLUS, a club never onto either
   /// (app.organization_space_guard).
   plan                    OrgPlan   @default(TRIAL)
-  /// TRIAL: when the trial ends (30 days after the club was started); the
-  /// club is paused after it until the owner picks a plan. Never changed by
-  /// the app roles.
+  /// When the space's trial ends (14 days after it was started): a club on
+  /// TRIAL, or a Personal space on FREE (Personal Plus until then). After
+  /// it the space is on planAfterTrial, else its free plan. Never changed
+  /// by the app roles.
   trialEndsAt             DateTime?
+  /// TRIAL only: the plan the owner picked during the trial (TEAM_FREE,
+  /// CLUB or SOCIETY), which starts when the trial ends. Picking one never
+  /// cuts the trial short. OWNER-only (app.organization_guard).
+  planAfterTrial          OrgPlan?
   /// Bytes stored by the space: OrgFile (trashed files count until they are
   /// deleted for good), Receipt and NoteVersion sizes. Kept by the
   /// app.storage_used_track triggers; the app roles never write it (no
@@ -374,6 +413,8 @@ model Organization {
   events            Event[]
   availabilityPolls AvailabilityPoll[]
   polls             Poll[]
+  forms             Form[]
+  formResponses     FormResponse[]
   budgetPeriods     BudgetPeriod[]
   budgetCategories  BudgetCategory[]
   transactions      Transaction[]
@@ -386,6 +427,9 @@ model Organization {
   memberHistory     OrgMemberHistory[]
   secrets           OrgSecret[]
   settings          OrgSettings?
+  upNextDismissals  UpNextDismissal[]
+  inboxItemStates   InboxItemState[]
+  memberPresence    MemberPresence[]
   integrations      OrgIntegration[]
   slugHistory       OrgSlugHistory[]
   exports           OrgExport[]
@@ -403,6 +447,12 @@ model Organization {
   files             OrgFile[]
   noteFolders       NoteFolder[]
   pulseIssues       PulseIssue[]
+  connectorGrants   ConnectorGrant[]
+  itemLinks         ItemLink[]
+  announcements     Announcement[]
+  decisions         Decision[]
+  reports           Report[]
+  reportSnapshots   ReportSnapshot[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -419,6 +469,8 @@ enum OrgPlan {
   FREE
   PERSONAL_PLUS
   TRIAL
+  /// Team Free: an organization's free plan, and where a trial ends.
+  TEAM_FREE
   CLUB
   SOCIETY
 }
@@ -448,6 +500,12 @@ enum NotificationType {
   NOTE_SHARED
   // The club's weekly pulse (PulseIssue), in-app when OrgSettings.pulseInApp
   WEEKLY_PULSE
+  // A meeting's reminder to a member going (src/server/rsvp/jobs.ts)
+  EVENT_REMINDER
+  // A new answer to a form you made (src/server/forms/public.ts)
+  FORM_RESPONSE
+  // A saved report on its schedule (src/server/reports/jobs.ts)
+  REPORT_SENT
 }
 
 model Notification {
@@ -567,8 +625,6 @@ enum TaskPriority {
   HIGH
 }
 
-
-
 /// The task hierarchy (app.task_hierarchy_guard): an EPIC is always
 /// top-level; a STORY sits at the top or under an EPIC; a TASK at the top,
 /// under an EPIC or under a STORY. A task with subtasks is at least a STORY.
@@ -644,6 +700,7 @@ model Task {
   @@index([organizationId, completedAt])
   // C4: the "Private only" filter, and the RLS predicate's cheap first test.
   @@index([organizationId, visibility])
+  @@index([organizationId, createdById, status])
 }
 
 /// How an assignee (or owner) relates to the assigner in the published org
@@ -730,6 +787,7 @@ model TaskComment {
   author User @relation("TaskCommentAuthor", fields: [authorId], references: [id])
 
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 /// @[Name](user:id) tokens found in a task description ('desc') or a
@@ -750,6 +808,7 @@ model TaskMention {
 
   @@unique([taskId, sourceKey, mentionedUserId])
   @@index([organizationId, mentionedUserId, createdAt])
+  @@index([organizationId, mentionedById, createdAt])
 }
 
 /// Append-only task history (no UPDATE or DELETE for app_user).
@@ -768,6 +827,7 @@ model TaskActivity {
   actor User? @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, type, createdAt])
 }
 
 /// A lead's Sunday update: done / next / blocked for the org-local week
@@ -965,6 +1025,7 @@ model NoteComment {
   @@unique([noteId, id])
   @@index([organizationId, noteId, createdAt])
   @@index([noteId, threadId])
+  @@index([organizationId, createdAt])
 }
 
 /// A saved copy of a note's body: autosave snapshots (the service path,
@@ -1001,6 +1062,18 @@ enum ConferenceProvider {
   OTHER
 }
 
+/**
+ * How a meeting happens (docs/features/meetings.md). Explicit rather than
+ * derived from conferenceProvider and location, because an in-person meeting
+ * with no room picked yet is still in person, and a hybrid one wants both
+ * halves of the form whether or not both are filled in.
+ */
+enum MeetingFormat {
+  ONLINE
+  IN_PERSON
+  HYBRID
+}
+
 model Event {
   id                 String             @id @default(cuid())
   organizationId     String
@@ -1019,6 +1092,10 @@ model Event {
   // Sessions (Phase 4a): a Session in Databases and a calendar event are the
   // same record. Members may only create/edit their own INTERNAL events.
   kind               EventKind          @default(OTHER)
+  /// One of the org's meeting types (OrgSettings.eventTypes), by name; the calendar draws it in that type's colour.
+  meetingType        String?
+  /// A repeating meeting's series: every week is its own Event sharing this id (src/lib/meetings/series.ts).
+  seriesId           String?
   visibility         EventVisibility    @default(INTERNAL)
   hostUserId         String?
   /// Free-text host when the host is not a member (guest speaker).
@@ -1059,6 +1136,9 @@ model Event {
   capacityFull       Boolean            @default(false)
   featured           Boolean            @default(false)
   publicNote         String?
+  /// Where the recording is (a pasted link, http(s) only), for Past's
+  /// "Recording". Hosts paste it on the meeting page once it's up.
+  recordingUrl       String?
   // Public RSVP page (docs/features/rsvp.md): anyone with the link signs up
   // at /e/{rsvpSlug}, member or not. Owner/admin settings, like the rest of
   // the event.
@@ -1093,6 +1173,43 @@ model Event {
   /// {venmo?, cashapp?, paypal?, zelle?}: where guests pay the host (src/lib/rsvp/pay.ts).
   rsvpPayTo          Json?
 
+  // Meetings (docs/features/meetings.md). `conferenceProvider` and
+  // `conferenceUrl` are older than this and keep their meaning: the provider
+  // and the link people join at. What is new is that Bananasplit can now make
+  // that meeting itself, through the org's connected Meet, Zoom or Teams
+  // account, instead of only labelling a link someone pasted.
+  /// Online, in person, or both.
+  format                 MeetingFormat       @default(IN_PERSON)
+  /// True when we created the meeting through the provider's API, so we may
+  /// also move and cancel it. False for a link someone pasted: we never touch
+  /// a meeting we did not make.
+  conferenceManaged      Boolean             @default(false)
+  /// The provider's own id for the meeting (a Meet space name, a Zoom
+  /// meeting id, a Graph onlineMeeting id), for update and delete.
+  conferenceMeetingId    String?
+  /// WHERE the managed meeting actually lives, which is not always what
+  /// `conferenceProvider` now says: turning the call off, or switching from
+  /// Zoom to Meet, changes what is wanted before the old meeting has been
+  /// cancelled. The job cancels at this one, then clears it.
+  conferenceManagedAt    ConferenceProvider?
+  /// The host's start link, where the provider gives one (Zoom). Never shown
+  /// to guests.
+  conferenceHostUrl      String?
+  /// The passcode, where the meeting has one.
+  conferencePasscode     String?
+  /// Dial-in numbers as the provider returned them: [{country, number, pin?}].
+  conferenceDialIn       Json?
+  /// Same compare-and-set on syncVersion as the Google mirror above.
+  conferenceSyncState    CalendarSyncState   @default(NOT_APPLICABLE)
+  conferenceSyncAttempts Int                 @default(0)
+  conferenceSyncedAt     DateTime?
+  /// Sanitized: no tokens, no email addresses.
+  conferenceSyncError    String?
+  /// How long before it starts to remind people, in minutes, largest first.
+  /// Empty means no reminders. Defaults to the org's
+  /// OrgSettings.meetingReminderMinutes when a meeting is created.
+  reminderMinutes        Int[]               @default([1440, 60])
+
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy         User                @relation("EventCreatedBy", fields: [createdById], references: [id])
   host              User?               @relation("EventHost", fields: [hostUserId], references: [id], onDelete: SetNull)
@@ -1107,6 +1224,7 @@ model Event {
   ballotDefinitions BallotDefinition[]
   registrations     EventRegistration[]
   rsvpItems         RsvpItem[]
+  reminderSends     EventReminderSend[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, sourceSessionId])
@@ -1115,7 +1233,9 @@ model Event {
   @@index([organizationId, deletedAt, kind, startsAt])
   @@index([organizationId, visibility, deletedAt, startsAt])
   @@index([organizationId, term, startsAt])
+  @@index([organizationId, seriesId, startsAt])
   @@index([googleSyncState])
+  @@index([conferenceSyncState])
 }
 
 /// State of an Event's Google Calendar mirror (Phase 7).
@@ -1201,12 +1321,13 @@ model EventRegistration {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  event      Event               @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
-  user       User?               @relation("EventRegistrationUser", fields: [userId], references: [id], onDelete: SetNull)
-  invitedBy  EventRegistration?  @relation("RegistrationInvites", fields: [invitedById], references: [id], onDelete: SetNull)
-  invited    EventRegistration[] @relation("RegistrationInvites")
-  attendance Attendance?         @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
-  itemClaims RsvpItemClaim[]
+  event         Event               @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+  user          User?               @relation("EventRegistrationUser", fields: [userId], references: [id], onDelete: SetNull)
+  invitedBy     EventRegistration?  @relation("RegistrationInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invited       EventRegistration[] @relation("RegistrationInvites")
+  attendance    Attendance?         @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  itemClaims    RsvpItemClaim[]
+  reminderSends EventReminderSend[]
 
   @@unique([eventId, email])
   @@unique([eventId, inviteCode])
@@ -1261,6 +1382,105 @@ model RsvpItemClaim {
 
   @@id([itemId, registrationId])
   @@index([organizationId, registrationId])
+}
+
+/**
+ * One reminder, sent once (docs/features/meetings.md).
+ * Reminders used to be two columns on EventRegistration, which meant exactly
+ * two of them (a day and an hour) and only for public sign-ups. A meeting can
+ * now set any offsets it likes and remind members too, so each send gets a
+ * row instead: the unique key is the idempotency guard, so a retried job can
+ * never send the same reminder twice.
+ * userId is set for a member (EventAttendee), registrationId for a public
+ * sign-up; exactly one of the two.
+ */
+model EventReminderSend {
+  id             String   @id @default(cuid())
+  organizationId String
+  eventId        String
+  /// How far before the start this reminder was for, in minutes.
+  offsetMinutes  Int
+  userId         String?
+  registrationId String?
+  /// The recipient as one non-null value, "u:{userId}" or "g:{registrationId}".
+  /// The idempotency guard is unique on this rather than on the two nullable
+  /// columns, because under Postgres's default NULLS DISTINCT a row with a
+  /// null userId is distinct from itself, and a retried job could send twice.
+  recipientKey   String
+  /// email | sms | app
+  channel        String
+  sentAt         DateTime @default(now())
+
+  event        Event              @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+  user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registration EventRegistration? @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  /// The guard: one send per recipient, per offset, per channel.
+  @@unique([eventId, offsetMinutes, channel, recipientKey])
+  @@index([organizationId, eventId])
+  @@index([userId])
+  @@index([registrationId])
+}
+
+/**
+ * A member hid one card from their Overview's "Up next"
+ * (src/server/overview/up-next.ts). Per member, not per org: hiding the stale
+ * poll everyone can see is a personal choice.
+ * kind + refId name the block, the same pair Up next already builds its blocks
+ * from (task, meeting, event, rsvp, poll), so nothing needs a foreign key
+ * here: a dismissal for a deleted thing is simply never matched, and the
+ * maintenance job clears them out.
+ */
+model UpNextDismissal {
+  organizationId String
+  userId         String
+  /// task | meeting | event | rsvp | poll
+  kind           String
+  refId          String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, kind, refId])
+  @@index([organizationId, userId])
+}
+
+/// The Inbox's memory, per member: an item put off until later (snoozedUntil)
+/// or finished with (doneAt). itemKey is "<kind>:<id>" (invite, task,
+/// request, review, update). Own rows only (RLS pins userId).
+model InboxItemState {
+  organizationId String
+  userId         String
+  itemKey        String
+  snoozedUntil   DateTime?
+  doneAt         DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, itemKey])
+  @@index([organizationId, userId])
+}
+
+/// Who's online (Overview and People): the open app marks its member here
+/// about once a minute; a recent lastSeenAt is "online". Members of the org
+/// read every row; each writes only their own (RLS pins userId).
+model MemberPresence {
+  organizationId String
+  userId         String
+  lastSeenAt     DateTime @default(now())
+  /// The page they have open (a path under /app/{slug}) and its sidebar
+  /// section's name, for Home's "Here now". Never the page's own title.
+  pageHref       String?
+  pageLabel      String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([organizationId, lastSeenAt])
 }
 
 /// organizationId is denormalized from Event (Phase 7) and kept equal by the
@@ -1369,6 +1589,8 @@ model Poll {
   /// Voters see only their own choice until it closes (the creator and admins see counts).
   hideResultsUntilClosed Boolean   @default(false)
   closesAt               DateTime?
+  /// The form it was moved into (Forms); its page opens the form.
+  formId                 String?
   /// Set when someone closes it by hand; cleared on reopen.
   closedAt               DateTime?
   createdById            String
@@ -1424,6 +1646,112 @@ model PollVote {
   @@index([organizationId, pollId])
 }
 
+/// What a form is: a full form (questions, a database behind it) or a quick
+/// poll made from Forms (one choice question anyone with the link answers).
+/// Members-only question polls with live counts stay on Poll.
+enum FormKind {
+  FORM
+  QUICK_POLL
+}
+
+/// Who may answer a form.
+enum FormAccess {
+  /// Anyone with the link, no sign-in.
+  ANYONE
+  /// Members of the organization, signed in.
+  MEMBERS
+  /// Anyone signed in to Bananasplit, one answer each.
+  SIGNED_IN
+}
+
+/// Where a response stands in review (applications).
+enum FormResponseStatus {
+  NEW
+  ACCEPTED
+  WAITLISTED
+  DECLINED
+}
+
+/// A form: its questions (JSON, src/lib/forms/questions.ts) and settings.
+/// Every form writes into its own club database (databaseId): each question
+/// with an answer is a DatabaseField, each response a DatabaseRecord. People
+/// answer at /f/{slug}, signed in or not (access). Owners and admins make
+/// and change forms; the public submit runs on the service path after the
+/// app checks the form is open and the person may answer.
+model Form {
+  id                     String     @id @default(cuid())
+  organizationId         String
+  databaseId             String
+  kind                   FormKind   @default(FORM)
+  title                  String
+  description            String?
+  /// The public link: /f/{slug}.
+  slug                   String     @unique
+  questions              Json       @default("[]")
+  access                 FormAccess @default(ANYONE)
+  /// Signed-in people answer once (always true for SIGNED_IN).
+  onePerPerson           Boolean    @default(false)
+  /// Don't record who answered.
+  anonymous              Boolean    @default(false)
+  /// Quick polls: respondents see the results after answering, unless this.
+  hideResultsUntilClosed Boolean    @default(false)
+  /// Stops taking answers after this many.
+  responseCap            Int?
+  closesAt               DateTime?
+  /// Closed by hand; cleared on reopen.
+  closedAt               DateTime?
+  /// Tell the creator about each response.
+  notifyOwner            Boolean    @default(true)
+  /// Responses get a review status, a rating and notes (applications).
+  review                 Boolean    @default(false)
+  /// The Files folder uploads go into.
+  folderId               String?
+  /// When it went live; null while it's a draft (nobody can answer a draft).
+  publishedAt            DateTime?
+  /// How the answer page looks: {accent, cover, button, thanks} (lib/forms/design.ts).
+  design                 Json       @default("{}")
+  /// Email the person a copy of their answers when they gave an email.
+  receipt                Boolean    @default(false)
+  createdById            String
+  deletedAt              DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  responses    FormResponse[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// One response's review: the record holds the answers; this holds who
+/// answered (unless the form is anonymous) and the officers' status, rating
+/// and private notes. Owners and admins only.
+model FormResponse {
+  id             String             @id @default(cuid())
+  organizationId String
+  formId         String
+  recordId       String
+  userId         String?
+  email          String?
+  status         FormResponseStatus @default(NEW)
+  rating         Int?
+  notes          String?
+  reviewedById   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  form         Form           @relation(fields: [organizationId, formId], references: [organizationId, id], onDelete: Cascade)
+  record       DatabaseRecord @relation(fields: [organizationId, recordId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, recordId])
+  @@index([organizationId, formId, status, createdAt])
+  @@index([formId, userId])
+}
+
 // --- Finance ---
 // Amounts are always integer cents. There is no stored balance column anywhere;
 // balance is always derived from Transaction (spec section 5.7).
@@ -1435,6 +1763,10 @@ model BudgetPeriod {
   startsOn       DateTime @db.Date
   endsOn         DateTime @db.Date
   isActive       Boolean  @default(false)
+  /// The balance it opened with, carried over from the period it replaced
+  /// (signed cents). Counted in the balance like a starting-balance row, but
+  /// kept on the period so a period made by mistake can still be deleted.
+  carriedInCents Int      @default(0)
   createdAt      DateTime @default(now())
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1823,6 +2155,10 @@ model OrgSettings {
   /// covers the seven days ending that day (Sunday: Monday to Sunday).
   weeklyUpdateDay               Int              @default(0)
   reminderLeadDaysDefault       Int              @default(1)
+  /// Default reminder offsets for a new meeting, in minutes, largest
+  /// first (docs/features/meetings.md). A day and an hour, as the RSVP
+  /// reminders were before meetings could set their own.
+  meetingReminderMinutes        Int[]            @default([1440, 60])
   bootstrapTemplate             String?
   bootstrappedAt                DateTime?
   // Phase C1 (guided setup). Progress itself is DERIVED from the
@@ -1845,6 +2181,10 @@ model OrgSettings {
   /// The sidebar for everyone in the org: [{ id, hidden?, label? }] in order
   /// (src/lib/nav/sidebar.ts). NULL: the default sidebar. OWNER/ADMIN edit it.
   sidebar                       Json?
+  /// The add-ons this organization has added ("forms", "finance";
+  /// src/lib/addons.ts). One that isn't here stays out of the sidebar and
+  /// New; its data is never touched. Backfilled from use when introduced.
+  addOns                        String[]         @default([])
   // The weekly pulse (PulseIssue)
   pulseEnabled                  Boolean          @default(true)
   /// The day it goes out, 0 Sunday … 6 Saturday (as weeklyUpdateDay).
@@ -1854,8 +2194,15 @@ model OrgSettings {
   pulseAudience                 PulseAudience    @default(EVERYONE)
   pulseEmail                    Boolean          @default(true)
   pulseInApp                    Boolean          @default(true)
+  /// The organization's own event types, [{ name, color }] (onboarding's
+  /// Event types step). NULL: none named yet.
+  eventTypes                    Json?
   // What members (not only OWNER/ADMIN) may create; RLS reads these.
   memberCanCreateTags           Boolean          @default(true)
+  /// Members may use the club from AI apps they connect (Admin panel ›
+  /// Privacy › AI connectors; docs/features/ai-connectors.md). Off refuses
+  /// every connector call for the club; nothing is revoked.
+  connectorsEnabled             Boolean          @default(true)
   updatedById                   String?
   updatedAt                     DateTime         @default(now()) @updatedAt
 
@@ -1870,6 +2217,14 @@ enum IntegrationProvider {
   NETLIFY_BUILD_HOOK
   /// An OpenAI-compatible model API at a fixed vendor address (src/lib/ai/vendors.ts).
   OPENAI_COMPATIBLE
+  // Meeting providers (docs/features/meetings.md). Each is its own
+  // connection, so an org can have Meet without mirroring its calendar, or
+  // Zoom without a Google account at all. Google Meet is a second Google
+  // consent rather than extra scopes on GOOGLE_CALENDAR, so connecting one
+  // never re-prompts for the other.
+  GOOGLE_MEET
+  ZOOM
+  MICROSOFT_TEAMS
 }
 
 enum IntegrationStatus {
@@ -2066,7 +2421,7 @@ model OrgChartVersion {
   editVersion      Int                   @default(1)
   /// The teams this chart names, [{ id, name }] in order (src/lib/org-chart/teams.ts).
   /// Positions pick one (OrgChartPosition.teamId); copied with the positions.
-  teams                Json      @default("[]")
+  teams            Json                  @default("[]")
   createdById      String
   publishedById    String?
   publishedAt      DateTime?
@@ -2101,6 +2456,10 @@ model OrgChartPosition {
   // Structure. reportsTo must be in the same version (checked in code and at
   // publish); advisors sit beside their manager, outside the hierarchy.
   reportsToId      String?
+  /// Extra managers (dotted lines): ids of other positions in the same
+  /// version, checked by a trigger. reportsToId stays the one line the tree
+  /// is built from; these are drawn dashed and never move the position.
+  alsoReportsToIds String[]           @default([])
   isOpen           Boolean            @default(false)
   isAdvisor        Boolean            @default(false)
   // Content
@@ -2178,9 +2537,10 @@ model DatabaseRecord {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  database  DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
-  createdBy User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  createdBy    User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  formResponse FormResponse?
 
   @@unique([organizationId, id])
   @@index([organizationId, databaseId, deletedAt, createdAt])
@@ -2239,6 +2599,7 @@ model DatabaseDefinition {
   createdBy    User?            @relation("DatabaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   fields       DatabaseField[]
   records      DatabaseRecord[]
+  forms        Form[]
 
   @@unique([organizationId, key])
   @@unique([organizationId, id])
@@ -2566,4 +2927,204 @@ model OrgTheme {
   updatedAt        DateTime         @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =====================================================================
+// AI connectors (docs/features/ai-connectors.md)
+// =====================================================================
+
+/// What a connected AI app may do: read, or read and make changes. Chosen by
+/// the member on AuthKit's consent screen.
+enum ConnectorAccess {
+  READ
+  WRITE
+}
+
+/// An AI app a user connected (docs/features/ai-connectors.md): one per
+/// user and OAuth client. Our record of the grant; WorkOS issues the tokens.
+model ConnectorGrant {
+  id             String          @id @default(cuid())
+  userId         String
+  /// The OAuth client the tokens were issued to (a CIMD URL or a DCR id).
+  clientId       String
+  /// Looked up from WorkOS after the first call; null until then.
+  clientName     String?
+  /// The token's sub, for revoking the grant at WorkOS.
+  workosUserId   String
+  /// The consent the current tokens belong to (the token's sid).
+  consentId      String
+  access         ConnectorAccess @default(READ)
+  /// Null: Personal and every club the user is in. Else that one space.
+  organizationId String?
+  createdAt      DateTime        @default(now())
+  lastUsedAt     DateTime        @default(now())
+  /// Set by Disconnect, a password reset or the Google sign-in gate; every
+  /// call with this consent is refused until the member connects again.
+  revokedAt      DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientId])
+}
+
+/// A link between any two things in a space (a meeting and its sign-up
+/// form, a task and the notes it came from), shown in the Linked panel on
+/// both ends. It holds only the two references: titles and links are looked
+/// up as the viewer each time, so a private note linked from a meeting never
+/// shows its title to someone who can't open it.
+model ItemLink {
+  id             String   @id @default(cuid())
+  organizationId String
+  fromKind       String
+  fromId         String
+  toKind         String
+  toId           String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, fromKind, fromId, toKind, toId])
+  @@index([organizationId, toKind, toId])
+}
+
+/// An announcement to the whole organization, at the top of the Inbox. Any
+/// member posts one (authorId pinned); the author or an owner/admin edits or
+/// removes it (deletedAt, deletedById); only whoever removed it, or an
+/// owner/admin, puts it back (app.announcement_guard). A linked event goes
+/// through ItemLink (fromKind "announcement").
+model Announcement {
+  id             String    @id @default(cuid())
+  organizationId String
+  authorId       String?
+  title          String
+  body           String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  /// Who removed it, while it's removed.
+  deletedById    String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User?              @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  deletedBy    User?              @relation("AnnouncementDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  seen         AnnouncementSeen[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// Who has seen an announcement, for "Seen by N of M". Every member reads
+/// the rows; each writes only their own (RLS pins userId).
+model AnnouncementSeen {
+  organizationId String
+  announcementId String
+  userId         String
+  seenAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [organizationId, announcementId], references: [organizationId, id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([organizationId, userId])
+}
+
+enum DecisionStatus {
+  OPEN
+  DECIDED
+  DROPPED
+}
+
+/// Something the organization has to decide (Home's Decisions). Any member
+/// raises one; anyone takes an unowned one; the owner, whoever raised it or
+/// an owner/admin decides or drops it, and a settled one doesn't change
+/// (app.decision_guard). Meetings, notes, polls and events it
+/// came from link through ItemLink (fromKind "decision").
+model Decision {
+  id             String         @id @default(cuid())
+  organizationId String
+  question       String
+  detail         String?
+  status         DecisionStatus @default(OPEN)
+  outcome        String?
+  ownerId        String?
+  createdById    String?
+  decidedAt      DateTime?
+  dueAt          DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?        @relation("DecisionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("DecisionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([ownerId])
+  @@index([createdById])
+}
+
+/// Who sees a saved report (Databases > Reports): only whoever made it, or
+/// everyone in the organization. Either way each viewer's numbers come from
+/// the rows THEY can see, so sharing a report never shares a row.
+enum ReportAccess {
+  PRIVATE
+  ORGANIZATION
+}
+
+/// A saved report: one source (a database, or Tasks, Expenses, Events or
+/// People) and a board of widgets on it, each with its own settings
+/// (src/lib/reports/catalog.ts). Built by the New report walkthrough.
+/// Removing one archives it (app_user has no DELETE).
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  /// "custom:<databaseId>", "tasks", "expenses", "events" or "people".
+  source         String
+  access         ReportAccess @default(ORGANIZATION)
+  /// [{id, type, w, h, config}] in board order, validated by zod.
+  widgets        Json         @default("[]")
+  /// Claude's last reading of the report ({lines: [...]}), and when.
+  insights       Json?
+  insightsAt     DateTime?
+  /// A second database joined on a shared field: {source, field, otherField}
+  /// (src/lib/reports/join.ts).
+  joinWith       Json?
+  /// When it emails itself: {every, day, hour, to} (src/lib/reports/schedule.ts).
+  schedule       Json?
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation("ReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  snapshots    ReportSnapshot[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt, updatedAt])
+  @@index([createdById])
+}
+
+/// A report as it read at one moment (Report history): every widget's numbers
+/// and the insights, frozen, for the range it was taken over. Never edited.
+model ReportSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  reportId       String
+  takenById      String?
+  /// e.g. "Fall 2026".
+  rangeLabel     String
+  /// {title, widgets: [{id, type, w, h, title, payload}], insights}.
+  data           Json
+  takenAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report       Report       @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+  takenBy      User?        @relation("ReportSnapshotTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, reportId, takenAt])
+  @@index([takenById])
 }

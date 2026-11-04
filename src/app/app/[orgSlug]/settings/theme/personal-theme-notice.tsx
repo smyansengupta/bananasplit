@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useState, useTransition } from "react";
@@ -19,7 +19,7 @@ export function PersonalThemeNotice({
 }: {
   themeName: string;
   profileHref: string;
-  /** The club's default light/dark, applied when switching back to it. */
+  /** The organization's default light/dark, applied when switching back to it. */
   clubMode?: "light" | "dark" | "system";
 }) {
   const router = useRouter();
@@ -36,12 +36,10 @@ export function PersonalThemeNotice({
       <div className="min-w-0 flex-1 text-sm">
         <p className="font-semibold">You&apos;re seeing your own theme ({themeName}).</p>
         <p className="text-xs opacity-85">
-          Changes here apply to everyone who matches the club, but not to you while your personal
-          theme is on. You can change it in{" "}
+          Everyone else sees changes here.{" "}
           <a href={profileHref} className="underline underline-offset-2">
-            your profile
+            Your theme
           </a>
-          .
         </p>
         {error && <p className="text-destructive mt-1 text-xs">{error}</p>}
       </div>
@@ -62,7 +60,7 @@ export function PersonalThemeNotice({
         }
       >
         {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-        Match the club instead
+        Use the organization theme
       </Button>
     </div>
   );

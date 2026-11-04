@@ -1,6 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import {
@@ -24,7 +24,7 @@ export interface MenuItem {
   key: string;
   title: string;
   description?: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   /** Shown instead of the icon (an avatar, an emoji). */
   leading?: ReactNode;
   /** The heading this item sits under ("Basic blocks", "People"...). */
@@ -124,9 +124,9 @@ function MenuInner<T extends MenuItem>(
                   </span>
                 ))}
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium">{item.title}</span>
+                <span className="font-medium break-words">{item.title}</span>
                 {item.description && (
-                  <span className="text-muted-foreground truncate text-xs">{item.description}</span>
+                  <span className="text-muted-foreground text-xs">{item.description}</span>
                 )}
               </span>
               {item.hint && (

@@ -1,7 +1,7 @@
 "use server";
 
 import { requirePermission } from "@/lib/auth/permissions";
-import { isStartedStep } from "@/lib/overview/getting-started";
+import { isStartedStep, STARTED_STEP_KEYS } from "@/lib/overview/getting-started";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgAction } from "@/server/db/context";
 
@@ -34,6 +34,51 @@ export const setStartedStepSkipped = withOrgAction(
       targetType: "OrgSettings",
       targetId: ctx.organizationId,
       diff: { step, skipped },
+    });
+    return { ok: true };
+  },
+  { onRefused: "return" },
+);
+
+/**
+ * Hides the whole card at once: every step not done yet is checked off.
+ * Returns what was checked off before, so Undo puts exactly that back
+ * (restoreStartedSkipped).
+ */
+export const hideGettingStarted = withOrgAction(
+  async (ctx): Promise<{ ok: boolean; error?: string; previous?: string[] }> => {
+    requirePermission(ctx, "settings.general.write");
+    const row = await ctx.db.orgSettings.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: { startedSkipped: true },
+    });
+    const previous = row?.startedSkipped ?? [];
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { startedSkipped: [...STARTED_STEP_KEYS] },
+      select: { organizationId: true },
+    });
+    await writeOrgAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "settings.started.updated",
+      targetType: "OrgSettings",
+      targetId: ctx.organizationId,
+      diff: { hidden: true },
+    });
+    return { ok: true, previous };
+  },
+  { onRefused: "return" },
+);
+
+/** Undo for hideGettingStarted: the steps checked off before, and no more. */
+export const restoreStartedSkipped = withOrgAction(
+  async (ctx, previous: unknown): Promise<{ ok: boolean; error?: string }> => {
+    requirePermission(ctx, "settings.general.write");
+    if (!Array.isArray(previous)) return { ok: false, error: "Nothing to put back." };
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { startedSkipped: previous.filter(isStartedStep) },
+      select: { organizationId: true },
     });
     return { ok: true };
   },

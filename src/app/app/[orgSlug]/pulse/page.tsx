@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, Settings2 } from "lucide-react";
+import { Activity, ChevronRight, Settings2 } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -14,6 +14,8 @@ import { DEFAULT_PULSE_SETTINGS, describePulseSchedule } from "@/lib/pulse/setti
 import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listPulseIssues, nextPulseLabel } from "@/server/pulse/queries";
+
+import { TurnPulseOnButton } from "./turn-on-button";
 
 export const metadata = { title: "Weekly pulse" };
 
@@ -41,16 +43,19 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
   const now = new Date();
   const next = nextPulseLabel(now, tz, pulse.pulseDay, pulse.pulseHourLocal);
   const sent = (d: Date) =>
-    new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: tz }).format(d);
+    new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: tz,
+    }).format(d);
 
   return (
     <div className="space-y-[30px]">
       <PageHeader
         title="Weekly pulse"
         description={
-          pulse.pulseEnabled
-            ? `What the club got done each week. ${describePulseSchedule(pulse)}; the next one ${next}.`
-            : "The weekly pulse is off for this club."
+          pulse.pulseEnabled ? `${describePulseSchedule(pulse)}. Next: ${next}.` : "Off."
         }
         actions={
           isAdmin ? (
@@ -67,11 +72,8 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
         <EmptyState
           icon={Activity}
           title="No pulse yet"
-          description={
-            pulse.pulseEnabled
-              ? `The first one goes out ${next}: what got done, who came, decisions and next week.`
-              : "Turn it on in Admin panel › Weekly pulse to send a short recap every week."
-          }
+          description={pulse.pulseEnabled ? `The first one goes out ${next}.` : undefined}
+          action={!pulse.pulseEnabled && isAdmin ? <TurnPulseOnButton orgId={org.id} /> : undefined}
         />
       ) : (
         <ul className="bg-card edge ring-foreground/6 rounded-card overflow-hidden p-2 ring-1">
@@ -89,17 +91,22 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-[15px] font-semibold">{pulseTitle(issue.data.range)}</span>
+                    <span className="text-[15px] font-semibold">
+                      {pulseTitle(issue.data.range)}
+                    </span>
                     {!issue.sentAt && <Badge variant="accent">Draft</Badge>}
                   </span>
-                  <span className="text-muted-foreground block truncate text-sm">
+                  <span className="text-muted-foreground block text-sm break-words">
                     {pulseHeadline(issue.data)}
                   </span>
                 </span>
-                <span className="text-muted-foreground hidden shrink-0 text-[13px] sm:block">
+                <span className="text-muted-foreground shrink-0 text-[13px]">
                   {issue.sentAt ? `Sent ${sent(issue.sentAt)}` : `Goes out ${next}`}
                 </span>
-                <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                <ChevronRight
+                  className="text-muted-foreground size-4 shrink-0"
+                  aria-hidden="true"
+                />
               </Link>
             </li>
           ))}

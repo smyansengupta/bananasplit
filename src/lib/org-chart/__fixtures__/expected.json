@@ -5,6 +5,7 @@
       "title": "President",
       "personName": "Jackson Lamoureux",
       "reportsTo": null,
+      "alsoReportsTo": [],
       "manages": [
         "vp-ops-programs",
         "vp-growth",
@@ -14,7 +15,7 @@
         "founder-advisor"
       ],
       "responsibilities": [
-        "Sets semester vision, goals, and priorities for the club",
+        "Sets semester vision, goals, and priorities for the organization",
         "Owns all partnerships: Anthropic, Khoury, faculty advisor, sponsors, guest speakers",
         "Leads funding asks with Anthony",
         "Final say on budget, Anthropic brand use, new partnerships, and board changes",
@@ -39,13 +40,14 @@
       "title": "Founder & Advisor",
       "personName": "Mehr Anand",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
         "Sounding board for Jackson on strategy and tough calls",
         "Answers questions from Jackson as needed",
         "Optional technical input on the ops suite and workshops",
-        "Provides continuity from the club's founding"
+        "Provides continuity from the organization's founding"
       ],
       "decidesAlone": [],
       "sourceQuote": [
@@ -60,6 +62,7 @@
       "title": "VP Ops & Programs",
       "personName": "Oliver Ward",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [
         "head-of-programs",
         "head-of-tech"
@@ -89,14 +92,15 @@
       "title": "VP Growth",
       "personName": "Lucas Salzgeber",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [
         "head-of-social-membership",
         "graphic-designer"
       ],
       "advisors": [],
       "responsibilities": [
-        "Owns member growth, event turnout, and club brand on campus",
-        "Builds relationships with other clubs and campus orgs",
+        "Owns member growth, event turnout, and organization brand on campus",
+        "Builds relationships with other organizations on campus",
         "Manages the designer and sets priority across all design requests",
         "Signs off on brand consistency for posts, flyers, and decks",
         "Leads recruitment for the next board application round"
@@ -118,6 +122,7 @@
       "title": "Head of Finance",
       "personName": "Anthony Jones",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -141,6 +146,7 @@
       "title": "Head of Programs",
       "personName": "Alex Green",
       "reportsTo": "vp-ops-programs",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -164,6 +170,7 @@
       "title": "Head of Tech",
       "personName": "Smyan Sengupta",
       "reportsTo": "vp-ops-programs",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -187,6 +194,7 @@
       "title": "Head of Social & Membership",
       "personName": "Kristine Min",
       "reportsTo": "vp-growth",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -210,6 +218,7 @@
       "title": "Graphic Designer",
       "personName": null,
       "reportsTo": "vp-growth",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useRef } from "react";
 
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ export function TaskCheck({
       onKeyDown={(e) => e.stopPropagation()}
       style={{ width: size, height: size }}
       className={cn(
-        "group/check relative grid shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,border-color,transform] duration-200 outline-none",
+        "group/check relative grid shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,border-color,transform] duration-200 outline-none after:absolute after:-inset-2.5 after:content-['']",
         "focus-visible:outline-foreground ease-(--ease-spring) focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none",
         "disabled:cursor-default disabled:opacity-60",
         done

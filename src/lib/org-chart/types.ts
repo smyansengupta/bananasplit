@@ -23,6 +23,7 @@ export type WarningCode =
   | "multiple-roots"
   | "advisor-no-manager"
   | "advisor-has-reports"
+  | "also-reports-dropped"
   | "open-with-person";
 
 /** A parse or normalization finding, shown in the draft checklist. */
@@ -77,6 +78,8 @@ export interface ChartNodeDTO {
   userId: string | null;
   user: ChartPersonDTO | null;
   reportsToId: string | null;
+  /** Extra managers (dotted lines), drawn dashed; reportsToId places it. */
+  alsoReportsToIds?: string[];
   isOpen: boolean;
   isAdvisor: boolean;
   responsibilities: string[];

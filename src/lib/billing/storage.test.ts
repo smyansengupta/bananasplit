@@ -21,6 +21,7 @@ const space = (info: Partial<SpaceInfo>, usedBytes = 0): StorageSpace => ({
   kind: "CLUB",
   plan: "CLUB",
   trialEndsAt: null,
+  planAfterTrial: null,
   ...info,
   storageUsedBytes: BigInt(usedBytes),
 });
@@ -30,7 +31,14 @@ const plus = (used = 0) => space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }, us
 const team = (used = 0) => space({ plan: "CLUB" }, used);
 const advanced = (used = 0) => space({ plan: "SOCIETY" }, used);
 const trial = (endsInDays: number, used = 0) =>
-  space({ plan: "TRIAL", trialEndsAt: new Date(NOW.getTime() + endsInDays * DAY) }, used);
+  space(
+    {
+      plan: "TRIAL",
+      trialEndsAt: new Date(NOW.getTime() + endsInDays * DAY),
+      planAfterTrial: null,
+    },
+    used,
+  );
 
 const files = { feature: "files", now: NOW } as const;
 
@@ -38,13 +46,13 @@ describe("each tier's limits at the gate", () => {
   it.each([
     ["Personal Free", free, 10 * MB, 1 * GB],
     ["Personal Plus", plus, 250 * MB, 25 * GB],
-    ["Team", team, 250 * MB, 100 * GB],
-    ["Team Advanced", advanced, 1 * GB, 500 * GB],
-    ["a trial", (u?: number) => trial(10, u), 1 * GB, 500 * GB],
+    ["Team", team, 250 * MB, 50 * GB],
+    ["Team Advanced", advanced, 1 * GB, 100 * GB],
+    ["a trial", (u?: number) => trial(10, u), 1 * GB, 100 * GB],
   ])("%s: files up to its largest, and up to its storage", (_name, make, maxFile, storage) => {
     expect(uploadRefusal(make(), maxFile, files)).toBeNull();
     expect(uploadRefusal(make(), maxFile + 1, files)?.refused).toBe("too-large");
-    expect(storageState(make()).limitBytes).toBe(storage);
+    expect(storageState(make(), NOW).limitBytes).toBe(storage);
     // Exactly full is allowed; one byte past it isn't.
     expect(uploadRefusal(make(storage - MB), MB, files)).toBeNull();
     expect(uploadRefusal(make(storage - MB), MB + 1, files)?.refused).toBe("full");
@@ -52,22 +60,25 @@ describe("each tier's limits at the gate", () => {
 });
 
 describe("uploadRefusal", () => {
-  it("lets both Personal plans and every club upload notes files", () => {
+  it("lets both Personal plans and every organization upload notes files", () => {
     for (const s of [free(), plus(), team(), advanced(), trial(3)]) {
       expect(uploadRefusal(s, MB, files)).toBeNull();
     }
   });
 
-  it("refuses receipts in a Personal space (finance is for clubs)", () => {
+  it("refuses receipts in a Personal space (finance is for organizations)", () => {
     const refusal = uploadRefusal(plus(), MB, { feature: "finance", now: NOW });
     expect(refusal).toMatchObject({ status: 403, code: "SPACE_FEATURE", refused: "feature" });
     expect(uploadRefusal(team(), MB, { feature: "finance", now: NOW })).toBeNull();
   });
 
-  it("refuses every upload in a paused club, even a tiny one", () => {
-    const refusal = uploadRefusal(trial(-1), 1, files);
-    expect(refusal).toMatchObject({ status: 403, code: "SPACE_PAUSED", refused: "paused" });
-    expect(refusal?.error).toMatch(/paused/);
+  it("lets an ended trial (Team Free) keep uploading files, within Team Free's limits", () => {
+    expect(uploadRefusal(trial(-1), MB, files)).toBeNull();
+    expect(uploadRefusal(trial(-1), 200 * MB, files)).toMatchObject({ code: "FILE_TOO_LARGE" });
+    expect(uploadRefusal(trial(-1), MB, { feature: "finance", now: NOW })).toMatchObject({
+      code: "SPACE_FEATURE",
+      refused: "feature",
+    });
   });
 
   it("says how big the file is and how big it may be", () => {
@@ -82,15 +93,17 @@ describe("uploadRefusal", () => {
   });
 
   it("says how full the space is, and what to do", () => {
-    const refusal = uploadRefusal(advanced(Math.round(499.5 * GB)), 900 * MB, files);
+    const refusal = uploadRefusal(advanced(Math.round(99.5 * GB)), 900 * MB, files);
     expect(refusal).toMatchObject({ status: 403, code: "STORAGE_FULL", refused: "full" });
-    expect(refusal?.error).toBe("Not enough space: 499.5 GB of 500 GB used. Empty the trash or upgrade.");
-    const almost = team(Math.round(99.9 * GB));
+    expect(refusal?.error).toBe(
+      "Not enough space: 99.5 GB of 100 GB used. Empty the trash or upgrade.",
+    );
+    const almost = team(Math.round(49.9 * GB));
     expect(uploadRefusal(almost, 200 * MB, files)?.error).toBe(
-      "Not enough space: 99.9 GB of 100 GB used. Empty the trash or upgrade.",
+      "Not enough space: 49.9 GB of 50 GB used. Empty the trash or upgrade.",
     );
     expect(uploadRefusal(almost, 200 * MB, { ...files, canManagePlan: false })?.error).toBe(
-      "Not enough space: 99.9 GB of 100 GB used. Ask an owner or admin to make room.",
+      "Not enough space: 49.9 GB of 50 GB used. Ask an owner or admin to make room.",
     );
   });
 

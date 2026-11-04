@@ -6,21 +6,21 @@ import {
   CheckSquare,
   Database,
   FolderOpen,
-  Ticket,
-  type LucideIcon,
-} from "lucide-react";
+  Video,
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
-const SHORTCUTS: readonly { path: string; label: string; icon: LucideIcon }[] = [
+const SHORTCUTS: readonly { path: string; label: string; icon: IconComponent }[] = [
   { path: "/tasks", label: "Tasks", icon: CheckSquare },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/notes", label: "Files", icon: FolderOpen },
   { path: "/databases", label: "Databases", icon: Database },
   { path: "/calendar/find-a-time", label: "Find a time", icon: CalendarClock },
-  { path: "/calendar/rsvp", label: "RSVPs", icon: Ticket },
+  { path: "/meetings", label: "Meetings", icon: Video },
 ];
 
 /**

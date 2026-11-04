@@ -87,7 +87,7 @@ describe("My Tasks buckets", () => {
   });
 });
 
-describe("weekly-update weeks end on the club's day", () => {
+describe("weekly-update weeks end on the organization's day", () => {
   // Fri 2026-10-16. 0 Sunday … 6 Saturday.
   it.each([
     [0, "2026-10-12"], // Sunday club: Monday to Sunday
@@ -99,7 +99,7 @@ describe("weekly-update weeks end on the club's day", () => {
     expect(addDaysToKey(start, 6) >= "2026-10-16").toBe(true);
   });
 
-  it("matches the Monday weeks for a Sunday club", () => {
+  it("matches the Monday weeks for a Sunday organization", () => {
     const sundayNight = new Date("2026-11-09T04:30:00Z"); // Sun Nov 8, 11:30pm in New York
     expect(updateWeekStartKey(sundayNight, NY, 0)).toBe(weekStartKey(sundayNight, NY));
   });

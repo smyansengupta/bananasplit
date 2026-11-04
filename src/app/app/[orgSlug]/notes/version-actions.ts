@@ -68,7 +68,6 @@ export const listVersionsAction = filesAction(
     if (!note) return { error: NOT_FOUND };
     return { versions: await freshList(ctx, noteId) };
   },
-  { whenPaused: "allow" },
 );
 
 /** One version's body, for the preview and the comparison. */
@@ -88,7 +87,6 @@ export const getNoteVersion = filesAction(
     if (!version) return { error: "That version no longer exists." };
     return { contentJson: version.contentJson, name: version.name };
   },
-  { whenPaused: "allow" },
 );
 
 /**
@@ -157,7 +155,9 @@ export const deleteNoteVersion = filesAction(
     const note = await loadNote(ctx, noteId);
     if (!note) return { error: NOT_FOUND };
     if (!canShareNote(ctx, note)) {
-      return { error: "Only the note's author (or an admin, on a club note) deletes versions." };
+      return {
+        error: "Only the note's author (or an admin, on an organization note) deletes versions.",
+      };
     }
     await ctx.db.noteVersion.deleteMany({
       where: { id: versionId, noteId, organizationId: ctx.organizationId },

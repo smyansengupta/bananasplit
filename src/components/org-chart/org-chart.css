@@ -41,6 +41,12 @@
   stroke-dasharray: 6 5;
 }
 
+/* An extra manager (dotted line): dashed, lighter than the tree's lines. */
+.org-chart-flow .react-flow__edge.dotted .react-flow__edge-path {
+  stroke-dasharray: 3 5;
+  stroke-opacity: 0.8;
+}
+
 .org-chart-flow .react-flow__attribution a {
   color: var(--muted-foreground);
 }

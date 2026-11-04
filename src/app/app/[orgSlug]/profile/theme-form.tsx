@@ -10,14 +10,14 @@ import {
   ThemePicker,
   toPersonalTheme,
 } from "@/components/onboarding/theme-picker";
-import { Button } from "@/components/ui/button";
 import type { PersonalTheme } from "@/lib/theme/personal";
 
 import { SettingsCard } from "../settings/settings-card";
 
 /**
- * Profile > Theme: the personal theme from onboarding A4, editable. "Match
- * my club" saves NULL, so the org's theme (Settings > Theme) shows again.
+ * Profile > Theme: the personal theme from onboarding A4, editable. Picking
+ * one applies and saves it at once. "Match my club" saves NULL, so the org's
+ * theme (Settings > Theme) shows again.
  */
 export function ThemeForm({
   initial,
@@ -45,7 +45,7 @@ export function ThemeForm({
         return;
       }
       setTheme(value ? value.mode : clubMode);
-      setStatus({ ok: true, text: value ? "Theme saved." : "Following the club's theme." });
+      setStatus({ ok: true, text: "Saved" });
       router.refresh();
     });
   }
@@ -53,22 +53,23 @@ export function ThemeForm({
   return (
     <SettingsCard
       title="Theme"
-      description="Only changes your view, in every organization. An organization that locks light or dark keeps its lock."
+      description="Just for you."
       status={
         <span
           aria-live="polite"
           className={status?.ok === false ? "text-destructive" : "text-success"}
         >
-          {status?.text}
+          {pending ? "Saving" : status?.text}
         </span>
       }
-      footer={
-        <Button type="button" onClick={() => save(toPersonalTheme(choice))} disabled={pending}>
-          {pending ? "Saving…" : "Save theme"}
-        </Button>
-      }
     >
-      <ThemePicker value={choice} onChange={setChoice} />
+      <ThemePicker
+        value={choice}
+        onChange={(next) => {
+          setChoice(next);
+          save(toPersonalTheme(next));
+        }}
+      />
     </SettingsCard>
   );
 }

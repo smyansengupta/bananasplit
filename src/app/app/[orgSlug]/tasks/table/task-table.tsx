@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Columns3 } from "lucide-react";
+import { ChevronDown, ChevronRight, Columns3 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -15,6 +15,7 @@ import {
   isTaskFlagged,
   isTaskPrivate,
 } from "@/components/tasks/task-badges";
+import { TaskTitle } from "@/components/tasks/task-title";
 import { accessSubjectOf, useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
 import { TaskTypeChip } from "@/components/tasks/task-type";
@@ -375,7 +376,7 @@ export function TaskTable({
                   <p className="text-muted-foreground mt-1 text-sm">
                     {ws.filterCount > 0
                       ? "Remove one of the filters above to widen the search."
-                      : "The table lists every task in the club, 50 to a page."}
+                      : "The table lists every task in the organization, 50 to a page."}
                   </p>
                   <Button
                     size="sm"
@@ -438,7 +439,9 @@ export function TaskTable({
                         )}
                         {isTaskPrivate(task) && <PrivateMark />}
                         {task.type !== "TASK" && <TaskTypeChip type={task.type} iconOnly />}
-                        <span className="truncate">{task.title}</span>
+                        <span className="truncate">
+                          <TaskTitle>{task.title}</TaskTitle>
+                        </span>
                         {task.subtasks.length > 0 && (
                           <span className="text-muted-foreground shrink-0 text-xs">
                             ({doneSubtasks}/{task.subtasks.length})

@@ -1,57 +1,68 @@
 "use client";
 
 import {
-  CalendarCheck,
-  CalendarClock,
   CalendarDays,
   CheckSquare,
+  ClipboardList,
   Database,
-  Eye,
-  EyeOff,
   FolderOpen,
   GripVertical,
+  House,
+  Inbox,
   LayoutDashboard,
-  Loader2,
   Lock,
-  Network,
-  NotebookText,
+  Plug,
   RotateCcw,
-  Ticket,
   Users,
+  Video,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { SavedMark, useSaveOnChange } from "@/components/ui/autosave";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { toConfig, type GroupId, type ResolvedGroup, type ResolvedItem } from "@/lib/nav/sidebar";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/toaster";
+import {
+  PINNED_PLACE,
+  toConfig,
+  type GroupId,
+  type ResolvedGroup,
+  type ResolvedItem,
+  type SidebarConfig,
+} from "@/lib/nav/sidebar";
 import { cn } from "@/lib/utils";
 
 import { saveSidebarAction } from "./actions";
 
-const ICONS: Record<string, LucideIcon> = {
-  CalendarCheck,
-  CalendarClock,
+const ICONS: Record<string, IconComponent> = {
   CalendarDays,
   CheckSquare,
+  ClipboardList,
   Database,
   FolderOpen,
+  House,
+  Inbox,
   LayoutDashboard,
-  Network,
-  NotebookText,
-  Ticket,
+  Plug,
   Users,
+  Video,
   Wallet,
 };
 
+/** How long a rename waits for the typing to stop before it saves. */
+const TYPING_MS = 600;
+
 /**
- * Settings › Sidebar: drag sections to reorder them or move them to another
- * heading, rename sections and headings, and hide what the club doesn't
- * use. A live preview shows the sidebar members will get.
+ * Admin panel › Sidebar: drag sections to reorder them (across the thin
+ * lines between groups too), rename them, and switch off what the club
+ * doesn't use. Every change saves on its own, and the real sidebar beside
+ * this page is the preview: there is no Save button and no copy of it here.
+ * Groups have no names to edit (the sidebar has none).
  */
 export function SidebarEditor({
   orgId,
@@ -67,34 +78,60 @@ export function SidebarEditor({
   const router = useRouter();
   const [groups, setGroups] = useState(initial);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
-  const [pending, start] = useTransition();
-  const dirty = JSON.stringify(toConfig(groups)) !== JSON.stringify(toConfig(initial));
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { status, error, save } = useSaveOnChange(async (config: SidebarConfig | null) => {
+    const result = await saveSidebarAction(orgId, config);
+    if (!result.ok) return result.error ?? "Couldn't save.";
+    router.refresh();
+  });
 
-  function updateItem(id: string, patch: Partial<ResolvedItem>) {
-    setGroups((gs) =>
-      gs.map((g) => ({ ...g, items: g.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) })),
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  /** Shows the change at once and saves it (renames once the typing stops). */
+  function commit(next: ResolvedGroup[], { typing = false } = {}) {
+    setGroups(next);
+    if (timer.current) clearTimeout(timer.current);
+    const send = () => void save(toConfig(next));
+    if (typing) timer.current = setTimeout(send, TYPING_MS);
+    else send();
+  }
+
+  function updateItem(id: string, patch: Partial<ResolvedItem>, typing = false) {
+    commit(
+      groups.map((g) => ({
+        ...g,
+        items: g.items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+      })),
+      { typing },
     );
   }
 
   /** Moves `id` to `group`, in front of `beforeId` (or to the end). */
   function move(id: string, group: GroupId, beforeId: string | null) {
-    setGroups((gs) => {
-      const item = gs.flatMap((g) => g.items).find((i) => i.id === id);
-      if (!item || item.locked) return gs;
-      const without = gs.map((g) => ({ ...g, items: g.items.filter((i) => i.id !== id) }));
-      return without.map((g) => {
+    const item = groups.flatMap((g) => g.items).find((i) => i.id === id);
+    // Files and Integrations and apps keep their place (src/lib/nav/sidebar.ts).
+    if (!item || item.locked || PINNED_PLACE.includes(item.id)) return;
+    if (group === "workspace") return;
+    const without = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.id !== id) }));
+    commit(
+      without.map((g) => {
         if (g.id !== group) return g;
         const at = beforeId ? g.items.findIndex((i) => i.id === beforeId) : g.items.length;
         const index = at < 0 ? g.items.length : at;
-        // Overview stays first.
-        const safe = g.items[index]?.locked ? index + 1 : index;
+        // Home and Inbox stay first.
+        let safe = index;
+        while (g.items[safe]?.locked) safe += 1;
         return {
           ...g,
           items: [...g.items.slice(0, safe), { ...item, group }, ...g.items.slice(safe)],
         };
-      });
-    });
+      }),
+    );
   }
 
   function nudge(id: string, by: number) {
@@ -109,29 +146,31 @@ export function SidebarEditor({
     }
   }
 
-  function save(config: ReturnType<typeof toConfig> | null) {
-    setStatus(null);
-    start(async () => {
-      const result = await saveSidebarAction(orgId, config);
-      if (!result.ok) {
-        setStatus({ ok: false, text: result.error ?? "Couldn't save." });
-        return;
-      }
-      setStatus({
-        ok: true,
-        text: config ? "Sidebar saved for everyone." : "Back to the default sidebar.",
-      });
-      router.refresh();
+  async function reset() {
+    const before = groups;
+    const ok = await save(null);
+    if (!ok) return;
+    toast({
+      title: "Back to the default",
+      action: {
+        label: "Undo",
+        run: async () => {
+          const result = await saveSidebarAction(orgId, toConfig(before));
+          if (!result.ok) return result.error ?? "Couldn't undo.";
+          setGroups(before);
+          router.refresh();
+        },
+      },
     });
   }
 
   return (
-    <div className="grid gap-7.5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-      <div className="space-y-4.5">
-        {groups.map((group) => (
-          <Card
+    <div className="max-w-2xl space-y-4">
+      <Card className="gap-0 px-3 py-3">
+        {groups.map((group, gi) => (
+          <div
             key={group.id}
-            className="gap-2 px-3 py-3"
+            className={cn(gi > 0 && "border-border/70 mt-2 border-t pt-2")}
             onDragOver={(e) => {
               if (dragId) e.preventDefault();
             }}
@@ -142,31 +181,9 @@ export function SidebarEditor({
               setDragId(null);
             }}
           >
-            <header className="flex items-center gap-2 px-2 pt-1">
-              <Input
-                value={group.label ?? ""}
-                disabled={!canEdit}
-                placeholder={group.id === "main" ? "No heading" : "Heading"}
-                maxLength={24}
-                onChange={(e) =>
-                  setGroups((gs) =>
-                    gs.map((g) =>
-                      g.id === group.id ? { ...g, label: e.target.value || null } : g,
-                    ),
-                  )
-                }
-                aria-label="Heading"
-                className="heading hover:bg-muted/60 h-10 max-w-64 border-transparent bg-transparent px-2 text-[15px] shadow-none"
-              />
-              <Badge variant="secondary" className="ms-auto">
-                {group.items.length} section{group.items.length === 1 ? "" : "s"}
-              </Badge>
-            </header>
-            <ul className="divide-border/70 divide-y">
+            <ul>
               {group.items.length === 0 && (
-                <li className="rounded-tile hatch bg-muted text-muted-foreground mx-1 px-4 py-3 text-sm">
-                  Drag a section here.
-                </li>
+                <li className="text-muted-foreground px-3 py-2 text-[13px]">Drop here</li>
               )}
               {group.items.map((item) => {
                 const Icon = ICONS[item.icon] ?? LayoutDashboard;
@@ -174,8 +191,8 @@ export function SidebarEditor({
                   <li
                     key={item.id}
                     className={cn(
-                      "rounded-field flex items-center gap-3 px-2 py-2 transition-colors",
-                      item.hidden ? "bg-muted/40" : "hover:bg-muted/40",
+                      "rounded-field flex items-center gap-3 px-2 py-1.5 transition-colors",
+                      "hover:bg-muted/40",
                       dragId === item.id && "opacity-40",
                     )}
                     onDragOver={(e) => {
@@ -189,9 +206,12 @@ export function SidebarEditor({
                       setDragId(null);
                     }}
                   >
-                    {item.locked ? (
+                    {item.locked || PINNED_PLACE.includes(item.id) ? (
                       <span className="grid size-8 shrink-0 place-items-center">
-                        <Lock className="text-muted-foreground size-4" aria-label="Always first" />
+                        <Lock
+                          className="text-muted-foreground size-4"
+                          aria-label={item.locked ? "Always shown" : "Stays in its place"}
+                        />
                       </span>
                     ) : (
                       <span
@@ -220,7 +240,12 @@ export function SidebarEditor({
                         <GripVertical className="size-4" aria-hidden="true" />
                       </span>
                     )}
-                    <span className="bg-card ring-foreground/6 grid size-9 shrink-0 place-items-center rounded-full shadow-[var(--edge-highlight)] ring-1">
+                    <span
+                      className={cn(
+                        "bg-card ring-foreground/6 grid size-9 shrink-0 place-items-center rounded-full shadow-[var(--edge-highlight)] ring-1",
+                        item.hidden && "opacity-50",
+                      )}
+                    >
                       <Icon className="size-[18px]" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -228,7 +253,7 @@ export function SidebarEditor({
                         value={item.label}
                         disabled={!canEdit}
                         maxLength={24}
-                        onChange={(e) => updateItem(item.id, { label: e.target.value })}
+                        onChange={(e) => updateItem(item.id, { label: e.target.value }, true)}
                         onBlur={(e) => {
                           if (!e.target.value.trim())
                             updateItem(item.id, { label: item.defaultLabel });
@@ -236,109 +261,43 @@ export function SidebarEditor({
                         aria-label={`Name of ${item.defaultLabel}`}
                         className={cn(
                           "hover:bg-muted/60 h-8 border-transparent bg-transparent px-2 font-semibold shadow-none",
-                          item.hidden && "text-muted-foreground line-through",
+                          item.hidden && "text-muted-foreground",
                         )}
                       />
-                      <p className="text-muted-foreground truncate px-2 text-[13px]">
-                        {item.label !== item.defaultLabel ? `${item.defaultLabel} · ` : ""}
-                        {item.description}
-                      </p>
+                      {item.label !== item.defaultLabel && (
+                        <p className="text-muted-foreground px-2 text-[13px]">
+                          Was {item.defaultLabel}
+                        </p>
+                      )}
                     </div>
                     {!item.locked && (
-                      <Button
-                        type="button"
-                        variant={item.hidden ? "outline" : "ghost"}
-                        size="sm"
+                      <Switch
+                        checked={!item.hidden}
                         disabled={!canEdit}
-                        aria-pressed={!item.hidden}
-                        onClick={() => updateItem(item.id, { hidden: !item.hidden })}
-                      >
-                        {item.hidden ? (
-                          <EyeOff className="size-4" aria-hidden="true" />
-                        ) : (
-                          <Eye className="size-4" aria-hidden="true" />
-                        )}
-                        {item.hidden ? "Hidden" : "Shown"}
-                      </Button>
+                        onCheckedChange={(on) => updateItem(item.id, { hidden: !on })}
+                        aria-label={`Show ${item.label}`}
+                      />
                     )}
                   </li>
                 );
               })}
             </ul>
-          </Card>
-        ))}
-
-        {canEdit && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              disabled={pending || !dirty}
-              onClick={() => save(toConfig(groups))}
-            >
-              {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-              Save for everyone
-            </Button>
-            {dirty && (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => setGroups(initial)}
-              >
-                Discard changes
-              </Button>
-            )}
-            {customized && (
-              <Button type="button" variant="ghost" disabled={pending} onClick={() => save(null)}>
-                <RotateCcw className="size-4" aria-hidden="true" />
-                Reset to default
-              </Button>
-            )}
-            {status && (
-              <span
-                role="status"
-                className={cn("text-sm", status.ok ? "text-success" : "text-destructive")}
-              >
-                {status.text}
-              </span>
-            )}
           </div>
-        )}
-      </div>
+        ))}
+      </Card>
 
-      <aside className="max-w-xs space-y-2 xl:sticky xl:top-20 xl:max-w-none xl:self-start">
-        <p className="eyebrow text-muted-foreground px-1">Preview</p>
-        <div className="bg-sidebar text-sidebar-foreground ring-foreground/6 edge rounded-card space-y-3 p-3 ring-1">
-          {groups
-            .map((g) => ({ ...g, items: g.items.filter((i) => !i.hidden) }))
-            .filter((g) => g.items.length > 0)
-            .map((g) => (
-              <div key={g.id} className="space-y-0.5">
-                {g.label && (
-                  <p className="text-sidebar-foreground/60 px-2.5 pb-0.5 text-xs font-medium">
-                    {g.label}
-                  </p>
-                )}
-                {g.items.map((i) => {
-                  const Icon = ICONS[i.icon] ?? LayoutDashboard;
-                  return (
-                    <p
-                      key={i.id}
-                      className="rounded-field flex items-center gap-2.5 px-2.5 py-1.5 text-sm"
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                      {i.label || i.defaultLabel}
-                    </p>
-                  );
-                })}
-              </div>
-            ))}
-        </div>
-        <p className="text-muted-foreground px-1 text-[13px]">
-          Hiding a section tidies the app for members; it doesn&apos;t delete anything. Owners and
-          admins can still open it.
+      <div className="flex flex-wrap items-center gap-3 px-1">
+        {canEdit && customized && (
+          <Button type="button" variant="ghost" onClick={() => void reset()}>
+            <RotateCcw className="size-4" aria-hidden="true" />
+            Reset to default
+          </Button>
+        )}
+        <SavedMark status={status} error={error} />
+        <p className="text-muted-foreground text-[13px]">
+          Hidden sections stay open to owners and admins.
         </p>
-      </aside>
+      </div>
     </div>
   );
 }

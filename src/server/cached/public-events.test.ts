@@ -49,6 +49,8 @@ describe("getPublicEvents cache contract", () => {
     const db = {
       membership: { count: async () => 1 },
       orgIntegration: { findMany: async () => [] },
+      // createEvent reads the org's reminder default; no settings row is fine.
+      orgSettings: { findUnique: async () => null },
       event: {
         create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "e1", googleEventId: null, ...data }),
       },

@@ -7,7 +7,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 /**
  * Slug rename against the local database: OWNER-only in the database too,
  * the old slug keeps resolving (as retired, which the org layout turns into
- * a redirect), and no other org can ever claim it. Throwaway orgs.
+ * a redirect), and no other org can ever claim it. Also the meeting reminder
+ * default, which an ADMIN sets: stored earliest first, audited with what it
+ * was and what it became, and a list the database would refuse is a sentence
+ * instead. Throwaway orgs.
  */
 
 const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
@@ -19,7 +22,7 @@ import { authDb, disconnectAll } from "@/server/db/clients";
 import { withOrgAction, withSystemOrgTx } from "@/server/db/context";
 import { createOrganization } from "@/server/settings/org-creation";
 
-import { renameOrgSlug } from "./actions";
+import { renameOrgSlug, updateMeetingReminderDefault } from "./actions";
 
 let dbReady = false;
 try {
@@ -128,5 +131,62 @@ describe.skipIf(!dbReady)("slug rename against the local database", () => {
     expect(await renameOrgSlug(orgId, oldSlug)).toEqual({ slug: oldSlug });
     const r = await client.query(`SELECT * FROM app.resolve_org_slug($1)`, [newSlug]);
     expect(r.rows[0]).toMatchObject({ canonicalSlug: oldSlug, isRetired: true });
+  });
+
+  describe("the meeting reminder default", () => {
+    const stored = async () =>
+      (
+        await client.query(
+          `SELECT "meetingReminderMinutes" AS m FROM "OrgSettings" WHERE "organizationId" = $1`,
+          [orgId],
+        )
+      ).rows[0].m as number[];
+    const audits = async () =>
+      (
+        await client.query(
+          `SELECT "diffJson", "targetType", "targetId", "actorId" FROM "OrgAuditLog"
+            WHERE "organizationId" = $1 AND action = 'settings.meeting_reminders_changed'
+            ORDER BY "createdAt"`,
+          [orgId],
+        )
+      ).rows;
+
+    it("an ADMIN changes it; it is stored earliest first and audited with what it was", async () => {
+      requireUserMock.mockResolvedValue(admin);
+      expect(await stored()).toEqual([1440, 60]);
+      expect(await updateMeetingReminderDefault(orgId, [10, 10080, 60])).toEqual({});
+      expect(await stored()).toEqual([10080, 60, 10]);
+      const rows = await audits();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        diffJson: { from: [1440, 60], to: [10080, 60, 10] },
+        targetType: "OrgSettings",
+        targetId: orgId,
+        actorId: admin.id,
+      });
+    });
+
+    it("the same list again writes nothing, in whatever order it arrives", async () => {
+      requireUserMock.mockResolvedValue(admin);
+      expect(await updateMeetingReminderDefault(orgId, [60, 10, 10080])).toEqual({});
+      expect(await audits()).toHaveLength(1);
+    });
+
+    it("a list the database would refuse is a sentence, and nothing is written", async () => {
+      requireUserMock.mockResolvedValue(admin);
+      for (const bad of [[1, 2, 3, 4, 5, 6, 7, 8, 9], [0], [40321], [1.5], [60, 60]]) {
+        const result = await updateMeetingReminderDefault(orgId, bad);
+        expect(result.error, JSON.stringify(bad)).toEqual(expect.any(String));
+      }
+      expect(await stored()).toEqual([10080, 60, 10]);
+      expect(await audits()).toHaveLength(1);
+    });
+
+    it("no reminders at all is allowed, and is what the next meeting gets", async () => {
+      requireUserMock.mockResolvedValue(admin);
+      expect(await updateMeetingReminderDefault(orgId, [])).toEqual({});
+      expect(await stored()).toEqual([]);
+      expect((await audits())[1]).toMatchObject({ diffJson: { from: [10080, 60, 10], to: [] } });
+    });
   });
 });

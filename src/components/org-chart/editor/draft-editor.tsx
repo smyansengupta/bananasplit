@@ -4,11 +4,12 @@ import type { NamedTeam } from "@/lib/org-chart/teams";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CheckCheck, CircleAlert, ListTree, Plus, Trash2, Type, Undo2 } from "lucide-react";
+import { CheckCheck, CircleAlert, ListTree, Plus, Trash2, Type, Undo2 } from "@/components/icons";
 
 import {
   discardDraftAction,
   publishDraftAction,
+  rollbackAction,
   saveDraftAction,
 } from "@/app/app/[orgSlug]/org-chart/actions";
 import { setMemberTitle } from "@/app/app/[orgSlug]/settings/members/actions";
@@ -30,11 +31,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  addAlsoReportsTo,
   addPosition,
   confirmAllExact,
   exactMatches,
   moveDraft,
   moveSibling,
+  removeAlsoReportsTo,
   removePosition,
   setManager,
   toValidationNodes,
@@ -57,9 +60,10 @@ const ChartCanvas = dynamic(() => import("../chart-canvas"), {
 });
 
 /**
- * The draft editor (ADMIN+). Parsing is never trusted blindly: every
+ * The draft editor (any member). Parsing is never trusted blindly: every
  * position can be renamed, re-linked, moved (drag and drop in the outline,
- * or the Reports to picker and move buttons), toggled advisor or open hire,
+ * or the Reports to picker and move buttons), given extra managers (dotted
+ * lines), toggled advisor or open hire,
  * and its bullets edited, with a live checklist and a read-only preview of
  * the chart. Saves use optimistic concurrency (editVersion); publishing
  * saves first, then validates again on the server.
@@ -83,8 +87,13 @@ export interface DraftEditorProps {
   members: EditorMember[];
   /** OWNER/ADMIN may invite (the "invite" link on unknown names). */
   canInvite?: boolean;
-  /** May set members' titles (title sync). */
+  /**
+   * May set members' titles (members.setTitle, OWNER/ADMIN): title sync, and
+   * the "set each linked member's title" option on publish.
+   */
   canSetTitles?: boolean;
+  /** The chart live now, which Undo after publishing puts back. */
+  publishedVersionId?: string | null;
 }
 
 /** Autosave this long after the last change. */
@@ -99,6 +108,7 @@ export function DraftEditor({
   members: initialMembers,
   canInvite = false,
   canSetTitles = false,
+  publishedVersionId = null,
 }: DraftEditorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -109,11 +119,14 @@ export function DraftEditor({
   const [status, setStatus] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [conflict, setConflict] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [publishOpen, setPublishOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
-  const [setTitles, setSetTitles] = useState(false);
+  // Members' own titles follow their positions unless turned off (they
+  // drifted when this was opt-in).
+  const [setTitles, setSetTitles] = useState(true);
   const [tab, setTab] = useState("outline");
-  const [mode, setMode] = useState<"type" | "positions">(searchParams.get("mode") === "positions" ? "positions" : "type");
+  const [mode, setMode] = useState<"type" | "positions">(
+    searchParams.get("mode") === "positions" ? "positions" : "type",
+  );
   const [outlineKey, setOutlineKey] = useState(0);
   const [members, setMembers] = useState<EditorMember[]>(initialMembers);
   const [saving, setSaving] = useState(false);
@@ -127,7 +140,11 @@ export function DraftEditor({
 
   const initialSelected = (() => {
     const key = searchParams.get("position");
-    return (key && initial.find((p) => p.key === key)?.id) || flattenOutline(initial)[0]?.position.id || null;
+    return (
+      (key && initial.find((p) => p.key === key)?.id) ||
+      flattenOutline(initial)[0]?.position.id ||
+      null
+    );
   })();
   const [selectedId, setSelectedId] = useState<string | null>(initialSelected);
 
@@ -138,7 +155,8 @@ export function DraftEditor({
     const map = new Map<string, "error" | "warning">();
     for (const issue of issues) {
       if (!issue.positionId) continue;
-      if (issue.level === "error" || !map.has(issue.positionId)) map.set(issue.positionId, issue.level);
+      if (issue.level === "error" || !map.has(issue.positionId))
+        map.set(issue.positionId, issue.level);
     }
     return map;
   }, [issues]);
@@ -165,14 +183,16 @@ export function DraftEditor({
     setHistorySize(history.current.length);
   }
 
-  const onTyped = useCallback((next: DraftPosition[]) => {
-    remember(positions, false);
-    setPositions(next);
-    changes.current += 1;
-    setDirty(true);
-    setStatus(null);
-     
-  }, [positions]);
+  const onTyped = useCallback(
+    (next: DraftPosition[]) => {
+      remember(positions, false);
+      setPositions(next);
+      changes.current += 1;
+      setDirty(true);
+      setStatus(null);
+    },
+    [positions],
+  );
 
   const undo = useCallback(() => {
     const previous = history.current.pop();
@@ -197,18 +217,20 @@ export function DraftEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [undo]);
 
-  const update = useCallback((next: DraftPosition[] | null, message?: string) => {
-    if (!next) {
-      if (message) setStatus({ tone: "error", text: message });
-      return;
-    }
-    remember(positions, true);
-    setPositions(next);
-    changes.current += 1;
-    setDirty(true);
-    setStatus(null);
-     
-  }, [positions]);
+  const update = useCallback(
+    (next: DraftPosition[] | null, message?: string) => {
+      if (!next) {
+        if (message) setStatus({ tone: "error", text: message });
+        return;
+      }
+      remember(positions, true);
+      setPositions(next);
+      changes.current += 1;
+      setDirty(true);
+      setStatus(null);
+    },
+    [positions],
+  );
 
   const onMove = useCallback(
     (dragId: string, targetId: string, zone: DropZone) =>
@@ -231,6 +253,7 @@ export function DraftEditor({
         matchScore: p.matchScore,
         suggestedUserIds: p.suggestedUserIds,
         reportsTo: p.reportsTo,
+        alsoReportsTo: p.alsoReportsTo ?? [],
         isOpen: p.isOpen,
         isAdvisor: p.isAdvisor,
         responsibilities: p.responsibilities.filter((b) => b.trim()),
@@ -261,21 +284,20 @@ export function DraftEditor({
     setSaveError(false);
     const ids = "ids" in result ? result.ids : {};
     const remap = (id: string | null) => (id && ids[id] ? ids[id] : id);
-    setPositions((current) => current.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })));
+    const remapPosition = (p: DraftPosition): DraftPosition => ({
+      ...p,
+      id: remap(p.id) as string,
+      reportsTo: remap(p.reportsTo),
+      ...(p.alsoReportsTo ? { alsoReportsTo: p.alsoReportsTo.map((m) => remap(m) as string) } : {}),
+    });
+    setPositions((current) => current.map(remapPosition));
     setSelectedId((id) => remap(id));
     editVersionRef.current = result.editVersion;
-    history.current = history.current.map((snap) =>
-      snap.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })),
-    );
+    history.current = history.current.map((snap) => snap.map(remapPosition));
     // Still unsaved if something changed while the save was on its way.
     if (changes.current === mark) setDirty(false);
     return result.editVersion;
   }
-
-  const onSave = () =>
-    startTransition(async () => {
-      if ((await save()) !== null) setStatus(null);
-    });
 
   // Drafts save themselves a moment after the last change (one save at a time).
   const saveRef = useRef(save);
@@ -299,14 +321,34 @@ export function DraftEditor({
       await settled();
       const current = dirty ? await save() : editVersionRef.current;
       if (current === null) return;
-      const result = await publishDraftAction(orgId, version.id, { setTitles, expectedEditVersion: current });
+      const result = await publishDraftAction(orgId, version.id, {
+        setTitles: canSetTitles && setTitles,
+        expectedEditVersion: current,
+      });
       if (!result.ok) {
-        const detail = "issues" in result && result.issues?.length ? ` ${result.issues.map((i) => i.message).join(" ")}` : "";
+        const detail =
+          "issues" in result && result.issues?.length
+            ? ` ${result.issues.map((i) => i.message).join(" ")}`
+            : "";
         setStatus({ tone: "error", text: `${result.error}${detail}` });
-        setPublishOpen(false);
         return;
       }
-      setPublishOpen(false);
+      // Published at once; Undo puts the chart that was live back (a restore
+      // copies it forward, so nothing is lost either way).
+      const previous = publishedVersionId;
+      toast({
+        title: `Draft v${version.number} published`,
+        action: previous
+          ? {
+              label: "Undo",
+              run: async () => {
+                const undone = await rollbackAction(orgId, previous);
+                router.refresh();
+                return undone.ok ? null : "error" in undone ? undone.error : "Couldn't undo.";
+              },
+            }
+          : undefined,
+      });
       router.push(`/app/${orgSlug}/org-chart`);
       router.refresh();
     });
@@ -315,7 +357,10 @@ export function DraftEditor({
     startTransition(async () => {
       const result = await discardDraftAction(orgId, version.id);
       if (!result.ok) {
-        setStatus({ tone: "error", text: "error" in result ? result.error : "The draft could not be discarded." });
+        setStatus({
+          tone: "error",
+          text: "error" in result ? result.error : "The draft could not be discarded.",
+        });
         return;
       }
       setDirty(false);
@@ -335,6 +380,7 @@ export function DraftEditor({
           userId: p.userId,
           user: m ? { id: m.id, name: m.name, image: m.image, avatar: m.avatar } : null,
           reportsToId: p.reportsTo,
+          alsoReportsToIds: p.alsoReportsTo,
           isOpen: p.isOpen,
           isAdvisor: p.isAdvisor,
           responsibilities: p.responsibilities,
@@ -381,15 +427,44 @@ export function DraftEditor({
             <Undo2 aria-hidden="true" />
             Undo
           </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setDiscardOpen(true)} disabled={pending}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setDiscardOpen(true)}
+            disabled={pending}
+          >
             <Trash2 className="size-4" aria-hidden="true" />
             Discard
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onSave} disabled={pending || saving || !dirty || conflict}>
-            Save now
-          </Button>
-          <Button type="button" size="sm" onClick={() => setPublishOpen(true)} disabled={pending || conflict}>
-            Review and publish
+          {canSetTitles && (
+            <span className="flex items-center gap-2 px-1">
+              <Checkbox
+                id="set-titles"
+                checked={setTitles}
+                onCheckedChange={(v) => setSetTitles(v === true)}
+              />
+              <Label htmlFor="set-titles" className="text-sm font-normal">
+                Update titles
+              </Label>
+            </span>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            onClick={onPublish}
+            disabled={pending || conflict || hasErrors(issues)}
+            title={
+              errors.length > 0
+                ? `Fix ${errors.length} ${errors.length === 1 ? "problem" : "problems"} first`
+                : undefined
+            }
+          >
+            {pending
+              ? "Publishing…"
+              : errors.length > 0
+                ? `Publish (${errors.length} to fix)`
+                : "Publish"}
           </Button>
         </div>
       </div>
@@ -456,100 +531,120 @@ export function DraftEditor({
           canInvite={canInvite}
         />
       ) : (
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <section aria-label="Chart structure" className="bg-card min-w-0 rounded-xl border p-3">
-          <Tabs value={tab} onValueChange={setTab}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <TabsList>
-                <TabsTrigger value="outline">Outline</TabsTrigger>
-                <TabsTrigger value="preview">Preview</TabsTrigger>
-              </TabsList>
-              <div className="flex flex-wrap gap-2">
-                {exact.length > 0 && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => update(confirmAllExact(positions, names))}>
-                    <CheckCheck className="size-4" aria-hidden="true" />
-                    Confirm all exact ({exact.length})
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const next = addPosition(positions, null);
-                    update(next);
-                    setSelectedId(next[next.length - 1].id);
-                  }}
-                >
-                  <Plus className="size-4" aria-hidden="true" />
-                  Add position
-                </Button>
-              </div>
-            </div>
-            <TabsContent value="outline" className="mt-3">
-              {positions.length === 0 ? (
-                <p className="text-muted-foreground p-6 text-center text-sm">
-                  No positions yet. Add the top position first, then add its reports.
-                </p>
-              ) : (
-                <OutlineTree
-                  positions={positions}
-                  members={membersById}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  onMove={onMove}
-                  issuesById={issuesById}
-                />
-              )}
-            </TabsContent>
-            <TabsContent value="preview" className="mt-3">
-              <div className="h-[520px] overflow-hidden rounded-lg border">
-                {tab === "preview" && (
-                  <ChartCanvas
-                    nodes={previewNodes}
-                    teams={teams}
-                    selectedId={selectedId}
-                    onSelect={(id) => {
-                      setSelectedId(id);
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <section aria-label="Chart structure" className="bg-card min-w-0 rounded-xl border p-3">
+            <Tabs value={tab} onValueChange={setTab}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <TabsList>
+                  <TabsTrigger value="outline">Outline</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <div className="flex flex-wrap gap-2">
+                  {exact.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => update(confirmAllExact(positions, names))}
+                    >
+                      <CheckCheck className="size-4" aria-hidden="true" />
+                      Confirm all exact ({exact.length})
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const next = addPosition(positions, null);
+                      update(next);
+                      setSelectedId(next[next.length - 1].id);
                     }}
-                    refitOnChange
-                    ariaLabel="Preview of the draft chart"
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                    Add position
+                  </Button>
+                </div>
+              </div>
+              <TabsContent value="outline" className="mt-3">
+                {positions.length === 0 ? (
+                  <p className="text-muted-foreground p-6 text-center text-sm">
+                    No positions yet. Add the top position first, then add its reports.
+                  </p>
+                ) : (
+                  <OutlineTree
+                    positions={positions}
+                    members={membersById}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onMove={onMove}
+                    issuesById={issuesById}
                   />
                 )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </section>
+              </TabsContent>
+              <TabsContent value="preview" className="mt-3">
+                <div className="h-[520px] overflow-hidden rounded-lg border">
+                  {tab === "preview" && (
+                    <ChartCanvas
+                      nodes={previewNodes}
+                      teams={teams}
+                      selectedId={selectedId}
+                      onSelect={(id) => {
+                        setSelectedId(id);
+                      }}
+                      refitOnChange
+                      ariaLabel="Preview of the draft chart"
+                    />
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </section>
 
-        <section aria-label="Selected position" className="bg-card min-w-0 rounded-xl border p-4">
-          {selected ? (
-            <PositionEditor
-              key={selected.id}
-              position={selected}
-              positions={positions}
-              members={members}
-              issues={issues.filter((i) => i.positionId === selected.id)}
-              onChange={(next) => update(positions.map((p) => (p.id === next.id ? next : p)))}
-              onSetManager={(managerId) =>
-                update(setManager(positions, selected.id, managerId), "That would make the chart loop back on itself.")
-              }
-              onMove={(direction) => update(moveSibling(positions, selected.id, direction))}
-              onAddReport={() => {
-                const next = addPosition(positions, selected.id);
-                update(next);
-                setSelectedId(next[next.length - 1].id);
-              }}
-              onRemove={() => {
-                update(removePosition(positions, selected.id));
-                setSelectedId(selected.reportsTo ?? positions.find((p) => p.id !== selected.id)?.id ?? null);
-              }}
-            />
-          ) : (
-            <p className="text-muted-foreground text-sm">Select a position in the outline to edit it.</p>
-          )}
-        </section>
-      </div>
-
+          <section aria-label="Selected position" className="bg-card min-w-0 rounded-xl border p-4">
+            {selected ? (
+              <PositionEditor
+                key={selected.id}
+                position={selected}
+                positions={positions}
+                members={members}
+                issues={issues.filter((i) => i.positionId === selected.id)}
+                onChange={(next) => update(positions.map((p) => (p.id === next.id ? next : p)))}
+                onSetManager={(managerId) =>
+                  update(
+                    setManager(positions, selected.id, managerId),
+                    "That would make the chart loop back on itself.",
+                  )
+                }
+                onAddAlsoManager={(managerId) =>
+                  update(
+                    addAlsoReportsTo(positions, selected.id, managerId),
+                    "That position can't be an extra manager here.",
+                  )
+                }
+                onRemoveAlsoManager={(managerId) =>
+                  update(removeAlsoReportsTo(positions, selected.id, managerId))
+                }
+                onMove={(direction) => update(moveSibling(positions, selected.id, direction))}
+                onAddReport={() => {
+                  const next = addPosition(positions, selected.id);
+                  update(next);
+                  setSelectedId(next[next.length - 1].id);
+                }}
+                onRemove={() => {
+                  update(removePosition(positions, selected.id));
+                  setSelectedId(
+                    selected.reportsTo ?? positions.find((p) => p.id !== selected.id)?.id ?? null,
+                  );
+                }}
+              />
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Select a position in the outline to edit it.
+              </p>
+            )}
+          </section>
+        </div>
       )}
 
       <TeamsEditor
@@ -581,7 +676,10 @@ export function DraftEditor({
             return;
           }
           setMembers((list) => list.map((m) => (m.id === userId ? { ...m, title } : m)));
-          toast({ title: `Updated: ${membersById.get(userId)?.name ?? "the member"}'s title`, tone: "success" });
+          toast({
+            title: `Updated: ${membersById.get(userId)?.name ?? "the member"}'s title`,
+            tone: "success",
+          });
         }}
       />
 
@@ -594,65 +692,11 @@ export function DraftEditor({
         }}
       />
 
-      <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Publish draft v{version.number}?</DialogTitle>
-            <DialogDescription>
-              Everyone in the workspace will see this chart. The current chart is kept in the version history and can be
-              restored.
-            </DialogDescription>
-          </DialogHeader>
-          {errors.length > 0 ? (
-            <div role="alert" className="space-y-1 text-sm">
-              <p className="font-medium">Fix {errors.length === 1 ? "this problem" : `these ${errors.length} problems`} first:</p>
-              <ul className="list-disc pl-5">
-                {errors.slice(0, 6).map((e, i) => (
-                  <li key={i}>{e.message}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="space-y-3 text-sm">
-              <p>
-                {positions.length} positions, {positions.filter((p) => p.userId).length} linked to members
-                {warnings.length > 0 ? `, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : ""}.
-              </p>
-              {warnings.length > 0 && (
-                <ul className="text-muted-foreground list-disc pl-5">
-                  {warnings.slice(0, 5).map((w, i) => (
-                    <li key={i}>{w.message}</li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex items-start gap-2">
-                <Checkbox id="set-titles" checked={setTitles} onCheckedChange={(v) => setSetTitles(v === true)} />
-                <Label htmlFor="set-titles" className="leading-snug font-normal">
-                  Also set each linked member&apos;s title in this workspace from their position
-                </Label>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="button" onClick={onPublish} disabled={pending || hasErrors(issues)}>
-              {pending ? "Publishing…" : dirty ? "Save and publish" : "Publish"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Discard draft v{version.number}?</DialogTitle>
-            <DialogDescription>
-              The published chart does not change. The discarded draft stays in the version history.
-            </DialogDescription>
+            <DialogDescription>The published chart doesn&apos;t change.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
@@ -733,13 +777,16 @@ function Checklist({
           <p className="text-sm font-medium">
             {warnings.length} thing{warnings.length === 1 ? "" : "s"} to check
           </p>
-          <ul className="text-muted-foreground list-disc space-y-0.5 pl-6 text-sm">{warnings.map(item)}</ul>
+          <ul className="text-muted-foreground list-disc space-y-0.5 pl-6 text-sm">
+            {warnings.map(item)}
+          </ul>
         </div>
       )}
       {parseWarnings.length > 0 && (
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">
-            {parseWarnings.length} note{parseWarnings.length === 1 ? "" : "s"} from reading the document
+            {parseWarnings.length} note{parseWarnings.length === 1 ? "" : "s"} from reading the
+            document
           </summary>
           <ul className="text-muted-foreground mt-1 list-disc space-y-0.5 pl-6">
             {parseWarnings.map((w, i) => (
@@ -752,13 +799,21 @@ function Checklist({
   );
 }
 
-function OpenItemsEditor({ items, onChange }: { items: OpenItem[]; onChange: (items: OpenItem[]) => void }) {
+function OpenItemsEditor({
+  items,
+  onChange,
+}: {
+  items: OpenItem[];
+  onChange: (items: OpenItem[]) => void;
+}) {
   return (
     <section aria-label="Open items" className="space-y-2 rounded-xl border p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Open items</h2>
-          <p className="text-muted-foreground text-xs">Questions the document leaves open, with who should answer.</p>
+          <p className="text-muted-foreground text-xs">
+            Questions the document leaves open, with who should answer.
+          </p>
         </div>
         <Button
           type="button"
@@ -782,14 +837,18 @@ function OpenItemsEditor({ items, onChange }: { items: OpenItem[]; onChange: (it
                 maxLength={120}
                 placeholder="Who"
                 aria-label={`Open item ${i + 1}: who`}
-                onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))}
+                onChange={(e) =>
+                  onChange(items.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))
+                }
               />
               <Input
                 value={item.question}
                 maxLength={500}
                 placeholder="Question"
                 aria-label={`Open item ${i + 1}: question`}
-                onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, question: e.target.value } : x)))}
+                onChange={(e) =>
+                  onChange(items.map((x, j) => (j === i ? { ...x, question: e.target.value } : x)))
+                }
               />
               <Button
                 type="button"

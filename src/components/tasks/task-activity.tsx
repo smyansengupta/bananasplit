@@ -85,7 +85,7 @@ export function TaskActivity({ taskId }: { taskId: string }) {
           <span className="text-foreground font-medium">{item.actor?.name ?? "Someone"}</span>{" "}
           {describe(item, nameOf)}{" "}
           <time dateTime={new Date(item.createdAt).toISOString()}>
-            · {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+            {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
           </time>
         </li>
       ))}

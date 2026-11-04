@@ -145,7 +145,7 @@ export function canIssueOrgCreationCodes(
 export const ORG_CREATION_DENIAL_MESSAGES: Record<OrgCreationDenial, string> = {
   unverified: "Verify your email address before creating an organization.",
   disabled:
-    "Creating new organizations is switched off on this platform for now. Ask your club's president for an invite.",
+    "Creating new organizations is switched off on this platform for now. Ask your organization's admins for an invite.",
   locked:
-    "Creating organizations is limited to platform admins for now. Ask your club's president for an invite.",
+    "Creating organizations is limited to platform admins for now. Ask your organization's admins for an invite.",
 };

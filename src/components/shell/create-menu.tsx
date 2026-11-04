@@ -2,42 +2,51 @@
 
 import {
   CalendarClock,
+  ClipboardList,
   CalendarPlus,
   CheckSquare,
   Loader2,
   NotebookPen,
   Plus,
+  Receipt,
+  Video,
   Vote,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
+import { rememberLinkOrigin } from "@/components/links/pending-link";
+import { refFromPath } from "@/lib/links";
 import type { CreateAction } from "@/components/shell/nav-config";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
 
-const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, IconComponent> = {
   CalendarClock,
   CalendarPlus,
+  ClipboardList,
   CheckSquare,
   NotebookPen,
+  Receipt,
+  Video,
   Vote,
 };
 
 /**
- * The + menu: start a task, an event, a note, a poll or a Find a time from
+ * The + menu: start a task, an event, a meeting, a note, a poll or a Find a time from
  * any page (createActions in nav-config.ts says which, for this space and
- * viewer). The tool capsule and the phone tab bar's create button both open
- * it; `children` is the trigger, which gets a spinner while a note is made.
+ * viewer). The tool capsule opens it (desktop only: on a phone each page's
+ * own add button does); `children` is the trigger, which gets a spinner while
+ * a note is made.
  */
 export function CreateMenu({
   orgId,
@@ -60,8 +69,11 @@ export function CreateMenu({
   function newNote() {
     start(async () => {
       try {
+        // Made from a page that is one thing (a meeting): linked to it.
+        const from = refFromPath(window.location.pathname);
         const res = await createNote(orgId);
         if (res.noteId) {
+          if (from) await addLinkAction(orgId, orgSlug, from, { kind: "note", id: res.noteId });
           router.push(`/app/${orgSlug}/notes/${res.noteId}`);
           return;
         }
@@ -86,9 +98,6 @@ export function CreateMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children({ pending, icon })}</DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align} sideOffset={10} className="w-56">
-        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          Create
-        </DropdownMenuLabel>
         {actions.map((action) => {
           const Icon = ICONS[action.icon] ?? Plus;
           const content = (
@@ -99,7 +108,9 @@ export function CreateMenu({
           );
           return action.href ? (
             <DropdownMenuItem key={action.id} asChild>
-              <Link href={action.href}>{content}</Link>
+              <Link href={action.href} onClick={() => rememberLinkOrigin(action.id)}>
+                {content}
+              </Link>
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem key={action.id} disabled={pending} onSelect={newNote}>

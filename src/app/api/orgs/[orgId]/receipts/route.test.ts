@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { serialized } from "@/test/serialized-request";
+
 /**
  * The receipt upload route against fake wrappers: withOrgTx / withOrgAction
  * hand the handler a mocked transaction client and the caller's role (or
@@ -72,7 +74,7 @@ function jpegOfSize(bytes: number): Uint8Array<ArrayBuffer> {
   return data;
 }
 
-function upload(
+async function upload(
   file: { bytes: Uint8Array<ArrayBuffer>; name: string; type: string } | null,
   opts: { transactionId?: string; origin?: string } = {},
 ) {
@@ -86,7 +88,7 @@ function upload(
     body: form,
     headers,
   });
-  return POST(request, { params: Promise.resolve({ orgId: "org_1" }) });
+  return POST(await serialized(request), { params: Promise.resolve({ orgId: "org_1" }) });
 }
 
 beforeEach(() => {
@@ -100,12 +102,10 @@ beforeEach(() => {
   // A Team club with room to spare (the upload gate reads it).
   db.organization.findUnique.mockResolvedValue(space());
   db.membership.findMany.mockResolvedValue([]);
-  putBlobMock.mockImplementation(
-    async (kind: string, scopeId: string, segments: string[]) => ({
-      key: [kind, scopeId, ...segments].join("/"),
-      url: null,
-    }),
-  );
+  putBlobMock.mockImplementation(async (kind: string, scopeId: string, segments: string[]) => ({
+    key: [kind, scopeId, ...segments].join("/"),
+    url: null,
+  }));
 });
 
 describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
@@ -258,33 +258,35 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
 });
 
 describe("the receipt upload gate (redesign guide 11.2)", () => {
-  it("refuses a full club with the numbers, before storing anything", async () => {
+  it("refuses a full organization with the numbers, before storing anything", async () => {
     db.organization.findUnique.mockResolvedValue(
-      space({ storageUsedBytes: BigInt(100 * GB - 512 * 1024) }),
+      space({ storageUsedBytes: BigInt(50 * GB - 512 * 1024) }),
     );
     const response = await upload({ bytes: jpegOfSize(MB), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     const body = await response.json();
     expect(body.code).toBe("STORAGE_FULL");
     expect(body.error).toBe(
-      "Not enough space: 99.9 GB of 100 GB used. Ask an owner or admin to make room.",
+      "Not enough space: 49.9 GB of 50 GB used. Ask an owner or admin to make room.",
     );
-    expect(body.limitBytes).toBe(100 * GB);
+    expect(body.limitBytes).toBe(50 * GB);
     expect(putBlobMock).not.toHaveBeenCalled();
   });
 
-  it("refuses a paused club before reading the body", async () => {
+  it("refuses an ended trial (Team Free has no finance) before reading the body", async () => {
     db.organization.findUnique.mockResolvedValue(
       space({ plan: "TRIAL", trialEndsAt: new Date(Date.now() - 1000) }),
     );
     const response = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe("SPACE_PAUSED");
+    expect((await response.json()).code).toBe("SPACE_FEATURE");
     expect(db.transaction.findFirst).not.toHaveBeenCalled();
   });
 
-  it("refuses a Personal space: finance is for clubs", async () => {
-    db.organization.findUnique.mockResolvedValue(space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }));
+  it("refuses a Personal space: finance is for organizations", async () => {
+    db.organization.findUnique.mockResolvedValue(
+      space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }),
+    );
     const response = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe("SPACE_FEATURE");
@@ -293,9 +295,9 @@ describe("the receipt upload gate (redesign guide 11.2)", () => {
   it("rolls the row back and deletes the blob when a racing upload took the last of the room", async () => {
     // Under the limit at the gate; over it once the database has counted this receipt.
     db.organization.findUnique
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB - 2 * MB) }))
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB - 2 * MB) }))
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB + 512 * 1024) }));
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB - 2 * MB) }))
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB - 2 * MB) }))
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB + 512 * 1024) }));
     const response = await upload({ bytes: jpegOfSize(MB), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe("STORAGE_FULL");

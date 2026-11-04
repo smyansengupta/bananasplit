@@ -116,7 +116,7 @@ describe("pinning anything", () => {
     expect(pins.map((p) => [p.kind, p.label])).toEqual([
       ["note", `Minutes ${tag}`],
       ["folder", `Board ${tag}`],
-      ["page", "Tasks · Board · Mine"],
+      ["page", "Tasks, Board, Mine"],
       ["person", `pin-owner ${tag}`],
     ]);
     expect(pins[2].href).toBe(`${base}/tasks?view=board&scope=mine`);
@@ -139,6 +139,6 @@ describe("pinning anything", () => {
     // With no query: pages and views, every folder, recent notes.
     const all = await as(member, ({ db }) => searchPinnables(db, org.id, org.slug, member.id, ""));
     expect(all.map((g) => g.id)).toEqual(expect.arrayContaining(["pages", "folders", "notes"]));
-    expect(all.find((g) => g.id === "pages")!.items.map((i) => i.label)).toContain("Tasks · Board");
+    expect(all.find((g) => g.id === "pages")!.items.map((i) => i.label)).toContain("Tasks, Board");
   });
 });

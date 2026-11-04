@@ -118,7 +118,7 @@ describe("payLinks", () => {
 describe("costLine", () => {
   it("says what each guest pays", () => {
     expect(costLine("EACH", 500, 12)).toBe("$5 each");
-    expect(costLine("SPLIT", 12000, 25)).toBe("$120 split 25 ways · $4.80 each right now");
+    expect(costLine("SPLIT", 12000, 25)).toBe("$120 split 25 ways, $4.80 each right now");
     expect(costLine("SPLIT", 12000, 1)).toBe("$120 split between everyone going");
   });
 });

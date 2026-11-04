@@ -11,10 +11,12 @@ import { PRIVACY_HREF, TERMS_HREF } from "@/lib/brand/links";
 import { cn } from "@/lib/utils";
 
 import { signUpAction } from "./actions";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 
 /**
- * One sign-up for everyone: name, email, password. "Your profile" comes
- * next (/onboarding). `google`: the "Sign up with Google" button and divider,
+ * One sign-up for everyone, for a personal account: name, email, a
+ * password typed twice. "What are you here for?" comes next (/onboarding).
+ * `google`: the "Sign up with Google" button and divider,
  * above the fields (not once it's sent). `callbackUrl`: where to go once
  * signed up, e.g. back to the invite link someone started from.
  */
@@ -40,9 +42,7 @@ export function SignUpForm({
           title="Check your email."
           description={
             <>
-              We sent a verification link to{" "}
-              <span className="font-semibold">{state.checkEmail}</span>. Open it to verify your
-              address, then log in. You need a verified email to join or start a club.
+              Open the link we sent to <span className="font-semibold">{state.checkEmail}</span>.
             </>
           }
         />
@@ -56,12 +56,15 @@ export function SignUpForm({
 
   return (
     <>
-      <AuthTitle
-        title="Create your account."
-        description="Free forever for your own tasks, calendar, polls and event pages. Join clubs free."
-      />
+      <AuthTitle title="Create your account." />
       {google}
-      <form action={formAction} className="flex flex-col gap-[18px]">
+      <form
+        noValidate
+        onSubmit={highlightInvalid}
+        onInput={clearInvalid}
+        action={formAction}
+        className="flex flex-col gap-[18px]"
+      >
         {callbackUrl && <input type="hidden" name="callbackUrl" value={callbackUrl} />}
         <BrandField id="name" label="Full name">
           <BrandInput
@@ -69,7 +72,7 @@ export function SignUpForm({
             name="name"
             required
             autoComplete="name"
-            placeholder="Maya Chen"
+            placeholder="Full name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -81,7 +84,7 @@ export function SignUpForm({
             type="email"
             required
             autoComplete="email"
-            placeholder="you@example.com"
+            placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -92,14 +95,14 @@ export function SignUpForm({
           {isPending ? "Creating account…" : "Create account"}
         </PrimaryButton>
         <p className="text-muted-foreground m-0 text-center text-[13px] leading-[1.5]">
-          By continuing you agree to the{" "}
-          <a href={TERMS_HREF} className="text-foreground underline underline-offset-2">
+          You agree to the{" "}
+          <Link href={TERMS_HREF} className="text-foreground underline underline-offset-2">
             Terms
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a href={PRIVACY_HREF} className="text-foreground underline underline-offset-2">
+          <Link href={PRIVACY_HREF} className="text-foreground underline underline-offset-2">
             Privacy Policy
-          </a>
+          </Link>
           . Have an account?{" "}
           <Link
             href={signInHref}

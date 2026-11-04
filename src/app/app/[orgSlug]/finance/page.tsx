@@ -1,4 +1,4 @@
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -22,7 +22,7 @@ import { getDashboardData } from "./queries";
  * widgets, under the header's Add transaction. It never dead-ends: until the
  * budget basics are in place the setup guide's banner sits on top (Finance ›
  * Set up), the board shows empty widgets, and the first transaction sets up
- * this school year by itself. Everyone else lands on their reimbursements.
+ * this year by itself. Everyone else lands on their reimbursements.
  */
 export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/finance">) {
   const { orgSlug } = await params;
@@ -52,11 +52,11 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
           <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
           <p className="min-w-0 flex-1">
             {dashboard.unreconciledOver60DaysCount === 1
-              ? "1 transaction is unreconciled and over 60 days old."
-              : `${dashboard.unreconciledOver60DaysCount} transactions are unreconciled and over 60 days old.`}
+              ? "1 transaction over 60 days old isn't reconciled."
+              : `${dashboard.unreconciledOver60DaysCount} transactions over 60 days old aren't reconciled.`}
           </p>
           <Button asChild size="sm" variant="outline" className="border-current/30">
-            <Link href={`/app/${orgSlug}/finance/transactions?reconciled=no`}>Review them</Link>
+            <Link href={`/app/${orgSlug}/finance/transactions?view=unreconciled`}>Reconcile</Link>
           </Button>
         </div>
       )}

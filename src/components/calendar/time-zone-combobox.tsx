@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, ChevronsUpDown, LocateFixed } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, LocateFixed } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";

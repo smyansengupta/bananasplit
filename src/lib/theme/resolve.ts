@@ -1,8 +1,8 @@
 import { withAccent } from "./accent";
 import { deriveDarkRoles, deriveTheme, type DerivedTheme } from "./derive";
 import {
-  DEFAULT_PRESET,
   DEFAULT_PRESET_ID,
+  UNTHEMED_PRESET,
   isFormerDefault,
   presetGlow,
   savedPresetId,
@@ -68,14 +68,17 @@ function asLogoDisplay(value: string | null | undefined): LogoDisplayValue {
     : "LOGO_AND_NAME";
 }
 
-// Moonstone is dark first: an org with no theme row opens in dark mode.
+// Graphite is light first: an org with no theme row opens on the white page.
+// (Dark-first was Moonstone's rule, and Graphite in dark is all but
+// indistinguishable from Moonstone in dark - which is how the default looked
+// unchanged after it was switched.) A member's own stored choice still wins.
 export const DEFAULT_RESOLVED_THEME: ResolvedTheme = buildResolved({
-  preset: DEFAULT_PRESET.id,
-  mode: "DARK",
+  preset: UNTHEMED_PRESET.id,
+  mode: "LIGHT",
   lockMode: false,
   logoDisplay: "LOGO_AND_NAME",
-  light: DEFAULT_PRESET.light,
-  dark: DEFAULT_PRESET.dark,
+  light: UNTHEMED_PRESET.light,
+  dark: UNTHEMED_PRESET.dark,
   style: DEFAULT_THEME_STYLE,
   isDefault: true,
 });
@@ -116,9 +119,9 @@ export function resolveTheme(row: OrgThemeRowLike | null | undefined): ResolvedT
   if (!stored) return DEFAULT_RESOLVED_THEME;
   const mode = asMode(row.mode);
   // A former default (the raspberry or the cream Bananasplit) saved as
-  // "default": follow the brand onto today's default, Moonstone.
+  // "default": follow the brand onto today's default, Graphite.
   const legacy = row.preset === DEFAULT_PRESET_ID && isFormerDefault(stored);
-  const light = legacy ? DEFAULT_PRESET.light : stored;
+  const light = legacy ? UNTHEMED_PRESET.light : stored;
   const preset = savedPresetId(row.preset, light);
   return buildResolved({
     preset,
@@ -126,7 +129,7 @@ export function resolveTheme(row: OrgThemeRowLike | null | undefined): ResolvedT
     lockMode: row.lockMode && mode !== "SYSTEM",
     logoDisplay: asLogoDisplay(row.logoDisplay),
     light,
-    dark: legacy ? DEFAULT_PRESET.dark : parseRoles(row.dark),
+    dark: legacy ? UNTHEMED_PRESET.dark : parseRoles(row.dark),
     style: rowStyle(row.tokens),
     isDefault: false,
   });

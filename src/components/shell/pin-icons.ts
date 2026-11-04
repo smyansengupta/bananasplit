@@ -1,19 +1,20 @@
 import {
   CalendarDays,
   CheckSquare,
+  ClipboardList,
   Database,
   FileText,
   Folder,
   NotebookText,
   Paperclip,
   User,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import type { PinKind } from "@/lib/pins/pages";
 
 /** The icon for each kind of pinned or recently visited item. */
-export const PIN_ICONS: Record<PinKind, LucideIcon> = {
+export const PIN_ICONS: Record<PinKind, IconComponent> = {
   page: FileText,
   note: NotebookText,
   task: CheckSquare,
@@ -22,6 +23,7 @@ export const PIN_ICONS: Record<PinKind, LucideIcon> = {
   person: User,
   file: Paperclip,
   folder: Folder,
+  form: ClipboardList,
 };
 
 /** What each kind is called on a pin card. */
@@ -34,4 +36,5 @@ export const PIN_KIND_LABELS: Record<PinKind, string> = {
   person: "Person",
   file: "File",
   folder: "Folder",
+  form: "Form",
 };

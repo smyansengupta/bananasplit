@@ -1,4 +1,4 @@
-import { EyeOff, Vote } from "lucide-react";
+import { EyeOff, Vote } from "@/components/icons";
 
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";

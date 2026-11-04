@@ -33,19 +33,19 @@ screen. The full rationale, mocks and decisions live in the redesign guide
 
 ## Tokens (Tailwind colours)
 
-| Use | Classes |
-| --- | --- |
-| Page, cards, floats | `bg-background`, `bg-card`, `bg-raised` (dark-mode floats), `bg-popover` |
-| Fills | `bg-muted` (tracks, hovers), `bg-muted-strong` (stronger fill), `bg-thumb` (segmented thumb) |
-| Text | `text-foreground`, `text-muted-foreground` |
-| Accent (create, active nav, today) | `bg-brand-accent text-brand-accent-foreground` (+ `glow-halo`) |
-| Glow (light only) | `bg-glow`, `stroke-glow`; halos via `glow-halo`, focus via `focus-glow` |
-| Chrome (glass rail, toasts, tab bar, tooltips) | `bg-chrome text-chrome-foreground` |
-| Block cards | `bg-block-{quiet,alert,answer,goal}` + `-foreground` + `-meta` |
-| Chip tints | `bg-tint-{accent,success,info,danger}` + `text-tint-*-foreground` |
-| Avatars | `bg-avatar-{1..5} text-avatar-{1..5}-foreground` (via `UserAvatar`) |
-| Charts | `var(--chart-1..5)` in order; slot 1 is the brand colour |
-| Status | `text-success`, `text-warning`, `text-destructive` |
+| Use                                                | Classes                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Page, cards, floats                                | `bg-background`, `bg-card`, `bg-raised` (dark-mode floats), `bg-popover`                     |
+| Fills                                              | `bg-muted` (tracks, hovers), `bg-muted-strong` (stronger fill), `bg-thumb` (segmented thumb) |
+| Text                                               | `text-foreground`, `text-muted-foreground`                                                   |
+| Accent (create, active nav, today)                 | `bg-brand-accent text-brand-accent-foreground` (+ `glow-halo`)                               |
+| Glow (light only)                                  | `bg-glow`, `stroke-glow`; halos via `glow-halo`, focus via `focus-glow`                      |
+| Chrome (glass rail, toasts, menu button, tooltips) | `bg-chrome text-chrome-foreground`                                                           |
+| Block cards                                        | `bg-block-{quiet,alert,answer,goal}` + `-foreground` + `-meta`                               |
+| Chip tints                                         | `bg-tint-{accent,success,info,danger}` + `text-tint-*-foreground`                            |
+| Avatars                                            | `bg-avatar-{1..5} text-avatar-{1..5}-foreground` (via `UserAvatar`)                          |
+| Charts                                             | `var(--chart-1..5)` in order; slot 1 is the brand colour                                     |
+| Status                                             | `text-success`, `text-warning`, `text-destructive`                                           |
 
 ## Shape, depth, type
 
@@ -68,11 +68,11 @@ screen. The full rationale, mocks and decisions live in the redesign guide
 ## Components (src/components)
 
 - `ui/button`: variants `default | create | secondary | outline | ghost |
-  destructive | link`; sizes `default (40) | sm (32) | icon (40) | icon-sm
-  (32) | icon-xs (24, inside fields only)`. Circle icon buttons:
+destructive | link`; sizes `default (40) | sm (32) | icon (40) | icon-sm
+(32) | icon-xs (24, inside fields only)`. Circle icon buttons:
   `variant="outline" size="icon-sm"` (••• and ↗ in card headers).
 - `ui/badge`: chips: `default | secondary (counts) | accent | success | info
-  | destructive | outline`.
+| destructive | outline`.
 - `ui/chip`: `TagChip` (tag/epic colour mixed into the card; optional
   remove button) and `StatusDot` (dot + word, never a dot alone).
 - `ui/block-card`: `BlockCard tone="quiet|alert|answer|goal"` with kicker,
@@ -100,7 +100,7 @@ screen. The full rationale, mocks and decisions live in the redesign guide
   title, meta row (TagChip epic, due label), priority chip on the right
   (Urgent = `destructive` + flag icon, High = `accent`, Normal = nothing).
 - **Toasts:** `toast({ title: "Done: Creative brief draft", tone: "success",
-  action: { label: "Undo", run } })`. Verb first.
+action: { label: "Undo", run } })`. Verb first.
 - **Hatch** (`hatch` utility on `bg-muted`): pending, awaiting, not started,
   a drop slot.
 - **Motion:** hover lift 2-3px (180-250ms `--ease-ink`), press 97% (circle
@@ -109,3 +109,36 @@ screen. The full rationale, mocks and decisions live in the redesign guide
 - **Icons:** Lucide at stroke 1.75 (the default stroke is fine at 16-20px),
   sizes 16 inline, 20 buttons/nav, 24 stat chips. ↗ = open the full page,
   ••• = more actions, flag = urgent only, filled circle = done.
+
+## On a phone (below md, 768px)
+
+The phone is its own composition, not the desktop shrunk. Every rule below
+is a `max-md:` (or `md:hidden`) class, so the desktop is untouched.
+
+- **Navigation:** a menu button at the left of the tool capsule
+  (`shell/nav-menu.tsx`) opens a full-screen menu: the club (its menu
+  switches clubs) at the top, then every section under the sidebar's
+  headings, one roomy row each, the current page lit (the Admin panel is in
+  the club menu). No pins, no tab bar, nothing floating over the page.
+- **The add button is always at the top right,** beside the title, on
+  every page: `PageHeader` moves its `variant="create"` action (or the
+  group it sits in) there, and the other actions go under the summary.
+  A page with its own header does the same by hand (Tasks, Calendar).
+- **Nothing scrolls sideways.** `<main>` clips sideways overflow; anything
+  wide scrolls in its own box (a carousel, the board's columns).
+- **One list toolbar** (`ui/phone-toolbar.tsx`) on Tasks, Files and People:
+  the page's own switch on the left (whose tasks; grid or list), then
+  **Filters** with a count, which opens a `FilterSheet` of named chip rows
+  (folders, sort and the like go there too), and a search icon that turns
+  the row into the search box.
+- **Name every control** except the universal glyphs (search, close, •••,
+  menu) and the toolbar's switch.
+- **Tabs span the width** and wrap onto a second row rather than scroll
+  (`ui/page-tabs`).
+- **No summary line** under a page title (`PageHeader` leaves out its
+  `description`): the page itself says it.
+- **One "…" menu** for a detail page's actions, on the back link's row
+  (a Find a time poll), with Delete last; no pins.
+- **Read, don't arrange:** boards have no Customize on a phone.
+- **Lists, not tables:** a row is what and how much on the first line, the
+  details under it (Finance › Transactions).

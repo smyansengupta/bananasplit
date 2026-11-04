@@ -7,8 +7,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * The calendar against the real roles and policies of the local database
  * (seeded Claude Builders Club): the public feed loader's filter under the
- * service role, the event service's ADMIN+ rule on the member path, and the
- * gcal job's compare-and-set write. Google itself is a mocked fetch.
+ * service role, the event service's ADMIN+ rule on the member path, the
+ * gcal job's compare-and-set write, and "Don't mirror public events" (no
+ * public calendar: nothing public on Google). Google itself is a mocked fetch.
  * Skipped when the database or the seed is not there.
  */
 
@@ -20,7 +21,7 @@ import { loadPublicEvents } from "@/server/cached/public-events";
 import { authDb, disconnectAll } from "@/server/db/clients";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withSystemOrgTx } from "@/server/db/context";
-import { createEvent, deleteEvent } from "@/server/events/service";
+import { createEvent, deleteEvent, updateEvent } from "@/server/events/service";
 
 import { googleEventId } from "./mapping";
 import { gcalJob, syncDeps } from "./sync";
@@ -192,5 +193,78 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
       googleEtag: '"1"',
     });
     expect(row.updatedAt.getTime()).toBe(event.updatedAt.getTime());
+  });
+
+  it("with no public calendar a PUBLIC event stays off Google and the old public mirror is removed", async () => {
+    // "Don't mirror public events" on the connection the test above made.
+    await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.orgIntegration.updateMany({
+        where: { organizationId: s.cbcId, provider: "GOOGLE_CALENDAR", config: { path: ["b7Test"], equals: true } },
+        data: { config: { publicCalendarId: null, b7Test: true } },
+      }),
+    );
+    const fresh = await asAdmin(s.cbcId, {
+      title: "B7 test opted-out workshop",
+      startsAt: soon,
+      endsAt: later,
+      kind: "WORKSHOP",
+      visibility: "PUBLIC",
+    });
+    expect(fresh.googleSyncState).toBe("NOT_APPLICABLE");
+
+    // Editing the event mirrored above queues its removal from Google.
+    const mirrored = await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.event.findFirstOrThrow({
+        where: { organizationId: s.cbcId, title: "B7 test mirrored workshop", googleEventId: { not: null } },
+        select: { id: true, googleCalendarId: true, googleEventId: true },
+      }),
+    );
+    await withOrgAction(async (ctx) => updateEvent(ctx, mirrored.id, { title: "B7 test mirrored workshop, edited" }))(
+      s.cbcId,
+    );
+
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: URL, init: RequestInit) => {
+        calls.push(`${init.method} ${decodeURIComponent(new URL(url).pathname)}`);
+        return new Response(null, { status: 204 });
+      }),
+    );
+    const original = syncDeps.getAccessToken;
+    syncDeps.getAccessToken = async () => "ya29.test";
+    const run = (eventId: string) =>
+      gcalJob({
+        id: `job_${eventId}`,
+        kind: "gcal",
+        organizationId: s.cbcId,
+        payload: { eventId },
+        dedupeKey: `gcal:${eventId}`,
+        attempt: 1,
+        maxAttempts: 8,
+        signal: new AbortController().signal,
+        deadline: Date.now() + 30_000,
+      });
+    try {
+      await run(fresh.id);
+      expect(calls).toEqual([]);
+      await run(mirrored.id);
+    } finally {
+      syncDeps.getAccessToken = original;
+      vi.unstubAllGlobals();
+    }
+    expect(calls).toEqual([
+      `DELETE /calendar/v3/calendars/organization@group.calendar.google.com/events/${mirrored.googleEventId}`,
+    ]);
+    const rows = await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.event.findMany({
+        where: { id: { in: [fresh.id, mirrored.id] } },
+        select: { googleSyncState: true, googleCalendarId: true, googleEventId: true },
+      }),
+    );
+    expect(rows).toEqual([
+      { googleSyncState: "NOT_APPLICABLE", googleCalendarId: null, googleEventId: null },
+      { googleSyncState: "NOT_APPLICABLE", googleCalendarId: null, googleEventId: null },
+    ]);
   });
 });

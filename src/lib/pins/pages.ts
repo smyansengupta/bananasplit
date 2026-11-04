@@ -20,6 +20,7 @@ export const PIN_KINDS = [
   "person",
   "file",
   "folder",
+  "form",
 ] as const;
 export type PinKind = (typeof PIN_KINDS)[number];
 
@@ -31,7 +32,8 @@ export type PageLookup =
   | { type: "database"; key: string }
   | { type: "person"; id: string }
   | { type: "file"; id: string }
-  | { type: "folder"; id: string };
+  | { type: "folder"; id: string }
+  | { type: "form"; id: string };
 
 export interface PageInfo {
   /** The in-app address: the path plus any kept view parameters. */
@@ -40,7 +42,7 @@ export interface PageInfo {
   /** The label for fixed pages; the fallback while a lookup resolves. */
   label: string;
   lookup?: PageLookup;
-  /** Appended to a looked-up label ("Minutes · Files"). */
+  /** Appended to a looked-up label ("Minutes, Files"). */
   suffix?: string;
   /** Pages not worth listing under "Recently visited" (the Overview itself). */
   skipRecent?: boolean;
@@ -50,6 +52,8 @@ const SECTIONS: Record<string, string> = {
   tasks: "Tasks",
   notes: "Files",
   calendar: "Calendar",
+  meetings: "Meetings",
+  forms: "Forms",
   databases: "Databases",
   finance: "Finance",
   "org-chart": "Org chart",
@@ -62,11 +66,12 @@ const SECTIONS: Record<string, string> = {
 
 const SUBPAGES: Record<string, string> = {
   "calendar/find-a-time": "Find a time",
-  "calendar/find-a-time/new": "New find-a-time poll",
-  "calendar/polls": "Polls",
-  "calendar/polls/ask": "Ask a question",
-  "calendar/polls/new": "New find-a-time poll",
-  "calendar/rsvp": "RSVPs",
+  "calendar/find-a-time/new": "Find a time",
+  "calendar/polls": "Forms",
+  "calendar/polls/ask": "Quick poll",
+  "forms/new": "New form",
+  "calendar/polls/new": "Find a time",
+  meetings: "Meetings",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",
   "finance/budget": "Budget",
@@ -154,23 +159,23 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
         kind: "folder",
         label: "Folder",
         lookup: { type: "folder", id: q.folder },
-        suffix: only ? ` · ${only}` : undefined,
+        suffix: only ? `, ${only}` : undefined,
       };
     }
     if (q.folder === "none")
       return { href, kind: "page", label: `${only ?? "Files"} not in a folder` };
-    return { href, kind: "page", label: only ? `Files · ${only}` : "Files" };
+    return { href, kind: "page", label: only ? `Files, ${only}` : "Files" };
   }
   if (section === "tasks" && parts.length === 1) {
     const bits = [q.view ? TASK_VIEWS[q.view] : null, q.scope ? TASK_SCOPES[q.scope] : null].filter(
       Boolean,
     );
-    return { href, kind: "page", label: bits.length ? `Tasks · ${bits.join(" · ")}` : "Tasks" };
+    return { href, kind: "page", label: bits.length ? `Tasks, ${bits.join(", ")}` : "Tasks" };
   }
   if (parts.length === 1) return { href, kind: "page", label: SECTIONS[section] };
 
   if (section === "settings") {
-    return { href, kind: "page", label: `Admin panel · ${titleCase(second)}` };
+    return { href, kind: "page", label: `Admin panel, ${titleCase(second)}` };
   }
   if (section === "notes" && second === "files" && third && parts.length === 3 && ID.test(third)) {
     return { href, kind: "file", label: "File", lookup: { type: "file", id: third } };
@@ -190,20 +195,39 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
   ) {
     return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
   }
+  // A members' quick poll under Forms is a question poll, looked up the same way.
+  if (section === "forms" && second === "polls" && third && parts.length === 3 && ID.test(third)) {
+    return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
+  }
+  // A form's page (its builder and responses) shows the form's title.
+  if (section === "forms" && parts.length === 2 && ID.test(second)) {
+    return { href, kind: "form", label: "Form", lookup: { type: "form", id: second } };
+  }
   if (section === "calendar" && parts.length === 2 && ID.test(second)) {
     return { href, kind: "event", label: "Event", lookup: { type: "event", id: second } };
   }
-  if (section === "calendar" && parts.length === 3 && third === "rsvp" && ID.test(second)) {
+  // A meeting is an event, so its page is looked up the same way. Its sign-up
+  // screen moved here from the Calendar; the old path stays described, for
+  // pins saved before the move.
+  if (section === "meetings" && parts.length === 2 && ID.test(second)) {
+    return { href, kind: "event", label: "Meeting", lookup: { type: "event", id: second } };
+  }
+  if (
+    (section === "meetings" || section === "calendar") &&
+    parts.length === 3 &&
+    third === "rsvp" &&
+    ID.test(second)
+  ) {
     return {
       href,
       kind: "event",
       label: "RSVP page",
       lookup: { type: "event", id: second },
-      suffix: " · RSVPs",
+      suffix: ", RSVPs",
     };
   }
   if (section === "databases" && ID.test(second)) {
-    const suffix = third ? ` · ${titleCase(third)}` : "";
+    const suffix = third ? `, ${titleCase(third)}` : "";
     return {
       href,
       kind: "database",
@@ -225,7 +249,7 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
   return {
     href,
     kind: "page",
-    label: `${SECTIONS[section]} · ${titleCase(parts[parts.length - 1])}`,
+    label: `${SECTIONS[section]}, ${titleCase(parts[parts.length - 1])}`,
   };
 }
 

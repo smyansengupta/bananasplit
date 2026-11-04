@@ -387,3 +387,47 @@
     radial-gradient(circle at 25% 45%, var(--color-stem) 2px, transparent 2.5px),
     radial-gradient(circle at 65% 60%, var(--color-stem) 2.5px, transparent 3px);
 }
+
+/*
+ * The home page's hero (src/components/marketing/home/): the headline, buttons and
+ * dashboard rise in, and the phone's thread fills in bubble by bubble (the
+ * scroll effect is HeroStage's). Each piece sets its own animation-delay. Nothing moves for
+ * anyone who asks for reduced motion.
+ */
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+    filter: blur(8px);
+  }
+}
+@keyframes home-stage {
+  from {
+    opacity: 0;
+    transform: translateY(70px) scale(0.96);
+  }
+}
+@keyframes home-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+}
+@utility animate-home-rise {
+  animation: home-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+@utility animate-home-stage {
+  animation: home-stage 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+@utility animate-home-pop {
+  animation: home-pop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}

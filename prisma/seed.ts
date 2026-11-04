@@ -179,7 +179,7 @@ async function main() {
       },
     });
   const showcase = await epic(orgA.id, "Fall Showcase Robot", alice.id);
-  const clubOps = await epic(orgA.id, "Club Operations", alice.id);
+  const clubOps = await epic(orgA.id, "Organization Operations", alice.id);
   const tournament = await epic(orgB.id, "Regional Tournament", eve.id);
   const recruitment = await epic(orgB.id, "Recruitment Drive", eve.id);
 
@@ -451,6 +451,10 @@ async function main() {
   }
 
   // --- Finance: Org A (full example) ---
+  await prisma.orgSettings.update({
+    where: { organizationId: orgA.id },
+    data: { addOns: ["forms", "finance"] },
+  });
   const orgAPeriod = await prisma.budgetPeriod.create({
     data: {
       organizationId: orgA.id,
@@ -699,6 +703,10 @@ async function main() {
   }
 
   // --- Finance: Org B (lighter, still non-trivial) ---
+  await prisma.orgSettings.update({
+    where: { organizationId: orgB.id },
+    data: { addOns: ["forms", "finance"] },
+  });
   const orgBPeriod = await prisma.budgetPeriod.create({
     data: {
       organizationId: orgB.id,
@@ -793,7 +801,8 @@ async function main() {
   // sender (Phase 1 backfill); the seeded org also publishes its public feed.
   await prisma.orgSettings.update({
     where: { organizationId: cbc.id },
-    data: { platformMailFallback: true, publicEventsEnabled: true },
+    // Its forms and budget are part of the demo: both add-ons are on.
+    data: { platformMailFallback: true, publicEventsEnabled: true, addOns: ["forms", "finance"] },
   });
   const template = await applyCbcTemplate(prisma, {
     organizationId: cbc.id,
@@ -808,13 +817,14 @@ async function main() {
     labelIds: template.labelIds,
   });
   const moonstone = await seedMoonstoneShowcase(cbc.id, cbcUsers);
+  const past = await seedPastMeetingsLook(cbc.id, cbcUsers);
 
   console.log("Seed complete:", {
     users: userSeeds.length + CBC_PEOPLE.length,
     organizations: ORG_SLUGS,
     orgATasks: 17,
     orgBTasks: 8,
-    claudeBuildersClub: { ...demo, ...moonstone },
+    claudeBuildersClub: { ...demo, ...moonstone, ...past },
   });
 }
 
@@ -878,6 +888,115 @@ export interface PulseIssueData {
  * named); last week's pulse; and the pulse settings. The seed recreates the
  * org on every run, so this runs once per seed.
  */
+/** First names and last names for the demo's workshop sign-ups. */
+const SIGNUP_FIRST = ["Ava", "Ben", "Chloe", "Dev", "Ella", "Finn", "Grace", "Hugo", "Isla", "Jai"];
+const SIGNUP_LAST = ["Nguyen", "Patel", "Kim", "Garcia", "Okafor", "Silva", "Chen", "Rossi"];
+
+/**
+ * What the Past list draws in the workshop plan, made real for the demo:
+ * sign-ups on each past workshop, so a row reads "42 of 50 came" with its
+ * bar; a Recap note and a recording on the two latest workshops; and a few
+ * board meetings the month before, so a month folds to "3 more in
+ * September, Show". The same rows .data/past-meetings-look.mjs adds to an
+ * existing local demo database.
+ */
+async function seedPastMeetingsLook(
+  organizationId: string,
+  members: Record<CbcPersonKey, string>,
+): Promise<{ pastSignups: number; monthBeforeMeetings: number }> {
+  const now = new Date();
+  const workshops = await prisma.event.findMany({
+    where: { organizationId, kind: "WORKSHOP", endsAt: { lt: now }, deletedAt: null },
+    orderBy: { startsAt: "desc" },
+    select: { id: true, title: true, startsAt: true, attendanceCount: true },
+  });
+  const code = () => faker.string.alphanumeric({ length: 12, casing: "lower" });
+  let pastSignups = 0;
+  for (const [i, w] of workshops.entries()) {
+    // Everyone who came signed up, plus a few who didn't make it.
+    const total = Math.max(w.attendanceCount, 30) + 4 + ((i * 3) % 9);
+    const rows: Prisma.EventRegistrationCreateManyInput[] = Array.from(
+      { length: total },
+      (_, n) => {
+        const first = SIGNUP_FIRST[n % SIGNUP_FIRST.length];
+        const last = SIGNUP_LAST[Math.floor(n / SIGNUP_FIRST.length) % SIGNUP_LAST.length];
+        return {
+          organizationId,
+          eventId: w.id,
+          name: `${first} ${last}`,
+          email: `${first}.${last}.${n}@example.edu`.toLowerCase(),
+          phone: `+1617555${String(n).padStart(4, "0")}`,
+          status: "GOING",
+          inviteCode: code(),
+          ticketCode: code(),
+          checkedInAt:
+            n < w.attendanceCount ? new Date(w.startsAt.getTime() + 10 * 60 * 1000) : null,
+          queuedAt: new Date(w.startsAt.getTime() - (3 + (n % 5)) * DAY_MS),
+        };
+      },
+    );
+    await prisma.eventRegistration.createMany({ data: rows });
+    pastSignups += rows.length;
+  }
+
+  // The two latest workshops have their recap and their recording.
+  for (const w of workshops.slice(0, 2)) {
+    const text = `What we covered in ${w.title}, the demos, and the links people asked for.`;
+    await prisma.note.create({
+      data: {
+        organizationId,
+        title: `Recap: ${w.title}`,
+        contentJson: {
+          type: "doc",
+          content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+        },
+        contentText: text,
+        visibility: NoteVisibility.ORGANIZATION,
+        authorId: members.oliver,
+        updatedById: members.oliver,
+        eventId: w.id,
+      },
+    });
+    await prisma.event.update({
+      where: { id: w.id },
+      data: { recordingUrl: `https://example.com/recordings/${w.id}` },
+    });
+  }
+
+  // Board meetings in the month before this one: a month that folds.
+  const [year, month] = localDateKey(now, CBC_ORG.timezone).split("-").map(Number);
+  const before = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+  const board = [members.jackson, members.oliver, members.lucas, members.kristine];
+  const monthBefore = [
+    { title: "Fall planning retreat", day: 6, hour: 13, minutes: 180 },
+    { title: "Budget review with the treasurer", day: 13, hour: 18, minutes: 45 },
+    { title: "Workshop calendar lock", day: 20, hour: 18, minutes: 60 },
+    { title: "Partner pipeline check-in", day: 27, hour: 18, minutes: 30 },
+  ];
+  for (const m of monthBefore) {
+    const startsAt = zonedInstant(
+      `${before}-${String(m.day).padStart(2, "0")}`,
+      m.hour,
+      CBC_ORG.timezone,
+    );
+    await prisma.event.create({
+      data: {
+        organizationId,
+        title: m.title,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + m.minutes * 60 * 1000),
+        location: "Curry Student Center 342",
+        kind: "BOARD_MEETING",
+        visibility: "INTERNAL",
+        hostUserId: members.oliver,
+        createdById: members.oliver,
+        attendees: { create: board.map((userId) => ({ userId, rsvp: RSVPStatus.YES })) },
+      },
+    });
+  }
+  return { pastSignups, monthBeforeMeetings: monthBefore.length };
+}
+
 async function seedMoonstoneShowcase(
   organizationId: string,
   members: Record<CbcPersonKey, string>,
@@ -937,8 +1056,9 @@ async function seedMoonstoneShowcase(
     due: -14,
   });
   await plainEpic({
-    title: "Club operations",
-    description: "Budget, rooms, the board calendar and everything that keeps the club running.",
+    title: "Organization operations",
+    description:
+      "Budget, rooms, the board calendar and everything that keeps the organization running.",
     color: "#64748b",
     owner: "jackson",
     status: TaskStatus.NOT_STARTED,

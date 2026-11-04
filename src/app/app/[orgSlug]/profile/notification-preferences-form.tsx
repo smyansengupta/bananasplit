@@ -108,7 +108,7 @@ export function NotificationPreferencesForm({
   return (
     <SettingsCard
       title="Email notifications"
-      description="For every organization you belong to. These choose what is also emailed to you; everything still shows in the notification bell. Changes save as you make them."
+      description="What also gets emailed to you."
       status={
         <p aria-live="polite" className="min-h-5">
           {error ? (

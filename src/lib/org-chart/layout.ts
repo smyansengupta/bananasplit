@@ -6,7 +6,8 @@ import { stratify, tree, type HierarchyPointNode } from "d3-hierarchy";
  * Advisors are left out of the hierarchy and placed beside their manager,
  * to the right on the same row, joined by a dashed edge; the separation
  * function reserves their width so they never overlap a neighbour. Several
- * roots hang off an invisible root. A reference to a missing manager or a
+ * roots hang off an invisible root. Extra managers (alsoReportsToIds) are
+ * dotted edges on top of the tree: they never move a position. A reference to a missing manager or a
  * loop (possible only in an unsaved draft) makes that position a root.
  */
 
@@ -20,6 +21,7 @@ export interface LayoutInput {
   reportsToId: string | null;
   isAdvisor: boolean;
   rank: string;
+  alsoReportsToIds?: readonly string[];
 }
 
 export interface LaidOutNode {
@@ -34,7 +36,7 @@ export interface LaidOutEdge {
   id: string;
   source: string;
   target: string;
-  kind: "reports" | "advisor";
+  kind: "reports" | "advisor" | "dotted";
 }
 
 export interface ChartLayout {
@@ -145,6 +147,16 @@ export function layoutOrgChart(positions: readonly LayoutInput[]): ChartLayout {
       edges.push({ id: `a:${n.data.id}:${advisor.id}`, source: n.data.id, target: advisor.id, kind: "advisor" });
     });
   });
+
+  // Dotted lines between positions that are both on the canvas.
+  const placed = new Set(nodes.map((n) => n.id));
+  for (const p of sorted) {
+    if (!placed.has(p.id)) continue;
+    for (const manager of new Set(p.alsoReportsToIds ?? [])) {
+      if (manager === p.id || manager === parents.get(p.id) || !placed.has(manager)) continue;
+      edges.push({ id: `d:${manager}:${p.id}`, source: manager, target: p.id, kind: "dotted" });
+    }
+  }
 
   const minX = Math.min(...nodes.map((n) => n.x));
   for (const n of nodes) n.x -= minX;

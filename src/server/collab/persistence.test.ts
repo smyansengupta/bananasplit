@@ -111,7 +111,7 @@ describe("storeNoteState", () => {
     expect(db.note.updateMany).not.toHaveBeenCalled();
   });
 
-  it("saves nothing in a paused club (its trial ended), even for the author", async () => {
+  it("keeps saving once a trial ends: the organization is on Team Free, never paused", async () => {
     db.organization.findUnique.mockResolvedValueOnce({
       kind: "CLUB",
       plan: "TRIAL",
@@ -119,11 +119,9 @@ describe("storeNoteState", () => {
     } as never);
     db.note.findFirst.mockResolvedValue(row());
     const live = type(seedNoteState(doc("Minutes")), " edited");
-    expect(await storeNoteState(ctxAs("admin_1", Role.ADMIN), "note_1", live)).toEqual({
-      ok: false,
-      reason: "forbidden",
-    });
-    expect(db.note.updateMany).not.toHaveBeenCalled();
+    const result = await storeNoteState(ctxAs("admin_1", Role.ADMIN), "note_1", live);
+    expect(result).toMatchObject({ ok: true });
+    expect(db.note.updateMany).toHaveBeenCalled();
   });
 
   it("saves the body, its text for search, the state, the writer and a new version", async () => {

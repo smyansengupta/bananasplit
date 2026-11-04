@@ -209,6 +209,12 @@ function makeTx() {
         return { count: rows.length };
       },
     },
+    // createEvent reads the org's reminder default; no settings row is fine.
+    orgSettings: {
+      async findUnique() {
+        return null;
+      },
+    },
     membership: {
       async findMany({ where }: { where: Record<string, unknown> }) {
         return store.members.filter((r) => visible(r) && matchWhere(r, where)).map(clone);
@@ -327,7 +333,7 @@ async function fakeFetch(input: string | URL | Request, init: RequestInit = {}):
 
 const { gcalJob, syncDeps, pushToGoogle } = await import("./sync");
 const { googleImportJob } = await import("./import");
-const { requestGoogleImport } = await import("./requests");
+const { requestGoogleImport, requestGoogleSync, NO_PUBLIC_CALENDAR } = await import("./requests");
 const { googleRevokeJob } = await import("./revoke");
 const { siteRebuildJob, parseBuildHookUrl } = await import("@/server/public-events/rebuild");
 const { createCalendarClient } = await import("./client");
@@ -539,6 +545,30 @@ describe("gcal: mirroring one event", () => {
     expect(ev("e_int")).toMatchObject({ googleSyncState: "NOT_APPLICABLE", googleEventId: null });
   });
 
+  it("never mirrors a PUBLIC event without a public calendar (no default, not even primary)", async () => {
+    // Just connected, or "Don't mirror public events".
+    for (const config of [{}, { publicCalendarId: null }, { publicCalendarId: null, internalCalendarId: INTERNAL_CAL }]) {
+      store.integrations[0].config = config;
+      store.events.set("e1", event("e1"));
+      await gcalJob(run("e1"));
+      expect(google.calls).toEqual([]);
+      expect(ev("e1")).toMatchObject({ googleSyncState: "NOT_APPLICABLE", googleEventId: null, googleCalendarId: null });
+    }
+  });
+
+  it("opting out of public mirroring removes the public mirror on its next sync", async () => {
+    store.events.set("e1", event("e1"));
+    await gcalJob(run("e1"));
+    expect(liveGoogle(PUBLIC_CAL)).toHaveLength(1);
+    store.integrations[0].config = { publicCalendarId: null };
+    Object.assign(ev("e1"), { title: "Edited", syncVersion: 2, googleSyncState: "PENDING" });
+    google.calls = [];
+    await gcalJob(run("e1"));
+    expect(google.calls).toEqual([`DELETE ${PUBLIC_CAL}/${googleEventId(ORG, "e1").slice(0, 8)}`]);
+    expect(liveGoogle(PUBLIC_CAL)).toHaveLength(0);
+    expect(ev("e1")).toMatchObject({ googleSyncState: "NOT_APPLICABLE", googleEventId: null, googleCalendarId: null });
+  });
+
   it("a visibility flip to INTERNAL removes the public mirror (no internal calendar)", async () => {
     store.events.set("e1", event("e1"));
     await gcalJob(run("e1"));
@@ -632,7 +662,7 @@ describe("invalid_grant", () => {
     expect(first).toMatchObject({ status: "CANCELLED" });
     expect(store.integrations[0]).toMatchObject({ status: "NEEDS_REAUTH" });
     expect(store.notifications.map((n) => n.userId).sort()).toEqual(["u_admin", "u_owner"]);
-    expect(store.notifications[0]).toMatchObject({ type: "INTEGRATION_ERROR", linkUrl: "/app/claude-builders-club/settings/integrations" });
+    expect(store.notifications[0]).toMatchObject({ type: "INTEGRATION_ERROR", linkUrl: "/app/claude-builders-club/integrations/google-calendar" });
     expect(store.jobs.filter((j) => j.kind === "notify-email")).toHaveLength(2);
     expect(ev("e1")).toMatchObject({ googleSyncState: "FAILED" });
 
@@ -714,6 +744,45 @@ describe("the event service feeds the worker", () => {
   });
 });
 
+describe("Sync now (the backfill)", () => {
+  const soon = () => {
+    const startsAt = new Date(Date.now() + 86_400_000);
+    return { startsAt, endsAt: new Date(startsAt.getTime() + 3_600_000) };
+  };
+  function syncNow() {
+    return withSystemOrgTx(ORG, { userId: "u_admin" }, (ctx) =>
+      requestGoogleSync({ ...ctx, organizationId: ORG, userId: "u_admin", role: "ADMIN" }),
+    );
+  }
+  function seed() {
+    store.events.set("e_new", event("e_new", { ...soon(), googleSyncState: "NOT_APPLICABLE" }));
+    // Mirrored under the old implicit "primary" calendar.
+    store.events.set(
+      "e_mirrored",
+      event("e_mirrored", { ...soon(), googleSyncState: "SYNCED", googleCalendarId: "primary", googleEventId: "g_old" }),
+    );
+    store.events.set(
+      "e_synced",
+      event("e_synced", { ...soon(), googleSyncState: "SYNCED", googleCalendarId: PUBLIC_CAL, googleEventId: "g_ok" }),
+    );
+  }
+
+  it("pushes every public event that is not on the public calendar yet", async () => {
+    seed();
+    expect(await syncNow()).toEqual({ ok: true, queued: 2 });
+    expect(store.jobs.map((j) => j.key).sort()).toEqual(["e_mirrored", "e_new"]);
+  });
+
+  it("without a public calendar it queues only the public mirrors left to remove", async () => {
+    store.integrations[0].config = { publicCalendarId: null };
+    seed();
+    expect(await syncNow()).toEqual({ ok: true, queued: 2 });
+    expect(store.jobs.map((j) => j.key).sort()).toEqual(["e_mirrored", "e_synced"]);
+    expect(ev("e_new").googleSyncState).toBe("NOT_APPLICABLE");
+    expect(google.calls).toEqual([]);
+  });
+});
+
 describe("google-import", () => {
   function importRun(mode: "dry-run" | "apply") {
     return {
@@ -778,6 +847,25 @@ describe("google-import", () => {
       unchanged: 0,
     });
     expect(google.calls.every((c) => c.startsWith("GET"))).toBe(true);
+  });
+
+  it("without a public calendar it reads no calendar at all and is cancelled", async () => {
+    seedGoogle();
+    cal("primary").set("g_private", { id: "g_private", status: "confirmed", etag: '"1"', summary: "Dentist" });
+    for (const config of [{}, { publicCalendarId: null }]) {
+      for (const mode of ["dry-run", "apply"] as const) {
+        store.integrations[0].config = { ...config };
+        const before = store.events.size;
+        expect(await googleImportJob(importRun(mode))).toEqual({
+          status: "CANCELLED",
+          error: "No public calendar is chosen to import from",
+        });
+        expect(store.events.size).toBe(before);
+        expect(store.integrations[0].config).not.toHaveProperty("import");
+      }
+    }
+    expect(google.calls).toEqual([]);
+    expect(store.jobs).toHaveLength(0);
   });
 
   it("apply links the website-synced workshop once, creates the rest, and a re-run is a no-op", async () => {
@@ -863,6 +951,18 @@ describe("requesting the Google import", () => {
     expect(await request("dry-run")).toMatchObject({ ok: false, error: expect.stringMatching(/^Reconnect/) });
     store.integrations = store.integrations.filter((i) => i.provider !== "GOOGLE_CALENDAR");
     expect(await request("dry-run")).toMatchObject({ ok: false, error: expect.stringMatching(/^Connect/) });
+    expect(store.jobs).toHaveLength(0);
+    expect(store.audits).toHaveLength(0);
+  });
+
+  it("refuses without a public calendar: there is nothing it may read", async () => {
+    // Just connected, or "Don't mirror public events" (even after a dry run).
+    for (const config of [{}, { publicCalendarId: null, import: { mode: "dry-run", status: "done" } }]) {
+      store.integrations[0].config = config;
+      for (const mode of ["dry-run", "apply"] as const) {
+        expect(await request(mode)).toEqual({ ok: false, error: NO_PUBLIC_CALENDAR });
+      }
+    }
     expect(store.jobs).toHaveLength(0);
     expect(store.audits).toHaveLength(0);
   });

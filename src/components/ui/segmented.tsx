@@ -1,6 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -15,11 +15,13 @@ import { cn } from "@/lib/utils";
 export interface SegmentedOption {
   value: string;
   label: ReactNode;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   href?: string;
   /** Hide the label below `sm`, keeping the icon (and the label for screen readers). */
   compact?: boolean;
   title?: string;
+  /** How many are waiting there, as a small badge after the label (none at 0). */
+  count?: number;
 }
 
 export const segmentedTrack =
@@ -41,6 +43,20 @@ export function segmentedItem(active: boolean, options: { thumb?: boolean } = {}
   );
 }
 
+/** An option's count: a small round badge, dark on the one you're on. */
+export function SegmentCount({ n, active }: { n: number; active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[11px] leading-none font-semibold tabular-nums",
+        active ? "bg-foreground text-background" : "bg-foreground/10 text-foreground/70",
+      )}
+    >
+      {n}
+    </span>
+  );
+}
+
 /**
  * A filter chip (search scopes, calendar categories, "whose tasks"): a
  * small pill toggle, filled with the primary when on.
@@ -59,6 +75,7 @@ export function Segmented({
   value,
   onSelect,
   label,
+  labelsFrom,
   className,
 }: {
   options: readonly SegmentedOption[];
@@ -66,6 +83,13 @@ export function Segmented({
   onSelect?: (value: string) => void;
   /** What the group switches, for screen readers ("Layout", "View"). */
   label: string;
+  /**
+   * When a `compact` option shows its label beside the icon. The default is
+   * the viewport (`sr-only sm:not-sr-only`), which is wrong inside a bar that
+   * has to fit whatever room is left: the task toolbar passes a container
+   * query so the labels go when the BAR is tight, not when the window is.
+   */
+  labelsFrom?: string;
   className?: string;
 }) {
   const track = useRef<HTMLDivElement>(null);
@@ -112,7 +136,10 @@ export function Segmented({
         const content = (
           <>
             {Icon && <Icon aria-hidden="true" />}
-            <span className={cn(o.compact && Icon && "sr-only sm:not-sr-only")}>{o.label}</span>
+            <span className={cn(o.compact && Icon && (labelsFrom ?? "sr-only sm:not-sr-only"))}>
+              {o.label}
+            </span>
+            {o.count ? <SegmentCount n={o.count} active={active} /> : null}
           </>
         );
         const itemClass = segmentedItem(active, { thumb: thumb !== null });

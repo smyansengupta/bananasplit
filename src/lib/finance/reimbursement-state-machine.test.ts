@@ -83,7 +83,7 @@ describe("nextExpenseStatus — a member cannot approve their own expense (spec 
       submitterId: submitter,
       actorHasFinanceAccess: false,
     });
-    expect(result).toEqual({ error: "Only a treasurer or owner can approve expenses." });
+    expect(result).toEqual({ error: "Only an owner, admin or treasurer can approve expenses." });
   });
 });
 
@@ -130,5 +130,53 @@ describe("nextExpenseStatus — legal happy path", () => {
       actorHasFinanceAccess: false,
     });
     expect(result).toEqual({ status: TransactionStatus.DRAFT });
+  });
+
+  it("approves and pays a submitted expense in one step, never your own", () => {
+    const ok = nextExpenseStatus({
+      currentStatus: TransactionStatus.SUBMITTED,
+      transition: "APPROVE_AND_PAY",
+      actorId: treasurer,
+      submitterId: submitter,
+      actorHasFinanceAccess: true,
+    });
+    expect(ok).toEqual({ status: TransactionStatus.REIMBURSED });
+    const own = nextExpenseStatus({
+      currentStatus: TransactionStatus.SUBMITTED,
+      transition: "APPROVE_AND_PAY",
+      actorId: treasurer,
+      submitterId: treasurer,
+      actorHasFinanceAccess: true,
+    });
+    expect(own).toHaveProperty("error");
+    const draft = nextExpenseStatus({
+      currentStatus: TransactionStatus.DRAFT,
+      transition: "APPROVE_AND_PAY",
+      actorId: treasurer,
+      submitterId: submitter,
+      actorHasFinanceAccess: true,
+    });
+    expect(draft).toHaveProperty("error");
+  });
+
+  it("lets only the submitter send a rejected expense again", () => {
+    expect(
+      nextExpenseStatus({
+        currentStatus: TransactionStatus.REJECTED,
+        transition: "RESUBMIT",
+        actorId: submitter,
+        submitterId: submitter,
+        actorHasFinanceAccess: false,
+      }),
+    ).toEqual({ status: TransactionStatus.SUBMITTED });
+    expect(
+      nextExpenseStatus({
+        currentStatus: TransactionStatus.REJECTED,
+        transition: "RESUBMIT",
+        actorId: treasurer,
+        submitterId: submitter,
+        actorHasFinanceAccess: true,
+      }),
+    ).toHaveProperty("error");
   });
 });

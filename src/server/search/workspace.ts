@@ -48,9 +48,10 @@ import { everyWord } from "./where";
  * scoreFields() then ranks them, the same way for every kind, so the
  * palette can order whole groups by their best hit.
  *
- * What the database does not enforce, this does: finance beyond the
- * member's own expenses only for owners and treasurers (the RLS policy
- * lets any member read the ledger; the pages gate it), member emails only
+ * The database keeps finance to the owner, admins and treasurers (a member
+ * reads only their own expenses, and category names through
+ * app.expense_categories); this says the same, so a member's search never
+ * asks for more. What it does not enforce, this does: member emails only
  * for admins, and sections the org hid only for owners and admins.
  */
 
@@ -63,6 +64,8 @@ export interface SearchViewer {
   zones: { viewer: string; org: string };
   /** Sections the org turned off in Settings › Sidebar. */
   hiddenSections: ReadonlySet<SectionId>;
+  /** Add-ons the org hasn't added: left out for everyone (src/lib/addons.ts). */
+  notAddedSections?: ReadonlySet<SectionId>;
   /** The published org chart, if any. */
   orgChartVersionId: string | null;
   /** A Personal space: its databases are its owner's, not the club's. */
@@ -88,7 +91,7 @@ interface Ctx {
 
 function join(...parts: (string | null | undefined | false)[]): string | null {
   const kept = parts.filter((p): p is string => Boolean(p && p.trim()));
-  return kept.length ? kept.join(" · ") : null;
+  return kept.length ? kept.join(", ") : null;
 }
 
 function hit(kind: SearchKind, id: string, fields: Omit<SearchHit, "key" | "kind">): SearchHit {
@@ -247,7 +250,7 @@ async function searchFolders(ctx: Ctx): Promise<SearchGroup> {
     hit("folder", f.id, {
       title: f.name,
       href: `${ctx.base}/notes?folder=${f.id}`,
-      detail: "Folder in Files",
+      detail: "In Files",
       meta: `${f._count.notes} ${f._count.notes === 1 ? "note" : "notes"}`,
       score: scoreFields([{ text: f.name, weight: 3 }], q),
     }),
@@ -276,7 +279,7 @@ async function searchFiles(ctx: Ctx): Promise<SearchGroup> {
     return hit("file", f.id, {
       title: f.name,
       href: `${ctx.base}/notes/files/${f.id}`,
-      detail: excerptAround(f.excerpt, q.folded) ?? f.folder?.name ?? "File",
+      detail: excerptAround(f.excerpt, q.folded) ?? f.folder?.name ?? null,
       meta: ext ?? null,
       score: scoreFields(
         [
@@ -434,7 +437,7 @@ async function searchEpics(ctx: Ctx): Promise<SearchGroup> {
         title: l.name,
         href: `${ctx.base}/tasks?view=table&scope=all&label=${l.id}`,
         detail: "Tasks with this tag",
-        meta: "Tag",
+        meta: null,
         score: scoreFields([{ text: l.name, weight: 3 }], q),
       }),
     ),
@@ -568,9 +571,47 @@ async function searchPolls(ctx: Ctx): Promise<SearchGroup> {
     take: ctx.pool,
   });
 
+  // Forms (quick polls open to anyone are forms too): the Forms section's own.
+  const forms = await db.form.findMany({
+    where: {
+      organizationId: viewer.orgId,
+      deletedAt: null,
+      ...(ctx.browsing ? { closedAt: null } : {}),
+      ...everyWord<Prisma.FormWhereInput>(q.terms, (c) => [{ title: c }, { description: c }]),
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      kind: true,
+      closesAt: true,
+      closedAt: true,
+      createdAt: true,
+    },
+    take: ctx.pool,
+  });
+
   const closed = (closesAt: Date | null) =>
     Boolean(closesAt && closesAt.getTime() <= now.getTime());
   const rows = [
+    ...forms.map((f) => ({
+      createdAt: f.createdAt,
+      hit: hit("form", f.id, {
+        title: f.title,
+        href: `${ctx.base}/forms/${f.id}`,
+        detail:
+          excerptAround(f.description, q.folded) ?? (f.kind === "QUICK_POLL" ? "Quick poll" : null),
+        meta: f.closedAt || closed(f.closesAt) ? "Closed" : "Open",
+        score: scoreFields(
+          [
+            { text: f.title, weight: 3 },
+            { text: f.description, weight: 1 },
+          ],
+          q,
+        ),
+      }),
+    })),
     ...timePolls.map((p) => ({
       createdAt: p.createdAt,
       hit: hit("poll", p.id, {
@@ -593,7 +634,7 @@ async function searchPolls(ctx: Ctx): Promise<SearchGroup> {
         createdAt: p.createdAt,
         hit: hit("poll", p.id, {
           title: p.question,
-          href: `${ctx.base}/calendar/polls/${p.id}`,
+          href: `${ctx.base}/forms/polls/${p.id}`,
           detail:
             excerptAround(p.description, q.folded) ??
             excerptAround(options, q.folded) ??
@@ -705,7 +746,7 @@ async function searchRoles(ctx: Ctx): Promise<SearchGroup> {
   const hits = rows
     .map((p) => {
       const holder = p.user?.name ?? p.personName ?? null;
-      const duties = [...p.responsibilities, ...p.decidesAlone].join(" · ");
+      const duties = [...p.responsibilities, ...p.decidesAlone].join(", ");
       const score = ctx.browsing
         ? 1
         : scoreFields(
@@ -740,7 +781,6 @@ const DATABASE_KIND: Record<string, string> = {
   SIGNUPS: "Sign-ups",
   SESSIONS: "Sessions",
   PEOPLE: "People",
-  CUSTOM: "Club database",
 };
 
 async function searchDatabases(ctx: Ctx): Promise<SearchGroup> {
@@ -773,10 +813,7 @@ async function searchDatabases(ctx: Ctx): Promise<SearchGroup> {
     hit("database", d.key, {
       title: d.name,
       href: `${ctx.base}/databases/${d.key}`,
-      detail: join(
-        d.kind === "CUSTOM" && viewer.personal ? "Database" : (DATABASE_KIND[d.kind] ?? null),
-        d.tag,
-      ),
+      detail: join(DATABASE_KIND[d.kind] ?? null, d.tag),
       meta: null,
       score: scoreFields(
         [
@@ -816,7 +853,7 @@ function amountQuery(text: string): number | null {
 }
 
 /**
- * Finance. Owners and treasurers: the ledger (description, counterparty,
+ * Finance. Owners, admins and treasurers: the ledger (description, counterparty,
  * category, or the amount itself) and sponsors. Everyone else: only their
  * own expenses, which open on My reimbursements.
  */
@@ -824,10 +861,25 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
   const { db, viewer, q } = ctx;
   const manager = can({ role: viewer.role }, "finance.manage");
   const cents = ctx.browsing ? null : amountQuery(q.text);
+  // A member can't read category rows (finance only): their categories by
+  // name come from app.expense_categories, matched here.
+  const memberCategories = manager
+    ? []
+    : await db.$queryRaw<{ id: string; name: string }[]>`
+        SELECT "id", "name" FROM app.expense_categories()`;
+  const categoryName = new Map(memberCategories.map((c) => [c.id, c.name]));
   const words = everyWord<Prisma.TransactionWhereInput>(q.terms, (c) => [
     { description: c },
     { counterparty: c },
-    { category: { name: c } },
+    manager
+      ? { category: { name: c } }
+      : {
+          categoryId: {
+            in: memberCategories
+              .filter((m) => m.name.toLowerCase().includes(c.contains.toLowerCase()))
+              .map((m) => m.id),
+          },
+        },
   ]);
   const transactions = await db.transaction.findMany({
     where: {
@@ -849,6 +901,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
       status: true,
       occurredAt: true,
       voidedAt: true,
+      categoryId: true,
       category: { select: { name: true } },
     },
     take: ctx.pool,
@@ -874,9 +927,35 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
         })
       : [];
 
+  // Budget lines of the active period (finance roles; members can't read
+  // them), so a meeting or a task can be linked to the line it spends from.
+  const budgets =
+    manager && !ctx.browsing
+      ? await db.budgetCategory.findMany({
+          where: {
+            organizationId: viewer.orgId,
+            budgetPeriod: { isActive: true },
+            ...everyWord<Prisma.BudgetCategoryWhereInput>(q.terms, (c) => [{ name: c }]),
+          },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true, budgetPeriodId: true },
+          take: ctx.pool,
+        })
+      : [];
+
   const hits = [
+    ...budgets.map((c) =>
+      hit("budget", c.id, {
+        title: c.name,
+        href: `${ctx.base}/finance/budget?period=${c.budgetPeriodId}`,
+        detail: null,
+        score: scoreFields([{ text: c.name, weight: 3 }], q),
+      }),
+    ),
     ...transactions.map((t) => {
       const amount = formatCents(t.amountCents, t.currency);
+      const category =
+        t.category?.name ?? (t.categoryId ? categoryName.get(t.categoryId) : undefined);
       return hit("transaction", t.id, {
         title: t.description,
         href: manager
@@ -886,7 +965,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
         detail: join(
           formatFinanceDate(t.occurredAt),
           t.counterparty,
-          t.category?.name,
+          category,
           t.voidedAt ? "Voided" : TX_STATUS[t.status],
         ),
         meta: `${t.direction === "IN" ? "+" : "−"}${amount}`,
@@ -897,7 +976,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
                 [
                   { text: t.description, weight: 3 },
                   { text: t.counterparty, weight: 2 },
-                  { text: t.category?.name, weight: 1 },
+                  { text: category, weight: 1 },
                 ],
                 q,
               ),
@@ -907,7 +986,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
       hit("sponsor", s.id, {
         title: s.name,
         href: `${ctx.base}/finance/sponsorships`,
-        detail: join("Sponsor", s.contactName),
+        detail: s.contactName ?? null,
         meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "sponsorship" : "sponsorships"}`,
         score: scoreFields(
           [
@@ -963,12 +1042,13 @@ function sectionOf(href: string, base: string): SectionId | null {
 /** Which groups a search reads: the filter's, minus sections the org hid (unless admin). */
 export function groupsFor(
   scope: SearchScope,
-  viewer: Pick<SearchViewer, "role" | "hiddenSections">,
+  viewer: Pick<SearchViewer, "role" | "hiddenSections" | "notAddedSections">,
 ): ServerGroupId[] {
   const admin = can({ role: viewer.role }, "settings.view");
   return SERVER_GROUPS.filter((id) => {
     if (scope !== "all" && GROUP_SCOPE[id] !== scope) return false;
     const section = GROUP_SECTION[id];
+    if (section && viewer.notAddedSections?.has(section)) return false;
     return admin || !section || !viewer.hiddenSections.has(section);
   });
 }
@@ -976,12 +1056,19 @@ export function groupsFor(
 /**
  * Searches everything `viewer` may open for `query`. With no words: in
  * "All", the pages they visited last; under a filter, the latest of
- * that kind (recent notes, upcoming events, open tasks...).
+ * that kind (recent notes, upcoming events, open tasks...). `groups`
+ * narrows which groups run at all, and `limit` sets the hits per group
+ * (the AI connectors' search reads fewer kinds, and more of each).
  */
 export async function searchWorkspace(
   db: TxClient,
   viewer: SearchViewer,
-  input: { query: string; scope: SearchScope },
+  input: {
+    query: string;
+    scope: SearchScope;
+    groups?: readonly ServerGroupId[];
+    limit?: number;
+  },
   now = new Date(),
 ): Promise<SearchResponse> {
   const q = parseQuery(input.query);
@@ -994,6 +1081,7 @@ export async function searchWorkspace(
     const recent = (await listRecent(db, viewer.orgId, viewer.orgSlug, viewer.userId, 10))
       .filter((r) => {
         const section = sectionOf(r.href, base);
+        if (section && viewer.notAddedSections?.has(section)) return false;
         return admin || !section || !viewer.hiddenSections.has(section);
       })
       .slice(0, 6);
@@ -1014,10 +1102,11 @@ export async function searchWorkspace(
     };
   }
 
-  const limit = input.scope === "all" ? ALL_LIMIT : SCOPED_LIMIT;
+  const limit = input.limit ?? (input.scope === "all" ? ALL_LIMIT : SCOPED_LIMIT);
   const ctx: Ctx = { db, viewer, q, browsing, limit, pool: Math.min(limit * 4, 40), base, now };
   const groups: SearchGroup[] = [];
   for (const id of groupsFor(input.scope, viewer)) {
+    if (input.groups && !input.groups.includes(id)) continue;
     const result = await SEARCHERS[id](ctx);
     if (result.hits.length) groups.push(result);
   }

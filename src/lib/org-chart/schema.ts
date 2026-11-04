@@ -2,10 +2,12 @@ import { z } from "zod";
 
 /**
  * The strict JSON shape Claude returns for an org-chart document (decision
- * 'Org chart parsing with Claude'). It is the spec's schema plus two fields:
- * is_advisor (the spec's advisor rule, "no reports, reporting to one
- * person", matches every leaf, so advisors must be flagged explicitly) and
- * source_quote (the lines the position was read from, shown in review).
+ * 'Org chart parsing with Claude'). It is the spec's schema plus three
+ * fields: is_advisor (the spec's advisor rule, "no reports, reporting to one
+ * person", matches every leaf, so advisors must be flagged explicitly),
+ * source_quote (the lines the position was read from, shown in review) and
+ * also_reports_to (dotted lines; defaults to none, so older parses and
+ * fixtures still read).
  *
  * The schema is flat (structured outputs reject recursive schemas) and has
  * no length constraints: the SDK would strip them anyway, and normalize()
@@ -25,6 +27,12 @@ export const RawPositionSchema = z.object({
     .string()
     .nullable()
     .describe("The id of the position this one reports to, or null for the top of the chart."),
+  also_reports_to: z
+    .array(z.string())
+    .default([])
+    .describe(
+      "Ids of other positions this one also reports to (a dotted line or second manager), besides reports_to. Usually empty.",
+    ),
   manages: z
     .array(z.string())
     .describe("Ids of the positions this one manages, as the document states them."),
@@ -53,6 +61,7 @@ export const OrgChartParseSchema = z.object({
     .describe("Questions the document leaves open, including anything ambiguous about the structure."),
 });
 
-export type RawPosition = z.infer<typeof RawPositionSchema>;
-export type RawOpenItem = z.infer<typeof RawOpenItemSchema>;
-export type OrgChartParse = z.infer<typeof OrgChartParseSchema>;
+// Input types, so a position may leave also_reports_to out (it defaults to []).
+export type RawPosition = z.input<typeof RawPositionSchema>;
+export type RawOpenItem = z.input<typeof RawOpenItemSchema>;
+export type OrgChartParse = z.input<typeof OrgChartParseSchema>;

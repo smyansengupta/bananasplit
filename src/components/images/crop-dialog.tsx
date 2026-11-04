@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ZoomIn, ZoomOut } from "lucide-react";
+import { Loader2, ZoomIn, ZoomOut } from "@/components/icons";
 import { useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 

@@ -31,7 +31,7 @@ describe("fitsUnder (the database's rule)", () => {
 });
 
 describe("planNesting", () => {
-  it("breaking a plain task down makes it a story (clubs without epics, as before)", () => {
+  it("breaking a plain task down makes it a story (organizations without epics, as before)", () => {
     expect(planNesting(top("TASK"), newChild())).toEqual({
       ok: true,
       childType: "TASK",

@@ -93,7 +93,7 @@ function raw(over: Partial<Raw> = {}): Raw {
 const at = (iso: string) => new Date(iso);
 
 describe("shapePersonalHome", () => {
-  it("builds a card per club with its next meeting, open tasks, unread and pause", () => {
+  it("builds a card per organization with its next meeting, open tasks and unread", () => {
     const meeting = {
       id: "e1",
       title: "General meeting",
@@ -119,11 +119,10 @@ describe("shapePersonalHome", () => {
         nextMeeting: meeting,
         openTasks: 3,
         unread: 2,
-        paused: false,
         timeZone: "America/New_York",
       }),
       // A club that failed to load still has its card, just without numbers.
-      expect.objectContaining({ id: "c2", nextMeeting: null, openTasks: 0, paused: true }),
+      expect.objectContaining({ id: "c2", nextMeeting: null, openTasks: 0 }),
     ]);
     expect(data.moreClubs).toBe(2);
     expect(data.firstName).toBe("Maya");
@@ -330,7 +329,7 @@ describe("shapePersonalHome", () => {
         going: 7,
         capacity: 20,
         enabled: true,
-        manageHref: "/app/me-abc/calendar/party/rsvp",
+        manageHref: "/app/me-abc/meetings/party/rsvp",
         pageHref: "/e/bday1234",
       }),
     ]);
@@ -353,13 +352,62 @@ describe("profileGapsOf / Finish your profile", () => {
       hasAvailability: false,
     };
     expect(profileGapsOf(skipped)).toEqual(["school", "bio", "availability"]);
-    const data = shapePersonalHome(raw({ user: { ...user, hasAvailability: false } }), NOW);
+    const data = shapePersonalHome(
+      raw({
+        user: { ...user, hasAvailability: false },
+        spaces: [{ space: personal, digest: digest() }],
+      }),
+      NOW,
+    );
     expect(data.profileGaps).toEqual(["availability"]);
-    expect(data.finishProfileHref).toBe("/onboarding/profile/availability");
+    expect(data.finishProfileHref).toBe("/app/me-abc/profile");
   });
 
   it("counts links alone as a bio", () => {
     const links = [{ kind: "github", url: "https://github.com/maya" }];
     expect(profileGapsOf({ ...user, bio: null, links })).toEqual([]);
+  });
+});
+
+describe("Focus time on the Personal home", () => {
+  const evening = (id: string) => ({
+    id,
+    title: "Build night",
+    // Thursday 6 to 9 PM in Chicago.
+    startsAt: at("2026-10-15T23:00:00Z"),
+    endsAt: at("2026-10-16T02:00:00Z"),
+    allDay: false,
+    kind: "WORKSHOP" as const,
+    location: null,
+  });
+  const freeHours = (rsvp: "YES" | "NO" | null) => {
+    const data = shapePersonalHome(
+      raw({
+        spaces: [
+          { space: personal, digest: digest() },
+          {
+            space: robotics,
+            digest: digest({
+              events: [evening("e1")],
+              rsvps: rsvp ? new Map([["e1", rsvp]]) : new Map(),
+            }),
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(data.personalOrgId).toBe("p1");
+    expect(data.focus?.availabilityHref).toBe("/app/me-abc/profile");
+    return data.focus!.week.days.reduce((n, d) => n + d.free, 0);
+  };
+
+  it("counts an organization's event as busy only once you said yes", () => {
+    expect(freeHours("NO")).toBe(freeHours(null));
+    expect(freeHours("YES")).toBeLessThan(freeHours(null));
+  });
+
+  it("is left out without a Personal space", () => {
+    const data = shapePersonalHome(raw({ spaces: [{ space: robotics, digest: digest() }] }), NOW);
+    expect(data.focus).toBeNull();
   });
 });

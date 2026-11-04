@@ -16,6 +16,9 @@ import { GoogleReauthError } from "./token";
 /**
  * The google-import job: a one-time import of the events already on the
  * org's public Google Calendar, run as a dry run first and then applied.
+ * It reads only that calendar, and only when the org chose one: without a
+ * public calendar there is nothing to import (requestGoogleImport refuses,
+ * and a job queued before the opt-out is cancelled).
  *
  * - events.list runs outside any transaction (paginated, bounded by the
  *   job deadline), from 180 days back to 400 days ahead.
@@ -191,6 +194,9 @@ export const googleImportJob: JobHandler<{ integrationId: string; mode: "dry-run
     return { status: "CANCELLED", error: "Google Calendar needs to be reconnected" };
   }
   const calendarId = integration.config.publicCalendarId;
+  // The public calendar was unset or opted out of since the request: there
+  // is no calendar the import may read (never fall back to another one).
+  if (!calendarId) return { status: "CANCELLED", error: "No public calendar is chosen to import from" };
   const now = Date.now();
   const window = { timeMin: new Date(now - LOOKBACK_DAYS * DAY), timeMax: new Date(now + LOOKAHEAD_DAYS * DAY) };
 

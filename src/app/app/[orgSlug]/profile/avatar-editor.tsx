@@ -1,6 +1,6 @@
 "use client";
 
-import { ImageUp, Loader2, Trash2 } from "lucide-react";
+import { Camera, ImageUp, Loader2, Trash2 } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -20,7 +20,8 @@ import {
 const loadCropDialog = () => import("@/components/images/crop-dialog");
 const AvatarCropDialog = dynamic(loadCropDialog, { ssr: false });
 
-type Status = { kind: "idle" } | { kind: "saved"; message: string } | { kind: "error"; message: string };
+type Status =
+  { kind: "idle" } | { kind: "saved"; message: string } | { kind: "error"; message: string };
 
 async function readError(response: Response, fallback: string): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
@@ -35,10 +36,13 @@ async function readError(response: Response, fallback: string): Promise<string> 
 export function AvatarEditor({
   user,
   compact = false,
+  button = false,
 }: {
   user: UserAvatarUser;
   /** Onboarding A1: a small picture with Upload and "Use Google photo". */
   compact?: boolean;
+  /** The profile's header: the big picture itself, a click away from a new one. */
+  button?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +93,9 @@ export function AvatarEditor({
       setStatus({ kind: "saved", message: "Picture updated." });
       router.refresh();
     } catch (error) {
-      setCropError(error instanceof Error ? error.message : "Couldn't save your picture. Try again.");
+      setCropError(
+        error instanceof Error ? error.message : "Couldn't save your picture. Try again.",
+      );
     } finally {
       setUploading(false);
     }
@@ -101,7 +107,10 @@ export function AvatarEditor({
     try {
       const response = await fetch("/api/profile/avatar", { method: "DELETE" });
       if (!response.ok) {
-        setStatus({ kind: "error", message: await readError(response, "Couldn't remove your picture.") });
+        setStatus({
+          kind: "error",
+          message: await readError(response, "Couldn't remove your picture."),
+        });
         return;
       }
       setStatus({ kind: "saved", message: "Picture removed." });
@@ -133,6 +142,41 @@ export function AvatarEditor({
       onChange={pickFile}
     />
   );
+
+  if (button) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          onPointerEnter={() => void loadCropDialog()}
+          onFocus={() => void loadCropDialog()}
+          disabled={uploading || removing}
+          aria-label="Change your picture"
+          className="group focus-visible:ring-ring/50 relative shrink-0 rounded-full outline-none focus-visible:ring-3"
+        >
+          <UserAvatar user={user} size="xl" />
+          <span
+            aria-hidden="true"
+            className="bg-foreground/45 text-background absolute inset-0 grid place-items-center rounded-full opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          >
+            {uploading ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
+              <Camera className="size-5" />
+            )}
+          </span>
+        </button>
+        {status.kind === "error" && (
+          <p role="alert" className="text-destructive basis-full text-sm">
+            {status.message}
+          </p>
+        )}
+        {fileInput}
+        {cropDialog}
+      </>
+    );
+  }
 
   if (compact) {
     const hasPicture = hasUpload || Boolean(user.image);
@@ -181,7 +225,9 @@ export function AvatarEditor({
           </div>
           <p
             aria-live="polite"
-            className={status.kind === "error" ? "text-destructive text-xs" : "text-muted-foreground text-xs"}
+            className={
+              status.kind === "error" ? "text-destructive text-xs" : "text-muted-foreground text-xs"
+            }
           >
             {status.kind === "idle" ? "" : status.message}
           </p>

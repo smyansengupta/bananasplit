@@ -18,11 +18,12 @@ import { cancelOrgDeletion, scheduleOrgDeletion } from "@/server/settings/deleti
  */
 
 export const requestExportAction = withOrgAction(
-  async (ctx): Promise<{ error?: string; exportId?: string }> => {
-    const result = await requestOrgExport(ctx);
+  async (ctx, retryOf?: string): Promise<{ error?: string; exportId?: string }> => {
+    const result = await requestOrgExport(ctx, {
+      retryOf: retryOf === undefined ? undefined : z.string().max(64).parse(retryOf),
+    });
     return result.ok ? { exportId: result.exportId } : { error: result.error };
   },
-  { whenPaused: "allow" },
 );
 
 const bootstrapInOrg = withOrgAction(async (ctx, mapping: Record<string, string>) =>
@@ -47,9 +48,6 @@ export const scheduleDeletionAction = withOrgAction(
     if (!result.ok) return { error: result.error };
     redirect("/app");
   },
-  { whenPaused: "allow" },
 );
 
-export const cancelDeletionAction = withOrgAction(async (ctx) => cancelOrgDeletion(ctx), {
-  whenPaused: "allow",
-});
+export const cancelDeletionAction = withOrgAction(async (ctx) => cancelOrgDeletion(ctx));

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Layers, Plus, Search } from "lucide-react";
+import { Check, Layers, Plus, Search } from "@/components/icons";
 import { useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";

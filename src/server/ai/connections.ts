@@ -82,7 +82,7 @@ async function aiOnPlan(orgId: string): Promise<boolean> {
   const org = await withSystemOrgTx(orgId, ({ db }) =>
     db.organization.findUnique({
       where: { id: orgId },
-      select: { kind: true, plan: true, trialEndsAt: true },
+      select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true },
     }),
   );
   return Boolean(org && spaceIncludes(org, "ai"));
@@ -136,8 +136,8 @@ export async function listAiConnections(
     out.push({
       id: "claude",
       label: claudeModelLabel(claudeModelOf(claude)),
-      detail: "Your club's Claude key",
-      sentTo: "Anthropic (your club's account)",
+      detail: "Your organization's Claude key",
+      sentTo: "Anthropic (your organization's account)",
     });
   }
   if (usable(other)) {
@@ -146,9 +146,9 @@ export async function listAiConnections(
     if (picked && vendor) {
       out.push({
         id: "ai-model",
-        label: `${vendor.label.replace(/ \(.*\)$/, "")} · ${picked.model}`,
-        detail: `Your club's ${vendor.label.replace(/ \(.*\)$/, "")} key`,
-        sentTo: `${vendor.label.replace(/ \(.*\)$/, "")} (your club's account)`,
+        label: `${vendor.label.replace(/ \(.*\)$/, "")}, ${picked.model}`,
+        detail: `Your organization's ${vendor.label.replace(/ \(.*\)$/, "")} key`,
+        sentTo: `${vendor.label.replace(/ \(.*\)$/, "")} (your organization's account)`,
       });
     }
   }

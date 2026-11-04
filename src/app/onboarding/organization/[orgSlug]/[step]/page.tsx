@@ -1,43 +1,41 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { ProfileForm } from "@/app/onboarding/profile/profile-form";
+
 import { exitClass, SetupCard, SetupShell, StepIntro } from "@/components/onboarding/setup-shell";
-import { can } from "@/lib/auth/permissions";
 import { absoluteAppUrl } from "@/lib/app-url";
+import { can } from "@/lib/auth/permissions";
 import { bringSections } from "@/lib/onboarding/bring";
-import {
-  isOrgStep,
-  ORG_STEP_COUNT,
-  ORG_STEP_NAMES,
-  ORG_STEPS,
-  orgStepHref,
-  previousOrgStep,
-} from "@/lib/onboarding/steps";
-import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { setupEmailSwitches } from "@/lib/onboarding/emails";
+import { isOrgStep, ORG_FLOW, previousSetupStep, setupStepHref } from "@/lib/onboarding/steps";
+import { orgLogoUrl } from "@/lib/org-logo";
+import { getOrgContextBySlug, withOrgTx, withUserTx } from "@/server/db/context";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
-import { DEFAULT_PULSE_SETTINGS } from "@/lib/pulse/settings";
-import { loadFinanceSetup, loadTaskLabels, loadTeamsSetup } from "@/server/onboarding/org-setup";
-import { loadPulseSettings } from "@/server/onboarding/pulse";
+import { loadEventTypes, loadTaskLabels, loadTeamsSetup } from "@/server/onboarding/org-setup";
+import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { readBring } from "@/server/personal/bring-cookie";
 import { bringableIds, loadBringable } from "@/server/personal/move";
-import { loadSetupState } from "@/server/setup/progress";
 
+import { OrgBasicsStep } from "../basics-step";
 import { BringStep } from "../bring-step";
-import { DataStep, type DataConnection } from "../data-step";
-import { FinanceStep } from "../finance-step";
+import { EmailsStep } from "../emails-step";
+import { EventsStep } from "../events-step";
+import { ImportStep } from "../import-step";
 import { InviteStep } from "../invite-step";
 import { LabelsStep } from "../labels-step";
-import { PulseStep } from "../pulse-step";
+import { PictureStep } from "../picture-step";
 import { TeamsStep } from "../teams-step";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Club setup B2-B7 (onboarding Flow B), for an OWNER/ADMIN of the club, in
- * the one step screen (design: App screens, 05). One step per page under
- * the club's own URL, so the flow survives a refresh and can be picked up
- * later; "Save and exit" goes to the club, since each step saves as it
- * continues.
+ * Setting up an organization (ORG_STEPS), for an OWNER/ADMIN of it, after
+ * its basics, your profile last. One step per page under the
+ * organization's URL, so the flow survives a refresh and can be picked up
+ * later; "Save and exit" goes in, since each step saves as it continues.
+ * ORG_FLOW walks basics, invite, bring; the other steps open on their own
+ * from "Get your organization started" and return there.
  */
 export default async function OrgSetupStepPage({
   params,
@@ -46,23 +44,21 @@ export default async function OrgSetupStepPage({
   const { orgSlug, step } = await params;
   if (!isOrgStep(step)) notFound();
   const { organization, role, user } = await getOrgContextBySlug(orgSlug);
-  // Club setup is for clubs: a Personal space has no team, labels or invites.
+  // Organization setup is for organizations; Personal has its own (/onboarding/personal).
   if (organization.kind === "PERSONAL") notFound();
-  // B1 is step 1; B2 is the first of ORG_STEPS.
-  const index = ORG_STEPS.indexOf(step) + 2;
-  const total = ORG_STEP_COUNT;
-  const previous = previousOrgStep(step);
-  const backHref = previous
-    ? orgStepHref(organization.slug, previous)
-    : `/app/${organization.slug}`;
+  const stepHref = (s: typeof step) => setupStepHref("org", organization.slug, s);
+  const previous = previousSetupStep("org", step);
+  // Basics, the first, has no Back: the organization is made, and the start
+  // screen would only offer to make another. A step opened from "Get your
+  // organization started" goes back to the Overview.
+  const inFlow = ORG_FLOW.includes(step);
+  const backHref = previous ? stepHref(previous) : inFlow ? null : `/app/${organization.slug}`;
 
   const shell = (body: React.ReactNode) => (
     <SetupShell
       subject={organization.name}
-      steps={ORG_STEP_NAMES}
-      current={index}
       exit={
-        <Link href={`/app/${organization.slug}?welcome=1`} className={exitClass}>
+        <Link href={`/app/${organization.slug}`} className={exitClass}>
           Save and exit
         </Link>
       }
@@ -74,7 +70,7 @@ export default async function OrgSetupStepPage({
   if (!can({ role }, "settings.general.write")) {
     return shell(
       <SetupCard>
-        <StepIntro index={index} total={total} title="Setup is for the club's admins.">
+        <StepIntro title="Setup is for the organization's admins.">
           Ask an owner or admin of {organization.name} to finish it.
         </StepIntro>
         <Link href={`/app/${organization.slug}`} className="mt-6 font-semibold underline">
@@ -84,44 +80,65 @@ export default async function OrgSetupStepPage({
     );
   }
 
-  const base = { orgId: organization.id, orgSlug: organization.slug, index, total, backHref };
+  const base = {
+    flow: "org" as const,
+    orgId: organization.id,
+    orgSlug: organization.slug,
+    backHref,
+  };
 
   switch (step) {
-    case "data": {
-      const state = await withOrgTx(organization.id, ({ db }) =>
-        loadSetupState(db, organization.id),
-      );
-      const connections: DataConnection[] = state.steps.map((s) => ({
-        id: s.step.id,
-        title: s.step.title,
-        summary: s.step.summary,
-        status: s.status,
-        detail: connectionDetail(s.step.id, s.config, s.last4),
-        lastError: s.lastError,
-      }));
+    case "basics":
       return shell(
-        <DataStep {...base} connections={connections} connectedCount={state.connectedCount} />,
+        <OrgBasicsStep
+          {...base}
+          name={organization.name}
+          slug={organization.slug}
+          timezone={organization.timezone}
+        />,
       );
-    }
+    case "import":
+      return shell(
+        <ImportStep {...base} spreadsheetHref={`/app/${organization.slug}/databases/import`} />,
+      );
+    case "picture":
+      return shell(
+        <PictureStep
+          {...base}
+          name={organization.name}
+          logoUrl={orgLogoUrl(organization.logo, 256)}
+        />,
+      );
     case "labels": {
       const setup = await withOrgTx(organization.id, (ctx) => loadTaskLabels(ctx));
       return shell(<LabelsStep {...base} setup={setup} />);
     }
-    case "finance": {
-      const state = await withOrgTx(organization.id, (ctx) => loadFinanceSetup(ctx));
-      return shell(<FinanceStep {...base} state={state} timezone={organization.timezone} />);
+    case "events": {
+      const { types } = await withOrgTx(organization.id, (ctx) => loadEventTypes(ctx));
+      return shell(<EventsStep {...base} initial={types} />);
     }
     case "teams": {
       const state = await withOrgTx(organization.id, (ctx) => loadTeamsSetup(ctx));
       return shell(<TeamsStep {...base} state={state} currentUserId={user.id} />);
     }
-    case "pulse": {
-      const saved = await withOrgTx(organization.id, (ctx) => loadPulseSettings(ctx));
+    case "emails": {
+      const [preferences, recap] = await Promise.all([
+        withUserTx(user.id, ({ db }) =>
+          db.user.findUnique({ where: { id: user.id }, select: { emailPreferences: true } }),
+        ),
+        withOrgTx(organization.id, ({ db }) =>
+          db.orgSettings.findUnique({
+            where: { organizationId: organization.id },
+            select: { pulseEmail: true },
+          }),
+        ),
+      ]);
       return shell(
-        <PulseStep
+        <EmailsStep
           {...base}
-          clubName={organization.name}
-          initial={saved ?? DEFAULT_PULSE_SETTINGS}
+          orgName={organization.name}
+          initial={setupEmailSwitches(preferences?.emailPreferences)}
+          recapByEmail={recap?.pulseEmail ?? true}
         />,
       );
     }
@@ -145,10 +162,35 @@ export default async function OrgSetupStepPage({
       return shell(
         <InviteStep
           {...base}
-          me={{ name: user.name, email: user.email }}
           code={code?.enabled ? code.code : null}
-          joinUrl={absoluteAppUrl("/onboarding/join")}
+          joinUrl={absoluteAppUrl("/join")}
           invites={invites}
+        />,
+      );
+    }
+    case "profile": {
+      const profile = await getOnboardingProfile(user.id);
+      if (!profile) redirect("/auth/session-ended");
+      return shell(
+        <ProfileForm
+          title="Last thing: you."
+          intro={`How ${organization.name} will see you.`}
+          user={{
+            name: profile.name,
+            email: profile.email,
+            image: profile.image,
+            avatar: profile.avatar,
+          }}
+          initial={{
+            name: profile.name ?? "",
+            pronouns: profile.pronouns ?? "",
+            timezone: profile.timezone,
+            bio: profile.bio,
+            links: profile.links,
+          }}
+          next={`/app/${organization.slug}`}
+          back={backHref ?? undefined}
+          continueLabel={`Go to ${organization.name}`}
         />,
       );
     }
@@ -158,7 +200,7 @@ export default async function OrgSetupStepPage({
       // "Start a club with this"); only one of the user's own items counts.
       const query = await searchParams;
       const fromMove = query.from === "move";
-      const done = fromMove ? `/app/${organization.slug}` : `/app/${organization.slug}?welcome=1`;
+      const done = `/app/${organization.slug}`;
       const bringable = await loadBringable(user.id);
       if (!bringable || bringable.total === 0) redirect(done);
       const wanted = (typeof query.bring === "string" ? query.bring : null) ?? (await readBring());
@@ -174,26 +216,5 @@ export default async function OrgSetupStepPage({
         />,
       );
     }
-  }
-}
-
-/** One mono line under a connection: what it points at, never a secret. */
-function connectionDetail(
-  id: string,
-  config: Record<string, unknown>,
-  last4: string | null,
-): string | null {
-  const str = (k: string) => (typeof config[k] === "string" ? (config[k] as string) : null);
-  switch (id) {
-    case "data":
-      return str("projectRef") ? `${str("projectRef")}.supabase.co` : null;
-    case "calendar":
-      return str("publicCalendarId");
-    case "email":
-      return str("fromAddress");
-    case "claude":
-      return last4 ? `sk-…${last4}` : null;
-    default:
-      return null;
   }
 }

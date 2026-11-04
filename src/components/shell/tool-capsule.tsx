@@ -1,86 +1,33 @@
 "use client";
 
-import { Search } from "lucide-react";
-
-import { useModKey } from "@/components/command-palette/use-mod-key";
-import { capsuleButtonClass, CapsuleSeparator } from "@/components/shell/capsule";
-import { CreateMenu } from "@/components/shell/create-menu";
-import type { CreateAction } from "@/components/shell/nav-config";
-import { NotificationBell } from "@/components/shell/notification-bell";
-import { PinButton } from "@/components/shell/pin-button";
-import { ThemeToggle } from "@/components/shell/theme-toggle";
-import { UserMenu, type UserMenuUser } from "@/components/shell/user-menu";
-import { cn } from "@/lib/utils";
-
 /**
- * The tool capsule: one glass pill at the top right of every page, in place
- * of the old full-width top bar. Search (the ⌘K palette), the + create
- * menu, the page's pin, notifications, light or dark, and you.
+ * The phone's one piece of floating chrome: a glass circle at the top left
+ * holding the menu button (NavMenu), which opens the organization, you,
+ * search, New and every section, full screen. From md up there is no top
+ * bar at all: everything it held lives in the sidebar (search and New at the
+ * top, the pin beside the pins, you at the foot), so every page starts at
+ * the top of the window.
  *
  * It floats: its row is sticky and lets clicks through everywhere but the
- * pill, and it takes the same room at the top the old bar did, so every
- * page's title and actions sit below it. On a phone it spans the width with
- * search, notifications and you; the tab bar has the create button, and the
- * user menu has the theme.
+ * circle.
  */
 export function ToolCapsule({
-  orgId,
-  orgSlug,
-  user,
-  createActions,
-  onSearch,
+  menuButton,
 }: {
-  orgId: string;
-  orgSlug: string;
-  user: UserMenuUser;
-  createActions: readonly CreateAction[];
-  onSearch: () => void;
+  /** The phone's menu button (NavMenu). */
+  menuButton?: React.ReactNode;
 }) {
-  const mod = useModKey();
   return (
-    <div className="pointer-events-none sticky top-0 z-30 flex justify-end pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:px-6 md:pt-3.5">
+    <div
+      data-tool-capsule=""
+      className="pointer-events-none sticky top-0 z-30 flex pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden"
+    >
       <div
         role="toolbar"
         aria-label="Tools"
-        className="glass-light pointer-events-auto flex max-w-full min-w-0 flex-1 items-center gap-0.5 rounded-full p-1 md:flex-none"
+        className="glass-light pointer-events-auto flex items-center rounded-full p-1"
       >
-        <button
-          type="button"
-          onClick={onSearch}
-          aria-label="Search everything"
-          aria-keyshortcuts="Meta+K Control+K"
-          className={cn(
-            "focus-glow text-muted-foreground flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-full pr-2 pl-3.5 text-sm font-medium outline-none md:flex-none",
-            "hover:bg-muted hover:text-foreground transition-[background-color,color,scale] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
-          )}
-        >
-          <Search className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
-          <span className="truncate">Search</span>
-          <kbd className="bg-muted text-muted-foreground ms-auto hidden rounded-md px-1.5 py-1 font-mono text-[11px] leading-none md:ms-2 md:block">
-            {mod === "⌘" ? "⌘K" : "Ctrl K"}
-          </kbd>
-        </button>
-        <CapsuleSeparator className="max-md:hidden" />
-        {createActions.length > 0 && (
-          <CreateMenu orgId={orgId} orgSlug={orgSlug} actions={createActions}>
-            {({ pending, icon }) => (
-              <button
-                type="button"
-                aria-label="Create"
-                title="Create"
-                aria-busy={pending || undefined}
-                className={cn(capsuleButtonClass, "max-md:hidden")}
-              >
-                {icon}
-              </button>
-            )}
-          </CreateMenu>
-        )}
-        <PinButton className={cn(capsuleButtonClass, "max-md:hidden")} />
-        <NotificationBell />
-        <ThemeToggle className="max-md:hidden" />
-        <CapsuleSeparator className="max-md:hidden" />
-        <UserMenu user={user} />
+        {menuButton}
       </div>
     </div>
   );

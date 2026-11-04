@@ -82,6 +82,9 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // An RSVP page's bring list, and who is bringing each line.
   { model: "RsvpItem", key: ID },
   { model: "RsvpItemClaim", key: ["itemId", "registrationId"] },
+  // Which reminders went out for a meeting, and to whom (meetings). Same
+  // standing as the sign-ups themselves: OWNER-only, like the rest.
+  { model: "EventReminderSend", key: ID },
   { model: "EventLinkLog", key: ID },
   { model: "AvailabilityPoll", key: ID },
   { model: "PollSlot", key: ID },
@@ -91,6 +94,12 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // Question-poll votes without who cast them, so an anonymous poll stays
   // anonymous in the export too (the counts per option are still there).
   { model: "PollVote", key: ID, omit: ["userId"] },
+  // Forms: the questions and settings; the answers are in the form's own
+  // database (DatabaseRecord, exported with the rest). A response's review
+  // (status, rating, officers' notes) and who sent it, as the suite shows
+  // them to owners.
+  { model: "Form", key: ID },
+  { model: "FormResponse", key: ID },
   { model: "BudgetPeriod", key: ID },
   { model: "BudgetCategory", key: ID },
   { model: "Transaction", key: ID },
@@ -114,13 +123,32 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "Ballot", key: ID, ballotRows: true },
   { model: "BallotChoice", key: ID, ballotRows: true },
   { model: "DataSourceSyncState", key: ID },
+  // Links between things (the Linked panel): org data, both ends are ids.
+  { model: "ItemLink", key: ID },
+  // Announcements to the whole organization, removed ones included (as the
+  // database trash above), and who has seen each: every member reads those
+  // rows ("Seen by N of M").
+  { model: "Announcement", key: ID },
+  { model: "AnnouncementSeen", key: ["announcementId", "userId"] },
+  // Home's Decisions: what was raised, who owns it, what was decided.
+  { model: "Decision", key: ID },
+  // Saved reports (which database, which widgets) and the copies people
+  // kept: numbers already shown in the app, no rows of their own.
+  { model: "Report", key: ID },
+  { model: "ReportSnapshot", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */
 export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
   Notification:
-    "Each member's own inbox: personal, not club data, and only its recipient can read it.",
+    "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
+  UpNextDismissal:
+    "Cards each member hid from their own Overview: a personal preference, not organization data.",
+  InboxItemState:
+    "What each member snoozed or finished in their own Inbox: personal, not organization data.",
+  MemberPresence:
+    "When each member last had the app open (who's online): live status, not organization data.",
   OrgJoinCode:
     "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",
@@ -130,10 +158,12 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   Pin: "Each member's own shortcuts; the service role cannot read them.",
   RecentVisit: "Each member's own browsing history in the app; private, and not org data.",
   MemberPrefs: "Each member's own display settings; the service role cannot read them.",
+  ConnectorGrant:
+    "Each member's own AI app connections (organizationId is only the space one is scoped to); the service role cannot read them.",
   NoteShare:
-    "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than club data.",
+    "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than organization data.",
   NoteVersion:
-    "Saved copies of note bodies (autosave snapshots and named versions); the export carries each club note's current body.",
+    "Saved copies of note bodies (autosave snapshots and named versions); the export carries each organization note's current body.",
 };
 
 /** The Prisma client property for a model name ("OrgChartPosition" -> "orgChartPosition"). */

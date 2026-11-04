@@ -5,6 +5,7 @@ import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
 import { ArrowRight } from "@/components/brand/arrows";
 import { AuthCard, AuthTitle } from "@/components/brand/auth-card";
 import { requireUser } from "@/lib/auth/session";
+import { shareMetadata } from "@/lib/metadata/share";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { findPendingInvitationsForMe } from "@/server/settings/invitations";
 
@@ -13,12 +14,17 @@ import { JoinForm } from "./join-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Enter your invite code · Bananasplit" };
-
-const WHERE = [
-  "Check the invite email from your club.",
-  "Or ask any officer. It's on their club settings page.",
-] as const;
+/*
+ * Shared links now go to /join/<code>, which previews as the club and comes
+ * here on Continue; this preview is for older links and anyone pasting the
+ * bare page. It cannot name the club: the page is behind sign-in, so
+ * whatever unfurls it is redirected before reading any of this.
+ */
+export const metadata = shareMetadata({
+  title: "Join your organization",
+  description: "Enter the invite code whoever invited you sent, and join their workspace.",
+  noIndex: true,
+});
 
 /**
  * Join a club (design: App screens, 03): the club's code in eight boxes, or
@@ -34,12 +40,12 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
   if (!profile) redirect("/auth/session-ended");
   const { code } = await searchParams;
   const initialCode = typeof code === "string" ? code.slice(0, 20) : "";
-  // "Your profile", step 1, comes first; it brings them back here.
+  // A brand-new account is readied by /onboarding first; it brings them back here.
   if (!profile.onboardedAt) {
     const back = initialCode
       ? `/onboarding/join?code=${encodeURIComponent(initialCode)}`
       : "/onboarding/join";
-    redirect(`/onboarding/profile/basics?callbackUrl=${encodeURIComponent(back)}`);
+    redirect(`/onboarding?callbackUrl=${encodeURIComponent(back)}`);
   }
 
   const invites = profile.emailVerified ? await findPendingInvitationsForMe(user.id) : [];
@@ -53,32 +59,20 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
           <p className="font-heading m-0 text-[46px] leading-[1.02] tracking-[-0.035em]">
             Where&apos;s my code?
           </p>
-          <ul className="m-0 flex list-none flex-col gap-3 p-0 text-[15px] leading-[1.45]">
-            {WHERE.map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <ArrowRight className="mt-[3px]" />
-                <span>{line}</span>
-              </li>
-            ))}
-            <li className="flex items-start gap-2.5">
-              <ArrowRight className="mt-[3px]" />
-              <span>
-                Codes are 8 letters and numbers, like <b>RPKA-YWSF</b>.
-              </span>
-            </li>
-          </ul>
+          <p className="m-0 flex items-start gap-2.5 text-[15px] leading-[1.45]">
+            <ArrowRight className="mt-[3px]" />
+            <span>
+              In your invite email, or ask an admin. It looks like <b>RPKA-YWSF</b>.
+            </span>
+          </p>
         </div>
       }
     >
-      <AuthTitle
-        eyebrow="Join a club"
-        title="Enter your invite code."
-        description="Paste it or type it in. You'll see the club before you join."
-      />
+      <AuthTitle title="Enter your invite code." />
       {profile.emailVerified ? (
         <JoinForm initialCode={initialCode} />
       ) : (
-        <VerifyEmailNotice email={profile.email} action="join a club" />
+        <VerifyEmailNotice email={profile.email} action="join an organization" />
       )}
 
       {invites.length > 0 && (
@@ -87,14 +81,7 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
             Or accept an email invite to {profile.email}
           </h2>
           {invites.map((invitation) => (
-            <PendingInviteCard
-              key={invitation.id}
-              invitation={{
-                id: invitation.id,
-                role: invitation.role,
-                orgName: invitation.orgName,
-              }}
-            />
+            <PendingInviteCard key={invitation.id} invitation={invitation} />
           ))}
         </section>
       )}

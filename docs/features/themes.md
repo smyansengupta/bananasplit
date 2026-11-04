@@ -131,7 +131,7 @@ previews on Settings > Theme included. No grain on the page.
   only ever light: the corona behind the page top (`.corona`), halos
   (`glow-halo`), the focus ring (`focus-glow`), gauges and selection.
 - **Derived layer** (`derive.ts`): `glow`, `haze`, `raised`, `muted-strong`,
-  `thumb`, `chrome` (+foreground, the glass rail, toasts and tab bar), the four
+  `thumb`, `chrome` (+foreground, the glass rail, toasts and menu button), the four
   block cards (`block-quiet|alert|answer|goal` with `-foreground` and `-meta`;
   alert and goal hold fixed red and green hue families), chip tints
   (`tint-danger|accent|success|info` with inks) and avatar tints

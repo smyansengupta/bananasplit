@@ -7,7 +7,7 @@ import { NEW_TASK_PARAM } from "@/lib/shortcuts";
  * The sidebar's links for one space: a club's sections (in the club's
  * order, under its headings, with its names; Admin panel > Sidebar) as
  * plain data the client sidebar can take, or a Personal space's fixed few.
- * The phone's tab bar and the create menu are worked out from the same
+ * The create menu is worked out from the same
  * links, so they only offer what the space has.
  */
 
@@ -16,7 +16,7 @@ export interface NavLink {
   label: string;
   /** The page, sometimes with a query (Personal's Notes and Files share /notes). */
   href: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   /** Other pages that belong to this link (People's org chart). */
   also?: string[];
@@ -36,12 +36,12 @@ export interface NavSection {
 }
 
 /**
- * A Personal space's sidebar: Home (the Personal dashboard), Tasks,
- * Calendar, Files (notes and uploads together, the one library at /notes),
- * Databases (only the ones you make), Find a time (availability polls anyone
- * answers from a link) and RSVPs (its event pages and your tickets). No
- * question polls: only members vote on those, and Personal has one. Not
- * arrangeable: there is no team to arrange it for.
+ * A Personal space's sidebar: Home (the Personal dashboard) and Inbox;
+ * Tasks, Calendar and Meetings (its calls, event pages, tickets and Find a
+ * time); Databases (only the ones you make) and Files (notes and uploads
+ * together, the one library at /notes). No Forms: only members answer
+ * those, and Personal has one. Not arrangeable: there is no team to
+ * arrange it for.
  */
 export const PERSONAL_NAV: readonly {
   id: string;
@@ -51,21 +51,46 @@ export const PERSONAL_NAV: readonly {
   path: string;
   also?: readonly string[];
   exact: boolean;
+  /** Which section of the sidebar it's in (SECTION_NAMES names them). */
+  group: "main" | "plan" | "collect" | "workspace";
 }[] = [
-  { id: "home", label: "Home", icon: "House", path: "", exact: true },
-  { id: "tasks", label: "Tasks", icon: "CheckSquare", path: "/tasks", exact: false },
-  { id: "calendar", label: "Calendar", icon: "CalendarDays", path: "/calendar", exact: false },
-  // Notes and uploads together, as in a club: one library at /notes.
-  { id: "notes", label: "Files", icon: "FolderOpen", path: "/notes", exact: false },
-  { id: "databases", label: "Databases", icon: "Database", path: "/databases", exact: false },
+  { id: "home", label: "Home", icon: "House", path: "", exact: true, group: "main" },
+  { id: "inbox", label: "Inbox", icon: "Inbox", path: "/inbox", exact: false, group: "main" },
+  { id: "tasks", label: "Tasks", icon: "CheckSquare", path: "/tasks", exact: false, group: "plan" },
   {
-    id: "find-a-time",
-    label: "Find a time",
-    icon: "CalendarClock",
-    path: "/calendar/find-a-time",
+    id: "calendar",
+    label: "Calendar",
+    icon: "CalendarDays",
+    path: "/calendar",
     exact: false,
+    group: "plan",
   },
-  { id: "rsvps", label: "RSVPs", icon: "Ticket", path: "/calendar/rsvp", exact: false },
+  {
+    id: "meetings",
+    label: "Meetings",
+    icon: "Video",
+    path: "/meetings",
+    also: ["/calendar/rsvp", "/calendar/find-a-time"],
+    exact: false,
+    group: "plan",
+  },
+  {
+    id: "databases",
+    label: "Databases",
+    icon: "Database",
+    path: "/databases",
+    exact: false,
+    group: "collect",
+  },
+  // Notes and uploads together, as in an organization: one library at /notes, in Data.
+  {
+    id: "notes",
+    label: "Files",
+    icon: "FolderOpen",
+    path: "/notes",
+    exact: false,
+    group: "collect",
+  },
 ];
 
 /**
@@ -81,20 +106,18 @@ export function navSections(
 ): NavSection[] {
   const { space, showLocked = false } = options;
   if (space?.kind === "PERSONAL") {
-    return [
-      {
-        id: "personal",
-        label: null,
-        items: PERSONAL_NAV.map((i) => ({
-          id: i.id,
-          label: i.label,
-          href: `/app/${orgSlug}${i.path}`,
-          icon: i.icon,
-          also: (i.also ?? []).map((p) => `/app/${orgSlug}${p}`),
-          exact: i.exact,
-        })),
-      },
-    ];
+    return (["main", "plan", "collect", "workspace"] as const).map((group) => ({
+      id: group,
+      label: null,
+      items: PERSONAL_NAV.filter((i) => i.group === group).map((i) => ({
+        id: i.id,
+        label: i.label,
+        href: `/app/${orgSlug}${i.path}`,
+        icon: i.icon,
+        also: (i.also ?? []).map((p) => `/app/${orgSlug}${p}`),
+        exact: i.exact,
+      })),
+    }));
   }
   return groups
     .map((g) => ({
@@ -188,39 +211,28 @@ export function isExactPage(href: string, pathname: string, search: string = "")
   return true;
 }
 
-/**
- * The phone tab bar's links: the space's home (Overview in a club, Home in
- * Personal), Tasks and Calendar, each only when the space shows it and its
- * plan has it. Everything else is under More.
- */
-export function tabBarLinks(sections: readonly NavSection[]): {
-  home?: NavLink;
-  tasks?: NavLink;
-  calendar?: NavLink;
-} {
-  const links = sections.flatMap((s) => s.items).filter((l) => !l.locked);
-  const find = (...ids: string[]) => links.find((l) => ids.includes(l.id));
-  return { home: find("overview", "home"), tasks: find("tasks"), calendar: find("calendar") };
-}
-
-export type CreateActionId = "task" | "event" | "note" | "poll" | "find-a-time";
+export type CreateActionId =
+  "task" | "event" | "meeting" | "note" | "poll" | "form" | "expense" | "find-a-time";
 
 export interface CreateAction {
   id: CreateActionId;
   label: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   /** Where it starts; none for a note, which the menu creates and then opens. */
   href?: string;
 }
 
 /**
- * The + menu (the tool capsule's, and the phone tab bar's create button):
+ * The + menu (the tool capsule's):
  * what the viewer can start in this space, from the sections it shows.
  *
  * - New task: Tasks with ?new=1, which starts one there (as `c` does).
  * - New event: the Calendar with ?new=1, which opens the event form; only
  *   for those who may create events.
+ * - New meeting: Meetings with ?new=1, which opens the same form there, so a
+ *   meeting made from anywhere lands on its own page; only when Meetings is
+ *   in the sidebar, and for those who may create events.
  * - New note: a blank private note, made by the menu, then opened.
  * - New poll: Polls' "Ask a question" (clubs only; Personal has no polls).
  * - Find a time: a new availability poll.
@@ -253,16 +265,43 @@ export function createActions(
       href: `${path("calendar")}?${NEW_EVENT_PARAM}=1`,
     });
   }
-  if (links.has("notes")) actions.push({ id: "note", label: "New note", icon: "NotebookPen" });
-  if (links.has("polls")) {
-    actions.push({ id: "poll", label: "New poll", icon: "Vote", href: `${path("polls")}/ask` });
+  if (links.has("meetings") && canCreateEvents) {
+    actions.push({
+      id: "meeting",
+      label: "New meeting",
+      icon: "Video",
+      href: `${path("meetings")}?${NEW_EVENT_PARAM}=1`,
+    });
   }
-  if (links.has("find-a-time")) {
+  if (links.has("notes")) actions.push({ id: "note", label: "New note", icon: "NotebookPen" });
+  if (links.has("forms")) {
+    actions.push({
+      id: "poll",
+      label: "Quick poll",
+      icon: "Vote",
+      href: `${path("forms")}/new?poll=1`,
+    });
+    actions.push({
+      id: "form",
+      label: "New form",
+      icon: "ClipboardList",
+      href: `${path("forms")}/new`,
+    });
+  }
+  if (links.has("finance")) {
+    actions.push({
+      id: "expense",
+      label: "New expense",
+      icon: "Receipt",
+      href: `${path("finance")}/my-reimbursements?new=1`,
+    });
+  }
+  if (links.has("meetings")) {
     actions.push({
       id: "find-a-time",
       label: "Find a time",
       icon: "CalendarClock",
-      href: `${path("find-a-time")}/new`,
+      href: `${path("meetings").replace(/\/meetings$/, "")}/calendar/find-a-time/new`,
     });
   }
   return actions;

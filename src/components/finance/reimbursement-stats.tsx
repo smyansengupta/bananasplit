@@ -1,6 +1,6 @@
 "use client";
 
-import { HandCoins, ReceiptText } from "lucide-react";
+import { HandCoins, ReceiptText } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Stat, StatStrip } from "@/components/ui/stat";
@@ -21,7 +21,7 @@ export function ReimbursementStats({
 }) {
   return (
     <StatStrip>
-      <Stat icon={HandCoins} value={owed} label="Money owed to you" />
+      <Stat icon={HandCoins} value={owed} label="Owed to you" />
       <Stat
         icon={ReceiptText}
         value={requests}

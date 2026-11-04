@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronsUpDown, TriangleAlert, X } from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";

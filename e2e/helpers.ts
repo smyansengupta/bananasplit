@@ -128,10 +128,10 @@ export async function completeProfileSetup(page: Page, next: "join" | "create"):
   await page.getByRole("button", { name: "Finish later" }).click();
   // Personal's home (docs/features/personal-and-clubs.md).
   await page.waitForURL(/\/app\/me-[a-z0-9]+$/);
-  // "Start a club" is a link on Personal's home; joining is a code field
+  // "Start an organization" is a link on Personal's home; joining is a code field
   // there, so the join flow opens its page (where emailed invites list too).
   if (next === "join") await page.goto("/onboarding/join");
-  else await page.getByRole("main").getByRole("link", { name: "Start a club" }).click();
+  else await page.getByRole("main").getByRole("link", { name: "Start an organization" }).click();
   await page.waitForURL(next === "join" ? /\/onboarding\/join/ : /\/onboarding\/organization$/);
 }
 
@@ -155,7 +155,7 @@ export async function chooseClubRole(page: Page, orgSlug: string, role?: string)
 export async function createOrgViaOnboarding(page: Page, orgName: string): Promise<string> {
   if (!/\/onboarding\/organization$/.test(new URL(page.url()).pathname))
     await page.goto("/onboarding/organization");
-  await page.getByLabel("Club name").fill(orgName);
+  await page.getByLabel("Organization name").fill(orgName);
   await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForURL(/\/onboarding\/organization\/[^/]+\/labels$/);
   const slug = new URL(page.url()).pathname.split("/")[3]!;

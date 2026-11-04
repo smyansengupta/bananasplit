@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Loader2, Search, Vote } from "lucide-react";
+import { Database, Loader2, Search, Vote } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { listEmbedTargets, type EmbedTarget } from "@/app/app/[orgSlug]/notes/embed-actions";
@@ -76,7 +76,7 @@ function TaskForm({ orgId, initialTitle, onClose, onCreated }: TaskInsertProps) 
       <DialogHeader>
         <DialogTitle>New task</DialogTitle>
         <DialogDescription>
-          It goes on the club&apos;s task board and shows here as a chip you can check off.
+          It goes on the organization&apos;s task board and shows here as a chip you can check off.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -202,7 +202,7 @@ function EmbedPickerBody({
           </li>
         ) : shown.length === 0 ? (
           <li className="text-muted-foreground px-3 py-2 text-sm">
-            {q ? "Nothing matches." : `This club has no ${noun}s yet.`}
+            {q ? "Nothing matches." : `This organization has no ${noun}s yet.`}
           </li>
         ) : (
           shown.map((t) => (
@@ -213,7 +213,7 @@ function EmbedPickerBody({
                 className="hover:bg-muted flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm"
               >
                 <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{t.title}</span>
+                <span className="min-w-0 break-words">{t.title}</span>
               </button>
             </li>
           ))

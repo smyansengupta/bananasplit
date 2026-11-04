@@ -2,19 +2,23 @@
 
 import { PluginKey } from "@tiptap/pm/state";
 import type { Editor, Range } from "@tiptap/core";
-import { CalendarDays, FileText } from "lucide-react";
+import { CalendarDays, FileText } from "@/components/icons";
 
+import { KIND_ICONS } from "@/components/command-palette/palette-icons";
 import { UserAvatar } from "@/components/user-avatar";
 import { dayLabel, todayKey } from "@/lib/notes/dates";
 import { NoteMention } from "@/lib/notes/nodes";
 import { addDaysToKey } from "@/lib/tasks/dates";
+import type { SearchKind } from "@/lib/search/types";
 import { parseDueText } from "@/lib/tasks/due-text";
 
-import { noteHooks } from "./note-hooks";
+import { noteHooks, type LinkableItem, type NoteHooks } from "./note-hooks";
 import { suggestionMenuRenderer, type MenuItem } from "./suggestion-menu";
 
 /**
- * "@" mentions a member or drops in a date ("@tomorrow", "@next fri"), and
+ * "@" mentions a member, drops in a date ("@tomorrow", "@next fri") or links
+ * anything else in the space (a task, a meeting, a form: its name as a link,
+ * and an ItemLink so each page lists the other), and
  * "[[" links another page by name. Both are the schema's own nodes
  * (mention, dateChip, noteLink); this is only the menus that insert them.
  */
@@ -32,7 +36,32 @@ export interface MentionPage {
 }
 
 type AtItem = MenuItem &
-  ({ kind: "person"; id: string; label: string } | { kind: "date"; date: string });
+  (
+    | { kind: "person"; id: string; label: string }
+    | { kind: "date"; date: string }
+    | { kind: "item"; item: LinkableItem }
+  );
+
+/** Two letters after @ also search the space (tasks, meetings, forms). */
+const ITEM_QUERY_MIN = 2;
+
+async function itemsOf(query: string, hooks: NoteHooks | null): Promise<AtItem[]> {
+  if (!hooks || query.trim().length < ITEM_QUERY_MIN) return [];
+  try {
+    const found = await hooks.findItems(query.trim());
+    return found.map((item) => ({
+      kind: "item",
+      key: `item-${item.ref.kind}-${item.ref.id}`,
+      item,
+      title: item.title || "Untitled",
+      description: item.detail ?? undefined,
+      icon: KIND_ICONS[item.kind as SearchKind] ?? FileText,
+      group: "Link",
+    }));
+  } catch {
+    return [];
+  }
+}
 type PageItem = MenuItem & { id: string; label: string };
 
 function atItems(query: string, members: MentionMember[], selfId: string | null): AtItem[] {
@@ -86,9 +115,10 @@ export function noteMentionWithMenus() {
       {
         char: "@",
         pluginKey: new PluginKey("noteAtMenu"),
-        items: ({ query, editor }: { query: string; editor: Editor }) => {
+        items: async ({ query, editor }: { query: string; editor: Editor }) => {
           const hooks = noteHooks(editor);
-          return atItems(query, hooks?.people() ?? [], hooks?.selfId() ?? null);
+          const near = atItems(query, hooks?.people() ?? [], hooks?.selfId() ?? null);
+          return [...near, ...(await itemsOf(query, hooks))];
         },
         command: ({
           editor,
@@ -102,11 +132,22 @@ export function noteMentionWithMenus() {
           const props = raw as AtItem;
           if (props.kind === "person") {
             insert(editor, range, { type: "mention", attrs: { id: props.id, label: props.label } });
+          } else if (props.kind === "item") {
+            // A link to it in the words, and an ItemLink so it shows on both pages.
+            insert(editor, range, {
+              type: "text",
+              text: props.item.title || "Untitled",
+              marks: [{ type: "link", attrs: { href: props.item.href } }],
+            });
+            noteHooks(editor)?.linkItem(props.item.ref);
           } else {
             insert(editor, range, { type: "dateChip", attrs: { date: props.date } });
           }
         },
-        render: suggestionMenuRenderer<AtItem>("Mention someone or a date", "No one by that name"),
+        render: suggestionMenuRenderer<AtItem>(
+          "Mention someone, a date or anything",
+          "Nothing by that name",
+        ),
       },
       {
         char: "[[",

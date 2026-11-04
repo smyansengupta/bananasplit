@@ -2,7 +2,7 @@ import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 
-import { CircleAlert, FileJson } from "lucide-react";
+import { CircleAlert, FileJson } from "@/components/icons";
 
 import { BackLink } from "@/components/back-link";
 import { DefinitionEditForm, DefinitionImportForm } from "@/components/databases/definition-forms";
@@ -68,7 +68,7 @@ export default async function BallotDefinitionsPage({
     d ? format(new TZDate(d.getTime(), tz), "yyyy-MM-dd'T'HH:mm") : "";
   const sessions = data.sessions.map((s) => ({
     id: s.id,
-    label: `${s.title} · ${fmtDate(s.startsAt, tz)}`,
+    label: `${s.title}, ${fmtDate(s.startsAt, tz)}`,
   }));
   const bySlug = new Map<string, { reason: string | null; n: number }[]>();
   for (const r of data.reasons) {
@@ -91,7 +91,7 @@ export default async function BallotDefinitionsPage({
     unknown.length > 0 && `${unknown.length} waiting for a definition`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <div className="max-w-3xl space-y-7.5">
@@ -142,11 +142,11 @@ export default async function BallotDefinitionsPage({
                 action={d.isTest ? <Badge variant="secondary">Test</Badge> : undefined}
                 description={
                   <span className="tabular-nums">
-                    <code className="font-mono text-xs">{d.slug}</code> · {def.questions.length}{" "}
-                    questions · {counted} counted
+                    <code className="font-mono text-xs">{d.slug}</code>, {def.questions.length}{" "}
+                    questions, {counted} counted
                     {counts
                       .filter((c) => c.reason)
-                      .map((c) => ` · ${c.n} ${exclusionLabel(c.reason).toLowerCase()}`)
+                      .map((c) => `, ${c.n} ${exclusionLabel(c.reason).toLowerCase()}`)
                       .join("")}
                   </span>
                 }

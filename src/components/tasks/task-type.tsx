@@ -1,10 +1,10 @@
-import { Bookmark, Layers, SquareCheck, type LucideIcon } from "lucide-react";
+import { Bookmark, Layers, SquareCheck, type IconComponent } from "@/components/icons";
 import type { CSSProperties } from "react";
 
 import { TASK_TYPES, typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
 import { cn } from "@/lib/utils";
 
-export const TYPE_ICON: Record<TaskTypeValue, LucideIcon> = {
+export const TYPE_ICON: Record<TaskTypeValue, IconComponent> = {
   EPIC: Layers,
   STORY: Bookmark,
   TASK: SquareCheck,

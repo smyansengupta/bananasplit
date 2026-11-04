@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { SignedInAs } from "@/components/auth/signed-in-as";
 import { AlreadySignedIn } from "@/components/auth/already-signed-in";
 import { BrandGoogleButton } from "@/components/auth/google-sign-in-button";
@@ -6,10 +8,47 @@ import { FormMessage, OrDivider } from "@/components/brand/fields";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { auth } from "@/lib/auth/config";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
+import {
+  FALLBACK_CARDS,
+  shareMetadata,
+  SIGN_IN_CARD,
+  signInPreviewFor,
+} from "@/lib/metadata/share";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
 
-export const metadata = { title: "Log in · Bananasplit" };
+/**
+ * A plain link to the log-in page previews as "Welcome back". A link to
+ * anything behind sign-in, opened signed out (as whatever unfurls a texted
+ * link is), lands here with its path in ?callbackUrl= and previews as the
+ * main Bananasplit card instead, or as the join card for an old ?code= join
+ * link (signInPreviewFor). The tab still says "Log in".
+ */
+export async function generateMetadata({ searchParams }: PageProps<"/sign-in">): Promise<Metadata> {
+  const { callbackUrl } = await searchParams;
+  const preview = signInPreviewFor(typeof callbackUrl === "string" ? callbackUrl : null);
+  if (preview === "sign-in") {
+    return shareMetadata({
+      title: "Log in",
+      description: "Log in to your workspace on Bananasplit.",
+      card: SIGN_IN_CARD,
+    });
+  }
+  if (preview === "join") {
+    return {
+      ...shareMetadata({
+        title: "Join your organization",
+        description: "Enter the invite code whoever invited you sent, and join their workspace.",
+        card: FALLBACK_CARDS.join,
+        noIndex: true,
+      }),
+      title: "Log in, Bananasplit",
+    };
+  }
+  // Everything else inherits the root layout's title, line and main card
+  // (any openGraph here would drop the card); just keep it out of search.
+  return { robots: { index: false, follow: false } };
+}
 
 /**
  * Auth.js sends its errors here (pages.error). The remaining ways a Google
@@ -35,6 +74,10 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   // (unless Auth.js sent them back with an error to explain, e.g.
   // OAuthAccountNotLinked).
   if (session?.user?.email && !errorCode) {
+    // A plain visit (a bookmarked Log in) goes straight in; one carrying a
+    // destination (an invite, a join link) asks first, since that's when
+    // being in the wrong account matters.
+    if (!callbackUrl) redirect("/app");
     return (
       <AlreadySignedIn
         email={session.user.email}
@@ -53,7 +96,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
 
   return (
     <AuthCard footer={<SignedInAs />}>
-      <AuthTitle title="Welcome back." description="Log in to your club workspace." />
+      <AuthTitle title="Welcome back." />
       {notice === "password-reset" && !errorMessage && (
         <FormMessage tone="info">Your password is changed. Log in with the new one.</FormMessage>
       )}

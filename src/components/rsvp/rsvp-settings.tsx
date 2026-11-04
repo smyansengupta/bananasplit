@@ -9,10 +9,10 @@ import {
   MessageSquareText,
   Trash2,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { saveRsvpSettings } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { Button } from "@/components/ui/button";
@@ -215,22 +215,20 @@ export function RsvpSettings({
         ? `${formatCents(costCents)} from each guest`
         : `${formatCents(costCents)} total: ${formatCents(shareCents("SPLIT", costCents, sample) ?? costCents)} each with ${sample} going, ${formatCents(shareCents("SPLIT", costCents, Math.max(sample, 10) * 2) ?? costCents)} each with ${Math.max(sample, 10) * 2}`;
 
+  // Saves itself a moment after the last change, once what's typed makes
+  // sense (a spot count of 1 or more, an amount for a paid page); until
+  // then it waits. No Save or Discard.
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const capacityOk =
+    !limited ||
+    (Number.isFinite(Number.parseInt(capacityText, 10)) && Number.parseInt(capacityText, 10) >= 1);
+  const costOk = value.costMode === "NONE" || (costCents !== null && costCents >= 1);
+
   function save() {
     const capacity = limited ? Number.parseInt(capacityText, 10) : null;
-    if (limited && (!Number.isFinite(capacity) || (capacity ?? 0) < 1)) {
-      toast({
-        title: "Set how many spots",
-        description: "Enter a number of 1 or more, or turn off Limit spots.",
-      });
-      return;
-    }
-    if (value.costMode !== "NONE" && (costCents === null || costCents < 1)) {
-      toast({
-        title: "Set the amount",
-        description: "Enter dollars like 12 or 12.50, or pick Free.",
-      });
-      return;
-    }
+    if (!capacityOk || !costOk) return;
+    setSaved(false);
     start(async () => {
       // costText goes as cents; the action's schema drops the text itself.
       const result = await saveRsvpSettings(orgId, eventId, {
@@ -242,13 +240,21 @@ export function RsvpSettings({
         payTo: value.payTo,
       });
       if (result.error) {
-        toast({ title: "Couldn't save", description: result.error });
+        setSaveError(result.error);
         return;
       }
-      toast({ title: "RSVP page saved" });
+      setSaveError(null);
+      setSaved(true);
       router.refresh();
     });
   }
+  useEffect(() => {
+    if (!dirty || !capacityOk || !costOk) return;
+    const timer = setTimeout(save, 800);
+    return () => clearTimeout(timer);
+    // save reads the latest value through this render's closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, capacityText]);
 
   async function uploadCover(file: File) {
     setUploading(true);
@@ -449,7 +455,7 @@ export function RsvpSettings({
           description="The address comes from the event. Add how to find the room once people are in the building."
         >
           <div className="bg-muted rounded-field flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
-            <span className={cn("min-w-0 truncate", !location && "text-muted-foreground")}>
+            <span className={cn("min-w-0 break-words", !location && "text-muted-foreground")}>
               {location ?? "No location set"}
             </span>
             <Link
@@ -598,25 +604,19 @@ export function RsvpSettings({
           </div>
         </Card>
 
-        {/* Only while there's something to save, pinned to the bottom of the screen. */}
-        {dirty && (
-          <div className="bg-popover text-popover-foreground ring-foreground/6 shadow-e2 sticky bottom-[calc(var(--shell-bottom,0px)+0.75rem)] flex items-center justify-end gap-3 rounded-full p-2 ps-5 ring-1">
-            <span className="text-muted-foreground me-auto text-sm">Unsaved changes</span>
-            <Button
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                setValue(initial);
-                setCapacityText(initial.capacity ? String(initial.capacity) : "");
-              }}
-            >
-              Discard
-            </Button>
-            <Button disabled={pending} onClick={save}>
-              {pending ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
-        )}
+        <p role="status" aria-live="polite" className="text-muted-foreground min-h-5 text-[13px]">
+          {saveError ? (
+            <span className="text-tint-danger-foreground">{saveError}</span>
+          ) : pending ? (
+            "Saving…"
+          ) : limited && !capacityOk ? (
+            "Enter how many spots (1 or more)."
+          ) : !costOk ? (
+            "Enter the amount, like 12 or 12.50."
+          ) : saved && !dirty ? (
+            "Saved"
+          ) : null}
+        </p>
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-4">
@@ -631,8 +631,8 @@ export function RsvpSettings({
             <span>
               A confirmation email, then reminders a day and an hour before.{" "}
               {messaging.email === "org"
-                ? "Sent from your club's email sender."
-                : "Sent as your club via Bananasplit until you connect your own sender in Admin panel › Integrations."}
+                ? "Sent from your organization's email sender."
+                : "Sent as your organization via Bananasplit until you connect your own sender in Admin panel › Integrations."}
             </span>
           </p>
           <p className="text-muted-foreground flex gap-2 text-xs leading-relaxed">

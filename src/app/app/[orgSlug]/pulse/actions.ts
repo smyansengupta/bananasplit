@@ -25,7 +25,8 @@ const saveNoteTx = withOrgAction(
   async (ctx, raw: unknown): Promise<{ ok: boolean; error?: string }> => {
     requirePermission(ctx, "settings.general.write");
     const parsed = noteSchema.safeParse(raw);
-    if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the note." };
+    if (!parsed.success)
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the note." };
     const updated = await ctx.db.pulseIssue.updateMany({
       where: { id: parsed.data.issueId, organizationId: ctx.organizationId, sentAt: null },
       data: { note: parsed.data.note || null },
@@ -43,11 +44,26 @@ export async function savePulseNoteAction(
   try {
     const result = await saveNoteTx(orgId, input);
     if ("ok" in result && result.ok) refresh();
-    return "ok" in result ? result : { ok: false, error: "This club is paused." };
+    return "ok" in result ? result : { ok: false, error: "This organization is paused." };
   } catch (error) {
     if (error instanceof ForbiddenError) {
-      return { ok: false, error: "Only the club's owners and admins can add a note." };
+      return { ok: false, error: "Only the organization's owners and admins can add a note." };
     }
     throw error;
   }
 }
+
+/** "Turn on" from the archive's empty state: the weekly pulse, with its usual schedule. */
+export const turnPulseOnAction = withOrgAction(
+  async (ctx): Promise<{ ok: boolean; error?: string }> => {
+    requirePermission(ctx, "settings.general.write");
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { pulseEnabled: true, updatedById: ctx.userId },
+      select: { organizationId: true },
+    });
+    refresh();
+    return { ok: true };
+  },
+  { onRefused: "return", feature: "overview" },
+);

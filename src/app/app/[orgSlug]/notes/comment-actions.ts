@@ -221,5 +221,4 @@ export const listCommentsAction = filesAction(
     if (!note) return { error: NOT_FOUND };
     return { comments: await freshList(ctx, noteId) };
   },
-  { whenPaused: "allow" },
 );

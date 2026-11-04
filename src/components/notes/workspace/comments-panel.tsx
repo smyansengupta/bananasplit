@@ -2,7 +2,7 @@
 
 import type { Editor } from "@tiptap/core";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, Loader2, MessageSquarePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Loader2, MessageSquarePlus, Pencil, RotateCcw, Trash2 } from "@/components/icons";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
@@ -319,7 +319,7 @@ function NewThread({
         people={people}
         mentionsRef={mentions}
         onSubmit={() => void submit()}
-        placeholder="Add a comment. @ to mention someone"
+        placeholder="Comment, @ to mention"
         label="New comment"
       />
       <div className="flex justify-end gap-2">
@@ -365,7 +365,7 @@ function NoteLevelComment({
     return (
       <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
         <MessageSquarePlus className="size-4" aria-hidden="true" />
-        Comment on the whole note
+        Comment on note
       </Button>
     );
   }
@@ -395,7 +395,7 @@ function NoteLevelComment({
         mentionsRef={mentions}
         onSubmit={() => void submit()}
         placeholder="A comment on the whole note"
-        label="Comment on the whole note"
+        label="Comment on note"
       />
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
@@ -496,7 +496,7 @@ function ThreadCard({
       <div key={c.id} className="space-y-1">
         <div className="flex items-center gap-2">
           <UserAvatar user={c.author ?? { name: "Former member" }} size="xs" />
-          <span className="min-w-0 truncate text-[13px] font-semibold">
+          <span className="min-w-0 text-[13px] font-semibold break-words">
             {c.author?.name ?? "Former member"}
           </span>
           <span className="text-muted-foreground shrink-0 text-xs">{when(c.createdAt)}</span>

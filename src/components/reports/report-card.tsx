@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowUpRight, ChartNoAxesColumn, TriangleAlert, type LucideIcon } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChartNoAxesColumn,
+  TriangleAlert,
+  type IconComponent,
+} from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +39,7 @@ export function ReportCard({
 }: {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   viewHref?: string | null;
   viewLabel?: string;
   computedAt?: string | null;
@@ -47,7 +52,7 @@ export function ReportCard({
     <Card className={cn("min-w-0 flex-1", className)} aria-labelledby={headingId} role="region">
       <CardHeader>
         <CardTitle id={headingId}>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        {description && <CardDescription>{description}</CardDescription>}
         {viewHref ? (
           <CardAction>
             <Button asChild variant="outline" size="icon-sm">
@@ -87,7 +92,7 @@ export function ReportEmpty({
   icon: Icon = ChartNoAxesColumn,
 }: {
   children: ReactNode;
-  icon?: LucideIcon;
+  icon?: IconComponent;
 }) {
   return (
     <div className="bg-muted/40 rounded-tile text-muted-foreground flex min-h-28 flex-1 flex-col items-center justify-center gap-2.5 p-6 text-center text-sm">

@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import type { PersonFace } from "@/server/overview/queries";
+import type { PersonFace } from "@/lib/overview/types";
 
 /**
- * Small Overview pieces that work in server components (Lucide icons are
+ * Small Overview pieces that work in server components (icon components are
  * rendered here, never passed as props to a client component):
  * the ↗ circle link, the count chip, tiles and their icon chip, and the
  * avatar stack.
@@ -69,8 +69,10 @@ export function TileIcon({ children, className }: { children: ReactNode; classNa
 export function TileText({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <span className="min-w-0">
-      <span className="block truncate text-sm leading-tight font-semibold">{title}</span>
-      {sub && <span className="text-muted-foreground mt-0.5 block truncate text-[13px]">{sub}</span>}
+      <span className="block text-sm leading-tight font-semibold break-words">{title}</span>
+      {sub && (
+        <span className="text-muted-foreground mt-0.5 block text-[13px] break-words">{sub}</span>
+      )}
     </span>
   );
 }

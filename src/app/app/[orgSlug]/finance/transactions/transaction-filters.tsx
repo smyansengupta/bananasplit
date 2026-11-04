@@ -1,9 +1,16 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Download, SlidersHorizontal, X } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
+import { InBar } from "@/components/ui/bar-slot";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SearchField } from "@/components/ui/search-field";
+import { chipClass, Segmented } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -11,16 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { TransactionKind, TransactionStatus } from "@/generated/prisma/enums";
+import { TransactionKind } from "@/generated/prisma/enums";
 import { KIND_LABELS } from "@/components/finance/transaction-kind-select";
-import { STATUS_LABELS } from "@/components/finance/transaction-status-badge";
+import { cn } from "@/lib/utils";
 
-const FILTER_KEYS = [
+/** The panel's filters: what counts toward the Filters chip's number. */
+const PANEL_KEYS = [
   "period",
   "category",
   "kind",
-  "status",
   "submitter",
   "reconciled",
   "deleted",
@@ -28,159 +34,253 @@ const FILTER_KEYS = [
   "dateTo",
 ] as const;
 
-/** The transactions filters: a row of 40px pill dropdowns, each labelled, and a way to clear them. */
+const VIEWS = [
+  { value: "all", label: "Everything" },
+  { value: "review", label: "To review" },
+  { value: "pay", label: "To pay" },
+  { value: "unreconciled", label: "Unreconciled" },
+] as const;
+
+/**
+ * The transactions' controls, on Finance's tab bar (InBar): one Filters
+ * chip (Show first: everything, to review, to pay or unreconciled, the four
+ * questions a treasurer opens this page with; then period, category, kind,
+ * who, reconciled and dates), then search and Export.
+ */
 export function TransactionFilters({
   periods,
   categories,
   members,
+  exportHref,
 }: {
   periods: { id: string; label: string }[];
   categories: { id: string; name: string }[];
   members: { userId: string; name: string | null; email: string }[];
+  exportHref: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  function setParam(key: string, value: string | null) {
+  function setParams(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value && value !== "all") {
-      params.set(key, value);
-    } else {
-      params.delete(key);
+    for (const [key, value] of Object.entries(next)) {
+      if (value && value !== "all") params.set(key, value);
+      else params.delete(key);
     }
-    router.replace(`${pathname}?${params.toString()}`);
+    params.delete("open");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
+  const setParam = (key: string, value: string | null) => setParams({ [key]: value });
 
-  const active = FILTER_KEYS.some((k) => searchParams.has(k));
+  const view = searchParams.get("view") ?? "all";
+  const count =
+    PANEL_KEYS.filter((k) => searchParams.has(k)).length + (view !== "all" ? 1 : 0);
+  const [draft, setDraft] = useState(searchParams.get("q") ?? "");
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Select
-        value={searchParams.get("period") ?? "all"}
-        onValueChange={(v) => setParam("period", v)}
-      >
-        <SelectTrigger className="w-40 rounded-full" aria-label="Period">
-          <SelectValue placeholder="Period" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All periods</SelectItem>
-          {periods.map((p) => (
-            <SelectItem key={p.id} value={p.id}>
-              {p.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={searchParams.get("category") ?? "all"}
-        onValueChange={(v) => setParam("category", v)}
-      >
-        <SelectTrigger className="w-40 rounded-full" aria-label="Category">
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any category</SelectItem>
-          {categories.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
-              {c.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={searchParams.get("kind") ?? "all"} onValueChange={(v) => setParam("kind", v)}>
-        <SelectTrigger className="w-40 rounded-full" aria-label="Kind">
-          <SelectValue placeholder="Kind" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any kind</SelectItem>
-          {Object.values(TransactionKind).map((k) => (
-            <SelectItem key={k} value={k}>
-              {KIND_LABELS[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={searchParams.get("status") ?? "all"}
-        onValueChange={(v) => setParam("status", v)}
-      >
-        <SelectTrigger className="w-36 rounded-full" aria-label="Status">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any status</SelectItem>
-          {Object.values(TransactionStatus).map((s) => (
-            <SelectItem key={s} value={s}>
-              {STATUS_LABELS[s]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={searchParams.get("submitter") ?? "all"}
-        onValueChange={(v) => setParam("submitter", v)}
-      >
-        <SelectTrigger className="w-40 rounded-full" aria-label="Submitted by">
-          <SelectValue placeholder="Submitter" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Anyone</SelectItem>
-          {members.map((m) => (
-            <SelectItem key={m.userId} value={m.userId}>
-              {m.name ?? m.email}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={searchParams.get("reconciled") ?? "all"}
-        onValueChange={(v) => setParam("reconciled", v)}
-      >
-        <SelectTrigger className="w-40 rounded-full" aria-label="Reconciled">
-          <SelectValue placeholder="Reconciled" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any</SelectItem>
-          <SelectItem value="yes">Reconciled</SelectItem>
-          <SelectItem value="no">Not reconciled</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
-        value={searchParams.get("deleted") === "show" ? "show" : "hide"}
-        onValueChange={(v) => setParam("deleted", v === "show" ? "show" : null)}
-      >
-        <SelectTrigger className="w-40 rounded-full" aria-label="Deleted transactions">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="hide">Hide deleted</SelectItem>
-          <SelectItem value="show">Include deleted</SelectItem>
-        </SelectContent>
-      </Select>
-      <div className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          aria-label="From"
-          defaultValue={searchParams.get("dateFrom") ?? ""}
-          onChange={(e) => setParam("dateFrom", e.target.value || null)}
-          className="w-38 rounded-full"
-        />
-        <span className="text-muted-foreground text-sm">–</span>
-        <Input
-          type="date"
-          aria-label="To"
-          defaultValue={searchParams.get("dateTo") ?? ""}
-          onChange={(e) => setParam("dateTo", e.target.value || null)}
-          className="w-38 rounded-full"
-        />
+    <InBar>
+      <div className="flex flex-wrap items-center gap-2">
+        <Popover>
+          <PopoverTrigger
+            aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
+            className={chipClass(count > 0)}
+          >
+            <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+            Filters
+            {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
+          </PopoverTrigger>
+          <PopoverContent align="end" className="grid w-80 gap-3 p-3">
+            <PanelRow name="Show">
+              <Select value={view} onValueChange={(v) => setParam("view", v)}>
+                <SelectTrigger className="w-full" aria-label="Show">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VIEWS.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PanelRow>
+            <PanelRow name="Period">
+              <Select
+                value={searchParams.get("period") ?? "all"}
+                onValueChange={(v) => setParam("period", v)}
+              >
+                <SelectTrigger className="w-full" aria-label="Period">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All periods</SelectItem>
+                  {periods.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PanelRow>
+            <PanelRow name="Category">
+              <Select
+                value={searchParams.get("category") ?? "all"}
+                onValueChange={(v) => setParam("category", v)}
+              >
+                <SelectTrigger className="w-full" aria-label="Category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any category</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PanelRow>
+            <PanelRow name="Kind">
+              <Select
+                value={searchParams.get("kind") ?? "all"}
+                onValueChange={(v) => setParam("kind", v)}
+              >
+                <SelectTrigger className="w-full" aria-label="Kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any kind</SelectItem>
+                  {Object.values(TransactionKind).map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {KIND_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PanelRow>
+            {members.length > 1 && (
+              <PanelRow name="By">
+                <Select
+                  value={searchParams.get("submitter") ?? "all"}
+                  onValueChange={(v) => setParam("submitter", v)}
+                >
+                  <SelectTrigger className="w-full" aria-label="By">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Anyone</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.userId} value={m.userId}>
+                        {m.name ?? m.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </PanelRow>
+            )}
+            <PanelRow name="Reconciled">
+              <Segmented
+                label="Reconciled"
+                value={searchParams.get("reconciled") ?? "all"}
+                onSelect={(v) => setParam("reconciled", v)}
+                options={[
+                  { value: "all", label: "Any" },
+                  { value: "yes", label: "Reconciled" },
+                  { value: "no", label: "Not" },
+                ]}
+              />
+            </PanelRow>
+            <PanelRow name="Dates">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="date"
+                  aria-label="From"
+                  defaultValue={searchParams.get("dateFrom") ?? ""}
+                  onChange={(e) => setParam("dateFrom", e.target.value || null)}
+                  className="min-w-0 flex-1"
+                />
+                <span className="text-muted-foreground text-sm">to</span>
+                <Input
+                  type="date"
+                  aria-label="To"
+                  defaultValue={searchParams.get("dateTo") ?? ""}
+                  onChange={(e) => setParam("dateTo", e.target.value || null)}
+                  className="min-w-0 flex-1"
+                />
+              </div>
+            </PanelRow>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                aria-pressed={searchParams.get("deleted") === "show"}
+                onClick={() =>
+                  setParam("deleted", searchParams.get("deleted") === "show" ? null : "show")
+                }
+                className={cn(
+                  chipClass(searchParams.get("deleted") === "show"),
+                  "h-8 px-3 text-[13px]",
+                )}
+              >
+                Show voided
+              </button>
+              {count > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setParams({
+                      view: null,
+                      ...Object.fromEntries(PANEL_KEYS.map((k) => [k, null])),
+                    })
+                  }
+                >
+                  <X aria-hidden="true" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <div className="flex items-center gap-2">
+          <SearchField
+            value={draft}
+            onValueChange={setDraft}
+            onClear={() => {
+              setDraft("");
+              setParam("q", null);
+            }}
+            placeholder="Search"
+            aria-label="Search transactions"
+            className="w-52"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setParam("q", draft.trim() || null);
+            }}
+            onBlur={() => {
+              if (draft.trim() !== (searchParams.get("q") ?? "")) {
+                setParam("q", draft.trim() || null);
+              }
+            }}
+          />
+          <Button variant="outline" size="icon" asChild>
+            <a href={exportHref} aria-label="Export CSV" title="Export CSV">
+              <Download className="size-4" aria-hidden="true" />
+            </a>
+          </Button>
+        </div>
       </div>
-      {active && (
-        <Button type="button" variant="ghost" onClick={() => router.replace(pathname)}>
-          <X aria-hidden="true" />
-          Clear filters
-        </Button>
-      )}
+    </InBar>
+  );
+}
+
+function PanelRow({ name, children }: { name: string; children: React.ReactNode }) {
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <span className="text-muted-foreground text-[13px] font-medium">{name}</span>
+      {children}
     </div>
   );
 }

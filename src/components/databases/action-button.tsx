@@ -1,12 +1,14 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
 import { ItemMenu, type ItemMenuEntry } from "@/components/item-menu";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/components/ui/toaster";
 
 type Variant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
@@ -93,7 +95,15 @@ export interface ActionMenuItem {
   /** What happens, under the question. */
   confirmDescription?: string;
   destructive?: boolean;
+  /**
+   * Runs a few seconds later with Undo instead of asking first: for a
+   * delete that can't be brought back once it's sent, the wait is the undo.
+   */
+  undoLabel?: string;
 }
+
+/** How long a delete waits, Undo on screen, before it's sent. */
+const UNDO_WINDOW_MS = 6000;
 
 /**
  * The row drawer's "…" menu (the shared ItemMenu) for the Server Actions
@@ -117,6 +127,31 @@ export function ActionMenu({
   const [error, setError] = useState<string | null>(null);
 
   const run = async (item: ActionMenuItem) => {
+    if (item.undoLabel) {
+      let undone = false;
+      toast({
+        title: item.undoLabel,
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: "Undo",
+          run: () => {
+            undone = true;
+          },
+        },
+      });
+      window.setTimeout(() => {
+        if (undone) return;
+        start(async () => {
+          const result = await item.action(...(item.args ?? []));
+          if (result.error) {
+            toast({ title: result.error, tone: "error" });
+            return;
+          }
+          router.refresh();
+        });
+      }, UNDO_WINDOW_MS);
+      return;
+    }
     if (
       item.confirm &&
       !(await ask({
@@ -164,6 +199,60 @@ export function ActionMenu({
           {error}
         </span>
       )}
+    </span>
+  );
+}
+
+/**
+ * A switch that runs a Server Action when it's flipped: `argsOn` when it
+ * turns on, `argsOff` when it turns off (server components pass both, never
+ * a closure). It shows the new state at once and snaps back on an error.
+ */
+export function ActionSwitch<A extends AnyAction>({
+  action,
+  argsOn,
+  argsOff,
+  checked,
+  label,
+}: {
+  action: A;
+  argsOn: Parameters<A>;
+  argsOff: Parameters<A>;
+  checked: boolean;
+  label: string;
+}) {
+  const router = useRouter();
+  const [on, setOn] = useState(checked);
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <span className="flex items-center justify-between gap-3 py-1">
+      <span className="text-sm font-medium">{label}</span>
+      <span className="flex items-center gap-2">
+        {error && (
+          <span role="alert" className="text-destructive text-xs">
+            {error}
+          </span>
+        )}
+        <Switch
+          checked={on}
+          disabled={pending}
+          aria-label={label}
+          onCheckedChange={(next) => {
+            setOn(next);
+            setError(null);
+            start(async () => {
+              const result = await action(...(next ? argsOn : argsOff));
+              if (result.error) {
+                setOn(!next);
+                setError(result.error);
+                return;
+              }
+              router.refresh();
+            });
+          }}
+        />
+      </span>
     </span>
   );
 }

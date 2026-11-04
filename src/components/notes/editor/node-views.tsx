@@ -15,7 +15,7 @@ import {
   FileText,
   Loader2,
   Vote,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 
@@ -157,7 +157,9 @@ function TaskChipView({ node }: ReactNodeViewProps) {
       >
         {done && <Check className="size-3.5" strokeWidth={2.6} aria-hidden="true" />}
       </button>
-      <span className={cn("min-w-0 flex-1 truncate", done && "text-muted-foreground line-through")}>
+      <span
+        className={cn("min-w-0 flex-1 break-words", done && "text-muted-foreground line-through")}
+      >
         {title}
       </span>
       {task === undefined && (
@@ -274,11 +276,11 @@ function LinkCardView({ node, selected }: ReactNodeViewProps) {
           <Icon className="size-[18px]" aria-hidden="true" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="text-foreground truncate text-sm font-semibold">
+          <span className="text-foreground text-sm font-semibold break-words">
             {String(node.attrs.title) || (kind === "poll" ? "Poll" : "Database")}
           </span>
           <span className="text-muted-foreground text-xs">
-            {kind === "poll" ? "Poll · open to vote" : "Database view · open the table"}
+            {kind === "poll" ? "Poll" : "Database view"}
           </span>
         </span>
         <ArrowUpRight className="text-muted-foreground size-4" aria-hidden="true" />
@@ -307,7 +309,7 @@ function FileAttachmentView({ node, selected }: ReactNodeViewProps) {
           href={fileId ? `/app/${orgSlug}/notes/files/${fileId}` : "#"}
           className="flex min-w-0 flex-1 flex-col no-underline"
         >
-          <span className="text-foreground truncate text-sm font-semibold">
+          <span className="text-foreground text-sm font-semibold break-words">
             {String(node.attrs.name)}
           </span>
           {size > 0 && <span className="text-muted-foreground text-xs">{formatBytes(size)}</span>}

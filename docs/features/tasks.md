@@ -210,6 +210,16 @@ org-wide) is the exec-sync agenda.
 
 Keyboard: `1`–`6` switch layout, `/` focuses search, `c` starts a task.
 
+**On a phone** Tasks has no Board or Table (a remembered or linked one
+opens the List there, and the remembered layout is kept for the computer).
+The stat strip is one bar, to scale: overdue, due this week, open for
+later, done this week. Under it, the phone's layouts by name (List, Week,
+Roadmap, Dashboard), then one row: whose work as icons you flip between
+(three with _My team_), **Filters** (a sheet with person, project, tag,
+status and visibility, and a link to all projects), and a search icon that
+opens the search box. **New task** is at the top right; the List's quick
+add is a computer thing.
+
 Deep links other sections use, all unchanged:
 
 - `?view=table&owner={userId}&status=open` — that person's open tasks (the
@@ -250,7 +260,7 @@ stayed where it was. The Project table, its policies and lead guard,
   **New epic** asks for a name, colour, owner, dates and a line about it;
   each card's ••• edits it, marks it done or reopens it, or deletes it (with
   Undo). A card opens the List filtered to that epic.
-- **Part of** in the task editor (and "in …" in Sentence mode) picks what a
+- **Part of** in the task editor picks what a
   story or task sits in: an epic, or for a task a story, each epic followed
   by its stories. Typing a new name offers **Create epic “…”**. An epic gets
   a **Colour** row instead.
@@ -268,8 +278,8 @@ colour. Names are unique regardless of case, so typing "Catering" picks
 "catering" instead of making a second. The database holds it to that (a
 unique index on the org and the lower-cased name): when two people make the
 same tag at once, `createTag` catches the clash and hands back the one that
-won. Duplicates made before the index were merged into the oldest. `#tag` in a title (the composer,
-the Sentence title, the List's quick add) tags the task: "Book a
+won. Duplicates made before the index were merged into the oldest. `#tag` in a title (the composer
+and the List's quick add) tags the task: "Book a
 photographer #showcase". Anyone makes a tag while adding or editing a task
 (**Settings › Tags** is gone, and with it the switch that kept new tags to
 owners and admins; `20261020120000_overview_reset_tags_open` turned it back

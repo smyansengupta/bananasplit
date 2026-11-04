@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Loader2, Plus } from "lucide-react";
+import { ChevronDown, Loader2, Plus } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 

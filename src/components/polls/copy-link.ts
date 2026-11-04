@@ -21,7 +21,5 @@ export function copyPollLink(
 export function copyGuestPollLink(pollId: string): void {
   copyPollLink(`/poll/${pollId}`, {
     title: "Guest link copied",
-    description: "Anyone with it can answer with just their name. No account needed.",
-    duration: 5_000,
   });
 }

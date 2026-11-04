@@ -13,19 +13,26 @@ plan from a9b3141 and the old free /rsvp pages.
   2026-10-19) notes and files, and the databases its owner makes (see "Files
   and Databases in Personal" below). No members, invitations, roles,
   people, org chart, finance or reports. It is on **Personal Free** (`FREE`)
-  or **Personal Plus** (`PERSONAL_PLUS`, $4 a month or $36 a year: themes,
-  calendar sync, AI imports, more storage); its owner switches in Settings ›
-  Plan and storage.
-- **Club**: a shared space (`kind = CLUB`). Anyone can start one. A new club
-  gets a **30-day free trial** of everything (Team Advanced), no card.
-  When the trial ends the owner picks **Team** (`CLUB`) or **Team
-  Advanced** (`SOCIETY`). Until then
-  the club is **paused**: everyone can still open and read everything,
-  nothing is deleted, public RSVP and poll links keep working for guests,
-  but members can't create or edit club content; owners and admins see a
-  "Choose a plan" screen. Billing isn't connected yet: picking a plan
-  applies at once (as Admin panel > Plan does today), behind the same seam
-  (`changeOrgPlan`) a real checkout will call.
+  or **Personal Plus** (`PERSONAL_PLUS`, $8 a month or $72 a year: themes,
+  integrations, AI imports, more storage); its owner switches in Settings ›
+  Plan and storage. A new account's space gets a **14-day free trial** of
+  Personal Plus, no card: plan `FREE` with a `trialEndsAt`, read as Personal
+  Plus until then. There is no student price for Personal.
+- **Organization**: a shared space (`kind = CLUB`). Anyone can start one. A
+  new organization gets a **14-day free trial** of everything (Team
+  Advanced), no card. Owners get an email and a banner three days before it
+  ends, and a dialog once it has. When the trial ends it moves to **Free**
+  (`TEAM_FREE`, a reverse trial): nothing pauses or is deleted, and what
+  Team and Team Advanced add is locked until the owner picks **Team**
+  (`CLUB`) or **Team Advanced** (`SOCIETY`). The row stays `TRIAL` until a
+  plan is picked; the app reads an ended trial as `TEAM_FREE`
+  (`src/lib/billing/space.ts`). Owners and admins see a note that the
+  trial ended. Prices: standard per member a month, billed yearly, or for
+  a student organization (owner on a school address, within the plan's
+  member cap) a flat price per academic year or semester
+  (`src/lib/billing/plans.ts`). Billing isn't connected yet: picking a plan
+  applies at once, behind the same seam (`changeOrgPlan`) a real checkout
+  will call.
 - **Joining a club is always free.** A joiner never sees a price, a trial
   or a paywall. Only owners and admins see plan prompts.
 - Guests (people who RSVP or answer a poll) never need an account.
@@ -43,19 +50,19 @@ database values stay FREE, PERSONAL_PLUS, CLUB, SOCIETY and TRIAL; only
 Every number lives in `src/lib/billing/features.ts` (`PLAN_LIMITS`,
 `PLAN_FEATURES`, `PLAN_NAMES`) and `src/lib/billing/plans.ts` (prices).
 
-| | Personal Free | Personal Plus | Team | Team Advanced (and the trial) |
-|---|---|---|---|---|
-| Price | $0 | $4/month or $36/year | $4/member/semester | $7/member/semester |
-| Storage | 1 GB | 25 GB | 100 GB | 500 GB |
-| Largest file | 10 MB | 250 MB | 250 MB | 1 GB |
-| Note history | 7 days | 1 year | 90 days | 1 year |
-| Data connections | 0 | 1 | 2 | 6 |
+|                  | Personal Free | Personal Plus        | Team               | Team Advanced (and the trial) |
+| ---------------- | ------------- | -------------------- | ------------------ | ----------------------------- |
+| Price            | $0            | $4/month or $36/year | $4/member/semester | $7/member/semester            |
+| Storage          | 1 GB          | 25 GB                | 100 GB             | 500 GB                        |
+| Largest file     | 10 MB         | 250 MB               | 250 MB             | 1 GB                          |
+| Note history     | 7 days        | 1 year               | 90 days            | 1 year                        |
+| Data connections | 0             | 1                    | 2                  | 6                             |
 
 - Storage counts Notes files (and images in notes), receipts, note history
   and the trash, until it is emptied (`Organization.storageUsedBytes`, kept
   by database triggers; the app never writes it).
 - Every upload passes one gate (`src/server/storage/quota.ts`): the space
-  has the feature and isn't paused, the file is within the plan's largest
+  has the feature, the file is within the plan's largest
   file, and it fits. Refusals say the numbers. Files over 4 MB go straight
   to Vercel Blob with a short-lived, size-capped token
   (`src/server/storage/direct.ts`); the browser side is `uploadNoteFile()`
@@ -70,6 +77,8 @@ Every number lives in `src/lib/billing/features.ts` (`PLAN_LIMITS`,
 - **Send to a club** (`src/server/storage/send-to-club.ts`): a copy of a
   Personal note or file into one of your clubs, shared there and counted
   toward the club's storage.
+  Moving them instead (Move to a club, below) takes the originals, with
+  their ids, history and comments.
 
 ## Sign-up and onboarding
 
@@ -142,8 +151,9 @@ had hidden Polls (Find a time) or Calendar (RSVPs).
 
 The last club setup step (`/onboarding/organization/{slug}/bring`, B7)
 lists the creator's Personal event pages, other calendar events (upcoming
-and the last month), availability and question polls, and open top-level
-tasks and epics in one list, none ticked; skipped when there's nothing to bring.
+and the last month), availability and question polls, open top-level
+tasks and epics, folders, top-level notes and uploads in one list, none
+ticked; skipped when there's nothing to bring.
 `?bring={id}`, or the item remembered by "Start a club" on
 `/app/{personal slug}/move?item={id}` (Move to a club), starts ticked.
 `/app/{personal slug}/move` also lists the clubs you own or run, each
@@ -152,13 +162,53 @@ opening the same list with `?from=move`.
 The move is `app.move_personal_items` (migration
 `20261013190000_move_personal_items`, which documents every row it
 touches): one transaction, ids kept, the caller must own the Personal space
-and be OWNER or ADMIN of a club that isn't paused. Events move with
+and be OWNER or ADMIN of the organization. Events move with
 sign-ups, tickets, bring list and pending RSVP jobs, and become INTERNAL
 (nothing lands on the club's public feed by itself). Polls move with slots,
 responses, options and votes; a poll's scheduled event comes along. Tasks
 move with subtasks, comments, activity and reminders; labels are matched in
 the club by name or made there. (Projects became epics, which move like
 any top-level task.)
+
+Files (added 2026-10-21, migration `20261023120000_move_personal_files`,
+same function; `src/server/personal/move-files.ts`):
+
+- **What comes along.** A folder brings its live notes and uploads; a note
+  brings every live sub-page under it and the uploads it (or a sub-page)
+  shows as an image or a file card. So the list's Files section leaves out
+  uploads a live note shows: they move with their note. Notes keep their
+  ids, comments and version history; uploads keep their ids.
+- **Private to you.** Personal content is its owner's alone, and it stays
+  that way in the club: moved notes and uploads land PRIVATE to the mover
+  (a note's "every member can edit" is off and any share dropped) until
+  they share them.
+- **Folders** are matched in the club by name (case-insensitive) or made
+  there with the same name and colour. A picked folder moves itself (id
+  kept) when the club has no folder of that name; otherwise its contents go
+  into the club's, and the Personal folder goes. Trashed notes and uploads
+  stay in Personal's trash, let go of anything that moved (a sub-page in
+  the trash ends up at the top level).
+- **Upload bytes.** They are stored under the space's id
+  (`files/{orgId}/...`), so the app copies each one under the club's id
+  before the move and deletes the Personal copy after it commits; a failed
+  move deletes the copies instead (and the storage sweep catches any
+  left). The function refuses (40001, "try again") when a copy is missing,
+  so a file never moves without its bytes.
+- **Image links.** A note's images link to `/api/orgs/{orgId}/files/{id}`.
+  The move points them at the club in the body, the live document (rebuilt
+  by the app with the same edit an autosave makes, so comment anchors keep
+  their places) and the version history. A Personal note that stays but
+  shows a moved upload loses that image; links between pages that moved
+  and pages that stayed stop opening.
+- **Storage.** Uploads and note history count toward the club's storage
+  after the move (and stop counting in Personal), so the move goes through
+  the club's upload gate: not paused, each file within its plan's largest
+  file, and room for all of it, checked before copying and again in the
+  move's transaction. Crossing 80% sends the usual notice.
+
+Not built yet: custom databases (Personal has them now: "Files and
+Databases in Personal", below). Moving one needs a new key when the club
+already uses its key, so its URL would change.
 
 ## Files and Databases in Personal
 
@@ -179,5 +229,6 @@ person:
   index, opening one by URL (404), search and pin search. No data source
   (Personal Plus's data connection is for calendar sync), no Reports tab,
   and the settings dialog doesn't ask who can see or edit it.
-- **Into a club**: Send to a club copies a note or file. Moving a Personal
-  database into a club isn't built yet.
+- **Into a club**: Send to a club copies a note or file; Move to a club
+  moves notes, folders and uploads, originals and all ("Bring anything
+  in", above). Moving a Personal database into a club isn't built yet.

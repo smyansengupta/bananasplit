@@ -1,6 +1,6 @@
 "use client";
 
-import { HardDrive } from "lucide-react";
+import { HardDrive } from "@/components/icons";
 import Link from "next/link";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

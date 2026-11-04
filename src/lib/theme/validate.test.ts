@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { themeStyleSheet, tokenStyle } from "./css";
 import { deriveTheme, deriveTokens } from "./derive";
-import { CBC_PRESET, DEFAULT_PRESET } from "./presets";
+import { CBC_PRESET, UNTHEMED_PRESET } from "./presets";
 import { buildThemeRecord } from "./record";
 import { resolveTheme } from "./resolve";
 import { hexSchema, isHex, normalizeHex, parseRoles, themeInputSchema } from "./validate";
@@ -119,7 +119,7 @@ describe("render-time validation", () => {
       };
       const resolved = resolveTheme(row);
       expect(resolved.isDefault).toBe(true);
-      expect(resolved.light).toEqual(DEFAULT_PRESET.light);
+      expect(resolved.light).toEqual(UNTHEMED_PRESET.light);
     }
   });
 

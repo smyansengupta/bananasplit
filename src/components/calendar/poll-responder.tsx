@@ -10,13 +10,14 @@ import {
   TriangleAlert,
   Users,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { finalizePoll } from "@/app/app/[orgSlug]/calendar/polls/actions";
 import { submitPollResponse } from "@/app/poll/[pollId]/actions";
+import { copyGuestPollLink } from "@/components/polls/copy-link";
 import { PollStatusBadge } from "@/components/polls/poll-status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,8 +37,11 @@ import type { PollAnswer, PollView } from "@/lib/polls/poll-view";
 import { cn } from "@/lib/utils";
 
 import { useViewerTimeZone } from "./hooks";
-import { intervalLabel, momentLabel, timeZoneDisplayName } from "./poll-format";
+import { intervalLabel, momentLabel, momentDayLabel, timeZoneDisplayName } from "./poll-format";
 import { PollGridFrame } from "./poll-grid";
+import { ConferencePicker, useMeetingConnections } from "@/components/meetings/conference-picker";
+import { ConferenceProvider } from "@/generated/prisma/enums";
+import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
 import {
   buildPollGrid,
   distinctRespondents,
@@ -99,6 +103,7 @@ export function PollResponder({
   actions,
   notices,
   aside,
+  bookBest = false,
 }: {
   /** The stripped DTO (src/lib/polls/poll-view.ts): no ids, emails or keys. */
   poll: PollView;
@@ -113,6 +118,8 @@ export function PollResponder({
   notices?: ReactNode;
   /** Extra panels at the top of the side column. */
   aside?: ReactNode;
+  /** Arrived from a card's "Book best time": open the schedule step on the best one. */
+  bookBest?: boolean;
 }) {
   const router = useRouter();
   const isGuest = respondAs === "guest";
@@ -283,20 +290,40 @@ export function PollResponder({
     if (dirty || (hasAnswered && name !== savedName)) void save(myResponses, name);
   }
 
+  // Booking asks how the meeting happens: online with a call, or in person
+  // at a place, with the same provider buttons as the meeting form.
+  const connections = useMeetingConnections(orgId ?? "");
+  const [bookOnline, setBookOnline] = useState(false);
+  const [bookProvider, setBookProvider] = useState<ConferenceProvider>(ConferenceProvider.NONE);
+  const [bookUrl, setBookUrl] = useState("");
+  const [bookPlace, setBookPlace] = useState("");
+
   function openSchedule(window: RankedSlot) {
     setScheduleError(null);
     setScheduleTarget(window);
+  }
+  // "Book best time" on a card lands here and opens the schedule step on
+  // the best time, once.
+  const [booked, setBooked] = useState(false);
+  if (bookBest && !booked && canSchedule && bestWindows[0]) {
+    setBooked(true);
+    openSchedule(bestWindows[0]);
   }
 
   function confirmSchedule() {
     if (!scheduleTarget || !orgId) return;
     startScheduling(async () => {
-      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id);
+      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id, {
+        conferenceProvider: bookOnline ? bookProvider : ConferenceProvider.NONE,
+        conferenceUrl:
+          bookOnline && bookProvider === ConferenceProvider.OTHER ? bookUrl || null : null,
+        location: bookOnline ? null : bookPlace.trim() || null,
+      });
       if (result.error) {
         setScheduleError(result.error);
         return;
       }
-      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/calendar/${result.eventId}`);
+      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/meetings/${result.eventId}`);
       else router.refresh();
       setScheduleTarget(null);
     });
@@ -427,14 +454,22 @@ export function PollResponder({
               {poll.description}
             </p>
           )}
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+          {/* One line on a phone: the close date without its time, "60 min". */}
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs max-md:flex-nowrap max-md:gap-x-2.5 max-md:whitespace-nowrap">
             <PollStatusBadge tone={isFinalized ? "scheduled" : isClosed ? "closed" : "open"}>
               {isFinalized ? "Scheduled" : isClosed ? "Closed" : "Open"}
             </PollStatusBadge>
-            {!isClosed && poll.closesAt && <span>Closes {momentLabel(poll.closesAt, zone)}</span>}
+            {!isClosed && poll.closesAt && (
+              <span>
+                Closes <span className="max-md:hidden">{momentLabel(poll.closesAt, zone)}</span>
+                <span className="md:hidden">{momentDayLabel(poll.closesAt, zone)}</span>
+              </span>
+            )}
             <span className="inline-flex items-center gap-1">
               <Clock aria-hidden className="size-3.5" />
-              {poll.durationMinutes}-minute meeting
+              {poll.durationMinutes}
+              <span className="max-md:hidden">-minute meeting</span>
+              <span className="md:hidden"> min</span>
             </span>
             <span className="inline-flex items-center gap-1 tabular-nums">
               <Users aria-hidden className="size-3.5" />
@@ -442,7 +477,12 @@ export function PollResponder({
             </span>
           </div>
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>}
+        {/* Not on a phone: there the page puts them on the back link's row, so the title has the width. */}
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 max-md:hidden">
+            {actions}
+          </div>
+        )}
       </div>
 
       {/* --------------------------------------------------------------- notices */}
@@ -459,7 +499,7 @@ export function PollResponder({
               </span>
               {poll.finalizedEventId && orgSlug && (
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/app/${orgSlug}/calendar/${poll.finalizedEventId}`}>View event</Link>
+                  <Link href={`/app/${orgSlug}/meetings/${poll.finalizedEventId}`}>View event</Link>
                 </Button>
               )}
             </span>
@@ -658,6 +698,7 @@ export function PollResponder({
             selectedStartId={highlight.length ? highlight[0] : null}
             onSelect={selectWindow}
             onSchedule={canSchedule ? openSchedule : undefined}
+            onCopyLink={isGuest ? undefined : () => copyGuestPollLink(poll.id)}
           />
           <RespondentList respondents={respondents} />
           {isGuest && !isClosed && (
@@ -683,7 +724,7 @@ export function PollResponder({
           </DialogHeader>
           {scheduleTarget && scheduleInvitees && (
             <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
-              <li>Creates an internal event, &ldquo;{poll.title}&rdquo;, and closes the poll.</li>
+              <li>Creates an internal event and closes the poll.</li>
               <li>
                 {scheduleInvitees.members === 0
                   ? "No members are invited: none marked the start time as available."
@@ -698,6 +739,49 @@ export function PollResponder({
               )}
             </ul>
           )}
+          <div className="space-y-3">
+            <div role="radiogroup" aria-label="How it happens" className={segmentedTrack}>
+              {(
+                [
+                  [false, "In person"],
+                  [true, "Online"],
+                ] as const
+              ).map(([online, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={bookOnline === online}
+                  onClick={() => {
+                    setBookOnline(online);
+                    if (online && bookProvider === ConferenceProvider.NONE) {
+                      const first = firstConnectedProvider(connections);
+                      if (first) setBookProvider(first);
+                    }
+                  }}
+                  className={segmentedItem(bookOnline === online)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {bookOnline ? (
+              <ConferencePicker
+                connections={connections}
+                provider={bookProvider}
+                onProviderChange={setBookProvider}
+                conferenceUrl={bookUrl}
+                onUrlChange={setBookUrl}
+              />
+            ) : (
+              <Input
+                aria-label="Where"
+                placeholder="Room or address"
+                value={bookPlace}
+                onChange={(e) => setBookPlace(e.target.value)}
+              />
+            )}
+          </div>
           {scheduleError && (
             <p className="text-destructive text-sm" role="alert">
               {scheduleError}
@@ -766,9 +850,6 @@ function BrushPicker({
   return (
     <fieldset className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <legend className="sr-only">Mark times as</legend>
-      <span aria-hidden className="text-sm font-medium">
-        Mark as
-      </span>
       {/* The shared segmented look, kept as radios: a brush is a choice, not a view. */}
       <div className={cn(segmentedTrack, "flex w-full sm:inline-flex sm:w-auto")}>
         {BRUSHES.map((option) => (

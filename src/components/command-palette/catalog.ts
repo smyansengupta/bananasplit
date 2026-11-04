@@ -17,6 +17,8 @@ import { scoreFields, type ParsedQuery } from "@/lib/search/text";
 
 export type PaletteCommand =
   | { type: "href"; href: string }
+  /** Makes a task from the typed text, right there (the Create group). */
+  | { type: "create-task"; text: string }
   | { type: "pin" }
   | { type: "new-note" }
   | { type: "shortcuts" }
@@ -29,7 +31,7 @@ export interface CatalogEntry {
   detail?: string;
   /** Other words people use for it ("kanban", "dark mode"). */
   keywords: readonly string[];
-  /** A lucide icon name (palette-icons.ts). */
+  /** An icon name (@/components/icons) (palette-icons.ts). */
   icon: string;
   command: PaletteCommand;
 }
@@ -43,6 +45,8 @@ export interface PaletteSection {
   /** Other paths in the same section (People's /org-chart). */
   also?: readonly string[];
   hidden: boolean;
+  /** An add-on the organization hasn't added: not offered at all. */
+  notAdded?: boolean;
   icon: string;
   description: string;
 }
@@ -227,7 +231,7 @@ const PAGES: readonly PageDef[] = [
   },
   {
     path: "/finance/my-reimbursements",
-    title: "My reimbursements",
+    title: "My requests",
     section: "finance",
     icon: "Receipt",
     keywords: ["expense", "receipt", "pay me back", "reimburse", "money owed"],
@@ -269,7 +273,15 @@ const PAGES: readonly PageDef[] = [
     title: "Admin panel",
     permission: "settings.view",
     icon: "ShieldCheck",
-    keywords: ["settings", "preferences", "configuration", "admin", "options", "club settings"],
+    keywords: [
+      "settings",
+      "preferences",
+      "configuration",
+      "admin",
+      "options",
+      "organization settings",
+      "org settings",
+    ],
   },
   {
     path: "/settings/members",
@@ -285,7 +297,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Mail",
     keywords: ["resend", "domain", "mail", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/claude",
@@ -293,7 +305,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "KeyRound",
     keywords: ["ai", "anthropic", "api key", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/ai-model",
@@ -301,7 +313,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Settings2",
     keywords: ["claude", "model", "ai", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/google-calendar",
@@ -309,7 +321,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "CalendarSync",
     keywords: ["gcal", "sync", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/website",
@@ -317,7 +329,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Globe",
     keywords: ["build hook", "public events", "site", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/data-source",
@@ -325,13 +337,13 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "DatabaseZap",
     keywords: ["supabase", "sync", "attendance", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
 ];
 
 /** Other words for each settings page (settings-nav has the names and permissions). */
 const SETTINGS_KEYWORDS: Record<string, readonly string[]> = {
-  general: ["club name", "url", "slug", "timezone", "picture", "logo"],
+  general: ["organization name", "org name", "url", "slug", "timezone", "picture", "logo"],
   sidebar: ["sections", "navigation", "hide", "rename", "menu", "order"],
   theme: ["colors", "branding", "logo", "dark mode", "light mode", "appearance"],
   labels: ["tags", "task labels"],
@@ -345,6 +357,7 @@ const SETTINGS_KEYWORDS: Record<string, readonly string[]> = {
 function sectionVisible(input: CatalogInput, section: SectionId | undefined): boolean {
   if (!section) return true;
   const found = input.sections.find((s) => s.id === section);
+  if (found?.notAdded) return false;
   return !found?.hidden || can({ role: input.role }, "settings.view");
 }
 
@@ -387,7 +400,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       key: `page:/settings/${s.segment}`,
       group: "pages",
       title: s.label,
-      detail: `Admin panel · ${s.description}`,
+      detail: `Admin panel, ${s.description}`,
       keywords: SETTINGS_KEYWORDS[s.segment] ?? [],
       icon: s.icon,
       command: { type: "href", href: `${base}/settings/${s.segment}` },
@@ -398,6 +411,30 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
   const action = (entry: Omit<CatalogEntry, "group">, section?: SectionId) => {
     if (sectionVisible(input, section)) entries.push({ ...entry, group: "actions" });
   };
+  // The Create group: shown under what you type, made from it (a task's
+  // title, a quick poll's question), as the workspace plan has it: only these
+  // two. paletteGroups fills in the text; keys start "create:".
+  const create = (entry: Omit<CatalogEntry, "group" | "keywords">, section: SectionId) => {
+    if (sectionVisible(input, section)) entries.push({ ...entry, keywords: [], group: "actions" });
+  };
+  create(
+    {
+      key: "create:task",
+      title: "New task",
+      icon: "CheckSquare",
+      command: { type: "create-task", text: "" },
+    },
+    "tasks",
+  );
+  create(
+    {
+      key: "create:poll",
+      title: "Quick poll",
+      icon: "Vote",
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
+    },
+    "forms",
+  );
   action(
     {
       key: "action:new-task",
@@ -436,24 +473,24 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       icon: "CalendarPlus",
       command: { type: "href", href: `${base}/calendar/find-a-time/new` },
     },
-    "find-a-time",
+    "meetings",
   );
   action(
     {
       key: "action:ask",
-      title: "Ask the club a question",
+      title: "Ask the organization a question",
       detail: "A quick vote",
       keywords: ["new poll", "create poll", "vote", "survey", "question"],
       icon: "MessageCircleQuestion",
-      command: { type: "href", href: `${base}/calendar/polls/ask` },
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
     },
-    "polls",
+    "forms",
   );
   action(
     {
       key: "action:expense",
       title: "Submit an expense",
-      detail: "Get paid back for club spending",
+      detail: "Get paid back for organization spending",
       keywords: ["reimbursement", "receipt", "new expense", "pay me back"],
       icon: "Receipt",
       command: { type: "href", href: `${base}/finance/my-reimbursements` },
@@ -507,8 +544,8 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
     action({
       key: `action:org:${org.slug}`,
       title: `Switch to ${org.name}`,
-      detail: org.kind === "PERSONAL" ? "Personal" : "Club",
-      keywords: ["switch", "organization", "club", "org"],
+      detail: org.kind === "PERSONAL" ? "Personal" : "Organization",
+      keywords: ["switch", "organization", "org", "workspace"],
       icon: "ArrowRightLeft",
       command: { type: "href", href: `/app/${org.slug}` },
     });
@@ -525,6 +562,7 @@ export interface CatalogHit {
 export function matchCatalog(entries: readonly CatalogEntry[], q: ParsedQuery): CatalogHit[] {
   if (!q.folded.length) return [];
   return entries
+    .filter((entry) => !entry.key.startsWith("create:"))
     .map((entry, i) => ({
       entry,
       i,

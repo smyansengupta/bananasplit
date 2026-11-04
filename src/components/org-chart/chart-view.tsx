@@ -138,7 +138,9 @@ export function ChartView({
         orgSlug={orgSlug}
         node={selected}
         manager={selected ? index.managerOf(selected.id) : null}
+        alsoManagers={selected ? index.alsoManagersOf(selected.id) : []}
         reports={selected ? index.reportsOf(selected.id) : []}
+        dottedReports={selected ? index.dottedReportsOf(selected.id) : []}
         advisors={selected ? index.advisorsOf(selected.id) : []}
         side={isDesktop ? "right" : "bottom"}
         onClose={() => setPosition(null)}

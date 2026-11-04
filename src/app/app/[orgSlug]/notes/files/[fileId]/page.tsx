@@ -1,16 +1,16 @@
 import { format } from "date-fns";
 import { BackLink } from "@/components/back-link";
-import { Lock, Users } from "lucide-react";
+import { LinkedSection } from "@/components/links/linked-section";
 import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { FILE_ICONS, FILE_LABELS } from "@/components/notes/file-card";
-import { DocumentPreview, FileActions } from "@/components/notes/file-preview";
-import { Badge } from "@/components/ui/badge";
+import { DocumentPreview, FileActions, FileDetails } from "@/components/notes/file-preview";
 import { can } from "@/lib/auth/permissions";
 import { isPersonalSpace } from "@/lib/billing/space";
 import { familyOf, formatBytes } from "@/lib/files/types";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listFolders } from "@/server/notes/folders";
 import { docxToHtml, FileRejectedError, readNoteFile } from "@/server/notes/files";
 import { planGate } from "@/server/billing/plan-gate";
 
@@ -51,6 +51,10 @@ function parseCsv(text: string): string[][] {
  * An uploaded file in Files, shown in the app: PDFs in the browser's viewer
  * (a same-origin frame), images, Word documents as a read-only note, text
  * and CSV as they are. Slides and spreadsheets download.
+ *
+ * Its name, who can see it and its folder are edited right here (click
+ * the name). Back returns to the folder it's in. A Word document offers
+ * Make a note, and a spreadsheet or CSV Make a database, as buttons.
  */
 export default async function NoteFilePage({
   params,
@@ -66,6 +70,23 @@ export default async function NoteFilePage({
   const Icon = FILE_ICONS[family];
   const src = `/api/orgs/${encodeURIComponent(org.id)}/files/${encodeURIComponent(row.id)}`;
   const canRemove = row.uploadedBy.id === user.id || can({ role }, "members.invite");
+  const personal = isPersonalSpace(org);
+  const folders = await withOrgTx(org.id, ({ db }) => listFolders(db, org.id, user.id));
+  const inFolder = row.folderId ? folders.find((f) => f.id === row.folderId) : undefined;
+  const back = inFolder
+    ? {
+        href: `/app/${orgSlug}/notes?folder=${encodeURIComponent(inFolder.id)}`,
+        label: inFolder.name,
+      }
+    : { href: `/app/${orgSlug}/notes`, label: "Files" };
+  // A spreadsheet or CSV can become a database (Databases opens its import on it).
+  const tabular =
+    row.contentType === "text/csv" ||
+    row.contentType === "text/tab-separated-values" ||
+    family === "sheet";
+  const tableHref = tabular
+    ? `/app/${orgSlug}/databases?fromFile=${encodeURIComponent(row.id)}`
+    : null;
 
   let docHtml: string | null = null;
   let docError: string | null = null;
@@ -82,36 +103,25 @@ export default async function NoteFilePage({
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <BackLink href={`/app/${orgSlug}/notes`} label="Files" />
+      <BackLink href={back.href} label={back.label} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <Icon className="text-muted-foreground mt-1 size-5 shrink-0" aria-hidden="true" />
-          <div className="min-w-0">
-            <h1 className="heading truncate text-2xl">{row.name}</h1>
-            <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
-              <span>
-                {FILE_LABELS[family]} · {formatBytes(row.sizeBytes)}
-              </span>
-              <span>
-                {row.uploadedBy.name ?? "A member"}, {format(row.createdAt, "MMM d, yyyy")}
-              </span>
-              {/* In Personal everything is its owner's alone. */}
-              {!isPersonalSpace(org) && (
-                <Badge
-                  variant={row.visibility === "PRIVATE" ? "outline" : "secondary"}
-                  className="gap-1"
-                >
-                  {row.visibility === "PRIVATE" ? (
-                    <Lock className="size-3" aria-hidden="true" />
-                  ) : (
-                    <Users className="size-3" aria-hidden="true" />
-                  )}
-                  {row.visibility === "PRIVATE" ? "Only you" : "Everyone in the club"}
-                </Badge>
-              )}
-            </p>
-          </div>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Icon className="text-muted-foreground mt-2 size-5 shrink-0" aria-hidden="true" />
+          <FileDetails
+            orgId={org.id}
+            fileId={row.id}
+            name={row.name}
+            meta={[
+              `${FILE_LABELS[family]}, ${formatBytes(row.sizeBytes)}`,
+              `${row.uploadedBy.name ?? "A member"}, ${format(row.createdAt, "MMM d, yyyy")}`,
+            ]}
+            visibility={row.visibility}
+            folderId={row.folderId}
+            folders={folders.map((f) => ({ id: f.id, name: f.name }))}
+            canEdit={canRemove}
+            personal={personal}
+          />
         </div>
         <FileActions
           orgId={org.id}
@@ -120,6 +130,8 @@ export default async function NoteFilePage({
           name={row.name}
           canRemove={canRemove}
           noteHtml={docHtml}
+          tableHref={tableHref}
+          backHref={back.href}
         />
       </div>
 
@@ -172,13 +184,10 @@ export default async function NoteFilePage({
             </pre>
           </div>
         ) : (
-          <EmptyState
-            size="compact"
-            title={`${FILE_LABELS[family]} files don't have a preview yet`}
-            description="Download it to open it in its own app."
-          />
+          <EmptyState size="compact" title="No preview. Download to open." />
         )}
       </div>
+      <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "file", id: row.id }} />
     </div>
   );
 }

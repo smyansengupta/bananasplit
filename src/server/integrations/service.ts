@@ -19,6 +19,14 @@ import { testEmail } from "@/server/email/templates";
 import { transportFor } from "@/server/email/transport";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { sanitize } from "@/server/jobs/sanitize";
+import { clearAccessToken, getAccessToken } from "@/server/conference/token";
+import {
+  isMeetingIntegration,
+  providerOf as conferenceProvider,
+} from "@/server/conference/providers";
+import { revokeToken as revokeConferenceToken } from "@/server/conference/oauth";
+import { markConferenceNeedsReauth } from "@/server/conference/reauth";
+import { ConferenceReauthError } from "@/server/conference/types";
 import {
   getSecret,
   removeSecret,
@@ -602,7 +610,34 @@ export async function testProvider(
         await testIntegration({ orgId, actor, provider, test: aiModelConnectionTest }),
         "The key works and the model is available.",
       );
+    case "GOOGLE_MEET":
+    case "ZOOM":
+    case "MICROSOFT_TEAMS":
+      return testConference(orgId, provider);
   }
+}
+
+/**
+ * Tests a meeting connection by refreshing its access token: the one call
+ * that proves the saved grant still works without creating anything in the
+ * org's account (docs/features/meetings.md).
+ */
+async function testConference(
+  orgId: string,
+  provider: IntegrationProvider,
+): Promise<IntegrationResult> {
+  const label = providerInfo(provider).label;
+  try {
+    clearAccessToken(orgId, provider);
+    await getAccessToken(orgId, provider, { signal: AbortSignal.timeout(10_000) });
+  } catch (error) {
+    if (error instanceof ConferenceReauthError) {
+      await markConferenceNeedsReauth(orgId, provider, error);
+      return { ok: false, error: `${label} refused the saved connection. Connect it again.` };
+    }
+    return { ok: false, error: `${label} could not be reached: ${sanitize(error, 200)}` };
+  }
+  return { ok: true, message: `Connected. ${label} is ready to create meetings.` };
 }
 
 /** OWNER-only: deletes the secret(s); the integration shows as disconnected. */
@@ -613,6 +648,18 @@ export async function removeProvider(
 ): Promise<IntegrationResult> {
   requirePermission(actor, "integrations.remove");
   providerInfo(provider);
+  if (isMeetingIntegration(provider)) {
+    // Best effort, outside any transaction: hand the grant back before the
+    // token is deleted, so the org's account stops listing us.
+    const def = conferenceProvider(provider);
+    try {
+      const token = await getSecret({ orgId, provider, kind: "REFRESH_TOKEN" });
+      if (token && def) await revokeConferenceToken(def, token, AbortSignal.timeout(10_000));
+    } catch (error) {
+      console.warn(`[integrations] ${provider} revoke on remove failed: ${sanitize(error)}`);
+    }
+    clearAccessToken(orgId, provider);
+  }
   if (provider === "GOOGLE_CALENDAR") {
     // Best effort, outside any transaction: revoke at Google before the token is gone.
     try {

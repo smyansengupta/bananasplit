@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { MixBar } from "@/components/ui/meters";
 import { STATUS_LABEL, STATUS_TOKEN, TASK_PANEL } from "@/components/tasks/layout-ui";
 import { BlockedNote, DueLabel } from "@/components/tasks/task-badges";
+import { TaskTitle } from "@/components/tasks/task-title";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -323,7 +324,9 @@ export function DashboardView({
                           className="size-2 shrink-0 rounded-full"
                           style={{ background: STATUS_TOKEN[t.status] }}
                         />
-                        <span className="truncate">{t.title}</span>
+                        <span className="truncate">
+                          <TaskTitle>{t.title}</TaskTitle>
+                        </span>
                       </span>
                       {t.status === "BLOCKED" && <BlockedNote reason={t.blockedReason} />}
                       <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

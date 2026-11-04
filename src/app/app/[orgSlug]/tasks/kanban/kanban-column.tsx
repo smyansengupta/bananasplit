@@ -2,7 +2,7 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/icons";
 
 import { ClearCompletedButton } from "@/components/tasks/clear-completed";
 import { STATUS_TOKEN } from "@/components/tasks/layout-ui";

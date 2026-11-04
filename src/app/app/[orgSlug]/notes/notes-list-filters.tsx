@@ -1,48 +1,38 @@
 "use client";
 
-import { ListFilter, UserRound } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterChoices } from "@/components/ui/phone-toolbar";
+import { chipClass } from "@/components/ui/segmented";
+import { FiltersMenu } from "@/components/ui/toolbar-chips";
 
-/** `tab` keeps its old name so existing links (`?tab=files`) still land on uploads. */
-const KINDS = [
-  ["all", "Everything"],
-  ["notes", "Notes"],
-  ["files", "Uploads"],
+/** The order, in the Filters panel and the phone's sheet. */
+export const NOTE_SORT_OPTIONS = [
+  { value: "edited", label: "Edited" },
+  { value: "created", label: "Newest" },
+  { value: "title", label: "A–Z" },
 ] as const;
 
 const AUDIENCES = [
   ["all", "Anyone"],
   ["PRIVATE", "Private"],
   ["SHARED", "Shared with me"],
-  ["ORGANIZATION", "Everyone in the club"],
+  ["ORGANIZATION", "Everyone"],
 ] as const;
 
 /**
- * Files › the library's filter and order: one Filter menu (what kind, who
- * can see it, who added it) and a sort. Both live in the URL, so a filtered
- * view can be linked and pinned. Personal has one person, so only the kind.
+ * Files' Filters chip (as on Tasks and People): one panel with the order,
+ * who can see it and who added it, each reading what's picked. All of it
+ * lives in the URL, so a filtered view can be linked and pinned. Personal
+ * has one person, so only the order.
  */
 export function NotesListFilters({
   members,
@@ -55,10 +45,9 @@ export function NotesListFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const kind = searchParams.get("tab") ?? "all";
+  const sort = searchParams.get("sort") ?? "edited";
   const visibility = searchParams.get("visibility") ?? "all";
   const author = searchParams.get("author") ?? "all";
-  const active = [kind, visibility, author].filter((v) => v !== "all").length;
   const authorMember = members.find((m) => m.userId === author);
 
   function setParams(patch: Record<string, string | null>) {
@@ -71,97 +60,148 @@ export function NotesListFilters({
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }
 
-  // Picking an option keeps the menu open, so several filters can be set in one go.
-  const keepOpen = (e: Event) => e.preventDefault();
+  return (
+    <FiltersMenu
+      count={(visibility !== "all" ? 1 : 0) + (author !== "all" ? 1 : 0)}
+      items={[
+        {
+          name: "Sort by",
+          node: (
+            <ChipMenu
+              text={NOTE_SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Edited"}
+              on={false}
+              value={sort}
+              options={[...NOTE_SORT_OPTIONS]}
+              onChange={(v) => setParams({ sort: v === "edited" ? null : v })}
+            />
+          ),
+        },
+        ...(!personal
+          ? [
+              {
+                name: "Access",
+                node: (
+                  <ChipMenu
+                    text={AUDIENCES.find(([value]) => value === visibility)?.[1] ?? "Anyone"}
+                    on={visibility !== "all"}
+                    value={visibility}
+                    options={AUDIENCES.map(([value, label]) => ({ value, label }))}
+                    onChange={(v) => setParams({ visibility: v })}
+                  />
+                ),
+              },
+            ]
+          : []),
+        ...(!personal && members.length > 1
+          ? [
+              {
+                name: "Added by",
+                node: (
+                  <ChipMenu
+                    text={authorMember ? (authorMember.name ?? authorMember.email) : "Anyone"}
+                    on={author !== "all"}
+                    value={author}
+                    options={[
+                      { value: "all", label: "Anyone" },
+                      ...members.map((m) => ({ value: m.userId, label: m.name ?? m.email })),
+                    ]}
+                    onChange={(v) => setParams({ author: v })}
+                  />
+                ),
+              },
+            ]
+          : []),
+      ]}
+    />
+  );
+}
+
+/** One filter in the panel: what's picked, opening the choices. */
+function ChipMenu({
+  text,
+  on,
+  value,
+  options,
+  onChange,
+}: {
+  text: string;
+  on: boolean;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={chipClass(on)}>
+          <span className="truncate">{text}</span>
+          <ChevronDown aria-hidden="true" className="opacity-70" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-72 min-w-48 overflow-y-auto">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o.value} value={o.value}>
+              {o.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * The same filters and order for the phone's filter sheet (the library adds
+ * the folder and All, Notes or Uploads): each one a named row of chips.
+ */
+export function NotesFilterChoices({
+  members,
+  personal = false,
+}: {
+  members: { userId: string; name: string | null; email: string }[];
+  /** A Personal space: everything is yours alone, so no "who can see it". */
+  personal?: boolean;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function setParam(key: string, value: string, fallback: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value !== fallback) params.set(key, value);
+    else params.delete(key);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="outline" size="sm">
-            <ListFilter className="size-4" aria-hidden="true" />
-            Filter
-            {active > 0 && (
-              <span className="bg-muted text-muted-foreground rounded-md px-1.5 text-xs tabular-nums">
-                {active}
-                <span className="sr-only"> on</span>
-              </span>
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuLabel>Show</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={kind} onValueChange={(v) => setParams({ tab: v })}>
-            {KINDS.map(([value, label]) => (
-              <DropdownMenuRadioItem key={value} value={value} onSelect={keepOpen}>
-                {label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          {!personal && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Who can see it</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={visibility}
-                onValueChange={(v) => setParams({ visibility: v })}
-              >
-                {AUDIENCES.map(([value, label]) => (
-                  <DropdownMenuRadioItem key={value} value={value} onSelect={keepOpen}>
-                    {label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <UserRound className="size-4" aria-hidden="true" />
-                  Added by
-                  <span className="text-muted-foreground ms-auto max-w-28 truncate text-xs">
-                    {authorMember ? (authorMember.name ?? authorMember.email) : "Anyone"}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-                  <DropdownMenuRadioGroup
-                    value={author}
-                    onValueChange={(v) => setParams({ author: v })}
-                  >
-                    <DropdownMenuRadioItem value="all">Anyone</DropdownMenuRadioItem>
-                    {members.map((m) => (
-                      <DropdownMenuRadioItem key={m.userId} value={m.userId}>
-                        {m.name ?? m.email}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </>
-          )}
-          {active > 0 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => setParams({ tab: null, visibility: null, author: null })}
-              >
-                Clear filters
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Select
+      {!personal && (
+        <FilterChoices
+          title="Access"
+          value={searchParams.get("visibility") ?? "all"}
+          onPick={(v) => setParam("visibility", v, "all")}
+          options={AUDIENCES.map(([value, label]) => ({ value, label }))}
+        />
+      )}
+      {members.length > 1 && (
+        <FilterChoices
+          title="Added by"
+          value={searchParams.get("author") ?? "all"}
+          onPick={(v) => setParam("author", v, "all")}
+          options={[
+            { value: "all", label: "Anyone" },
+            ...members.map((m) => ({ value: m.userId, label: m.name ?? m.email })),
+          ]}
+        />
+      )}
+      <FilterChoices
+        title="Sort by"
         value={searchParams.get("sort") ?? "edited"}
-        onValueChange={(v) => setParams({ sort: v === "edited" ? null : v })}
-      >
-        <SelectTrigger size="sm" className="w-40" aria-label="Sort">
-          <SelectValue placeholder="Sort" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="edited">Recently edited</SelectItem>
-          <SelectItem value="created">Newest</SelectItem>
-          <SelectItem value="title">Title A–Z</SelectItem>
-        </SelectContent>
-      </Select>
+        onPick={(v) => setParam("sort", v, "edited")}
+        options={[...NOTE_SORT_OPTIONS]}
+      />
     </>
   );
 }

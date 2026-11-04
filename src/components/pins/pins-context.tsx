@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FileText, Loader2, Pin } from "lucide-react";
+import { Check, FileText, Loader2, Pin } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
 
@@ -168,7 +168,7 @@ function PickerRow({ item }: { item: PinnableItem }) {
           <span className="block truncate text-sm font-semibold">{item.label}</span>
           <span className="text-muted-foreground block truncate text-[13px]">
             {PIN_KIND_LABELS[item.kind]}
-            {item.detail ? ` · ${item.detail}` : ""}
+            {item.detail ? `, ${item.detail}` : ""}
           </span>
         </span>
         <span

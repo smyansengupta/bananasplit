@@ -86,4 +86,4 @@ export function canCreateTags(actor: TagActor): boolean {
   return actor.isAdmin || actor.membersCanCreate;
 }
 
-export const TAG_CREATE_DENIED = "Only an owner or admin can make new tags in this club.";
+export const TAG_CREATE_DENIED = "Only an owner or admin can make new tags in this organization.";

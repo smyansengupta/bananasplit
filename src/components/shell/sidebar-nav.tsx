@@ -7,20 +7,24 @@ import {
   CheckSquare,
   Database,
   FileText,
+  ClipboardList,
   FolderOpen,
   House,
+  Inbox,
   LayoutDashboard,
   Lock,
   Network,
   NotebookText,
   Pin,
-  Plus,
+  Plug,
   Ticket,
+  ChevronRight,
   Users,
+  Video,
   Wallet,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
@@ -34,8 +38,12 @@ import {
 } from "@/components/shell/nav-config";
 import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
+import { PinButton, usePinTarget } from "@/components/shell/pin-button";
+import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
+import { SidebarEditHeader, SidebarEditRows } from "@/components/shell/sidebar-edit-rows";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
+import { arrangeSections, EMPTY_MY_SIDEBAR } from "@/lib/nav/my-sidebar";
 import { canonicalHref } from "@/lib/pins/pages";
 import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
@@ -47,29 +55,36 @@ export interface SidebarPin {
   kind: PinKind;
 }
 
-export const NAV_ICONS: Record<string, LucideIcon> = {
+export const NAV_ICONS: Record<string, IconComponent> = {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
   CheckSquare,
   Database,
+  ClipboardList,
   FolderOpen,
   House,
+  Inbox,
   LayoutDashboard,
   Network,
   NotebookText,
+  Plug,
   Ticket,
   Users,
+  Video,
   Wallet,
 };
 
-/** Lucide at the redesign's lighter stroke. */
+/** The icons at the redesign's lighter stroke. */
 export const ICON_STROKE = 1.75;
 
 /**
- * One row of the sidebar: a 40px pill with the icon 10px in, so collapsing
- * to the rail is only a change of width (40px, a circle around the icon).
- * The page you're on is the accent pill with the glow under it.
+ * One row of the sidebar, as the workspace plan draws it ("Option A,
+ * revised"): a compact 32px row with a 16px icon 8px in; on the rail it
+ * becomes a 40px circle with the icon at its centre, down the middle of
+ * the 68px pill under the organization's square tile. The
+ * page you're on is the whole row filled with the accent; a hover is a light
+ * wash of the same accent. No outlines.
  */
 export function sidebarItemClass({
   active,
@@ -82,15 +97,31 @@ export function sidebarItemClass({
 }) {
   const tone = surfaceTone(chrome);
   return cn(
-    "focus-glow relative flex h-10 shrink-0 items-center gap-3 overflow-hidden rounded-full pr-3 pl-2.5 text-sm font-medium whitespace-nowrap outline-none",
-    "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms,box-shadow_200ms] motion-reduce:[transition:none]",
-    rail ? "w-10" : "w-full",
+    "focus-glow relative flex shrink-0 items-center gap-2.5 overflow-hidden text-[14.5px] whitespace-nowrap outline-none",
+    // The icon a shade lighter than its label: a colour, not opacity, which
+    // Chrome paints as a dark square over the rail's glass.
+    "[&>svg:first-child]:text-current/70",
+    "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),background-color_200ms,color_200ms] motion-reduce:[transition:none]",
+    // On the rail a 40px circle with the icon at its centre (12px in).
+    rail ? "size-10 rounded-[20px] px-3" : "h-8 w-full rounded-[10px] px-2",
     active
-      ? chrome
-        ? "bg-chrome-accent text-chrome-accent-foreground glow-halo font-semibold"
-        : "bg-brand-accent text-brand-accent-foreground glow-halo font-semibold"
-      : cn(tone.text, tone.hover),
+      ? cn(
+          "font-semibold [&>svg:first-child]:text-current",
+          chrome
+            ? "bg-chrome-accent text-chrome-accent-foreground"
+            : "bg-brand-accent text-brand-accent-foreground",
+        )
+      : cn("font-medium", tone.text, tone.hover),
   );
+}
+
+/** The count pill's colours: dark on a plain row (light on the glass), the accent's text colour on the lit one. */
+function countTone(active: boolean, chrome: boolean): string {
+  // On the dark glass a dark pill would vanish: it turns light there.
+  if (!active) return chrome ? "bg-chrome-foreground text-chrome" : "bg-foreground text-background";
+  return chrome
+    ? "bg-chrome-accent-foreground text-chrome-accent"
+    : "bg-brand-accent-foreground text-brand-accent";
 }
 
 function NavItemLink({
@@ -98,9 +129,12 @@ function NavItemLink({
   pathname,
   search,
   all,
+  count = 0,
   onNavigate,
 }: {
   link: NavLink;
+  /** Waiting on you here (Inbox, Forms, Finance): a small number at the end. */
+  count?: number;
   pathname: string;
   search: string;
   all: readonly NavLink[];
@@ -122,8 +156,34 @@ function NavItemLink({
         link.locked && !isActive && "opacity-60",
       )}
     >
-      <Icon className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+      <Icon className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
       <span className={cn("min-w-0 flex-1 truncate", fadeLabel(rail))}>{link.label}</span>
+      {count > 0 && !link.locked && (
+        <>
+          <span
+            className={cn(
+              // A small dark pill, so what waits on you stands out; on the
+              // accent row it turns to the accent's own text colour.
+              "shrink-0 rounded-full px-1.5 font-mono text-[11.5px] leading-[19px] font-medium tabular-nums",
+              countTone(isActive, chrome),
+              fadeLabel(rail),
+            )}
+          >
+            {count > 99 ? "99+" : count}
+          </span>
+          {/* On the rail, a dot on the icon instead of the number. */}
+          {rail && (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute top-2 left-6 size-2 rounded-full",
+                countTone(isActive, chrome),
+              )}
+            />
+          )}
+          <span className="sr-only">, {count} waiting</span>
+        </>
+      )}
       {link.locked && (
         <>
           <Lock className={cn("size-3.5 shrink-0", fadeLabel(rail))} aria-hidden="true" />
@@ -135,30 +195,99 @@ function NavItemLink({
 }
 
 /**
- * A group's name in sentence case; on the rail, a short hairline instead.
- * `children` sits at the right of the row (Pinned's +).
+ * The sidebar's sections by name. The first group (Home, Inbox, People) needs
+ * none: it's where you start. The rest are named for what's in them.
+ */
+export const SECTION_NAMES: Record<string, string> = {
+  plan: "Planning",
+  collect: "Data",
+  workspace: "Integrations and apps",
+  money: "Money",
+};
+
+/** A section heading's box: more room above it than below, the same everywhere. */
+const HEADING = "mt-3.5 mb-1 flex h-6 shrink-0 items-center gap-1 px-2";
+
+/**
+ * A section's name, small and quiet, with room above it; on the rail, only
+ * the room. `children` sits at its right (Pinned's pin button).
  */
 export function GroupLabel({ label, children }: { label: string; children?: React.ReactNode }) {
   const { rail, chrome } = useSidebarMode();
   const tone = surfaceTone(chrome);
+  if (rail) return <div aria-hidden="true" className="h-4 shrink-0" />;
   return (
-    <div
-      className={cn(
-        "relative flex shrink-0 items-center justify-between overflow-hidden text-[13px] font-medium whitespace-nowrap",
-        "transition-[height,padding] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
-        rail ? "h-3.5 p-0" : "h-[34px] pt-3 pr-1 pl-3",
-        tone.quiet,
-      )}
-    >
-      <span
-        aria-hidden="true"
+    <div className={cn(HEADING, "text-[13px] font-medium whitespace-nowrap", tone.quiet)}>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A section's name that folds the section shut and open again (kept per
+ * member, src/lib/nav/my-sidebar.ts). The arrow shows on hover and stays
+ * while the section is shut, beside what's waiting inside it. On the rail
+ * every icon shows and the heading is only room.
+ */
+function SectionHeader({
+  id,
+  label,
+  collapsed,
+  waiting = 0,
+  children,
+}: {
+  id: string;
+  label: string;
+  collapsed: boolean;
+  /** What waits on you inside, shown while it's shut. */
+  waiting?: number;
+  children?: React.ReactNode;
+}) {
+  const { rail, chrome } = useSidebarMode();
+  const edit = useSidebarEdit();
+  const tone = surfaceTone(chrome);
+  if (rail) return <div aria-hidden="true" className="h-4 shrink-0" />;
+  if (!edit) return <GroupLabel label={label}>{children}</GroupLabel>;
+  return (
+    <div className={cn(HEADING, "group/heading pr-1")}>
+      <button
+        type="button"
+        onClick={() => edit.toggleGroup(id)}
+        aria-expanded={!collapsed}
+        aria-controls={`sidebar-section-${id}`}
         className={cn(
-          "absolute top-1/2 left-2 h-px w-6 transition-opacity duration-200 motion-reduce:transition-none",
-          tone.line,
-          rail ? "opacity-100" : "opacity-0",
+          "focus-glow -ml-1 flex h-6 min-w-0 items-center gap-1 rounded-md px-1 text-[13px] font-medium whitespace-nowrap outline-none",
+          "transition-colors duration-150 motion-reduce:transition-none",
+          tone.quiet,
+          "hover:text-sidebar-foreground",
+          chrome && "hover:text-chrome-foreground",
         )}
-      />
-      <span className={fadeLabel(rail)}>{label}</span>
+      >
+        <span className="truncate">{label}</span>
+        <ChevronRight
+          className={cn(
+            "size-3 shrink-0 transition-[rotate,opacity] duration-200 motion-reduce:transition-none",
+            collapsed
+              ? "opacity-100"
+              : "rotate-90 opacity-0 group-focus-within/heading:opacity-100 group-hover/heading:opacity-100",
+          )}
+          strokeWidth={2.25}
+          aria-hidden="true"
+        />
+      </button>
+      <span className="flex-1" />
+      {collapsed && waiting > 0 && (
+        <span
+          className={cn(
+            "rounded-full px-1.5 font-mono text-[11.5px] leading-[19px] font-medium tabular-nums",
+            countTone(false, chrome),
+          )}
+        >
+          {waiting > 99 ? "99+" : waiting}
+          <span className="sr-only"> waiting</span>
+        </span>
+      )}
       {children}
     </div>
   );
@@ -203,6 +332,8 @@ function PinnedList({
 }) {
   const router = useRouter();
   const pinsCtx = usePins();
+  const edit = useSidebarEdit();
+  const target = usePinTarget();
   const { rail, chrome, requestPeek } = useSidebarMode();
   const tone = surfaceTone(chrome);
   const current = pinsCtx
@@ -214,49 +345,55 @@ function PinnedList({
     pins.map((p) => p.id),
   );
   const onAPin = pins.some((p) => p.href === current);
+  const collapsed = !over && pins.length > 0 && (edit?.my.collapsed.includes("pinned") ?? false);
+  // Shut, the pin you're on still shows, so where you are never disappears.
+  const shown = collapsed ? pins.filter((p) => p.href === current) : pins;
   return (
     <div
       {...zone}
       className={cn(
-        "flex flex-col rounded-[22px] transition-colors",
-        over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
+        "flex shrink-0 flex-col rounded-lg transition-colors duration-200",
+        // Dragging a page over Pinned lights it up as the place to drop.
+        over && "bg-sidebar-accent/60",
       )}
     >
-      <GroupLabel label="Pinned">
-        {pinsCtx && (
-          <button
-            type="button"
-            onClick={() => pinsCtx.openPicker()}
-            aria-label="Pin something"
-            title="Pin something"
-            tabIndex={rail ? -1 : undefined}
-            aria-hidden={rail || undefined}
+      {/* Pinned is a section like the others: its name (which folds it shut)
+          and, at the right, the pin for the page on screen. */}
+      <SectionHeader id="pinned" label="Pinned" collapsed={collapsed}>
+        {pins.length > 0 && (
+          <PinButton
+            iconClassName="size-3.5"
             className={cn(
-              "focus-glow grid size-[26px] place-items-center rounded-full outline-none",
-              "transition-opacity duration-200 motion-reduce:transition-none",
+              "focus-glow grid size-6 shrink-0 place-items-center rounded-md outline-none",
+              "transition-colors duration-150 motion-reduce:transition-none",
+              tone.quiet,
               tone.hover,
-              rail && "pointer-events-none opacity-0",
             )}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-          </button>
+          />
         )}
-      </GroupLabel>
+      </SectionHeader>
       <Fold open={!rail}>
         {pins.length === 0 ? (
-          <p
-            title="Drag a page here, or press the pin at the top of any page."
-            className={cn(
-              "px-3 py-1 text-xs whitespace-nowrap",
-              tone.quiet,
-              over && "text-sidebar-foreground",
-            )}
-          >
-            {over ? "Drop to pin" : "Nothing pinned yet"}
-          </p>
+          // Nothing pinned yet: a row like the others that pins the page on
+          // screen, or a quiet line where there's nothing to pin.
+          over ? (
+            <p className={cn("flex h-8 items-center px-2 text-[14px]", tone.text)}>
+              Drop to pin it here
+            </p>
+          ) : target ? (
+            <PinButton
+              showLabel
+              iconClassName="size-4"
+              className={cn(sidebarItemClass({ active: false, rail: false, chrome }), tone.quiet)}
+            />
+          ) : (
+            <p className={cn("flex h-8 items-center px-2 text-[14px]", tone.quiet)}>
+              Pinned pages show here
+            </p>
+          )
         ) : (
-          <ul className="flex flex-col gap-0.5">
-            {pins.map((pin) => {
+          <ul id="sidebar-section-pinned" className="flex flex-col gap-0.5">
+            {shown.map((pin) => {
               const Icon = PIN_ICONS[pin.kind] ?? FileText;
               const active = current === pin.href;
               return (
@@ -266,18 +403,14 @@ function PinnedList({
                     onClick={onNavigate}
                     draggable={false}
                     aria-current={active ? "page" : undefined}
-                    className={cn(
-                      sidebarItemClass({ active, rail: false, chrome }),
-                      "pr-9",
-                      !active && "font-normal",
-                    )}
+                    className={cn(sidebarItemClass({ active, rail: false, chrome }), "pr-8")}
                   >
                     <Icon
-                      className="size-5 shrink-0 opacity-80"
+                      className="size-4 shrink-0"
                       strokeWidth={ICON_STROKE}
                       aria-hidden="true"
                     />
-                    <span className="truncate">{pin.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{pin.label}</span>
                   </Link>
                   <button
                     type="button"
@@ -290,8 +423,12 @@ function PinnedList({
                       })
                     }
                     className={cn(
-                      "focus-glow absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-full opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100",
-                      active ? "text-brand-accent-foreground" : tone.hover,
+                      "focus-glow absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100",
+                      active
+                        ? chrome
+                          ? "text-chrome-accent-foreground hover:bg-chrome-accent-foreground/15"
+                          : "text-brand-accent-foreground hover:bg-brand-accent-foreground/15"
+                        : tone.hover,
                     )}
                   >
                     <X className="size-3.5" aria-hidden="true" />
@@ -300,13 +437,8 @@ function PinnedList({
               );
             })}
             {over && (
-              <li
-                className={cn(
-                  "mx-1 rounded-full border border-dashed px-3 py-1.5 text-xs",
-                  tone.text,
-                )}
-              >
-                Drop to pin
+              <li className={cn("flex h-8 items-center px-2 text-[14px]", tone.text)}>
+                Drop to pin it here
               </li>
             )}
           </ul>
@@ -324,10 +456,10 @@ function PinnedList({
           title="Pinned"
           className={sidebarItemClass({ active: onAPin, rail: true, chrome })}
         >
-          <Pin className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+          <Pin className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
         </button>
       </Fold>
-      {error && <p className="text-destructive px-3 pt-1 text-xs">{error}</p>}
+      {error && <p className="text-destructive px-2 pt-1 text-xs">{error}</p>}
     </div>
   );
 }
@@ -336,13 +468,19 @@ export function SidebarNav({
   sections,
   orgId,
   pins = [],
+  counts = {},
+  tools,
   spaces,
   onNavigate,
 }: {
   sections: NavSection[];
   orgId: string;
   pins?: SidebarPin[];
-  /** Personal and the clubs (SpaceList), at the foot; folded away on the rail. */
+  /** Small counts beside entries, by section id (Inbox, Forms, Finance). */
+  counts?: Record<string, number>;
+  /** Search and New, above the sections (SidebarTools). */
+  tools?: React.ReactNode;
+  /** Kept for callers; the organization menu at the top of the sidebar lists the spaces now. */
   spaces?: React.ReactNode;
   onNavigate?: () => void;
 }) {
@@ -350,42 +488,81 @@ export function SidebarNav({
   const search = useSearchParams().toString();
   const { rail } = useSidebarMode();
   const all = sections.flatMap((s) => s.items);
+  // Your own order and hidden rows (Edit sidebar), on top of the organization's.
+  const edit = useSidebarEdit();
+  const editing = Boolean(edit?.editing) && !rail;
+  const arranged = arrangeSections(sections, edit?.my ?? EMPTY_MY_SIDEBAR, {
+    keepHidden: editing,
+  });
 
   return (
     <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
+      {editing ? <SidebarEditHeader /> : tools}
       <div
         className={cn(
-          "-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-1 pb-1",
+          "-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-1 pb-3",
           rail && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         )}
       >
-        {sections.map((section) => (
-          <div key={section.id} className="flex flex-col gap-0.5">
-            {section.label && <GroupLabel label={section.label} />}
-            {section.items.map((link) => (
+        {editing && <SidebarEditRows sections={arranged} />}
+        {!editing &&
+          arranged.map((section) => {
+            const name = section.label ?? SECTION_NAMES[section.id];
+            const row = (link: NavLink) => (
               <NavItemLink
                 key={link.id}
                 link={link}
                 pathname={pathname}
                 search={search}
                 all={all}
+                count={counts[link.id] ?? 0}
                 onNavigate={onNavigate}
               />
-            ))}
-          </div>
-        ))}
-        <PinnedList
-          pins={pins}
-          orgId={orgId}
-          pathname={pathname}
-          search={search}
-          onNavigate={onNavigate}
-        />
+            );
+            if (!name) {
+              return (
+                <div key={section.id} className="flex flex-col gap-0.5">
+                  {section.items.map(row)}
+                </div>
+              );
+            }
+            const collapsed = !rail && (edit?.my.collapsed.includes(section.id) ?? false);
+            return (
+              <div key={section.id} className="flex flex-col">
+                <SectionHeader
+                  id={section.id}
+                  label={name}
+                  collapsed={collapsed}
+                  waiting={section.items.reduce((sum, l) => sum + (counts[l.id] ?? 0), 0)}
+                />
+                {/* Each row folds on its own: shut, the page you're on stays in place. */}
+                <div id={`sidebar-section-${section.id}`} className="flex flex-col">
+                  {section.items.map((link) => (
+                    <Fold
+                      key={link.id}
+                      open={!collapsed || isLinkActive(link, pathname, all, search)}
+                    >
+                      <div className="pb-0.5">{row(link)}</div>
+                    </Fold>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        {!editing && (
+          <PinnedList
+            pins={pins}
+            orgId={orgId}
+            pathname={pathname}
+            search={search}
+            onNavigate={onNavigate}
+          />
+        )}
       </div>
       {/* Personal and the clubs: at the foot of the sidebar, never pushed
           under the pins (they scroll on their own when there are many). */}
       {spaces && (
-        <Fold open={!rail} className="border-border/60 mt-1 shrink-0 border-t pt-2">
+        <Fold open={!rail} className="mt-1 shrink-0 pt-2">
           <div className="max-h-[40vh] overflow-y-auto">{spaces}</div>
         </Fold>
       )}

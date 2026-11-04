@@ -1,23 +1,25 @@
 "use client";
 
-import { Ban, CalendarDays, Lock } from "lucide-react";
+import { Ban, CalendarDays, Flag, Lock } from "@/components/icons";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
-import { Badge } from "@/components/ui/badge";
+import { PushBackButton } from "@/components/tasks/overdue-actions";
 import { TagChip } from "@/components/ui/chip";
 import { toast } from "@/components/ui/toaster";
 import { TaskStatus } from "@/generated/prisma/enums";
 import type { DueTone } from "@/lib/overview/format";
 import { cn } from "@/lib/utils";
 
+import { LinkChips, type ItemRef } from "./connections";
 import { TaskCheck } from "./task-check";
 
 /**
  * My tasks' rows (redesign guide 7.11, 16): a 22px circle check, the title,
- * a meta line (the epic as a tag chip, the due label by urgency), and a
- * High chip on the right. Checking one marks it done through the tasks
+ * a meta line (the epic as a tag chip, the due label by urgency), chips for
+ * what the task is linked to (its event, meeting or note), and a High chip
+ * on the right. Checking one marks it done through the tasks
  * action (the same checks as the task page), with the check's spring and a
  * "Done: …" toast with Undo; the row leaves when the page refreshes.
  */
@@ -33,13 +35,18 @@ export interface TaskRowData {
   /** "Subtask of …", when it is one. */
   context: string | null;
   due: { text: string; tone: DueTone } | null;
+  /** Past its due date: Push back sits beside the date. */
+  late?: boolean;
   high: boolean;
+  /** What it's linked to. */
+  chips?: readonly ItemRef[];
 }
 
+/** The due date as a pill on the right: red when late or today, firm tomorrow, quiet after. */
 const DUE_TONE: Record<DueTone, string> = {
-  danger: "text-tint-danger-foreground font-semibold",
-  bold: "text-foreground font-semibold",
-  muted: "text-muted-foreground",
+  danger: "bg-tint-danger text-tint-danger-foreground",
+  bold: "bg-tint-info text-tint-info-foreground",
+  muted: "bg-muted text-muted-foreground",
 };
 
 export function TaskRows({ orgId, tasks }: { orgId: string; tasks: readonly TaskRowData[] }) {
@@ -83,7 +90,7 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
   return (
     <li
       className={cn(
-        "group/row hover:bg-muted/60 rounded-field relative -mx-3 flex items-center gap-3.5 px-3 py-3 transition-[background-color,opacity] duration-300",
+        "group/row hover:bg-muted/60 rounded-field relative -mx-3 flex items-center gap-3.5 px-3 py-2.5 transition-[background-color,opacity] duration-300",
         !first &&
           "before:bg-border before:absolute before:top-0 before:right-3 before:left-12 before:h-px hover:before:opacity-0",
         done && "opacity-70",
@@ -101,42 +108,59 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
           {task.private && (
             <Lock className="text-muted-foreground size-3.5 shrink-0" aria-label="Private task" />
           )}
-          <span className="truncate">{task.title}</span>
+          <span className="break-words">{task.title}</span>
         </Link>
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
-          {task.epic && (
-            <TagChip color={task.epic.color ?? "var(--chart-3)"}>{task.epic.name}</TagChip>
-          )}
-          {task.status === TaskStatus.BLOCKED && (
-            <span className="text-tint-danger-foreground inline-flex items-center gap-1 font-medium">
-              <Ban className="size-3.5" aria-hidden="true" />
-              Blocked
-            </span>
-          )}
-          {task.due && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 whitespace-nowrap",
-                DUE_TONE[task.due.tone],
-              )}
-            >
-              <CalendarDays className="size-3.5" aria-hidden="true" />
-              {task.due.text}
-            </span>
-          )}
-          {task.context && <span className="text-muted-foreground truncate">{task.context}</span>}
-        </div>
+        {(task.epic || task.context || task.status === TaskStatus.BLOCKED) && (
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px]">
+            {task.epic && (
+              <TagChip color={task.epic.color ?? "var(--chart-3)"}>{task.epic.name}</TagChip>
+            )}
+            {task.status === TaskStatus.BLOCKED && (
+              <span className="text-tint-danger-foreground inline-flex items-center gap-1 font-medium">
+                <Ban className="size-3.5" aria-hidden="true" />
+                Blocked
+              </span>
+            )}
+            {task.context && (
+              <span className="text-muted-foreground min-w-0 truncate">{task.context}</span>
+            )}
+          </div>
+        )}
+        {task.chips && task.chips.length > 0 && (
+          <LinkChips items={task.chips} className="relative z-10 mt-1.5" />
+        )}
         {error && (
           <p role="alert" className="text-destructive mt-1 text-xs">
             {error}
           </p>
         )}
       </div>
-      {task.high && (
-        <Badge variant="accent" className="shrink-0">
-          High
-        </Badge>
-      )}
+      <span className="flex shrink-0 items-center gap-1.5">
+        {task.late && !done && (
+          <span className="relative z-10">
+            <PushBackButton orgId={orgId} taskId={task.id} title={task.title} size="icon-sm" />
+          </span>
+        )}
+        {task.high && (
+          <span
+            title="High priority"
+            className="bg-tint-accent text-tint-accent-foreground grid size-6 place-items-center rounded-full"
+          >
+            <Flag className="size-3.5" aria-label="High priority" />
+          </span>
+        )}
+        {task.due && (
+          <span
+            className={cn(
+              "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-semibold whitespace-nowrap",
+              DUE_TONE[task.due.tone],
+            )}
+          >
+            <CalendarDays className="size-3.5" aria-hidden="true" />
+            {task.due.text.replace(/^Overdue, /, "Late, ")}
+          </span>
+        )}
+      </span>
     </li>
   );
 }

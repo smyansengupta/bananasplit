@@ -1,9 +1,9 @@
 "use client";
 
-import { ImageUp, Plus } from "lucide-react";
+import { ImageUp } from "@/components/icons";
 
+import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 /** What the header's New event asks the calendar grid (event-calendar.tsx) to open. */
 export const CALENDAR_CREATE_EVENT = "calendar:create";
@@ -22,23 +22,21 @@ function ask(from: CalendarCreateDetail["from"]) {
  * them.
  */
 export function NewEventButton() {
+  // The menu only repeated New event and held one other way in, so that
+  // one is its own button beside it.
   return (
-    <CreateSplitButton
-      label="New event"
-      onClick={() => ask("blank")}
-      menuLabel="More ways to add events"
-    >
-      <DropdownMenuItem onSelect={() => ask("blank")}>
-        <Plus className="size-4" aria-hidden="true" />
-        New event
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => ask("screenshot")}>
-        <ImageUp className="size-4" aria-hidden="true" />
-        <span className="flex flex-col">
-          From a screenshot
-          <span className="text-muted-foreground text-xs">An invite, an email or a flyer</span>
-        </span>
-      </DropdownMenuItem>
-    </CreateSplitButton>
+    <span className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        onClick={() => ask("screenshot")}
+        aria-label="New event from a screenshot"
+        title="From a screenshot"
+      >
+        <ImageUp className="size-[18px]" aria-hidden="true" />
+      </Button>
+      <CreateSplitButton label="New event" onClick={() => ask("blank")} />
+    </span>
   );
 }

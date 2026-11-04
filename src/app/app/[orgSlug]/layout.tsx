@@ -1,8 +1,9 @@
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { SpaceBanner } from "@/components/billing/space-banner";
+import { TrialEndedDialog } from "@/components/billing/trial-ended-dialog";
 import { AppShell } from "@/components/shell/app-shell";
 import { navSections } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
@@ -10,15 +11,24 @@ import { OrgBrand } from "@/components/theme/org-brand";
 import { OrgThemeRoot } from "@/components/theme/org-theme-root";
 import { CALLBACK_HEADER } from "@/lib/auth/callback-url";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import {
+  spaceIncludes,
+  trialFallbackName,
+  trialJustEnded,
+  trialPlanName,
+} from "@/lib/billing/space";
 import { getSession, requireUser } from "@/lib/auth/session";
+import { readAddOns } from "@/lib/addons";
 import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
+import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { sidebarCookieName } from "@/lib/sidebar-mode";
-import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
+import { mySidebarCookieName } from "@/lib/nav/my-sidebar";
+import { getMySidebar, getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { sidebarCounts } from "@/server/inbox/counts";
 import { listPins } from "@/server/pins";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
@@ -59,10 +69,32 @@ async function deepRedirectTarget(error: unknown, orgSlug: string): Promise<stri
 }
 
 /**
- * The page runs under the phone's notch and home indicator, so the tab bar
+ * The page runs under the phone's notch and home indicator, so the menu button
  * can float clear of the indicator (env(safe-area-inset-*) in the shell).
  */
 export const viewport: Viewport = { viewportFit: "cover" };
+
+/**
+ * The tab wears the club's own picture while you are inside it, so a window
+ * of a dozen Bananasplit tabs is still readable. getOrgContextBySlug is
+ * React-cached and the layout below calls it in the same request, so this
+ * costs no extra read; the logo URL is the stored variant the shell already
+ * shows, public and cached immutably. A club with no logo, and every case
+ * where the slug does not resolve (the layout answers that properly a
+ * moment later), keeps the banana (SITE_ICONS).
+ */
+export async function generateMetadata({
+  params,
+}: LayoutProps<"/app/[orgSlug]">): Promise<Metadata> {
+  const { orgSlug } = await params;
+  try {
+    const ctx = await getOrgContextBySlug(orgSlug);
+    const icons = clubIcons(ctx.organization.logo);
+    return { title: ctx.organization.name, ...(icons ? { icons } : {}) };
+  } catch {
+    return {};
+  }
+}
 
 function isNotFound(error: unknown): boolean {
   const digest = (error as { digest?: unknown } | null)?.digest;
@@ -116,6 +148,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // Someone who joined through an emailed invite before finishing profile
   // setup finishes it first (the flowchart's "Profile complete?").
   const prefs = await getViewerPrefs(ctx.user.id);
+
   if (!prefs.onboardedAt) redirect("/onboarding");
   // The org's OrgTheme row rides along with the per-request org context
   // (React cache()), resolved and re-validated as strict hex before render;
@@ -128,8 +161,25 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
     listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
   );
+  // The small counts beside Inbox, Forms and Finance (src/server/inbox/counts.ts).
+  const counts = await withOrgTx(ctx.organization.id, ({ db }) =>
+    sidebarCounts(db, {
+      orgId: ctx.organization.id,
+      userId: ctx.user.id,
+      org: ctx.organization,
+      // An add-on that isn't added keeps its rows out of Inbox and the badge.
+      canReviewFinance:
+        can({ role: ctx.role }, "finance.manage") &&
+        readAddOns(ctx.settings?.addOns).includes("finance"),
+      canReviewForms:
+        can({ role: ctx.role }, "databases.write") &&
+        readAddOns(ctx.settings?.addOns).includes("forms"),
+    }),
+  ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.
   const sidebarMode = await getSidebarMode(ctx.user.id);
+  // Your own order and hidden rows, on top of the organization's sidebar.
+  const mySidebar = await getMySidebar(ctx.user.id, ctx.organization.id);
 
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
@@ -139,12 +189,17 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgs={orgs}
         user={shellUser}
         pins={pins}
-        sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar), {
-          space: ctx.organization,
-          // Owners and admins see what the plan lacks (locked); members don't.
-          showLocked: can({ role: ctx.role }, "settings.view"),
-        })}
-        sectionPaths={resolveSidebar(ctx.settings?.sidebar)
+        counts={counts ? { inbox: counts.inbox, forms: counts.forms, finance: counts.finance } : {}}
+        sections={navSections(
+          ctx.organization.slug,
+          visibleSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? []),
+          {
+            space: ctx.organization,
+            // Owners and admins see what the plan lacks (locked); members don't.
+            showLocked: can({ role: ctx.role }, "settings.view"),
+          },
+        )}
+        sectionPaths={resolveSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? [])
           .flatMap((g) => g.items)
           .map((i) => ({
             id: i.id,
@@ -153,6 +208,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
             path: i.path,
             also: i.also,
             hidden: i.hidden,
+            ...(i.notAdded ? { notAdded: true } : {}),
             icon: i.icon,
             description: i.description,
           }))}
@@ -164,20 +220,38 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         canCreateEvents={can({ role: ctx.role }, "events.write")}
         sidebarMode={sidebarMode}
         sidebarCookie={sidebarCookieName(ctx.user.id)}
+        mySidebar={mySidebar}
+        mySidebarCookie={mySidebarCookieName(ctx.user.id, ctx.organization.id)}
+        presence={ctx.organization.kind !== "PERSONAL"}
         taskViews={spaceIncludes(ctx.organization, "taskViews")}
         teamwork={spaceIncludes(ctx.organization, "teamwork")}
         banner={
-          <SpaceBanner
-            space={ctx.organization}
-            orgSlug={ctx.organization.slug}
-            canChoosePlan={can({ role: ctx.role }, "settings.view")}
-          />
+          <>
+            <SpaceBanner
+              space={ctx.organization}
+              orgSlug={ctx.organization.slug}
+              canChoosePlan={can({ role: ctx.role }, "settings.view")}
+            />
+            {can({ role: ctx.role }, "settings.view") &&
+              ctx.organization.trialEndsAt &&
+              trialJustEnded(ctx.organization) && (
+                <TrialEndedDialog
+                  orgId={ctx.organization.id}
+                  orgSlug={ctx.organization.slug}
+                  trialEnd={ctx.organization.trialEndsAt.toISOString()}
+                  trialPlan={trialPlanName(ctx.organization)}
+                  freePlan={trialFallbackName(ctx.organization)}
+                  personal={ctx.organization.kind === "PERSONAL"}
+                />
+              )}
+          </>
         }
         brand={
           <OrgBrand
             name={ctx.organization.name}
             logo={ctx.organization.logo}
             display={theme.logoDisplay}
+            compact
           />
         }
       >

@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarRange, Check, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { CalendarRange, Check, Loader2, Pencil, Plus, Star, Trash2 } from "@/components/icons";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -30,7 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Gauge, TickMeter } from "@/components/ui/meters";
-import { toast } from "@/components/ui/toaster";
+import { toast, undoable } from "@/components/ui/toaster";
 import { formatCents, formatDollars, parseDollarsToCents } from "@/lib/finance/money";
 
 import { tickUnitCents } from "./budget-ticks";
@@ -60,20 +61,25 @@ export interface BudgetCategoryRow {
 }
 
 /**
- * Finance > Budget: the periods (school year, semester...) and, for the
+ * Finance > Budget: the periods (a year, a quarter...) and, for the
  * active one, each category's budget against what's been spent. Every field
  * says what it is, new periods start from a preset, and everything can be
  * renamed, moved or deleted.
  */
 export function BudgetView({
   orgId,
+  orgSlug,
   periods,
   activePeriodId,
+  viewedPeriodId,
   categories,
 }: {
   orgId: string;
+  orgSlug: string;
   periods: BudgetPeriodRow[];
   activePeriodId: string | null;
+  /** The period whose categories are shown: the active one unless another was picked to look at. */
+  viewedPeriodId?: string | null;
   categories: BudgetCategoryRow[];
 }) {
   const router = useRouter();
@@ -81,7 +87,8 @@ export function BudgetView({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<BudgetPeriodRow | "new" | null>(null);
   const [confirmEl, confirm] = useConfirm();
-  const active = periods.find((p) => p.id === activePeriodId) ?? null;
+  // Looking at another period never changes which one is active for everyone.
+  const active = periods.find((p) => p.id === (viewedPeriodId ?? activePeriodId)) ?? null;
 
   function run(task: () => Promise<{ error?: string }>, success?: string) {
     setError(null);
@@ -98,31 +105,49 @@ export function BudgetView({
 
   async function removePeriod(p: BudgetPeriodRow) {
     const ok = await confirm({
-      title: `Delete the period “${p.label}”?`,
-      description:
-        "Its categories go with it. A period that already has transactions or sponsorships can't be deleted.",
-      confirmLabel: "Delete period",
+      title: `Delete ${p.label}?`,
+      description: "Its categories go with it.",
+      confirmLabel: "Delete",
       run: async () => (await deleteBudgetPeriod(orgId, p.id)).error,
     });
     if (ok) {
-      toast({ title: `Deleted “${p.label}”` });
+      toast({ title: "Deleted" });
       router.refresh();
     }
   }
 
   async function removeCategory(c: BudgetCategoryRow) {
     const n = c.transactionCount;
+    // Nothing filed under it: delete at once, Undo puts it back as it was.
+    if (n === 0 && active) {
+      const periodId = active.id;
+      void undoable({
+        title: "Deleted",
+        run: async () => {
+          const result = await deleteCategory(orgId, c.id);
+          router.refresh();
+          return result.error;
+        },
+        undo: async () => {
+          const back = await createCategory(orgId, periodId, {
+            name: c.name,
+            allocatedCents: c.allocatedCents,
+          });
+          if (back.error) return back.error;
+          router.refresh();
+        },
+      });
+      return;
+    }
+    // Transactions filed under it lose the category for good, so this one asks.
     const ok = await confirm({
-      title: `Delete the category “${c.name}”?`,
-      description:
-        n > 0
-          ? `${n} transaction${n === 1 ? " is" : "s are"} filed under it. ${n === 1 ? "It stays" : "They stay"} in every total, just uncategorized.`
-          : "Nothing is filed under it yet.",
-      confirmLabel: "Delete category",
+      title: `Delete ${c.name}?`,
+      description: `${n} transaction${n === 1 ? " becomes" : "s become"} uncategorized.`,
+      confirmLabel: "Delete",
       run: async () => (await deleteCategory(orgId, c.id)).error,
     });
     if (ok) {
-      toast({ title: `Deleted “${c.name}”` });
+      toast({ title: "Deleted" });
       router.refresh();
     }
   }
@@ -140,12 +165,7 @@ export function BudgetView({
     <div className="space-y-4.5">
       <section className={SECTION}>
         <header className="flex flex-wrap items-center justify-between gap-3 px-6 pt-6 pb-3">
-          <div>
-            <h2 className="heading text-[17px]">Budget periods</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              The stretch of time a budget covers. Money goes into the active one.
-            </p>
-          </div>
+          <h2 className="heading text-[17px]">Budget periods</h2>
           {/* With no period yet, the empty state below carries this button. */}
           {periods.length > 0 && (
             <Button size="sm" variant="outline" onClick={() => setEditing("new")}>
@@ -159,7 +179,6 @@ export function BudgetView({
             <EmptyState
               icon={CalendarRange}
               title="No budget period yet"
-              description="Start one for this school year in a click, or pick your own dates."
               action={
                 <Button onClick={() => setEditing("new")}>
                   <Plus className="size-4" aria-hidden="true" />
@@ -175,32 +194,47 @@ export function BudgetView({
                 key={p.id}
                 className="hover:bg-muted/50 rounded-field flex flex-wrap items-center gap-3 px-2.5 py-3 transition-colors"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-sm font-semibold">
+                <Link
+                  href={
+                    p.isActive
+                      ? `/app/${orgSlug}/finance/budget`
+                      : `/app/${orgSlug}/finance/budget?period=${p.id}`
+                  }
+                  aria-current={p.id === active?.id ? "true" : undefined}
+                  className="focus-glow min-w-0 flex-1 rounded-sm"
+                >
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-semibold break-words">
                     {p.label}
                     {p.isActive && <Badge variant="success">Active</Badge>}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
+                    {p.id === active?.id && !p.isActive && (
+                      <Badge variant="secondary">Viewing</Badge>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground block text-xs">
                     {formatPeriodRange(p.startsOn, p.endsOn)}
-                  </p>
-                </div>
+                  </span>
+                </Link>
+                {!p.isActive && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isPending}
+                    onClick={() => run(() => setActivePeriod(orgId, p.id), "Made active")}
+                  >
+                    <Star className="size-4" aria-hidden="true" />
+                    Make active
+                  </Button>
+                )}
                 <ItemMenu
                   label={`Actions for ${p.label}`}
                   items={[
-                    !p.isActive && {
-                      label: "Make active",
-                      icon: Star,
-                      disabled: isPending,
-                      onSelect: () =>
-                        run(() => setActivePeriod(orgId, p.id), `${p.label} is now active`),
-                    },
                     {
                       label: "Rename or change dates",
                       icon: Pencil,
                       onSelect: () => setEditing(p),
                     },
                     {
-                      label: "Delete period",
+                      label: "Delete",
                       icon: Trash2,
                       destructive: true,
                       onSelect: () => void removePeriod(p),
@@ -225,13 +259,8 @@ export function BudgetView({
       {active && (
         <section className={SECTION}>
           <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 px-6 pt-6 pb-2">
-            <div className="min-w-0">
-              <h2 className="heading text-[17px]">Categories · {active.label}</h2>
-              <p className="text-muted-foreground mt-1 max-w-prose text-sm">
-                Set how much each category may spend. Type a number and click away to save.
-              </p>
-            </div>
-            <div className="flex items-center gap-5">
+            <h2 className="heading min-w-0 text-[17px] break-words">{active.label} categories</h2>
+            <div className="flex items-center gap-5 max-md:w-full max-md:gap-4">
               {totals.budget > 0 && (
                 <Gauge
                   value={(totals.spent / totals.budget) * 100}
@@ -240,20 +269,24 @@ export function BudgetView({
                   className="[&_b]:text-[22px]"
                 />
               )}
-              <dl className="flex gap-6 text-right">
+              <dl className="flex gap-6 text-right max-md:min-w-0 max-md:flex-1 max-md:justify-between max-md:gap-3">
                 <div>
                   <dt className="text-muted-foreground text-[13px]">Budgeted</dt>
-                  <dd className="numeral mt-1 text-[22px]">{formatDollars(totals.budget)}</dd>
+                  <dd className="numeral mt-1 text-[22px] max-md:text-lg">
+                    {formatDollars(totals.budget)}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground text-[13px]">Spent</dt>
-                  <dd className="numeral mt-1 text-[22px]">{formatDollars(totals.spent)}</dd>
+                  <dd className="numeral mt-1 text-[22px] max-md:text-lg">
+                    {formatDollars(totals.spent)}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground text-[13px]">Left</dt>
                   <dd
                     className={cn(
-                      "numeral mt-1 text-[22px]",
+                      "numeral mt-1 text-[22px] max-md:text-lg",
                       totals.budget - totals.spent < 0 && "text-destructive",
                     )}
                   >
@@ -287,7 +320,7 @@ export function BudgetView({
             </ul>
             {categories.length > 0 && (
               <p className="text-muted-foreground px-2.5 pt-1 pb-2 text-xs">
-                One tick per {formatDollars(unit)}
+                1 tick = {formatDollars(unit)}
               </p>
             )}
           </div>
@@ -388,6 +421,16 @@ function CategoryRow({
         ) : (
           <p className="text-muted-foreground mt-1 px-2 text-xs">No budget yet</p>
         )}
+        <p
+          className={cn(
+            "text-muted-foreground mt-1 px-2 text-xs tabular-nums sm:hidden",
+            left < 0 && "text-destructive font-medium",
+          )}
+        >
+          {left < 0
+            ? `${formatCents(-left)} over`
+            : `${formatCents(category.spentCents)} spent, ${formatCents(left)} left`}
+        </p>
       </div>
       <div className="relative">
         <Label htmlFor={`cat-budget-${category.id}`} className="sr-only">
@@ -435,7 +478,7 @@ function CategoryRow({
       </span>
       <ItemMenu
         label={`Actions for ${category.name}`}
-        items={[{ label: "Delete category", icon: Trash2, destructive: true, onSelect: onDelete }]}
+        items={[{ label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete }]}
       />
       {message && <p className="text-destructive col-span-full px-2 text-xs">{message}</p>}
     </li>
@@ -528,7 +571,7 @@ function PeriodDialog({
 }) {
   const isNew = period === "new";
   const open = period !== null;
-  // The form starts from the period being edited, or the school-year preset.
+  // The form starts from the period being edited, or the This year preset.
   const initial: PeriodDraft =
     period && period !== "new"
       ? { label: period.label, startsOn: period.startsOn, endsOn: period.endsOn }
@@ -631,7 +674,7 @@ function PeriodForm({
           value={draft.label}
           maxLength={100}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          placeholder="e.g. 2026–27 or Fall 2026"
+          placeholder="e.g. 2026 or Q3 2026"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -671,7 +714,7 @@ function PeriodForm({
           disabled={pending || !draft.label.trim() || !draft.startsOn || !draft.endsOn}
         >
           {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          {isNew ? "Create and make active" : "Save"}
+          {isNew ? "Create" : "Save"}
         </Button>
       </DialogFooter>
     </form>

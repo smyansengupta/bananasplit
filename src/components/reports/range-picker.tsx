@@ -2,22 +2,31 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarRange, Check, ChevronDown } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  CalendarDays,
+  CalendarRange,
+  Clock,
+  History,
+  type IconComponent,
+} from "@/components/icons";
 import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import { useReportsFrame } from "./reports-frame";
 
-export type RangePresetId = "term" | "30d" | "all" | "custom";
+export type RangePresetId = "quarter" | "year" | "30d" | "all" | "custom";
 
-const PRESETS: { id: Exclude<RangePresetId, "custom">; label: string }[] = [
-  { id: "term", label: "This term" },
-  { id: "30d", label: "Last 30 days" },
-  { id: "all", label: "All time" },
+const PRESETS: { id: Exclude<RangePresetId, "custom">; label: string; icon: IconComponent }[] = [
+  { id: "quarter", label: "This quarter", icon: CalendarRange },
+  { id: "year", label: "This year", icon: CalendarDays },
+  { id: "30d", label: "30 days", icon: Clock },
+  { id: "all", label: "All time", icon: History },
 ];
 
 function toIsoDate(d: Date): string {
@@ -33,10 +42,10 @@ function fromIsoDate(s: string | null): Date | undefined {
 }
 
 /**
- * The global date range: presets as rows (checked when selected), a custom
- * range behind a hairline in the footer. Selecting navigates to
- * ?range=... or ?from=&to= inside the shared transition; every report below
- * re-renders against the same range.
+ * The global date range: the presets as a switch bar (one click each) and
+ * a calendar button for a custom range, which shows the range once picked.
+ * Selecting navigates to ?range=... or ?from=&to= inside the shared
+ * transition; every report below re-renders against the same range.
  */
 export function RangePicker({
   preset,
@@ -67,65 +76,34 @@ export function RangePicker({
   }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setCustom(preset === "custom");
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="max-w-full justify-start"
-          aria-label={`Date range: ${label}`}
-        >
-          <CalendarRange aria-hidden="true" />
-          <span className="font-medium">{label}</span>
-          {span && span !== label ? (
-            <span className="text-muted-foreground hidden truncate font-normal sm:inline">
-              {span}
-            </span>
-          ) : null}
-          <ChevronDown
-            className={cn("text-muted-foreground", pending && "animate-pulse")}
-            aria-hidden="true"
-          />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className={cn("p-1.5", custom ? "w-auto" : "w-60")}>
-        <ul role="listbox" aria-label="Date range presets" className="flex flex-col">
-          {PRESETS.map((p) => {
-            const selected = preset === p.id;
-            return (
-              <li key={p.id} role="option" aria-selected={selected}>
-                <button
-                  type="button"
-                  onClick={() => go(p.id === "term" ? {} : { range: p.id })}
-                  className="hover:bg-muted focus-visible:bg-muted rounded-field flex h-9 w-full items-center justify-between px-3 text-left text-sm outline-none"
-                >
-                  <span className={cn(selected && "font-medium")}>{p.label}</span>
-                  {selected ? (
-                    <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="border-border/70 mt-1 border-t pt-1">
-          {!custom ? (
-            <button
-              type="button"
-              onClick={() => setCustom(true)}
-              className="hover:bg-muted focus-visible:bg-muted rounded-field flex h-9 w-full items-center justify-between px-3 text-left text-sm outline-none"
-            >
-              <span className={cn(preset === "custom" && "font-medium")}>Custom range…</span>
-              {preset === "custom" ? (
-                <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
-              ) : null}
-            </button>
-          ) : (
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmented
+        label="Date range"
+        options={PRESETS.map((p) => ({ value: p.id, label: p.label, icon: p.icon, compact: true }))}
+        value={preset === "custom" ? "" : preset}
+        onSelect={(id) => go(id === "quarter" ? {} : { range: id })}
+        className={cn(pending && "opacity-80")}
+      />
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) setCustom(true);
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size={preset === "custom" ? "default" : "icon"}
+            aria-label={preset === "custom" ? `Date range: ${label}` : "Custom range"}
+            title="Custom range"
+          >
+            <CalendarIcon aria-hidden="true" />
+            {preset === "custom" && <span className="font-medium">{span ?? label}</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-1.5">
+          {custom && (
             <div className="flex flex-col gap-2">
               <Calendar
                 mode="range"
@@ -135,10 +113,7 @@ export function RangePicker({
                 defaultMonth={draft?.from ?? new Date()}
                 autoFocus
               />
-              <div className="flex items-center justify-between gap-2 px-1 pb-1">
-                <span className="text-muted-foreground text-xs">
-                  {draft?.from && draft?.to ? "" : "Pick a first and last day."}
-                </span>
+              <div className="flex items-center justify-end gap-2 px-1 pb-1">
                 <Button
                   size="sm"
                   disabled={!draft?.from || !draft?.to}
@@ -152,8 +127,8 @@ export function RangePicker({
               </div>
             </div>
           )}
-        </div>
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }

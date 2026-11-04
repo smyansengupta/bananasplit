@@ -7,7 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * only reach Auth.js's "server configuration" error.
  */
 
-const { authMock } = vi.hoisted(() => ({ authMock: vi.fn() }));
+const { authMock, redirectMock } = vi.hoisted(() => ({
+  authMock: vi.fn(),
+  redirectMock: vi.fn((to: string) => {
+    throw new Error(`redirect:${to}`);
+  }),
+}));
+
+vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 
 vi.mock("@/lib/auth/config", () => ({ auth: authMock, signIn: vi.fn() }));
 vi.mock("./actions", () => ({ passwordSignInAction: vi.fn() }));
@@ -18,8 +25,9 @@ const { default: SignInPage } = await import("./page");
 
 const props = { searchParams: Promise.resolve({}) } as unknown as PageProps<"/sign-in">;
 
-async function render() {
-  return renderToStaticMarkup(await SignInPage(props));
+async function render(search: Record<string, string> = {}) {
+  const withSearch = { searchParams: Promise.resolve(search) } as unknown as PageProps<"/sign-in">;
+  return renderToStaticMarkup(await SignInPage(Object.keys(search).length ? withSearch : props));
 }
 
 beforeEach(() => {
@@ -31,11 +39,18 @@ afterEach(() => {
 });
 
 describe("/sign-in", () => {
-  it("tells someone already signed in which account, with a way to sign out", async () => {
+  it("sends someone already signed in straight into the app from a plain visit", async () => {
     authMock.mockResolvedValue({
       user: { id: "u1", email: "wrong@example.com", name: "Wren Ong" },
     });
-    const html = await render();
+    await expect(render()).rejects.toThrow("redirect:/app");
+  });
+
+  it("asks which account first when they came with somewhere to go", async () => {
+    authMock.mockResolvedValue({
+      user: { id: "u1", email: "wrong@example.com", name: "Wren Ong" },
+    });
+    const html = await render({ callbackUrl: "/invite/tok" });
     expect(html).toContain("You&#x27;re already signed in.");
     expect(html).toContain("wrong@example.com");
     expect(html).toContain("Continue as Wren");
@@ -49,7 +64,7 @@ describe("/sign-in", () => {
     const html = await render();
     expect(html).toContain("Continue with Google");
     expect(html).toContain(">or<");
-    expect(html).toContain("Log in to your club workspace.");
+    expect(html).toContain("Welcome back.");
     expect(html).toContain('name="password"');
   });
 
@@ -64,7 +79,7 @@ describe("/sign-in", () => {
     expect(html).not.toContain("Continue with Google");
     expect(html).not.toContain(">or<");
     expect(html).not.toContain("Google account");
-    expect(html).toContain("Log in to your club workspace.");
+    expect(html).toContain("Welcome back.");
     expect(html).toContain('name="password"');
   });
 });

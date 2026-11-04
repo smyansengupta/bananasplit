@@ -1,47 +1,54 @@
 import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
 
 /**
- * The four plans (redesign guide 11.1; docs/features/personal-and-clubs.md):
- * what each includes and its limits, the one place both live. The pricing
- * table, checkout and Settings › Plan and storage read from here; the app
- * itself asks spaceIncludes() and spaceLimits() (src/lib/billing/space.ts),
- * which also know trials and paused clubs. Change the pricing table with
- * this.
+ * The five plans (the Bananasplit business model, October 2026): what each
+ * includes and its limits, the one place both live. /pricing, checkout and
+ * Settings › Plan and storage read from here; the app itself asks
+ * spaceIncludes() and spaceLimits() (src/lib/billing/space.ts), which also
+ * know trials. Change the pricing table (src/components/marketing/
+ * pricing-plans.tsx) with this. Prices live in src/lib/billing/plans.ts.
  *
  *   FREE           Personal Free: every account's own space. RSVP pages,
  *                  tasks (every view, for one person), the calendar,
  *                  availability polls, notes and files, databases it makes
  *                  itself, and its own settings.
- *   PERSONAL_PLUS  Personal Plus: Personal Free plus themes, calendar sync
- *                  (data connections, for Google Calendar) and AI imports,
+ *   PERSONAL_PLUS  Personal Plus: Personal Free plus themes, integrations
+ *                  (data connections: Google Calendar and the rest) and AI imports,
  *                  with more storage, bigger files and longer note history.
- *   CLUB           Team: the club workspace. The overview, weekly updates,
- *                  labels, notes and files, people and the org chart,
- *                  finance, databases (with the built-in ones) and
- *                  reports, and data connections.
- *   SOCIETY        Team Advanced: everything, plus themes, AI,
- *                  sponsorships, website sync and the audit log. A club's
- *                  30-day trial (TRIAL) is Team Advanced, limits included.
+ *   TEAM_FREE      Team Free: an organization, free, up to 10 members.
+ *                  Everything Personal Free has, plus the overview, weekly
+ *                  updates, tags, the member directory, the sidebar and
+ *                  privacy settings. Where a trial ends.
+ *   CLUB           Team: Team Free plus finance, the org chart and every
+ *                  integration (data connections).
+ *   SOCIETY        Team Advanced: everything, plus reports, themes, AI,
+ *                  sponsorships, website sync and the audit log. An
+ *                  organization's 14-day trial (TRIAL) is Team Advanced,
+ *                  limits included; an ended one is Team Free.
  *
- * The plan values keep their database names (FREE, PERSONAL_PLUS, CLUB,
- * SOCIETY, TRIAL); only PLAN_NAMES says them out loud. FREE and
- * PERSONAL_PLUS are Personal's plans and only Personal's; a club is on
- * TRIAL, CLUB or SOCIETY (the database guards both).
+ * The plan values keep their database names (FREE, PERSONAL_PLUS, TRIAL,
+ * TEAM_FREE, CLUB, SOCIETY); only PLAN_NAMES says them out loud. FREE and
+ * PERSONAL_PLUS are Personal's plans and only Personal's; an organization
+ * is on TRIAL, TEAM_FREE, CLUB or SOCIETY (the database guards both).
  */
 
-/** A plan that has a price and a card (TRIAL is a club's first 30 days of Team Advanced). */
+/** A plan that has a price and a card (TRIAL is a club's first 14 days of Team Advanced). */
 export type PricedPlan = Exclude<OrgPlan, "TRIAL">;
 
-/** The order the four tiers are shown in: the two for one person, then the two for a club. */
+/** The order the tiers are shown in: the two for one person, then the three for an organization. */
 export const PLAN_ORDER = [
   "FREE",
   "PERSONAL_PLUS",
+  "TEAM_FREE",
   "CLUB",
   "SOCIETY",
 ] as const satisfies readonly PricedPlan[];
 
-/** The club ladder: a feature names the cheapest rung that has it, and each rung has the ones below. */
-const LADDER = ["FREE", "CLUB", "SOCIETY"] as const;
+/**
+ * The ladder: a feature names the cheapest rung that has it, and each rung
+ * has the ones below. FREE is what every space has, Personal included.
+ */
+const LADDER = ["FREE", "TEAM_FREE", "CLUB", "SOCIETY"] as const;
 type LadderPlan = (typeof LADDER)[number];
 
 export const PLAN_FEATURES = {
@@ -63,25 +70,37 @@ export const PLAN_FEATURES = {
    * ones it makes (LISTED_DEFINITIONS, src/server/databases/types.ts).
    */
   databases: "FREE",
+  /** Task tags (Admin panel > Labels): shared in an organization, your own in Personal. */
+  labels: "FREE",
+  /**
+   * AI connectors: the member's own AI app (Claude, ChatGPT, Cursor, VS
+   * Code) reads and changes what they can see here, over MCP
+   * (docs/features/ai-connectors.md). Every plan: the member's app pays for
+   * the model, and a club switches it off in Admin panel > Privacy.
+   */
+  connectors: "FREE",
 
   /** The Overview board of widgets (Personal has its own home). */
-  overview: "CLUB",
+  overview: "TEAM_FREE",
   /** Weekly updates: work between people. */
-  teamwork: "CLUB",
-  /** Shared task labels (Admin panel > Labels). */
-  labels: "CLUB",
-  /** The member directory, profiles and the org chart. */
-  people: "CLUB",
+  teamwork: "TEAM_FREE",
+
+  /** The member directory and profiles. */
+  people: "TEAM_FREE",
+  /** Arranging the sidebar (Admin panel > Sidebar). */
+  sidebar: "TEAM_FREE",
+  /** Ballot privacy, member visibility and the public events feed. */
+  privacy: "TEAM_FREE",
+
+  /** The org chart: drafts, versions, imports and the handover. */
+  orgChart: "CLUB",
   /** The finance board, budget, transactions and reimbursements. */
   finance: "CLUB",
-  /** Reports over the club's databases. */
-  reports: "CLUB",
   /** Data connections: Google Calendar sync, an email sender, a data source, guided setup. */
   integrations: "CLUB",
-  /** Arranging the sidebar (Admin panel > Sidebar). */
-  sidebar: "CLUB",
-  /** Ballot privacy, member visibility and the public events feed. */
-  privacy: "CLUB",
+
+  /** Reports over the club's databases (Team Advanced: the plan that runs on the go). */
+  reports: "SOCIETY",
 
   /** Custom colors, logo display and the light or dark default. */
   themes: "SOCIETY",
@@ -98,8 +117,9 @@ export const PLAN_FEATURES = {
 export type PlanFeature = keyof typeof PLAN_FEATURES;
 
 /**
- * What Personal Plus adds to Personal Free: themes, calendar sync (Google
- * Calendar is a data connection) and AI imports. Nothing else of a club's.
+ * What Personal Plus adds to Personal Free: themes, integrations (Google
+ * Calendar and the other data connections) and AI imports. Nothing else of
+ * a club's.
  */
 export const PERSONAL_PLUS_EXTRAS = [
   "themes",
@@ -125,7 +145,7 @@ export interface PlanLimits {
   noteHistoryDays: number;
   /** Data connections (Google Calendar, an email sender, a data source). */
   dataConnections: number;
-  /** Members a space can have: Personal is one person; clubs have no cap. */
+  /** Members a space can have: Personal is one person, Free 10; the rest have no cap. */
   members: number | null;
 }
 
@@ -140,19 +160,30 @@ const PERSONAL_PLUS_LIMITS: PlanLimits = {
   storageBytes: 25 * GB,
   maxFileBytes: 250 * MB,
   noteHistoryDays: 365,
-  // Calendar sync: one Google Calendar.
-  dataConnections: 1,
+  // Integrations: Google Calendar and two more.
+  dataConnections: 3,
   members: 1,
 };
+/** Members on Free (a trial, Team and Team Advanced have no cap). */
+export const TEAM_FREE_MEMBER_CAP = 10;
+
+const TEAM_FREE_LIMITS: PlanLimits = {
+  storageBytes: 5 * GB,
+  maxFileBytes: 100 * MB,
+  noteHistoryDays: 30,
+  dataConnections: 0,
+  members: TEAM_FREE_MEMBER_CAP,
+};
 const TEAM_LIMITS: PlanLimits = {
-  storageBytes: 100 * GB,
+  storageBytes: 50 * GB,
   maxFileBytes: 250 * MB,
   noteHistoryDays: 90,
-  dataConnections: 2,
+  // The same integrations as Team Advanced: integrations are not what sets them apart.
+  dataConnections: 6,
   members: null,
 };
 const TEAM_ADVANCED_LIMITS: PlanLimits = {
-  storageBytes: 500 * GB,
+  storageBytes: 100 * GB,
   maxFileBytes: 1 * GB,
   noteHistoryDays: 365,
   dataConnections: 6,
@@ -162,12 +193,13 @@ const TEAM_ADVANCED_LIMITS: PlanLimits = {
 /**
  * Each plan's quantities, enforced by the upload gate
  * (src/server/storage/quota.ts) and shown by the plan cards and the
- * pricing table. A trial has Team Advanced's.
+ * pricing table. A trial has Team Advanced's (an ended one, Team Free's).
  */
 export const PLAN_LIMITS: Record<OrgPlan, PlanLimits> = {
   FREE: PERSONAL_FREE_LIMITS,
   PERSONAL_PLUS: PERSONAL_PLUS_LIMITS,
   TRIAL: TEAM_ADVANCED_LIMITS,
+  TEAM_FREE: TEAM_FREE_LIMITS,
   CLUB: TEAM_LIMITS,
   SOCIETY: TEAM_ADVANCED_LIMITS,
 };
@@ -178,12 +210,17 @@ export const PLAN_NAMES: Record<OrgPlan, string> = {
   FREE: "Personal Free",
   PERSONAL_PLUS: "Personal Plus",
   TRIAL: "Trial",
+  TEAM_FREE: "Free",
   CLUB: "Team",
   SOCIETY: "Team Advanced",
 };
 
-/** What an owner picks for a club when (or before) its trial ends. */
-export const CLUB_PLAN_CHOICES = ["CLUB", "SOCIETY"] as const satisfies readonly PricedPlan[];
+/** What an owner may move an organization to: Free, Team or Team Advanced. */
+export const CLUB_PLAN_CHOICES = [
+  "TEAM_FREE",
+  "CLUB",
+  "SOCIETY",
+] as const satisfies readonly PricedPlan[];
 export type ClubPlanChoice = (typeof CLUB_PLAN_CHOICES)[number];
 
 /** What a Personal space switches between (the database allows nothing else). */
@@ -201,7 +238,7 @@ export function isPersonalPlanChoice(value: unknown): value is PersonalPlanChoic
   return typeof value === "string" && (PERSONAL_PLAN_CHOICES as readonly string[]).includes(value);
 }
 
-/** The plans a space of `kind` may be switched to: Personal Free or Plus; Team or Team Advanced. */
+/** The plans a space of `kind` may be switched to: Personal Free or Plus; Free, Team or Team Advanced. */
 export function planChoicesFor(kind: OrgKind): readonly PricedPlan[] {
   return kind === "PERSONAL" ? PERSONAL_PLAN_CHOICES : CLUB_PLAN_CHOICES;
 }
@@ -211,7 +248,7 @@ export function isPlanChoiceFor(kind: OrgKind, plan: unknown): plan is PricedPla
   return kind === "PERSONAL" ? isPersonalPlanChoice(plan) : isClubPlanChoice(plan);
 }
 
-/** A priced plan's name (FREE, PERSONAL_PLUS, CLUB or SOCIETY). */
+/** A priced plan's name (FREE, PERSONAL_PLUS, TEAM_FREE, CLUB or SOCIETY). */
 export function isOrgPlan(value: unknown): value is PricedPlan {
   return typeof value === "string" && (PLAN_ORDER as readonly string[]).includes(value);
 }
@@ -231,7 +268,7 @@ export function planIncludes(plan: PricedPlan, feature: PlanFeature): boolean {
   return rank(plan) >= rank(PLAN_FEATURES[feature]);
 }
 
-/** The cheapest club plan that includes `feature` (Personal Free for what every space has). */
+/** The cheapest organization plan that includes `feature` (Personal Free for what every space has). */
 export function planFor(feature: PlanFeature): LadderPlan {
   return PLAN_FEATURES[feature];
 }
@@ -258,9 +295,11 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   teamwork: "Weekly updates",
   labels: "Tags",
   files: "Notes and files",
-  people: "People and the org chart",
+  people: "The member directory",
+  orgChart: "The org chart",
   finance: "Finance",
   databases: "Databases",
+  connectors: "AI connectors",
   reports: "Reports",
   integrations: "Data connections",
   sidebar: "Arranging the sidebar",
@@ -273,7 +312,12 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
 };
 
 /** Labels that read as plural ("Notes and files are ..."). */
-const PLURAL_FEATURES: ReadonlySet<PlanFeature> = new Set(["taskViews", "teamwork", "files"]);
+const PLURAL_FEATURES: ReadonlySet<PlanFeature> = new Set([
+  "taskViews",
+  "teamwork",
+  "files",
+  "connectors",
+]);
 
 /** Whether a feature's label takes "are" rather than "is". */
 export function isPluralFeature(feature: PlanFeature): boolean {
@@ -288,19 +332,21 @@ export const FEATURE_PITCH: Record<PlanFeature, string> = {
   polls: "Find a time that works for everyone, or ask anything.",
   admin: "Your name, time zone and the rest of your settings.",
   overview: "Each member's home page: their tasks, meetings, pins and recent pages.",
-  teamwork: "Post a weekly update to your team, on the day your club picks.",
+  teamwork: "Post a weekly update to your team, on the day your organization picks.",
   labels: "A shared label palette for sorting tasks.",
   files: "Live notes, documents and uploads in one place.",
-  people: "A member directory with profiles, and an org chart for your officers.",
+  people: "A member directory with profiles.",
+  orgChart: "An org chart in versions, so every handover keeps the whole team.",
   finance: "A budget, transactions and reimbursements your treasurer can run.",
   databases: "Attendance, sign-ups and votes, with CSV import.",
-  reports: "Charts and summaries from your club's databases.",
+  connectors: "Use your Personal space and organizations from Claude, ChatGPT and other AI apps.",
+  reports: "Charts and summaries from your organization's databases.",
   integrations: "Google Calendar sync, your own email sender and your website's data.",
-  sidebar: "Choose which sections your club uses, their order and their names.",
+  sidebar: "Choose which sections your organization uses, their order and their names.",
   privacy: "Ballot privacy, who sees member emails, and the public events feed.",
   themes: "Your colors and logo across the app.",
   ai: "Turn notes into tasks and events, and let AI sort your data.",
   sponsorships: "Track sponsors, what they promised and your runway.",
-  websiteSync: "Publish events and sign-ups to your club website.",
+  websiteSync: "Publish events and sign-ups to your website.",
   auditLog: "Every settings change: who made it and when.",
 };

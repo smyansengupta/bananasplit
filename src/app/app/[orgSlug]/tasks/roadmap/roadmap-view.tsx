@@ -1,11 +1,16 @@
 "use client";
 
-import { Layers } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Layers } from "@/components/icons";
+import { useOptimistic, useTransition, type CSSProperties } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { useCompleteTask } from "@/components/tasks/quick-controls";
+import { TaskCheck } from "@/components/tasks/task-check";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/user-avatar";
+import { TaskStatus } from "@/generated/prisma/enums";
 import { addDaysToKey, mondayOfKey } from "@/lib/tasks/dates";
 import { epicColor } from "@/lib/tasks/epic";
 import { cn } from "@/lib/utils";
@@ -19,14 +24,18 @@ const weeksBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / (7 * 864e5));
 
 /**
- * The Roadmap: epics on a week timeline, the ones still going first. Each bar runs
- * from the epic's start (its start date, else when it was made or its
- * earliest dated work) to its due date with its progress filled in, and
- * this week's column is marked. An epic with no date anywhere shows from its
- * start for two weeks, dashed, saying so.
+ * Epics: every epic once, on a week timeline, the ones still going first.
+ * The left of each row is the epic itself (the circle that finishes it, its
+ * name in full, who owns it, what's open and what's late); the right is its
+ * bar, from its start (its start date, else when it was made or its earliest
+ * dated work) to its due date, with its progress filled in. This week's
+ * column is marked. An epic with no due date runs two weeks, dashed.
+ *
+ * Clicking an epic opens it, the same as everywhere else; to see only its
+ * work, pick it in the Epic filter. New epic is in the New task menu.
  */
 export function RoadmapView({ epics }: { epics: RoadmapEpic[] }) {
-  const { org, openTask, newTask } = useTasks();
+  const { org, newTask } = useTasks();
   const ws = useWorkspace();
 
   if (epics.length === 0) {
@@ -34,12 +43,17 @@ export function RoadmapView({ epics }: { epics: RoadmapEpic[] }) {
       <div className="bg-card edge rounded-card">
         <EmptyState
           icon={Layers}
-          title={ws.filterCount > 0 ? "No epics match that" : "No epics yet"}
-          description="An epic is a big outcome that spans weeks, like “Venue and logistics”. Its stories and tasks roll up into it."
+          title={ws.filterCount > 0 ? "No epics match" : "No epics yet"}
           action={
-            <Button variant="create" onClick={() => newTask({ type: "EPIC" })}>
-              New epic
-            </Button>
+            ws.filterCount > 0 ? (
+              <Button variant="outline" onClick={ws.clearFilters}>
+                Clear filters
+              </Button>
+            ) : (
+              <Button variant="create" onClick={() => newTask({ type: "EPIC" })}>
+                New epic
+              </Button>
+            )
           }
         />
       </div>
@@ -65,25 +79,24 @@ export function RoadmapView({ epics }: { epics: RoadmapEpic[] }) {
   // Epics still going first, the finished ones under them.
   const going = epics.filter((e) => e.status !== "COMPLETED");
   const finishedEpics = epics.filter((e) => e.status === "COMPLETED");
-  const ordered: [string, { name: string; color: string; epics: RoadmapEpic[] }][] = [
-    ["going", { name: "In progress", color: "var(--brand-accent)", epics: going }],
-    ["done", { name: "Done", color: "var(--success)", epics: finishedEpics }],
-  ].filter(([, g]) => (g as { epics: RoadmapEpic[] }).epics.length > 0) as [
-    string,
-    { name: string; color: string; epics: RoadmapEpic[] },
-  ][];
+  const ordered = (
+    [
+      ["going", { name: "In progress", color: "var(--brand-accent)", epics: going }],
+      ["done", { name: "Done", color: "var(--success)", epics: finishedEpics }],
+    ] as const
+  ).filter(([, g]) => g.epics.length > 0);
 
   const grid: CSSProperties = {
-    gridTemplateColumns: `minmax(140px, 200px) repeat(${weeks.length}, minmax(56px, 1fr))`,
+    gridTemplateColumns: `minmax(220px, 300px) repeat(${weeks.length}, minmax(56px, 1fr))`,
   };
 
   return (
     <div className="bg-card edge rounded-card overflow-x-auto p-4 sm:p-6">
       <div
         role="table"
-        aria-label="Roadmap of epics"
-        className="relative grid items-center gap-y-2.5"
-        style={{ ...grid, minWidth: 200 + weeks.length * 60 }}
+        aria-label="Epics on a timeline"
+        className="relative grid items-center gap-y-3"
+        style={{ ...grid, minWidth: 300 + weeks.length * 60 }}
       >
         <div role="row" className="contents">
           <span
@@ -132,56 +145,104 @@ export function RoadmapView({ epics }: { epics: RoadmapEpic[] }) {
                   style={{ background: g.color }}
                 />
                 {g.name}
+                <Badge variant="secondary" className="tabular-nums">
+                  {g.epics.length}
+                </Badge>
               </span>
             </div>
-            {g.epics.map((e) => {
-              const startCol = clampCol(mondayOfKey(e.start));
-              const endCol = clampCol(mondayOfKey(e.end ?? addDaysToKey(e.start, 13)));
-              const pct = e.total > 0 ? Math.round((e.done / e.total) * 100) : 0;
-              const finished = e.status === "COMPLETED" || (e.total > 0 && e.done === e.total);
-              const color = epicColor(e);
-              return (
-                <div key={e.id} role="row" className="contents">
-                  <span role="cell" style={{ gridColumn: 1 }} className="min-w-0 pe-3">
-                    <button
-                      type="button"
-                      onClick={() => openTask(e.id)}
-                      className="block w-full truncate text-left text-[13px] font-semibold underline-offset-4 hover:underline"
-                    >
-                      {e.title}
-                    </button>
-                  </span>
-                  <span
-                    role="cell"
-                    style={
-                      {
-                        gridColumn: `${startCol + 2} / ${Math.max(endCol, startCol) + 3}`,
-                        "--lc": color,
-                      } as CSSProperties
-                    }
-                    className={cn(
-                      "relative z-[1] flex h-[30px] items-center overflow-hidden rounded-full border px-3 text-xs font-semibold",
-                      "border-[color-mix(in_oklab,var(--lc)_35%,transparent)] bg-[color-mix(in_oklab,var(--lc)_18%,var(--card))]",
-                      !e.end && "border-dashed",
-                    )}
-                    title={`${e.title}: ${e.done} of ${e.total} done`}
-                  >
-                    <i
-                      aria-hidden="true"
-                      className="absolute inset-y-0 start-0 bg-[color-mix(in_oklab,var(--lc)_42%,var(--card))]"
-                      style={{ width: `${pct}%` }}
-                    />
-                    <span className="relative truncate">
-                      {finished ? "Done" : e.total > 0 ? `${pct}%` : "Not broken down yet"}
-                      {!e.end && " · no due date"}
-                    </span>
-                  </span>
-                </div>
-              );
-            })}
+            {g.epics.map((e) => (
+              <EpicRow
+                key={e.id}
+                epic={e}
+                startCol={clampCol(mondayOfKey(e.start))}
+                endCol={clampCol(mondayOfKey(e.end ?? addDaysToKey(e.start, 13)))}
+              />
+            ))}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function EpicRow({
+  epic: e,
+  startCol,
+  endCol,
+}: {
+  epic: RoadmapEpic;
+  startCol: number;
+  endCol: number;
+}) {
+  const { openTask } = useTasks();
+  const complete = useCompleteTask();
+  const [status, setOptimistic] = useOptimistic(e.status);
+  const [, startTransition] = useTransition();
+  const done = status === TaskStatus.COMPLETED;
+  const pct = e.total > 0 ? Math.round((e.done / e.total) * 100) : 0;
+  const finished = done || (e.total > 0 && e.done === e.total);
+  const color = epicColor(e);
+  const open = e.total - e.done;
+
+  return (
+    <div role="row" className="contents">
+      <span role="cell" style={{ gridColumn: 1 }} className="flex min-w-0 items-start gap-2.5 pe-3">
+        <TaskCheck
+          size={18}
+          done={done}
+          label={done ? `Reopen ${e.title}` : `Mark ${e.title} done`}
+          className="mt-0.5"
+          onToggle={() =>
+            startTransition(async () => {
+              const next = done ? TaskStatus.NOT_STARTED : TaskStatus.COMPLETED;
+              setOptimistic(next);
+              await complete({ id: e.id, title: e.title, status: e.status }, next);
+            })
+          }
+        />
+        <span className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => openTask(e.id)}
+            className="block text-left text-[13px] leading-snug font-semibold break-words underline-offset-4 hover:underline"
+          >
+            {e.title}
+          </button>
+          <span className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            {e.total > 0 && <span className="tabular-nums">{open} open</span>}
+            {e.overdue > 0 && (
+              <span className="text-tint-danger-foreground font-semibold tabular-nums">
+                {e.overdue} overdue
+              </span>
+            )}
+          </span>
+        </span>
+        {e.owner && <UserAvatar user={e.owner} size="xs" className="mt-0.5" />}
+      </span>
+      <span
+        role="cell"
+        style={
+          {
+            gridColumn: `${startCol + 2} / ${Math.max(endCol, startCol) + 3}`,
+            "--lc": color,
+          } as CSSProperties
+        }
+        className={cn(
+          "relative z-[1] flex h-[30px] items-center overflow-hidden rounded-full border px-3 text-xs font-semibold",
+          "border-[color-mix(in_oklab,var(--lc)_35%,transparent)] bg-[color-mix(in_oklab,var(--lc)_18%,var(--card))]",
+          !e.end && "border-dashed",
+        )}
+      >
+        <i
+          aria-hidden="true"
+          className="absolute inset-y-0 start-0 bg-[color-mix(in_oklab,var(--lc)_42%,var(--card))]"
+          style={{ width: `${pct}%` }}
+        />
+        <span className="relative whitespace-nowrap">
+          {finished ? "Done" : e.total > 0 ? `${pct}%, ${e.done} of ${e.total}` : "Empty"}
+          {!e.end && ", no due date"}
+        </span>
+      </span>
     </div>
   );
 }

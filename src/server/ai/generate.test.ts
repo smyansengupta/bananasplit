@@ -15,7 +15,7 @@ const openai: AiCredentials = {
   protocol: "openai",
   apiKey: "sk-test-key-123456789",
   model: "gpt-test",
-  label: "OpenAI · gpt-test",
+  label: "OpenAI, gpt-test",
   vendorId: "openai",
   baseUrl: "https://api.openai.com/v1",
   maxTokensParam: "max_completion_tokens",

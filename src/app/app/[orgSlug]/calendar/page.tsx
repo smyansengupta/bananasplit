@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarSync, Ticket } from "lucide-react";
+import { CalendarPlus, CalendarSync } from "@/components/icons";
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";
@@ -7,22 +7,18 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
-import {
-  addDaysToKey,
-  allDaySpan,
-  safeTimeZone,
-  zonedDateKey,
-  zonedMidnight,
-} from "@/lib/calendar/dates";
-import { weekWindowFor } from "@/lib/calendar/grid";
+import { addDaysToKey, allDaySpan, safeTimeZone, zonedDateKey } from "@/lib/calendar/dates";
 import { parseCalendarRange } from "@/lib/calendar/range";
+import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { sectionLabel } from "@/lib/nav/sidebar";
+
 import { dueDateKey, fromDateKey } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 import { getCalendarTasks } from "@/server/tasks/queries";
 
-import { getEventsInRange, getViewerRsvps, rangeWhere } from "./queries";
+import { getEventsInRange, getMeetingTypeDefaults, getViewerRsvps } from "./queries";
 
 /**
  * The org calendar. The server reads only the visible window (the view puts
@@ -41,6 +37,8 @@ export default async function CalendarPage({
 }: PageProps<"/app/[orgSlug]/calendar">) {
   const { orgSlug } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
+  // A new event starts with the organization's reminders (Settings > General).
+  const defaultReminderMinutes = settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES];
   const range = parseCalendarRange(await searchParams, org.timezone);
   const canManage = can({ role }, "events.write");
   // The Tasks layer is one of the task views; Google sync a data connection.
@@ -50,9 +48,8 @@ export default async function CalendarPage({
   // zone), whatever window the grid is showing.
   const zone = safeTimeZone(org.timezone);
   const todayKey = zonedDateKey(new Date(), zone);
-  const week = weekWindowFor(todayKey);
 
-  const { events, rsvps, tasks, thisWeek } = await withOrgTx(org.id, async ({ db }) => {
+  const { events, rsvps, tasks } = await withOrgTx(org.id, async ({ db }) => {
     const found = await getEventsInRange(db, org.id, {
       from: range.from,
       to: range.to,
@@ -75,21 +72,23 @@ export default async function CalendarPage({
               dueTo: fromDateKey(addDaysToKey(range.toKey, -1)),
             })
           : [],
-      thisWeek: await db.event.count({
-        where: rangeWhere(org.id, {
-          from: zonedMidnight(week.fromKey, zone),
-          to: zonedMidnight(week.toKey, zone),
-        }),
-      }),
     };
   });
   const members = canManage ? await getOrgMembersForPicker(org.id) : [];
 
+  // A new meeting of a type starts where the last one was.
+  const typeList = parseMeetingTypes(settings?.eventTypes);
+  const meetingTypes =
+    canManage && typeList.length > 0
+      ? await withOrgTx(org.id, ({ db }) => getMeetingTypeDefaults(db, org.id, typeList))
+      : typeList;
   const items: CalendarItem[] = events.map((e) => {
     const shared = {
       id: e.id,
       title: e.title,
       kind: e.kind,
+      meetingType: e.meetingType,
+      typeColor: meetingTypeColor(meetingTypes, e.meetingType),
       visibility: e.visibility,
       location: e.location,
       syncState: e.googleSyncState,
@@ -130,36 +129,22 @@ export default async function CalendarPage({
     <div className="space-y-7">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "calendar")}
-        description={
-          thisWeek === 0
-            ? "Nothing scheduled this week"
-            : `${thisWeek} ${thisWeek === 1 ? "event" : "events"} this week`
-        }
         actions={
           <>
-            {/* Planning a meeting starts here as often as from the sidebar. */}
-            {spaceIncludes(org, "polls") && (
-              <Button variant="outline" asChild>
-                <Link href={`/app/${orgSlug}/calendar/find-a-time/new`}>
-                  <CalendarClock aria-hidden="true" />
-                  Find a time
-                </Link>
-              </Button>
-            )}
-            {can({ role }, "events.write") && (
-              <Button variant="outline" asChild>
-                <Link href={`/app/${orgSlug}/calendar/rsvp`}>
-                  <Ticket aria-hidden="true" />
-                  RSVPs
-                </Link>
-              </Button>
-            )}
+            {/* On a phone New event (last here) moves to the top right; the rest is in the menu. */}
+            {/* Everyone can put the club's calendar in their own (Profile, Calendar feed). */}
+            <Button variant="outline" className="max-md:hidden" asChild>
+              <Link href={`/app/${orgSlug}/profile#calendar`}>
+                <CalendarPlus aria-hidden="true" />
+                Subscribe
+              </Link>
+            </Button>
             {can({ role }, "integrations.view") && spaceIncludes(org, "integrations") && (
-              <Button variant="outline" size="icon" asChild>
+              <Button variant="outline" size="icon" className="max-md:hidden" asChild>
                 <Link
                   href={`/app/${orgSlug}/calendar/sync`}
-                  aria-label="Google Calendar sync and website feed"
-                  title="Google Calendar sync and website feed"
+                  aria-label="Sync and feed"
+                  title="Sync and feed"
                 >
                   <CalendarSync className="size-[18px]" aria-hidden="true" />
                 </Link>
@@ -173,6 +158,8 @@ export default async function CalendarPage({
         orgId={org.id}
         orgSlug={orgSlug}
         timeZone={org.timezone}
+        defaultReminderMinutes={defaultReminderMinutes}
+        meetingTypes={meetingTypes}
         items={items}
         members={members.map((m) => ({
           id: m.id,

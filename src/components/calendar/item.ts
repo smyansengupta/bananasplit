@@ -20,6 +20,10 @@ export interface CalendarItem extends GridItem {
   end: string;
   allDay: boolean;
   kind: EventKind;
+  /** The meeting type's name (Event.meetingType), said instead of the kind's. */
+  meetingType?: string | null;
+  /** The meeting type's colour (src/lib/meetings/meeting-types.ts), drawn instead of the kind's. */
+  typeColor?: string | null;
   visibility: EventVisibility;
   location: string | null;
   syncState: CalendarSyncState;
@@ -76,5 +80,5 @@ export function itemLabel(item: CalendarItem, kindLabel: string, visibilityLabel
   const when = item.allDay ? "all day" : timeRange(item);
   const where = item.location ? `, ${item.location}` : "";
   const going = item.rsvp === "YES" ? ", you're going" : "";
-  return `${item.title}, ${when}${where}, ${kindLabel}, ${visibilityLabel}${going}`;
+  return `${item.title}, ${when}${where}, ${item.meetingType || kindLabel}, ${visibilityLabel}${going}`;
 }

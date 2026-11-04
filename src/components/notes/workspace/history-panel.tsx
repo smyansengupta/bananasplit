@@ -1,7 +1,7 @@
 "use client";
 
 import { format, isToday, isYesterday } from "date-fns";
-import { Eye, History, Loader2, Pencil, Save, Trash2 } from "lucide-react";
+import { History, Loader2, Pencil, Save, Trash2 } from "@/components/icons";
 import { useState } from "react";
 
 import {
@@ -16,7 +16,6 @@ import { ItemMenu } from "@/components/item-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
-import { formatBytes } from "@/lib/files/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -150,10 +149,7 @@ export function HistoryPanel({
         ))}
 
       {versions.length === 0 ? (
-        <p className="text-muted-foreground px-1 text-xs">
-          No versions yet. A snapshot is kept automatically while people edit, at most one every ten
-          minutes.
-        </p>
+        <p className="text-muted-foreground px-1 text-xs">No versions yet.</p>
       ) : (
         <ul className="space-y-0.5">
           {versions.map((v) => (
@@ -201,12 +197,12 @@ export function HistoryPanel({
                       />
                     )}
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold">
+                      <span className="block text-[13px] font-semibold break-words">
                         {v.name ?? "Autosave"}
                       </span>
-                      <span className="text-muted-foreground block truncate text-xs">
+                      <span className="text-muted-foreground block text-xs">
                         {stamp(v.createdAt)}
-                        {v.createdBy?.name ? ` · ${v.createdBy.name}` : ""}
+                        {v.createdBy?.name ? `, ${v.createdBy.name}` : ""}
                       </span>
                     </span>
                   </button>
@@ -214,7 +210,6 @@ export function HistoryPanel({
                     label={`Actions for ${v.name ?? "this autosave"}`}
                     size="xs"
                     items={[
-                      { label: "Open", icon: Eye, onSelect: () => void open(v) },
                       canEdit && {
                         label: v.name ? "Rename" : "Name it",
                         icon: Pencil,
@@ -238,10 +233,7 @@ export function HistoryPanel({
         </ul>
       )}
       <p className="text-muted-foreground px-1 text-[11px] leading-relaxed">
-        Autosaves are kept {historyDays} days, named versions until someone deletes
-        them.
-        {versions.length > 0 &&
-          ` ${formatBytes(versions.reduce((n, v) => n + v.sizeBytes, 0))} of the club's storage.`}
+        Autosaves kept {historyDays} days.
       </p>
     </div>
   );

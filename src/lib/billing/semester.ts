@@ -45,3 +45,16 @@ export function formatSemesterDate(date: Date): string {
     timeZone: "UTC",
   });
 }
+
+/**
+ * When a student plan billed by the academic year renews: the next fall
+ * start (Aug 25, the same placeholder as nextSemesterStart). Student plans
+ * never bill for the summer.
+ */
+export function nextAcademicYearStart(now: Date): Date {
+  const year = now.getUTCFullYear();
+  const thisFall = Date.UTC(year, FALL_START.month, FALL_START.day);
+  return new Date(
+    now.getTime() < thisFall ? thisFall : Date.UTC(year + 1, FALL_START.month, FALL_START.day),
+  );
+}

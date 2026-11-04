@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  Check,
-  ChevronsUpDown,
-  KeyRound,
-  LogOut,
-  Plus,
-  Settings,
-  ShieldCheck,
-  UserPlus,
-} from "lucide-react";
+import { Check, ChevronDown, LogOut, Plus, Settings, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useTransition, type ReactNode } from "react";
 
@@ -97,7 +88,6 @@ export function OrgSwitcher({
   user,
   brand,
   isAdmin = false,
-  canInvite = false,
 }: {
   orgs: OrgSummary[];
   activeSlug: string;
@@ -106,6 +96,7 @@ export function OrgSwitcher({
   /** The club's logo and name (OrgBrand); falls back to the mark and name. */
   brand?: ReactNode;
   isAdmin?: boolean;
+  /** Kept for callers; inviting lives on People now. */
   canInvite?: boolean;
 }) {
   const [, startTransition] = useTransition();
@@ -131,34 +122,43 @@ export function OrgSwitcher({
         <button
           type="button"
           className={cn(
-            "focus-glow relative flex h-12 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden text-left outline-none",
-            "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
-            rail ? "rounded-full p-0" : "rounded-field px-1.5",
+            "focus-glow group/switch relative flex min-w-0 shrink-0 items-center gap-2 overflow-hidden text-left outline-none",
+            "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
+            rail
+              ? cn("size-10 p-0", personal ? "rounded-full" : "rounded-[12px]")
+              : "min-h-9 w-full rounded-lg px-2 py-1.5",
             !rail &&
-              (chrome
-                ? "aria-expanded:bg-chrome-foreground/10"
-                : "aria-expanded:bg-sidebar-accent"),
+              (chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15"),
             !rail && tone.hover,
           )}
-          aria-label={`${nameOf(active)} menu`}
+          aria-label={`${nameOf(active)}: switch organization`}
+          title="Switch organization"
         >
-          <span className={cn("flex min-w-0 flex-1 items-center gap-2.5", fadeLabel(rail))}>
+          <span className={cn("flex min-w-0 items-center gap-2.5", fadeLabel(rail))}>
             {(!personal && brand) || (
               <>
-                {mark(active, "size-8")}
-                <span className="heading truncate text-[0.95rem]">{nameOf(active)}</span>
+                {mark(active, "size-[22px] rounded-[6px] text-[10px]")}
+                <span className="min-w-0 truncate text-[14.5px] leading-tight font-semibold">
+                  {nameOf(active)}
+                </span>
               </>
             )}
           </span>
-          <ChevronsUpDown
-            className={cn("size-4 shrink-0 opacity-50", fadeLabel(rail))}
+          {/* The arrow right after the name says it opens: where you switch. */}
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 opacity-60 transition-transform duration-200 group-aria-expanded/switch:rotate-180 motion-reduce:transition-none",
+              fadeLabel(rail),
+            )}
+            strokeWidth={2.25}
             aria-hidden="true"
           />
-          {/* On the rail, the club becomes a circle tile. */}
+          {/* On the rail, the organization becomes a square tile (Personal: your round picture). */}
           <span
             aria-hidden="true"
             className={cn(
-              "ring-chrome-foreground/25 pointer-events-none absolute top-1 left-0 grid size-10 place-items-center overflow-hidden rounded-full ring-1",
+              "ring-chrome-foreground/25 pointer-events-none absolute inset-0 grid size-10 place-items-center overflow-hidden ring-1 ring-inset",
+              personal ? "rounded-full" : "rounded-[12px]",
               "transition-opacity duration-300 motion-reduce:transition-none",
               rail ? "opacity-100 delay-150" : "opacity-0",
             )}
@@ -166,48 +166,28 @@ export function OrgSwitcher({
             {personal && user ? (
               <UserAvatar user={user} size="lg" />
             ) : (
-              <OrgMark org={active} tone="primary" className="size-10 rounded-full text-xs" />
+              <OrgMark org={active} tone="primary" className="size-10 rounded-[12px] text-xs" />
             )}
           </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        {personal ? (
-          <DropdownMenuItem asChild>
-            <Link href={`${base}/settings`}>
-              <Settings className="size-4" aria-hidden="true" />
-              Settings
-            </Link>
+        {/* The workspace plan's menu: your organizations (the one you're in
+            ticked), Personal, then what belongs to the space (Admin panel),
+            and one way to join or start another. Invites live on People. */}
+        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+          Switch organization
+        </DropdownMenuLabel>
+        {clubs.map((org) => (
+          <DropdownMenuItem
+            key={org.slug}
+            onSelect={() => startTransition(() => switchActiveOrg(org.slug))}
+          >
+            <OrgMark org={org} className="size-5" />
+            <span className="min-w-0 flex-1 break-words">{org.name}</span>
+            {org.slug === active.slug && <Check className="size-4" aria-hidden="true" />}
           </DropdownMenuItem>
-        ) : (
-          <>
-            {isAdmin ? (
-              <DropdownMenuItem asChild>
-                <Link href={`${base}/settings`}>
-                  <ShieldCheck className="size-4" aria-hidden="true" />
-                  Admin panel
-                </Link>
-              </DropdownMenuItem>
-            ) : null}
-            {canInvite ? (
-              <DropdownMenuItem asChild>
-                <Link href={`${base}/settings/members`}>
-                  <UserPlus className="size-4" aria-hidden="true" />
-                  Invite people
-                </Link>
-              </DropdownMenuItem>
-            ) : null}
-            {!isAdmin ? (
-              <DropdownMenuItem asChild>
-                <Link href={`${base}/settings/members#leave`}>
-                  <LogOut className="size-4" aria-hidden="true" />
-                  Leave {active.name}
-                </Link>
-              </DropdownMenuItem>
-            ) : null}
-          </>
-        )}
-        <DropdownMenuSeparator />
+        ))}
         {live
           .filter((o) => o.kind === "PERSONAL")
           .map((org) => (
@@ -216,54 +196,50 @@ export function OrgSwitcher({
               onSelect={() => startTransition(() => switchActiveOrg(org.slug))}
             >
               {mark(org, "size-5")}
-              <span className="flex-1 truncate">Personal</span>
+              <span className="flex-1">Personal</span>
               {org.slug === active.slug && <Check className="size-4" aria-hidden="true" />}
             </DropdownMenuItem>
           ))}
-        {clubs.length > 0 && (
-          <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-            Your clubs
-          </DropdownMenuLabel>
-        )}
-        {clubs.map((org) => (
-          <DropdownMenuItem
-            key={org.slug}
-            onSelect={() => startTransition(() => switchActiveOrg(org.slug))}
-          >
-            <OrgMark org={org} className="size-5" />
-            <span className="flex-1 truncate">{org.name}</span>
-            {org.slug === active.slug && <Check className="size-4" aria-hidden="true" />}
+        {pending.map((org) => (
+          <DropdownMenuItem key={org.slug} asChild>
+            <Link href={`/app/${org.slug}`}>
+              <OrgMark org={org} className="size-5 opacity-50" />
+              <span className="text-muted-foreground min-w-0 flex-1 break-words">
+                {nameOf(org)}, scheduled for deletion
+              </span>
+            </Link>
           </DropdownMenuItem>
         ))}
-        {pending.length > 0 && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-              Scheduled for deletion
-            </DropdownMenuLabel>
-            {pending.map((org) => (
-              <DropdownMenuItem key={org.slug} asChild>
-                <Link href={`/app/${org.slug}`}>
-                  <OrgMark org={org} className="size-5 opacity-50" />
-                  <span className="text-muted-foreground flex-1 truncate">{nameOf(org)}</span>
-                </Link>
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
         <DropdownMenuSeparator />
+        {personal ? (
+          <DropdownMenuItem asChild>
+            <Link href={`${base}/settings`}>
+              <Settings className="size-4" aria-hidden="true" />
+              Settings
+            </Link>
+          </DropdownMenuItem>
+        ) : isAdmin ? (
+          <DropdownMenuItem asChild>
+            <Link href={`${base}/settings`}>
+              <ShieldCheck className="size-4" aria-hidden="true" />
+              Admin panel
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild>
-          <Link href="/onboarding/join">
-            <KeyRound className="size-4" aria-hidden="true" />
-            Join a club
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/onboarding/organization">
+          <Link href="/onboarding/start">
             <Plus className="size-4" aria-hidden="true" />
-            Start a club
+            Join or create an organization
           </Link>
         </DropdownMenuItem>
+        {!personal && !isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link href={`${base}/settings/members#leave`}>
+              <LogOut className="size-4" aria-hidden="true" />
+              Leave {active.name}
+            </Link>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

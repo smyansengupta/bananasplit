@@ -35,7 +35,7 @@ const PAGES = [
   "/tasks?view=updates",
   "/calendar",
   "/calendar/find-a-time",
-  "/calendar/rsvp",
+  "/meetings",
   "/calendar/polls",
   "/calendar/find-a-time",
   "/notes",
@@ -52,7 +52,6 @@ const PAGES = [
   "/profile",
   "/settings",
   "/settings/members",
-  "/settings/notifications",
 ];
 
 const PER_KIND = 6;

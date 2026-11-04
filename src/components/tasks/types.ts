@@ -1,5 +1,6 @@
 import type { ViewerChart } from "@/lib/tasks/assignment";
 import type { OrgMemberOption } from "@/server/members";
+import type { FileRefOption } from "@/server/notes/files";
 import type { ParentOption, TaskListItem } from "@/server/tasks/queries";
 
 /** Client-side shapes for the task views (type-only imports of server read shapes). */
@@ -7,6 +8,8 @@ import type { ParentOption, TaskListItem } from "@/server/tasks/queries";
 export type TaskItem = TaskListItem;
 export type SubtaskItem = TaskListItem["subtasks"][number];
 export type MemberOption = OrgMemberOption;
+/** A club file a title or description can point at (`/` in either field). */
+export type FileOption = FileRefOption;
 export type { ParentOption };
 
 export interface LabelOption {

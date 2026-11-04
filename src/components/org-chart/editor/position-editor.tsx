@@ -1,16 +1,28 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink, X } from "@/components/icons";
 import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/user-avatar";
-import { confirmMember, toTree, unlinkMember, type DraftPosition } from "@/lib/org-chart/draft";
+import {
+  confirmMember,
+  extraManagerOptions,
+  toTree,
+  unlinkMember,
+  type DraftPosition,
+} from "@/lib/org-chart/draft";
 import { matchPerson } from "@/lib/org-chart/match";
 import { descendantIds } from "@/lib/org-chart/tree";
 import type { ValidationIssue } from "@/lib/org-chart/validate";
@@ -21,12 +33,19 @@ import { MemberPicker, type EditorMember } from "./member-picker";
 /**
  * Editing one position of a draft: title, person (link a member, confirm a
  * suggestion, or keep a placeholder name), reporting line (the keyboard and
- * touch alternative to dragging), advisor and open-hire toggles, and the
+ * touch alternative to dragging), extra managers (dotted lines on the
+ * chart; the position stays under its main manager), advisor and open-hire
+ * toggles, and the
  * responsibilities and decides-alone bullets. Source quotes from the parse
- * are shown read-only so the admin can check them.
+ * are shown read-only so whoever is editing can check them.
  */
 
 const NOBODY = "__none__";
+const ADD = "__add__";
+
+function optionLabel(p: DraftPosition): string {
+  return `${p.title || "Untitled position"}${p.personName ? `, ${p.personName}` : ""}`;
+}
 
 export function PositionEditor({
   position,
@@ -35,6 +54,8 @@ export function PositionEditor({
   issues,
   onChange,
   onSetManager,
+  onAddAlsoManager,
+  onRemoveAlsoManager,
   onMove,
   onAddReport,
   onRemove,
@@ -45,6 +66,8 @@ export function PositionEditor({
   issues: ValidationIssue[];
   onChange: (next: DraftPosition) => void;
   onSetManager: (managerId: string | null) => void;
+  onAddAlsoManager: (managerId: string) => void;
+  onRemoveAlsoManager: (managerId: string) => void;
   onMove: (direction: -1 | 1) => void;
   onAddReport: () => void;
   onRemove: () => void;
@@ -57,6 +80,11 @@ export function PositionEditor({
     .filter((p) => !blocked.has(p.id) && !p.isAdvisor)
     .sort((a, b) => a.title.localeCompare(b.title));
   const hasReports = positions.some((p) => p.reportsTo === position.id);
+  const byId = new Map(positions.map((p) => [p.id, p]));
+  const alsoManagers = (position.alsoReportsTo ?? []).filter((id) => id !== position.reportsTo);
+  const alsoOptions = extraManagerOptions(positions, position.id).sort((a, b) =>
+    a.title.localeCompare(b.title),
+  );
   const suggestions = position.suggestedUserIds
     .map((id) => membersById.get(id))
     .filter((m): m is EditorMember => Boolean(m));
@@ -114,7 +142,14 @@ export function PositionEditor({
             onCheckedChange={(checked) =>
               onChange(
                 checked
-                  ? { ...position, isOpen: true, userId: null, matchState: "UNMATCHED", suggestedUserIds: [], matchScore: null }
+                  ? {
+                      ...position,
+                      isOpen: true,
+                      userId: null,
+                      matchState: "UNMATCHED",
+                      suggestedUserIds: [],
+                      matchScore: null,
+                    }
                   : { ...position, isOpen: false },
               )
             }
@@ -139,10 +174,17 @@ export function PositionEditor({
               <div className="bg-muted/50 flex items-center gap-3 rounded-lg border p-3">
                 <UserAvatar user={linked} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{linked.name}</p>
-                  <p className="text-muted-foreground text-xs">Linked member · shows their picture and profile</p>
+                  <p className="text-sm font-medium break-words">{linked.name}</p>
+                  <p className="text-muted-foreground text-xs">
+                    Linked member, with their picture and profile
+                  </p>
                 </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => onChange(unlinkMember(position))}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange(unlinkMember(position))}
+                >
                   <Unlink className="size-4" aria-hidden="true" />
                   Unlink
                 </Button>
@@ -152,14 +194,14 @@ export function PositionEditor({
                 {suggestions.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-muted-foreground text-xs">
-                      Suggested match{suggestions.length > 1 ? "es" : ""} for “{position.personName}”. Nothing is linked
-                      until you confirm.
+                      Suggested match{suggestions.length > 1 ? "es" : ""} for “{position.personName}
+                      ”. Nothing is linked until you confirm.
                     </p>
                     <ul className="space-y-1">
                       {suggestions.map((m, i) => (
                         <li key={m.id} className="flex items-center gap-2">
                           <UserAvatar user={m} size="sm" />
-                          <span className="min-w-0 flex-1 truncate text-sm">
+                          <span className="min-w-0 flex-1 text-sm break-words">
                             {m.name}
                             {i === 0 && position.matchScore === 1 && (
                               <Badge variant="secondary" className="ml-2">
@@ -189,7 +231,7 @@ export function PositionEditor({
                 />
                 {position.personName && (
                   <p className="text-muted-foreground text-xs">
-                    Not linked: {position.personName} shows as a placeholder (“Not on the portal”).
+                    Not linked: {position.personName} shows as a placeholder (“Not a member”).
                   </p>
                 )}
               </div>
@@ -211,8 +253,7 @@ export function PositionEditor({
             <SelectItem value={NOBODY}>Nobody (top of the chart)</SelectItem>
             {managerOptions.map((p) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.title || "Untitled position"}
-                {p.personName ? ` · ${p.personName}` : ""}
+                {optionLabel(p)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -229,11 +270,63 @@ export function PositionEditor({
         </div>
       </div>
 
+      {(alsoManagers.length > 0 || (!position.isAdvisor && position.reportsTo !== null)) && (
+        <div className="space-y-2">
+          <Label htmlFor={`${uid}-also`}>Also reports to</Label>
+          <p className="text-muted-foreground text-xs">
+            A dotted line on the chart. The position stays under its main manager.
+          </p>
+          {alsoManagers.length > 0 && (
+            <ul className="space-y-1" aria-label="Also reports to">
+              {alsoManagers.map((id) => {
+                const manager = byId.get(id);
+                const name = manager ? optionLabel(manager) : "A position not in this draft";
+                return (
+                  <li
+                    key={id}
+                    className="bg-muted/50 flex items-center gap-2 rounded-md border py-1 pr-1 pl-3"
+                  >
+                    <span className="min-w-0 flex-1 text-sm break-words">{name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Remove ${manager?.title || "this manager"}`}
+                      onClick={() => onRemoveAlsoManager(id)}
+                    >
+                      <X aria-hidden="true" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!position.isAdvisor && alsoOptions.length > 0 && (
+            <Select value={ADD} onValueChange={(value) => value !== ADD && onAddAlsoManager(value)}>
+              <SelectTrigger id={`${uid}-also`} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ADD} disabled>
+                  Add a manager…
+                </SelectItem>
+                {alsoOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {optionLabel(p)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <Label htmlFor={`${uid}-advisor`}>Advisor</Label>
           <p className="text-muted-foreground text-xs">
-            Shown beside their manager, outside the main hierarchy. An advisor has a manager and no reports.
+            Shown beside their manager, outside the main hierarchy. An advisor has a manager and no
+            reports.
           </p>
         </div>
         <Switch
@@ -247,7 +340,7 @@ export function PositionEditor({
       <BulletListEditor
         label="Responsibilities"
         items={position.responsibilities}
-        placeholder="Owns the semester calendar"
+        placeholder="Owns the calendar and the task board"
         onChange={(responsibilities) => onChange({ ...position, responsibilities })}
       />
       <BulletListEditor
@@ -259,7 +352,9 @@ export function PositionEditor({
 
       {position.sourceQuote.length > 0 && (
         <details className="text-sm">
-          <summary className="text-muted-foreground cursor-pointer">Where the import read this from</summary>
+          <summary className="text-muted-foreground cursor-pointer">
+            Where the import read this from
+          </summary>
           <ul className="text-muted-foreground mt-2 space-y-1 border-l pl-3">
             {position.sourceQuote.map((q, i) => (
               <li key={i} className="font-mono text-xs break-words whitespace-pre-wrap">
@@ -271,7 +366,13 @@ export function PositionEditor({
       )}
 
       <div className="flex flex-wrap gap-2 border-t pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={onAddReport} disabled={position.isAdvisor}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onAddReport}
+          disabled={position.isAdvisor}
+        >
           <Plus className="size-4" aria-hidden="true" />
           Add a report
         </Button>

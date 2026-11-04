@@ -8,9 +8,15 @@ const event = {
   joinUrl: "https://meet.example.com/robot-demo",
 };
 
-function message(template: RsvpMessageInput["template"], going: boolean, hideLocation: boolean) {
+function message(
+  template: RsvpMessageInput["template"],
+  going: boolean,
+  hideLocation: boolean,
+  offsetMinutes?: number,
+) {
   return {
     template,
+    ...(offsetMinutes ? { offsetMinutes } : {}),
     guestName: "Maya Patel",
     orgName: "Robotics Club",
     title: "Robot demo night",
@@ -50,11 +56,39 @@ describe("where an RSVP email says the event is", () => {
   });
 
   it("puts them in the reminder of someone going", () => {
-    const input = message("reminder-hour", true, true);
+    const input = message("reminder", true, true, 60);
     const email = rsvpEmail(input);
     expect(email.text).toContain("Engineering Hall");
     expect(email.text).toContain("east wing");
     expect(email.text).toContain("meet.example.com");
     expect(rsvpText(input)).toContain("at Engineering Hall 112");
+  });
+});
+
+describe("the reminder email and text", () => {
+  it("say how far off the event is, in the reminder's own words", () => {
+    const hour = message("reminder", true, false, 60);
+    expect(rsvpEmail(hour).subject).toBe("Starting in an hour: Robot demo night");
+    expect(rsvpEmail(hour).text).toContain("Robot demo night starts in an hour, at 6:00 PM.");
+    expect(rsvpText(hour)).toMatch(
+      /^Robot demo night starts in an hour \(6:00 PM\) at Engineering Hall/,
+    );
+
+    const ten = message("reminder", true, false, 10);
+    expect(rsvpEmail(ten).subject).toBe("Starting in 10 minutes: Robot demo night");
+
+    const day = message("reminder", true, false, 1440);
+    expect(rsvpEmail(day).subject).toBe("Tomorrow: Robot demo night");
+    expect(rsvpEmail(day).text).toContain("A reminder that Robot demo night is tomorrow.");
+    expect(rsvpText(day)).toMatch(/^Reminder: Robot demo night is tomorrow, Thursday, October 15/);
+
+    const week = message("reminder", true, false, 10080);
+    expect(rsvpEmail(week).subject).toBe("Coming up in a week: Robot demo night");
+    expect(rsvpEmail(week).text).toContain("A reminder that Robot demo night is in a week.");
+  });
+
+  it("is the only email with a text", () => {
+    expect(rsvpText(message("registered", true, false))).toBeNull();
+    expect(rsvpText(message("event-cancelled", false, false))).toBeNull();
   });
 });

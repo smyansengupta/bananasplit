@@ -29,8 +29,12 @@ async function personalOnly(personalId: string): Promise<void> {
 }
 
 /** Copies a Personal file into `clubId` (a club the caller belongs to). */
-export async function sendFileToClub(personalId: string, fileId: string, clubId: string): Promise<SendResult> {
-  if (personalId === clubId) return { ok: false, error: "Choose one of your clubs." };
+export async function sendFileToClub(
+  personalId: string,
+  fileId: string,
+  clubId: string,
+): Promise<SendResult> {
+  if (personalId === clubId) return { ok: false, error: "Choose one of your organizations." };
   await personalOnly(personalId);
   const file = await withOrgTx(personalId, ({ db }) =>
     db.orgFile.findFirst({
@@ -44,7 +48,9 @@ export async function sendFileToClub(personalId: string, fileId: string, clubId:
 
   const blob = await getBlob(file.storageKey);
   if (!blob) return { ok: false, error: "That file's contents are missing, so it can't be sent." };
-  const stored = await putBlob("files", clubId, [randomKeyId()], blob.body, { contentType: file.contentType });
+  const stored = await putBlob("files", clubId, [randomKeyId()], blob.body, {
+    contentType: file.contentType,
+  });
   try {
     const id = await withOrgTx(clubId, async ({ db, userId, role }) => {
       const row = await db.orgFile.create({
@@ -61,7 +67,8 @@ export async function sendFileToClub(personalId: string, fileId: string, clubId:
         select: { id: true },
       });
       const fit = await confirmFits(db, clubId, file.sizeBytes, role);
-      if (crossedWarning(fit.space, fit)) await warnStorage(db, fit.space, fit.after, `file:${row.id}`);
+      if (crossedWarning(fit.space, fit))
+        await warnStorage(db, fit.space, fit.after, `file:${row.id}`);
       return row.id;
     });
     return { ok: true, id };
@@ -74,7 +81,20 @@ export async function sendFileToClub(personalId: string, fileId: string, clubId:
 
 /** The club's side of a note copy: a write, so a paused club or a plan without notes refuses it. */
 const createClubNote = withOrgAction(
-  async (ctx, note: { title: string; contentJson: Prisma.InputJsonValue; contentText: string; yjsState: Uint8Array<ArrayBuffer> | null; icon: string | null; layout: "PAGE" | "DOCUMENT"; paperSize: "LETTER" | "A4"; headerText: string | null; footerText: string | null }) => {
+  async (
+    ctx,
+    note: {
+      title: string;
+      contentJson: Prisma.InputJsonValue;
+      contentText: string;
+      yjsState: Uint8Array<ArrayBuffer> | null;
+      icon: string | null;
+      layout: "PAGE" | "DOCUMENT";
+      paperSize: "LETTER" | "A4";
+      headerText: string | null;
+      footerText: string | null;
+    },
+  ) => {
     const row = await ctx.db.note.create({
       data: {
         organizationId: ctx.organizationId,
@@ -91,13 +111,27 @@ const createClubNote = withOrgAction(
 );
 
 /** Copies a Personal note (its text, layout and live document) into `clubId`, shared with the club. */
-export async function sendNoteToClub(personalId: string, noteId: string, clubId: string): Promise<SendResult> {
-  if (personalId === clubId) return { ok: false, error: "Choose one of your clubs." };
+export async function sendNoteToClub(
+  personalId: string,
+  noteId: string,
+  clubId: string,
+): Promise<SendResult> {
+  if (personalId === clubId) return { ok: false, error: "Choose one of your organizations." };
   await personalOnly(personalId);
   const note = await withOrgTx(personalId, ({ db }) =>
     db.note.findFirst({
       where: { id: noteId, organizationId: personalId, deletedAt: null },
-      select: { title: true, contentJson: true, contentText: true, yjsState: true, icon: true, layout: true, paperSize: true, headerText: true, footerText: true },
+      select: {
+        title: true,
+        contentJson: true,
+        contentText: true,
+        yjsState: true,
+        icon: true,
+        layout: true,
+        paperSize: true,
+        headerText: true,
+        footerText: true,
+      },
     }),
   );
   if (!note) throw new NotFoundError();

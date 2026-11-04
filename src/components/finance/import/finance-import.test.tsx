@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { chosen, openSelect, stubPointerEvents } from "@/test/select";
+
 /**
  * Finance › Import in the browser: a CSV is read here (never uploaded),
  * its columns guessed, every row reviewed, rows already in the books
@@ -23,7 +25,9 @@ vi.mock("@/app/app/[orgSlug]/finance/import-actions", () => ({
   importFinanceBudget: m.budget,
   checkImportDuplicates: m.duplicates,
 }));
-vi.mock("@/app/app/[orgSlug]/_shell/ai-actions", () => ({ listAiConnectionsAction: m.connections }));
+vi.mock("@/app/app/[orgSlug]/_shell/ai-actions", () => ({
+  listAiConnectionsAction: m.connections,
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -48,6 +52,7 @@ function pick(name: string, contents: string | Uint8Array) {
 }
 
 beforeEach(() => {
+  stubPointerEvents();
   m.connections.mockResolvedValue([]);
   m.duplicates.mockResolvedValue({ duplicates: [] });
   m.importRecords.mockResolvedValue({
@@ -64,7 +69,15 @@ beforeEach(() => {
       orgId="org_1"
       orgSlug="cbc"
       today="2026-10-01"
-      periods={[{ id: "p1", label: "2026–27", startsOn: "2026-08-01", endsOn: "2027-07-31", isActive: true }]}
+      periods={[
+        {
+          id: "p1",
+          label: "2026–27",
+          startsOn: "2026-08-01",
+          endsOn: "2027-07-31",
+          isActive: true,
+        },
+      ]}
       categories={[{ name: "Food", budgetPeriodId: "p1" }]}
     />,
   );
@@ -79,8 +92,8 @@ describe("FinanceImport", () => {
   it("reads a CSV here, guesses the columns, reviews the rows and imports what's ticked", async () => {
     pick("ledger.csv", csv);
     await screen.findByText("Which column is which?");
-    expect((screen.getByRole("combobox", { name: "Column 1 (Date)" }) as HTMLSelectElement).value).toBe("date");
-    expect((screen.getByRole("combobox", { name: "Column 4 (Cost)" }) as HTMLSelectElement).value).toBe("amount");
+    expect(chosen(screen.getByRole("combobox", { name: "Column 1 (Date)" }))).toBe("Date");
+    expect(chosen(screen.getByRole("combobox", { name: "Column 4 (Cost)" }))).toBe("Amount");
 
     fireEvent.click(screen.getByRole("button", { name: /Review 3 rows/ }));
     await screen.findByText("Check the rows");
@@ -92,11 +105,28 @@ describe("FinanceImport", () => {
     await screen.findByText(/Imported: 2 transactions/);
     const [orgId, input] = m.importRecords.mock.calls[0];
     expect(orgId).toBe("org_1");
-    expect(input).toMatchObject({ source: "ledger.csv", createPeriods: true, createCategories: true, reconciled: false });
+    expect(input).toMatchObject({
+      source: "ledger.csv",
+      createPeriods: true,
+      createCategories: true,
+      reconciled: false,
+    });
     expect(input.batch).toMatch(/^[a-z0-9]{24}$/);
     expect(input.records).toEqual([
-      expect.objectContaining({ date: "2026-09-05", description: "Pizza", amountCents: 8450, direction: "OUT", kind: "EXPENSE", category: "Food" }),
-      expect.objectContaining({ date: "2026-09-12", description: "Posters", amountCents: 3520, category: "Marketing" }),
+      expect.objectContaining({
+        date: "2026-09-05",
+        description: "Pizza",
+        amountCents: 8450,
+        direction: "OUT",
+        kind: "EXPENSE",
+        category: "Food",
+      }),
+      expect.objectContaining({
+        date: "2026-09-12",
+        description: "Posters",
+        amountCents: 3520,
+        category: "Marketing",
+      }),
     ]);
     expect(screen.getByText("New categories: Marketing")).toBeTruthy();
 
@@ -117,7 +147,8 @@ describe("FinanceImport", () => {
   it("lets a column be changed by hand", async () => {
     pick("ledger.csv", csv);
     const category = await screen.findByRole("combobox", { name: "Column 3 (Category)" });
-    fireEvent.change(category, { target: { value: "ignore" } });
+    openSelect(category);
+    fireEvent.click(screen.getByRole("option", { name: "Don't import" }));
     fireEvent.click(screen.getByRole("button", { name: /Review 3 rows/ }));
     await screen.findByText("Check the rows");
     expect(screen.queryByText("New category")).toBeNull();

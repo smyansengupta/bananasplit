@@ -50,7 +50,7 @@ describe("org creation policy", () => {
     ).toBeNull();
   });
 
-  it("in production, any verified account may create a club by default", () => {
+  it("in production, any verified account may create an organization by default", () => {
     expect(orgCreationEnabled(prod())).toBe(true);
     expect(orgCreationMode(prod())).toBe("open");
     expect(orgCreationPolicy(verified, prod())).toMatchObject({

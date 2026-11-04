@@ -21,8 +21,8 @@ import {
   Strikethrough,
   Underline as UnderlineIcon,
   Undo2,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 
@@ -30,7 +30,7 @@ import { TableInsertButton, TableTools } from "./table-tools";
 
 interface Tool {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   active?: (e: Editor) => boolean;
   run: (e: Editor) => void;
   disabled?: (e: Editor) => boolean;
@@ -281,7 +281,7 @@ export function NoteOutline({ editor }: { editor: Editor }) {
   return (
     <aside className="text-sm" aria-label="On this page">
       <p className="text-muted-foreground text-xs">
-        {words.toLocaleString()} word{words === 1 ? "" : "s"} · {minutes} min read
+        {words.toLocaleString()} word{words === 1 ? "" : "s"}, {minutes} min read
       </p>
       {outline.length > 0 && (
         <>
@@ -297,7 +297,7 @@ export function NoteOutline({ editor }: { editor: Editor }) {
                     if (dom instanceof HTMLElement)
                       dom.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
-                  className="text-muted-foreground hover:text-foreground hover:border-primary -ml-px block w-full truncate border-l border-transparent py-0.5 text-left"
+                  className="text-muted-foreground hover:text-foreground hover:border-primary -ml-px block w-full border-l border-transparent py-0.5 text-left break-words"
                   style={{ paddingLeft: `${(item.level - 1) * 12 + 12}px` }}
                 >
                   {item.text}

@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,7 +11,7 @@ import { getOrgContextBySlug } from "@/server/db/context";
 import { isBringId } from "@/server/personal/bring-cookie";
 import { clubsUserRuns } from "@/server/personal/move";
 
-export const metadata = { title: "Move to a club · Bananasplit" };
+export const metadata = { title: "Move to an organization" };
 
 function initials(name: string): string {
   return name
@@ -26,8 +26,9 @@ function initials(name: string): string {
  * Move to a club (docs/features/personal-and-clubs.md): from Personal, pick
  * a club you own or run and you land on its "Bring anything in?" list with
  * ?item ticked; or start a club, and club setup ends on that list with it
- * ticked. Personal only. Link here from an event or poll as
- * /app/{personal slug}/move?item={eventId|pollId|taskId}.
+ * ticked. Personal only. Link here from an item as
+ * /app/{personal slug}/move?item={id}: an event, poll, task, folder, note
+ * or file.
  */
 export default async function MoveToClubPage({
   params,
@@ -49,15 +50,15 @@ export default async function MoveToClubPage({
     <div className="mx-auto w-full max-w-2xl space-y-7.5">
       <div className="space-y-3">
         <PageHeader
-          title="Move to a club"
+          title="Move to an organization"
           description={
             clubs.length > 0
-              ? `${clubs.length} club${clubs.length === 1 ? "" : "s"} you run${itemId ? " · 1 item picked" : ""}`
-              : "You don't run a club yet"
+              ? `${clubs.length} organization${clubs.length === 1 ? "" : "s"} you run`
+              : "You don't run an organization yet"
           }
         />
         <p className="text-muted-foreground max-w-prose text-sm">
-          Events, polls and tasks move one way, with their links, RSVPs, tickets and responses.
+          Moves with its links and replies. Notes arrive private.
         </p>
       </div>
 
@@ -66,9 +67,8 @@ export default async function MoveToClubPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                <h2>Clubs you run</h2>
+                <h2>Organizations you run</h2>
               </CardTitle>
-              <CardDescription>Pick one, then choose what to bring.</CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="divide-border/70 -mx-2 divide-y">
@@ -81,7 +81,7 @@ export default async function MoveToClubPage({
                       <span className="bg-muted grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">
                         {initials(club.name)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate">{club.name}</span>
+                      <span className="min-w-0 flex-1 break-words">{club.name}</span>
                       <ChevronRight
                         className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
                         aria-hidden="true"
@@ -98,16 +98,13 @@ export default async function MoveToClubPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                <h2>{clubs.length ? "Or start a new club" : "Start a club"}</h2>
+                <h2>{clubs.length ? "Or start a new organization" : "Start an organization"}</h2>
               </CardTitle>
-              <CardDescription>
-                A new club is free for 30 days. At the end of setup, you choose what to bring in
-                {itemId ? ", with this one already picked" : ""}.
-              </CardDescription>
+              <CardDescription>14 days of Team Advanced free.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-end">
               <Button type="submit" variant={clubs.length ? "outline" : "default"}>
-                Start a club
+                Start an organization
               </Button>
             </CardContent>
           </Card>

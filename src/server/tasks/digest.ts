@@ -1,5 +1,6 @@
 import { NotificationType, Prisma, TaskStatus } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
+import { fileRefsToPlainText } from "@/lib/tasks/file-refs";
 import {
   addDaysToKey,
   dueDateKey,
@@ -40,7 +41,8 @@ export async function loadDigest(
     t: Prisma.TaskGetPayload<{ select: typeof digestSelect }>,
     note?: string | null,
   ): DigestItem => ({
-    title: t.title,
+    // An email is plain text: a `/file` reference goes in by name.
+    title: fileRefsToPlainText(t.title),
     dueLabel: t.dueDate ? formatDueKey(dueDateKey(t.dueDate), todayKey) : null,
     url: link(t.id),
     note: note ?? null,
@@ -154,7 +156,7 @@ export async function loadDigest(
         t,
         [t.blockedReason, t.owner?.name && reports.length > 0 ? `owner: ${t.owner.name}` : null]
           .filter(Boolean)
-          .join(" · "),
+          .join(", "),
       ),
     ),
   };

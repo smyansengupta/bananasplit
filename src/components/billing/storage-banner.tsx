@@ -1,4 +1,4 @@
-import { HardDrive } from "lucide-react";
+import { HardDrive } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -35,14 +35,16 @@ export function StorageBanner({
   const level = storageLevel(usedBytes, limitBytes);
   if (!canManage || level === "ok") return null;
   const used = `${formatUsed(usedBytes, limitBytes)} of ${formatStorage(limitBytes)}`;
-  const whose = personal ? "Your space" : "Your club";
+  const whose = personal ? "Your space" : "Your organization";
   const percent = Math.min(100, Math.floor((usedBytes / limitBytes) * 100));
   return (
     <div
       role="status"
       className={cn(
         "rounded-tile flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-sm",
-        level === "full" ? "bg-tint-danger text-tint-danger-foreground" : "bg-tint-accent text-tint-accent-foreground",
+        level === "full"
+          ? "bg-tint-danger text-tint-danger-foreground"
+          : "bg-tint-accent text-tint-accent-foreground",
         className,
       )}
     >
@@ -65,7 +67,7 @@ export function StorageBanner({
       </p>
       {showLink && (
         <Button asChild size="sm" variant="outline">
-          <Link href={`/app/${orgSlug}/settings/plan/storage`}>See storage</Link>
+          <Link href={`/app/${orgSlug}/settings/plan`}>See storage</Link>
         </Button>
       )}
     </div>

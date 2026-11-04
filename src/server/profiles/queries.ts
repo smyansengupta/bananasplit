@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { Prisma, Role } from "@/generated/prisma/client";
 import { parseAvailability, type Availability } from "@/lib/availability";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
-import { withOrgTx, withUserTx } from "@/server/db/context";
+import { withOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { userPublicSelect, type UserPublic } from "@/server/members";
 import { everyWord } from "@/server/search/where";
 
@@ -209,41 +209,71 @@ export async function listOrgPeople(
   organizationId: string,
   options: { page?: number; q?: string } = {},
 ): Promise<PeoplePage> {
-  const q = options.q?.trim() ?? "";
-  const where: Prisma.MembershipWhereInput = {
+  return withOrgTx(organizationId, async ({ db }) => {
+    const total = await countOrgPeopleInTx(db, organizationId, options.q);
+    const pageCount = Math.max(1, Math.ceil(total / PEOPLE_PAGE_SIZE));
+    const page = Math.min(Math.max(1, options.page ?? 1), pageCount);
+    const people = await listOrgPeopleInTx(db, organizationId, {
+      q: options.q,
+      skip: (page - 1) * PEOPLE_PAGE_SIZE,
+      take: PEOPLE_PAGE_SIZE,
+    });
+    return { people, total, page, pageCount, pageSize: PEOPLE_PAGE_SIZE };
+  });
+}
+
+function peopleWhere(organizationId: string, q: string | undefined): Prisma.MembershipWhereInput {
+  return {
     organizationId,
     // Every word, in the name, this org's title or the major (as the ⌘K palette finds them).
-    ...everyWord<Prisma.MembershipWhereInput>(q, (c) => [
+    ...everyWord<Prisma.MembershipWhereInput>(q?.trim() ?? "", (c) => [
       { user: { name: c } },
       { title: c },
       { user: { major: c } },
     ]),
   };
-  return withOrgTx(organizationId, async ({ db }) => {
-    const total = await db.membership.count({ where });
-    const pageCount = Math.max(1, Math.ceil(total / PEOPLE_PAGE_SIZE));
-    const page = Math.min(Math.max(1, options.page ?? 1), pageCount);
-    const rows = await db.membership.findMany({
-      where,
-      orderBy: [{ user: { name: { sort: "asc", nulls: "last" } } }, { userId: "asc" }],
-      skip: (page - 1) * PEOPLE_PAGE_SIZE,
-      take: PEOPLE_PAGE_SIZE,
-      select: {
-        role: true,
-        title: true,
-        user: {
-          select: { ...userPublicSelect, pronouns: true, major: true, gradYear: true },
+}
+
+/** How many current members match `q` (listOrgPeopleInTx's filter). */
+export function countOrgPeopleInTx(
+  db: TxClient,
+  organizationId: string,
+  q?: string,
+): Promise<number> {
+  return db.membership.count({ where: peopleWhere(organizationId, q) });
+}
+
+/**
+ * The people directory in the caller's transaction (listOrgPeople's query,
+ * for callers that already hold one, like the AI connectors' list_members):
+ * by name, `skip` and `take` a slice. Emails only with `withEmails`, which
+ * the caller decides (members.viewEmails, or Privacy's member emails).
+ */
+export async function listOrgPeopleInTx(
+  db: TxClient,
+  organizationId: string,
+  options: { q?: string; skip: number; take: number; withEmails?: boolean },
+): Promise<(PersonSummary & { email?: string })[]> {
+  const rows = await db.membership.findMany({
+    where: peopleWhere(organizationId, options.q),
+    orderBy: [{ user: { name: { sort: "asc", nulls: "last" } } }, { userId: "asc" }],
+    skip: options.skip,
+    take: options.take,
+    select: {
+      role: true,
+      title: true,
+      user: {
+        select: {
+          ...userPublicSelect,
+          pronouns: true,
+          major: true,
+          gradYear: true,
+          email: options.withEmails === true,
         },
       },
-    });
-    return {
-      people: rows.map((m) => ({ ...m.user, role: m.role, title: m.title })),
-      total,
-      page,
-      pageCount,
-      pageSize: PEOPLE_PAGE_SIZE,
-    };
+    },
   });
+  return rows.map((m) => ({ ...m.user, role: m.role, title: m.title }));
 }
 
 export interface PersonProfile extends PersonSummary {

@@ -8,8 +8,8 @@ import {
   PenLine,
   Users,
   Vote,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { LazyAttendanceLineChart } from "@/components/reports/charts/lazy";
@@ -59,7 +59,7 @@ function Destination({
   detail,
 }: {
   href: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   detail: string;
 }) {
@@ -136,8 +136,8 @@ function DataResult({
             </p>
             <p className="text-muted-foreground text-sm">
               The export answered and reported zero sessions and zero check-ins. That is exactly
-              what a brand-new club website looks like — rows will appear here by themselves after
-              your first session. If you expected data, check that you applied{" "}
+              what a brand-new website looks like — rows will appear here by themselves after your
+              first session. If you expected data, check that you applied{" "}
               <span className="font-mono">suite-export.sql</span> to the live project rather than a
               staging copy.
             </p>
@@ -252,10 +252,10 @@ function DataResult({
         <NextStepLink orgSlug={orgSlug} nextStep="calendar" />
         <TestButton orgId={orgId} step="data" label="Test again" variant="ghost" />
         <Link
-          href={`/app/${orgSlug}/setup/status`}
+          href={`/app/${orgSlug}/integrations`}
           className="text-muted-foreground hover:text-foreground focus-glow ml-auto rounded-full text-[13px] font-medium underline-offset-4 hover:underline"
         >
-          Connection status
+          Integrations
         </Link>
       </div>
     </div>
@@ -324,11 +324,12 @@ function CalendarResult({
         <dt className="text-muted-foreground">Public events go to</dt>
         <dd>{publicName ?? "Nowhere — pick a calendar below"}</dd>
         <dt className="text-muted-foreground">Internal events go to</dt>
-        <dd>{internalName ?? "Nowhere. They stay in the portal only."}</dd>
+        <dd>{internalName ?? "Nowhere. They stay in Bananasplit only."}</dd>
       </dl>
       <p className="text-muted-foreground text-sm">
-        From now on, a session you create here appears on that calendar within a minute. The portal
-        only ever touches events it created itself.
+        From now on, a session you create here appears on that calendar within a minute. Bananasplit
+        only changes the events it mirrors, and reads other events only if you run the import from
+        the public calendar.
       </p>
       <PanelSection title="Now worth opening">
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -339,7 +340,7 @@ function CalendarResult({
             detail="Schedule a session and watch it appear in Google"
           />
           <Destination
-            href={`/app/${orgSlug}/settings/integrations/google-calendar`}
+            href={`/app/${orgSlug}/integrations/google-calendar`}
             icon={ArrowRight}
             label="Import existing events"
             detail="A dry run first; nothing is written until you apply it"
@@ -376,7 +377,7 @@ function ClaudeResult({
       <Done>The key works and can use {model}.</Done>
       <p className="text-muted-foreground text-sm">
         Nothing has been billed yet, and nothing will be until someone uploads an org chart. Each
-        upload is one API call on your club&apos;s own workspace.
+        upload is one API call on your organization&apos;s own workspace.
       </p>
       <PanelSection title="Now worth opening">
         <ul className="grid gap-2 sm:grid-cols-2">

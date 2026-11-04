@@ -5,9 +5,9 @@ import { withOrgTx } from "@/server/db/context";
 import { getBlob } from "@/server/storage";
 
 /**
- * GET /api/orgs/{orgId}/org-chart/imports/{versionId}/source (ADMIN+): the
- * original uploaded document, from the private store, as an attachment.
- * RLS re-checks the version (drafts and history are admin-only) before the
+ * GET /api/orgs/{orgId}/org-chart/imports/{versionId}/source (any member):
+ * the original uploaded document, from the private store, as an attachment.
+ * RLS re-checks the version (it must belong to the caller's org) before the
  * blob is read outside the transaction.
  */
 export const dynamic = "force-dynamic";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { deriveDarkRoles, deriveTheme } from "./derive";
-import { CUSTOM_PRESET_ID, DEFAULT_PRESET_ID, findPreset, presetGlow } from "./presets";
+import { CUSTOM_PRESET_ID, findPreset, presetGlow, UNTHEMED_PRESET_ID } from "./presets";
 import type { ResolvedTheme } from "./resolve";
 import type { ThemeRoles } from "./types";
 import { parseRoles, rolesSchema } from "./validate";
@@ -91,8 +91,10 @@ export function applyPersonalTheme(
     style: { ...org.style, accent: null, glow: null },
     glow: presetGlow(personal.preset),
     tokens: deriveTheme(palettes.light, palettes.dark, presetGlow(personal.preset)),
-    // The default preset is exactly globals.css: nothing to inject.
-    isDefault: personal.preset === DEFAULT_PRESET_ID,
+    // The unthemed preset is exactly globals.css: nothing to inject. (This
+    // compared against Moonstone's id, so a member who chose Moonstone got no
+    // CSS at all and saw Graphite instead.)
+    isDefault: personal.preset === UNTHEMED_PRESET_ID,
   };
 }
 

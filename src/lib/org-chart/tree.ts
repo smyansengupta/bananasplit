@@ -10,6 +10,7 @@ export interface TreeNode {
   id: string;
   key: string;
   reportsToId: string | null;
+  alsoReportsToIds?: readonly string[];
   isAdvisor: boolean;
   rank: string;
 }
@@ -24,6 +25,10 @@ export interface ChartIndex<T extends TreeNode> {
   /** Advisors beside this position, by rank. */
   advisorsOf(id: string): T[];
   managerOf(id: string): T | null;
+  /** Extra managers (dotted lines) that are in the chart, by rank. */
+  alsoManagersOf(id: string): T[];
+  /** Positions with a dotted line to this one, by rank. */
+  dottedReportsOf(id: string): T[];
   /** The managers above, nearest first. */
   chainOf(id: string): T[];
 }
@@ -46,6 +51,17 @@ export function indexChart<T extends TreeNode>(nodes: readonly T[]): ChartIndex<
       reports.set(parent, [...(reports.get(parent) ?? []), n]);
     }
   }
+  const alsoManagers = new Map<string, T[]>();
+  const dottedReports = new Map<string, T[]>();
+  for (const n of sorted) {
+    for (const m of new Set(n.alsoReportsToIds ?? [])) {
+      const manager = byId.get(m);
+      if (!manager || m === n.id || m === parents.get(n.id)) continue;
+      alsoManagers.set(n.id, [...(alsoManagers.get(n.id) ?? []), manager]);
+      dottedReports.set(m, [...(dottedReports.get(m) ?? []), n]);
+    }
+  }
+  for (const list of alsoManagers.values()) list.sort(compareRank);
   const managerOf = (id: string) => {
     const parent = parents.get(id);
     return parent ? (byId.get(parent) ?? null) : null;
@@ -57,6 +73,8 @@ export function indexChart<T extends TreeNode>(nodes: readonly T[]): ChartIndex<
     reportsOf: (id) => reports.get(id) ?? [],
     advisorsOf: (id) => advisors.get(id) ?? [],
     managerOf,
+    alsoManagersOf: (id) => alsoManagers.get(id) ?? [],
+    dottedReportsOf: (id) => dottedReports.get(id) ?? [],
     chainOf: (id) => {
       const chain: T[] = [];
       const seen = new Set<string>([id]);

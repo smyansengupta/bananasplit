@@ -1,6 +1,15 @@
 "use client";
 
-import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  Link2,
+  Loader2,
+  Lock,
+  UserPlus,
+  Users,
+  X,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -30,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
+import { Segmented, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { UserAvatar } from "@/components/user-avatar";
 import type { NoteGeneralAccess } from "@/lib/notes/access";
 import { cn } from "@/lib/utils";
@@ -61,41 +71,28 @@ export interface NoteSharingInfo {
 
 const ROLE_LABELS: Record<ShareRole, string> = { VIEWER: "Viewer", EDITOR: "Editor" };
 
-const ACCESS_OPTIONS: { value: NoteGeneralAccess; label: string; description: string }[] = [
-  {
-    value: "RESTRICTED",
-    label: "Only people added",
-    description: "Only you and the people above can open it.",
-  },
-  {
-    value: "CLUB_VIEW",
-    label: "Everyone in the club can view",
-    description: "Every member can read it; only editors change it.",
-  },
-  {
-    value: "CLUB_EDIT",
-    label: "Everyone in the club can edit",
-    description: "Every member can read and change it.",
-  },
+/** What everyone else in the club gets, as three buttons. */
+const ACCESS_OPTIONS: { value: NoteGeneralAccess; label: string }[] = [
+  { value: "RESTRICTED", label: "Only added" },
+  { value: "CLUB_VIEW", label: "Org can view" },
+  { value: "CLUB_EDIT", label: "Org can edit" },
 ];
 
 /** "Only you", "Shared with 3", "Club can view", "Club can edit". */
 function accessSummary(access: NoteGeneralAccess, shareCount: number, isAuthor: boolean): string {
-  if (access === "CLUB_EDIT") return "Club can edit";
-  if (access === "CLUB_VIEW") return shareCount > 0 ? `Club + ${shareCount}` : "Club can view";
+  if (access === "CLUB_EDIT") return "Org can edit";
+  if (access === "CLUB_VIEW") return shareCount > 0 ? `Org + ${shareCount}` : "Org can view";
   if (shareCount === 0) return isAuthor ? "Only you" : "Private";
   return `Shared with ${shareCount}`;
 }
 
-const selectClass =
-  "border-input h-8 rounded-lg border bg-transparent px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60";
-
 /**
  * The note's Share button and dialog, like a shared document's: add club
  * members as viewers or editors, change or remove them, and set what
- * everyone else in the club gets (nothing, read, or edit). Each change saves
- * at once (src/app/app/[orgSlug]/notes/actions.ts, sharing section); people
- * who can't share see who has access, and can take themselves off.
+ * everyone else in the club gets (nothing, read, or edit). Every choice is a
+ * button, and each change saves at once (src/app/app/[orgSlug]/notes/
+ * actions.ts, sharing section), so there's no Done; people who can't share
+ * see who has access, and can take themselves off.
  */
 export function ShareNoteDialog({
   orgId,
@@ -148,10 +145,9 @@ export function ShareNoteDialog({
       () => {
         setPicked([]);
         toast({
-          title: count === 1 ? "Shared" : `Shared with ${count} people`,
-          description: "They'll get a notification with the link.",
+          title: count === 1 ? "Shared" : `Shared with ${count}`,
           tone: "success",
-          duration: 4_000,
+          duration: 3_000,
         });
       },
     );
@@ -175,7 +171,7 @@ export function ShareNoteDialog({
       () => removeNoteShare(orgId, noteId, sharing.viewerId),
       () => {
         setOpen(false);
-        toast({ title: "You were taken off this note", tone: "success", duration: 4_000 });
+        toast({ title: "Removed", tone: "success", duration: 3_000 });
         if (access === "RESTRICTED") router.push(`/app/${orgSlug}/notes`);
         else router.refresh();
       },
@@ -185,7 +181,7 @@ export function ShareNoteDialog({
   function copyLink() {
     void navigator.clipboard
       ?.writeText(`${window.location.origin}/app/${orgSlug}/notes/${noteId}`)
-      .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
+      .then(() => toast({ title: "Copied", tone: "success", duration: 3_000 }))
       .catch(() => toast({ title: "Couldn't copy the link", tone: "error" }));
   }
 
@@ -201,23 +197,25 @@ export function ShareNoteDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" title="Who can see and edit this note">
+        <Button type="button" variant="outline" size="sm">
           <SummaryIcon aria-hidden="true" />
           {canShare ? "Share" : summary}
           {canShare && (
-            <span className="text-muted-foreground hidden font-normal sm:inline">· {summary}</span>
+            <span className="text-muted-foreground hidden font-normal sm:inline">{summary}</span>
           )}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="truncate">Share “{title.trim() || "Untitled note"}”</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="break-words">
+            Share “{title.trim() || "Untitled note"}”
+          </DialogTitle>
+          <DialogDescription className={cn(canShare && "sr-only")}>
             {canShare
-              ? "Add members as viewers or editors, and choose what the rest of the club gets."
+              ? "Add people and choose what the organization gets."
               : sharing.myRole === "EDITOR" || access === "CLUB_EDIT"
-                ? "You can edit this note. Its author decides who else has access."
-                : "You can view this note. Its author decides who else has access."}
+                ? "You can edit. The author controls access."
+                : "You can view. The author controls access."}
           </DialogDescription>
         </DialogHeader>
 
@@ -257,7 +255,7 @@ export function ShareNoteDialog({
                   <CommandList>
                     <CommandEmpty>
                       {candidates.length === 0
-                        ? "Everyone in the club has access already."
+                        ? "Everyone in the organization has access already."
                         : "No members found."}
                     </CommandEmpty>
                     <CommandGroup>
@@ -287,15 +285,15 @@ export function ShareNoteDialog({
                 </Command>
               </PopoverContent>
             </Popover>
-            <select
-              aria-label="Their access"
+            <Segmented
+              label="Their access"
+              options={[
+                { value: "EDITOR", label: "Editor" },
+                { value: "VIEWER", label: "Viewer" },
+              ]}
               value={role}
-              onChange={(e) => setRole(e.target.value as ShareRole)}
-              className={selectClass}
-            >
-              <option value="EDITOR">Editor</option>
-              <option value="VIEWER">Viewer</option>
-            </select>
+              onSelect={(v) => setRole(v as ShareRole)}
+            />
             <Button
               type="button"
               size="sm"
@@ -330,20 +328,27 @@ export function ShareNoteDialog({
                   right={
                     canShare ? (
                       <span className="flex items-center gap-1">
-                        <select
-                          aria-label={`${s.user.name ?? "Member"}'s access`}
-                          value={s.role}
+                        {/* One click flips Editor and Viewer. */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
                           disabled={pending}
-                          onChange={(e) =>
+                          aria-label={`${s.user.name ?? "Member"} is ${ROLE_LABELS[s.role].toLowerCase()}; make ${s.role === "EDITOR" ? "viewer" : "editor"}`}
+                          title={s.role === "EDITOR" ? "Make viewer" : "Make editor"}
+                          onClick={() =>
                             run(() =>
-                              updateNoteShare(orgId, noteId, s.userId, e.target.value as ShareRole),
+                              updateNoteShare(
+                                orgId,
+                                noteId,
+                                s.userId,
+                                s.role === "EDITOR" ? "VIEWER" : "EDITOR",
+                              ),
                             )
                           }
-                          className={cn(selectClass, "h-7 text-xs")}
                         >
-                          <option value="EDITOR">Editor</option>
-                          <option value="VIEWER">Viewer</option>
-                        </select>
+                          {ROLE_LABELS[s.role]}
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -380,36 +385,38 @@ export function ShareNoteDialog({
         </div>
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="note-general-access"
-            className="text-muted-foreground text-xs font-medium"
-          >
-            Everyone else in the club
-          </label>
-          <select
-            id="note-general-access"
-            value={access}
-            disabled={!canShare || pending}
-            onChange={(e) => changeAccess(e.target.value as NoteGeneralAccess)}
-            className={cn(selectClass, "w-full")}
-          >
-            {ACCESS_OPTIONS.map((o) => (
-              <option
-                key={o.value}
-                value={o.value}
-                // Only the author makes a club note private (an admin would lose it).
-                disabled={o.value === "RESTRICTED" && !sharing.isAuthor && access !== "RESTRICTED"}
-              >
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-muted-foreground text-xs">
-            {ACCESS_OPTIONS.find((o) => o.value === access)?.description}
-            {canShare &&
-              access !== "RESTRICTED" &&
-              " Owners and admins can always edit club notes."}
+          <p id="note-general-access" className="text-muted-foreground text-xs font-medium">
+            Everyone else in the organization
           </p>
+          <div
+            role="radiogroup"
+            aria-labelledby="note-general-access"
+            className={cn(segmentedTrack, "flex w-full")}
+          >
+            {ACCESS_OPTIONS.map((o) => {
+              // Only the author makes a club note private (an admin would lose it).
+              const locked =
+                !canShare ||
+                pending ||
+                (o.value === "RESTRICTED" && !sharing.isAuthor && access !== "RESTRICTED");
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={access === o.value}
+                  disabled={locked}
+                  onClick={() => access !== o.value && changeAccess(o.value)}
+                  className={cn(
+                    segmentedItem(access === o.value),
+                    "flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-60",
+                  )}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {error && (
@@ -418,13 +425,10 @@ export function ShareNoteDialog({
           </p>
         )}
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="gap-2 sm:justify-start">
           <Button type="button" variant="outline" onClick={copyLink}>
             <Link2 aria-hidden="true" />
             Copy link
-          </Button>
-          <Button type="button" onClick={() => setOpen(false)}>
-            Done
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -444,7 +448,7 @@ function PersonRow({
   return (
     <li className="flex items-center gap-2.5 px-3 py-2">
       <UserAvatar user={person} size="sm" />
-      <span className="min-w-0 flex-1 truncate text-sm">
+      <span className="min-w-0 flex-1 text-sm break-words">
         {person.name ?? "Member"}
         {you && <span className="text-muted-foreground"> (you)</span>}
       </span>

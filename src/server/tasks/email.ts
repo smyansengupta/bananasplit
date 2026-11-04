@@ -1,5 +1,6 @@
 import { NotificationType, TaskStatus, type TaskVisibility } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
+import { fileRefsToPlainText } from "@/lib/tasks/file-refs";
 import {
   daysBetweenKeys,
   dueDateKey,
@@ -150,7 +151,8 @@ export async function renderTaskNotificationEmail(
           next: summary.next.length,
           blocked: summary.blocked.length,
         },
-        url: appUrl(`/app/${org.slug}/tasks?view=updates`),
+        // That week's draft itself, even when it's opened after the week ends.
+        url: appUrl(`/app/${org.slug}/tasks?view=updates&week=${weekStart}`),
       });
     }
 
@@ -222,14 +224,15 @@ export async function renderTaskNotificationEmail(
 
     const dueKey = task.dueDate ? dueDateKey(task.dueDate) : null;
     const facts: TaskFacts = {
-      title: task.title,
+      // An email is plain text: a `/file` reference goes in by name.
+      title: fileRefsToPlainText(task.title),
       dueLabel: dueKey ? formatDueKey(dueKey, todayKey) : null,
       priority: PRIORITY_LABELS[task.priority] ?? task.priority,
       // A subtask's breadcrumb is dropped when the parent is out of reach:
       // somebody handed a piece of a private task must not learn its title.
       parentTitle:
         task.parentTask && canSeeTask(recipientActor, asSubject(task.parentTask))
-          ? task.parentTask.title
+          ? fileRefsToPlainText(task.parentTask.title)
           : null,
     };
 

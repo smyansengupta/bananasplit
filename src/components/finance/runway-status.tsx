@@ -1,9 +1,9 @@
-import { CircleCheck, CircleMinus, CircleX, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleMinus, CircleX, TriangleAlert, type IconComponent } from "@/components/icons";
 
 import { formatFinanceDate, type Runway, type RunwayStatus } from "@/lib/finance/stats";
 import { cn } from "@/lib/utils";
 
-const TONE: Record<RunwayStatus, { icon: LucideIcon; className: string }> = {
+const TONE: Record<RunwayStatus, { icon: IconComponent; className: string }> = {
   out: { icon: CircleX, className: "text-destructive" },
   short: { icon: TriangleAlert, className: "text-warning" },
   lasts: { icon: CircleCheck, className: "text-success" },

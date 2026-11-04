@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, CircleCheck, Plus } from "lucide-react";
+import { ChevronRight, CircleCheck, Plus } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -88,7 +88,8 @@ function groupByEpic(tasks: TaskItem[]): EpicGroup[] {
  * with roll-up progress), then what sits outside an epic, and what was done
  * this week folded away underneath. A club that never makes epics gets one
  * plain list, soonest due first, as before. The quick add at the top takes
- * `#tags`.
+ * `#tags` (not on a phone, where the List is the only layout and New task at
+ * the top right adds).
  */
 export function ListView({
   open,
@@ -146,7 +147,7 @@ export function ListView({
   }
 
   return (
-    <div className="space-y-[30px]">
+    <div className="space-y-[30px] max-md:space-y-5">
       <QuickAdd />
       {open.length === 0 && (
         <p className="text-muted-foreground text-sm">Everything here is done.</p>
@@ -340,8 +341,9 @@ function QuickAdd() {
     });
   }
 
+  // Not on a phone: there, adding is the header's New task, at the top right.
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 max-md:hidden">
       <div className="bg-card edge focus-within:outline-foreground flex h-12 items-center gap-3 rounded-full ps-4 pe-1.5 focus-within:outline-2 focus-within:outline-offset-2">
         <Plus className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
         <label htmlFor="quick-add" className="sr-only">

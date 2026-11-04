@@ -12,9 +12,14 @@ import { pill } from "./pill";
  */
 
 export const brandInputClass =
-  "bg-card text-foreground border-input focus-banana rounded-field h-10 w-full min-w-0 border px-3.5 text-base outline-none transition-[border-color,box-shadow] aria-invalid:border-destructive sm:text-[15px] pointer-coarse:h-11";
+  "bg-card text-foreground border-input focus-banana rounded-field h-10 w-full min-w-0 border px-3.5 text-base outline-none transition-[border-color,box-shadow] aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/15 sm:text-[15px] pointer-coarse:h-11";
 
-/** A labelled field. `aside` sits on the right of the label row (Forgot?). */
+/**
+ * A field whose label sits inside it: the input's placeholder says what it
+ * is (callers pass the label as the placeholder) and the label is kept for
+ * screen readers. Fewer words on the page. `aside` (Forgot?, a status)
+ * sits under the field on the right.
+ */
 export function BrandField({
   id,
   label,
@@ -29,12 +34,12 @@ export function BrandField({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="flex items-baseline justify-between gap-3 text-[14px] font-medium">
-        <label htmlFor={id}>{label}</label>
-        {aside}
-      </div>
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
       {children}
+      {aside && <div className="flex justify-end text-[13px]">{aside}</div>}
     </div>
   );
 }

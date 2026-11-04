@@ -207,4 +207,41 @@ describe("health checks", () => {
       });
     });
   });
+
+  describe("production:connectors", () => {
+    const check = async (env: Record<string, string>) =>
+      (await runHealthChecks(probes(), { VERCEL_ENV: "production", ...env })).checks.find(
+        (c) => c.name === "production:connectors",
+      );
+
+    it("is skipped while AI connectors are off", async () => {
+      expect(await check({})).toBeUndefined();
+      expect(await check({ WORKOS_API_KEY: "sk_live_x" })).toBeUndefined();
+    });
+
+    it("fails when CONNECTORS_ENABLED is on without the WorkOS settings", async () => {
+      expect(await check({ CONNECTORS_ENABLED: "true" })).toEqual({
+        name: "production:connectors",
+        ok: false,
+        detail: "WORKOS_API_KEY is not set; WORKOS_AUTHKIT_DOMAIN is not set",
+      });
+      expect(
+        await check({
+          CONNECTORS_ENABLED: "true",
+          WORKOS_API_KEY: "sk_live_x",
+          WORKOS_AUTHKIT_DOMAIN: "http://auth.example.org",
+        }),
+      ).toMatchObject({ ok: false, detail: expect.stringMatching(/must be an https URL/) });
+    });
+
+    it("passes with both WorkOS settings", async () => {
+      expect(
+        await check({
+          CONNECTORS_ENABLED: "true",
+          WORKOS_API_KEY: "sk_live_x",
+          WORKOS_AUTHKIT_DOMAIN: "https://auth.bananasplit.fyi",
+        }),
+      ).toEqual({ name: "production:connectors", ok: true, detail: undefined });
+    });
+  });
 });

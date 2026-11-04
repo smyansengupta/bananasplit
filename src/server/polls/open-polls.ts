@@ -1,11 +1,13 @@
 import type { TxClient } from "@/server/db/context";
 
-/** A poll still taking answers, of either kind (the Overview's "Open polls"). */
+/** A poll still taking answers, of either kind (the Overview's "Open forms"). */
 export interface OpenPoll {
   id: string;
   kind: "question" | "availability";
   title: string;
   closesAt: Date | null;
+  /** When it was asked: what Up next ages a poll with no closing date against. */
+  createdAt: Date;
 }
 
 /**
@@ -44,5 +46,5 @@ export async function listOpenPolls(
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit)
-    .map(({ id, kind, title, closesAt }) => ({ id, kind, title, closesAt }));
+    .map(({ id, kind, title, closesAt, createdAt }) => ({ id, kind, title, closesAt, createdAt }));
 }

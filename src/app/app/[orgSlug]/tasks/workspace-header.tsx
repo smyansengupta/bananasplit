@@ -8,19 +8,23 @@ import {
   CircleDot,
   ClipboardPaste,
   Layers,
+  ListFilter,
   Plus,
-} from "lucide-react";
-import Link from "next/link";
+  X,
+} from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ActionItemsImport } from "@/components/ai/action-items-import";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
+import { PHONE_SMALL_CREATE } from "@/components/page-header";
+import { OpenTasksBar, taskStatsSegments } from "@/components/tasks/open-tasks-bar";
 import { WorkspaceToolbar } from "@/components/tasks/workspace-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
 import { Stat, StatStrip } from "@/components/ui/stat";
+import { cn } from "@/lib/utils";
 import type { TaskStats } from "@/server/tasks/queries";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
@@ -116,24 +120,18 @@ export function WorkspaceHeader({
   }, [startNew, newTask, inEpic, searchParams, router, pathname]);
 
   return (
-    <div className="mb-[30px] space-y-[30px]">
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-        <h1 className="page-title mr-auto">{title}</h1>
+    <div className="mb-[30px] space-y-[30px] max-md:mb-5 max-md:space-y-4">
+      {/* On a phone: the title, and New task at the top right. */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
+        <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
           {inDestination ? (
             <Button variant="ghost" onClick={() => ws.setView("board")}>
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to tasks
             </Button>
-          ) : (
-            <Button variant="outline" asChild>
-              <Link href={`/app/${org.slug}/tasks/epics`}>
-                <Layers className="size-4" aria-hidden="true" />
-                Epics
-              </Link>
-            </Button>
-          )}
+          ) : null}
 
           {/* New task (the screen's one create), with more ways in its menu. */}
           <CreateSplitButton
@@ -167,8 +165,12 @@ export function WorkspaceHeader({
         </div>
       </div>
 
+      {/* A phone: the numbers as one bar, the same as the Overview's. */}
       {!inDestination && stats && (
-        <StatStrip>
+        <OpenTasksBar open={stats.open} className="md:hidden" segments={taskStatsSegments(stats)} />
+      )}
+      {!inDestination && stats && (
+        <StatStrip className="max-md:hidden">
           <Stat icon={CircleDot} value={stats.open} label="Open" />
           <Stat icon={CalendarRange} value={stats.dueThisWeek} label="Due this week" />
           <Stat
@@ -176,13 +178,34 @@ export function WorkspaceHeader({
             value={stats.overdue}
             label="Overdue"
             chip={
-              stats.overdue > 0 ? (
+              stats.overdue > 0 || ws.query.overdue ? (
+                // One control that says what it does, and undoes itself: the
+                // list narrows to exactly the tasks this stat counted, and the
+                // same chip takes the filter off again.
                 <button
                   type="button"
-                  onClick={() => ws.setFilters({ blockers: true })}
+                  aria-pressed={ws.query.overdue}
+                  onClick={() => ws.setFilters({ overdue: !ws.query.overdue })}
                   className="focus-glow rounded-full"
+                  title={
+                    ws.query.overdue
+                      ? "Show every task again"
+                      : "Show only the tasks that are overdue"
+                  }
                 >
-                  <Badge variant="destructive">Show them</Badge>
+                  <Badge variant={ws.query.overdue ? "secondary" : "destructive"} className="gap-1">
+                    {ws.query.overdue ? (
+                      <>
+                        <X className="size-3" aria-hidden="true" />
+                        Clear
+                      </>
+                    ) : (
+                      <>
+                        <ListFilter className="size-3" aria-hidden="true" />
+                        Filter
+                      </>
+                    )}
+                  </Badge>
                 </button>
               ) : undefined
             }

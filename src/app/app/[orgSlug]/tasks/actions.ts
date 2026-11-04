@@ -186,6 +186,26 @@ export async function bulkAssign(
   return run(() => bulkAssignTx(orgId, { taskIds, userId, ...options }));
 }
 
+/**
+ * The table's bulk Epic, Due and Tag: one ordinary update per task (the
+ * same checks as editing each by hand), then one refresh. Stops at the first
+ * refusal and says which.
+ */
+export async function bulkUpdate(
+  orgId: string,
+  items: { taskId: string; input: Record<string, unknown> }[],
+): Promise<{ error?: string }> {
+  if (items.length > 200) return { error: "Pick 200 tasks or fewer." };
+  for (const item of items) {
+    const result = await run(() => updateTaskTx(orgId, item.taskId, item.input), {
+      refresh: false,
+    });
+    if (result.error) return { error: result.error };
+  }
+  refresh();
+  return {};
+}
+
 export async function bulkDelete(orgId: string, taskIds: string[]) {
   return run(() => bulkDeleteTx(orgId, taskIds));
 }
@@ -209,16 +229,13 @@ export async function postWeeklyUpdate(
   return run(() => postWeeklyTx(orgId, input));
 }
 
-const loadCommentsTx = withOrgAction(
-  async (ctx, taskId: string, before: string | null) => {
-    const page = await getComments(ctx.db, ctx.organizationId, taskId, {
-      before,
-      take: COMMENTS_PAGE_SIZE,
-    });
-    return page;
-  },
-  { whenPaused: "allow" },
-);
+const loadCommentsTx = withOrgAction(async (ctx, taskId: string, before: string | null) => {
+  const page = await getComments(ctx.db, ctx.organizationId, taskId, {
+    before,
+    take: COMMENTS_PAGE_SIZE,
+  });
+  return page;
+});
 
 /** A page of comments for the dialog (lazy-loaded; oldest first). */
 export async function loadTaskComments(
@@ -235,9 +252,8 @@ export async function loadTaskComments(
   }
 }
 
-const loadActivityTx = withOrgAction(
-  async (ctx, taskId: string) => getActivity(ctx.db, ctx.organizationId, taskId),
-  { whenPaused: "allow" },
+const loadActivityTx = withOrgAction(async (ctx, taskId: string) =>
+  getActivity(ctx.db, ctx.organizationId, taskId),
 );
 
 export async function loadTaskActivity(orgId: string, taskId: string): Promise<TaskActivityItem[]> {
@@ -249,9 +265,8 @@ export async function loadTaskActivity(orgId: string, taskId: string): Promise<T
   }
 }
 
-const loadTaskTx = withOrgAction(
-  async (ctx, taskId: string) => getTaskDetail(ctx.db, ctx.organizationId, taskId),
-  { whenPaused: "allow" },
+const loadTaskTx = withOrgAction(async (ctx, taskId: string) =>
+  getTaskDetail(ctx.db, ctx.organizationId, taskId),
 );
 
 /** One task in the list shape (the dialog opens subtasks with it). */

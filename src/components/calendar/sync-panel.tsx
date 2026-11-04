@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -94,6 +94,8 @@ export function SyncPanel({
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const google = status.google;
   const usable = google && (google.status === "CONNECTED" || google.status === "ERROR");
+  // The import reads only the public calendar; with none chosen it has no source.
+  const importable = Boolean(usable && google.publicCalendarId);
   const imp = google?.import ?? null;
   const show = (section: SyncPanelSection) => sections.includes(section);
 
@@ -134,7 +136,7 @@ export function SyncPanel({
               </Badge>
             </CardTitle>
             <CardDescription>
-              Upcoming public events as JSON (what the club website reads at build time) and as a
+              Upcoming public events as JSON (what your website reads at build time) and as a
               calendar feed anyone can subscribe to. Cached for five minutes at the CDN.
               {!status.publicEventsEnabled && (
                 <>
@@ -172,17 +174,19 @@ export function SyncPanel({
               <>
                 <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1">
                   <dt className="text-muted-foreground">Public calendar</dt>
-                  <dd className="truncate">{google.publicCalendarId}</dd>
+                  <dd className="truncate">
+                    {google.publicCalendarId ?? "None: public events stay off Google"}
+                  </dd>
                   <dt className="text-muted-foreground">Internal calendar</dt>
                   <dd className="truncate">
                     {google.internalCalendarId ?? "None: internal events stay off Google"}
                   </dd>
                   <dt className="text-muted-foreground">Events</dt>
                   <dd>
-                    {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing ·{" "}
+                    {status.counts.SYNCED} on Google, {status.counts.PENDING} syncing,{" "}
                     {status.counts.FAILED} failed
                   </dd>
-                  <dt className="text-muted-foreground">Last Sync now</dt>
+                  <dt className="text-muted-foreground">Last sync</dt>
                   <dd>{when(google.lastSyncRequestAt)}</dd>
                 </dl>
                 {google.lastError && (
@@ -192,7 +196,7 @@ export function SyncPanel({
                   <ul className="space-y-1">
                     {status.failures.map((f) => (
                       <li key={f.id}>
-                        <Link className="underline" href={`/app/${orgSlug}/calendar/${f.id}`}>
+                        <Link className="underline" href={`/app/${orgSlug}/meetings/${f.id}`}>
                           {f.title}
                         </Link>
                         {f.error && <span className="text-muted-foreground">: {f.error}</span>}
@@ -207,7 +211,7 @@ export function SyncPanel({
                     onClick={() =>
                       run(
                         () => syncGoogleNow(orgId),
-                        (n) => `Queued ${n ?? 0} event(s) for Google.`,
+                        (n) => `Queued ${n ?? 0} events for Google.`,
                       )
                     }
                   >
@@ -217,8 +221,8 @@ export function SyncPanel({
               </>
             ) : (
               <p className="text-muted-foreground">
-                Not connected. Connect the club&apos;s Google account in{" "}
-                <Link className="underline" href={`/app/${orgSlug}/settings/integrations`}>
+                Not connected. Connect the organization&apos;s Google account in{" "}
+                <Link className="underline" href={`/app/${orgSlug}/integrations`}>
                   Admin panel › Integrations
                 </Link>
                 .
@@ -239,6 +243,19 @@ export function SyncPanel({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
+            {!google.publicCalendarId && (
+              <p className="text-muted-foreground">
+                No public events calendar is chosen, so there is nothing to import from. Choose one
+                in{" "}
+                <Link
+                  className="underline"
+                  href={`/app/${orgSlug}/integrations/google-calendar`}
+                >
+                  Admin panel › Integrations › Google Calendar
+                </Link>
+                .
+              </p>
+            )}
             {imp?.ranAt ? (
               <div className="space-y-1">
                 <p>
@@ -275,7 +292,7 @@ export function SyncPanel({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={isPending || !usable}
+                  disabled={isPending || !importable}
                   onClick={() =>
                     run(
                       () => importGoogleEvents(orgId, "dry-run"),
@@ -288,7 +305,7 @@ export function SyncPanel({
                 <Button
                   type="button"
                   disabled={
-                    isPending || !usable || imp?.mode !== "dry-run" || imp.status === "failed"
+                    isPending || !importable || imp?.mode !== "dry-run" || imp.status === "failed"
                   }
                   onClick={() =>
                     run(

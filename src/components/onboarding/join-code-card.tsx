@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Link2, RefreshCw } from "lucide-react";
+import { Check, Copy, Link2, RefreshCw } from "@/components/icons";
 import { useState, useTransition } from "react";
 
 import {
@@ -28,7 +28,7 @@ export function JoinCodeCard({
 }: {
   orgId: string;
   initial: CodeState;
-  /** The absolute /onboarding/join URL; ?code= is appended. */
+  /** The absolute /join URL; the link shared is /join/<code>, which previews as the club. */
   joinUrlBase: string;
   compact?: boolean;
 }) {
@@ -38,7 +38,7 @@ export function JoinCodeCard({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const link = `${joinUrlBase}?code=${code.code}`;
+  const link = `${joinUrlBase}/${code.code}`;
 
   function apply(run: () => Promise<JoinCodeResult>, message: string) {
     setError(null);
@@ -53,6 +53,11 @@ export function JoinCodeCard({
       setDomain(result.code.allowedDomain ?? "");
       setSaved(message);
     });
+  }
+
+  function saveDomain() {
+    if (pending || domain.trim() === (code.allowedDomain ?? "")) return;
+    apply(() => updateJoinCodeAction(orgId, { allowedDomain: domain.trim() || null }), "Saved.");
   }
 
   async function copy(what: "code" | "link") {
@@ -120,14 +125,12 @@ export function JoinCodeCard({
               }
             />
           </label>
+          {/* Saves itself: on Enter, or when you leave the box. */}
           <form
             className="grid gap-1.5"
             onSubmit={(e) => {
               e.preventDefault();
-              apply(
-                () => updateJoinCodeAction(orgId, { allowedDomain: domain.trim() || null }),
-                "Saved.",
-              );
+              saveDomain();
             }}
           >
             <label htmlFor="join-domain" className="text-sm">
@@ -139,15 +142,9 @@ export function JoinCodeCard({
                 value={domain}
                 placeholder="yourschool.edu (optional)"
                 onChange={(e) => setDomain(e.target.value)}
+                onBlur={saveDomain}
                 className="max-w-xs"
               />
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={pending || domain.trim() === (code.allowedDomain ?? "")}
-              >
-                Save
-              </Button>
             </div>
           </form>
           <div>

@@ -239,18 +239,33 @@ export const saveBringList = run(async (ctx, eventId: string, items: unknown) =>
   return {};
 });
 
-/** Adds someone by hand: always going, even past capacity. */
-export const addGuest = run(async (ctx, eventId: string, input: unknown) => {
-  const parsed = registrationSchema.safeParse(input);
-  if (!parsed.success)
-    return { error: parsed.error.issues[0]?.message ?? "Check the guest's details." };
-  const event = await loadEvent(ctx, eventId);
-  if (!event.rsvpEnabled) return { error: "Turn on the RSVP page first." };
-  const outcome = await registerGuest(ctx.db, event, parsed.data, { force: true });
-  if (outcome.kind === "exists") return { error: "That email is already on the list." };
-  if (outcome.kind === "closed") return { error: "This page isn't taking sign-ups." };
-  return {};
-});
+/**
+ * Adds someone by hand: always going, even past capacity. `checkIn` (door
+ * mode's walk-in) checks them in at once too.
+ */
+export const addGuest = run(
+  async (ctx, eventId: string, input: unknown, opts: { checkIn?: boolean } = {}) => {
+    const parsed = registrationSchema.safeParse(input);
+    if (!parsed.success)
+      return { error: parsed.error.issues[0]?.message ?? "Check the guest's details." };
+    const event = await loadEvent(ctx, eventId);
+    if (!event.rsvpEnabled) return { error: "Turn on the RSVP page first." };
+    const outcome = await registerGuest(ctx.db, event, parsed.data, { force: true });
+    if (outcome.kind === "exists") return { error: "That email is already on the list." };
+    if (outcome.kind === "closed") return { error: "This page isn't taking sign-ups." };
+    if (opts.checkIn && outcome.kind === "registered") {
+      await setRegistrationCheckIn(ctx.db, {
+        organizationId: ctx.organizationId,
+        eventId: event.id,
+        registrationId: outcome.registrationId,
+        checkedIn: true,
+        actorUserId: ctx.userId,
+        method: "MANUAL",
+      });
+    }
+    return {};
+  },
+);
 
 /** Removes a sign-up for good (a test, a duplicate); a freed spot moves the waitlist up. */
 export const deleteGuest = run(async (ctx, eventId: string, registrationId: string) => {

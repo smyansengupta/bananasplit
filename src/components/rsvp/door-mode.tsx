@@ -1,11 +1,15 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Search, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 
-import { setGuestCheckedIn } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
+import {
+  addGuest,
+  setGuestCheckedIn,
+  setGuestPaid,
+} from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { avatarTint } from "@/components/user-avatar";
 import { doorScan, initials } from "@/lib/rsvp/format";
 import { formatCents } from "@/lib/rsvp/pay";
@@ -36,7 +40,13 @@ interface BarcodeDetectorLike {
 }
 type BarcodeDetectorCtor = new (options: { formats: string[] }) => BarcodeDetectorLike;
 
-type Flash = { tone: "ok" | "warn" | "bad"; title: string; detail?: string };
+type Flash = {
+  tone: "ok" | "warn" | "bad";
+  title: string;
+  detail?: string;
+  /** One thing to do about it, right in the flash ("Let in anyway"). */
+  action?: { label: string; run: () => void };
+};
 
 const REFRESH_MS = 15_000;
 
@@ -66,7 +76,7 @@ export function DoorMode({
   );
   const [flash, setFlash] = useState<Flash | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [, start] = useTransition();
+  const [pending, start] = useTransition();
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -118,6 +128,38 @@ export function DoorMode({
     });
   }
 
+  /** Paid at the door (cash, or what they said they sent). */
+  function markPaid(g: DoorGuest) {
+    start(async () => {
+      const result = await setGuestPaid(orgId, eventId, g.id, true);
+      if (result.error) {
+        say({ tone: "bad", title: "That didn't save", detail: result.error });
+        return;
+      }
+      say({ tone: "ok", title: `${g.name} paid` });
+      router.refresh();
+    });
+  }
+
+  /** Someone not on the list: added and let in, without leaving the door. */
+  function addWalkIn(name: string, email: string) {
+    start(async () => {
+      const result = await addGuest(
+        orgId,
+        eventId,
+        { name: name.trim(), email: email.trim() },
+        { checkIn: true },
+      );
+      if (result.error) {
+        say({ tone: "bad", title: "Couldn't add them", detail: result.error });
+        return;
+      }
+      say({ tone: "ok", title: `${name.trim()} is in` });
+      setQuery("");
+      router.refresh();
+    });
+  }
+
   function onScan(raw: string) {
     const scan = doorScan(list, raw);
     if (scan.kind === "unknown") {
@@ -126,10 +168,11 @@ export function DoorMode({
       say({ tone: "warn", title: `${scan.guest.name} is already in` });
     } else if (scan.kind === "waitlist") {
       // Not checked in: the host decides, from the list.
+      const guest = scan.guest;
       say({
         tone: "warn",
-        title: `${scan.guest.name} is on the waitlist`,
-        detail: "To let them in anyway, close the scanner and tap Check in on their name.",
+        title: `${guest.name} is on the waitlist`,
+        action: { label: "Let in anyway", run: () => checkIn(guest, true, "QR") },
       });
     } else {
       checkIn(scan.guest, true, "QR");
@@ -249,7 +292,7 @@ export function DoorMode({
                 {initials(g.name)}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-xl font-semibold">{g.name}</span>
+                <span className="block text-xl font-semibold break-words">{g.name}</span>
                 <span className="text-chrome-foreground/65 block text-sm">
                   {[
                     g.status === "WAITLIST" ? "Waitlist" : null,
@@ -260,9 +303,19 @@ export function DoorMode({
                         : `Owes ${formatCents(g.owes)}`,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || (checked ? "Checked in" : "Going")}
+                    .join(", ") || (checked ? "Checked in" : "Going")}
                 </span>
               </span>
+              {g.owes !== null && (
+                <button
+                  type="button"
+                  onClick={() => markPaid(g)}
+                  className="bg-chrome-foreground/12 hover:bg-chrome-foreground/20 h-14 rounded-full px-4 text-base font-semibold"
+                  aria-label={`Mark ${g.name} paid`}
+                >
+                  Paid
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => checkIn(g, !checked)}
@@ -287,11 +340,13 @@ export function DoorMode({
         })}
         {shown.length === 0 && (
           <li className="text-chrome-foreground/70 py-10 text-center text-lg">
-            {query
-              ? "Nobody by that name. Add them from the guest list."
-              : going.length === 0
-                ? "Nobody is going yet."
-                : "Everyone's in. 🎉"}
+            {query ? (
+              <WalkIn name={query} onAdd={(email) => addWalkIn(query, email)} pending={pending} />
+            ) : going.length === 0 ? (
+              "Nobody is going yet."
+            ) : (
+              "Everyone's in."
+            )}
           </li>
         )}
       </ul>
@@ -308,6 +363,19 @@ export function DoorMode({
         >
           <p className="text-xl font-bold">{flash.title}</p>
           {flash.detail && <p className="text-sm opacity-90">{flash.detail}</p>}
+          {flash.action && (
+            <button
+              type="button"
+              onClick={() => {
+                const act = flash.action!;
+                setFlash(null);
+                act.run();
+              }}
+              className="mt-3 h-11 rounded-full bg-current/15 px-5 text-base font-semibold"
+            >
+              {flash.action.label}
+            </button>
+          )}
         </div>
       )}
 
@@ -420,5 +488,45 @@ function Scanner({ onClose, onScan }: { onClose: () => void; onScan: (raw: strin
         </div>
       )}
     </div>
+  );
+}
+
+/** Door mode's walk-in: the name typed in search, plus an email, added and checked in. */
+function WalkIn({
+  name,
+  onAdd,
+  pending,
+}: {
+  name: string;
+  onAdd: (email: string) => void;
+  pending: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  return (
+    <form
+      className="mx-auto flex max-w-md flex-col items-stretch gap-3 text-left"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (email.trim()) onAdd(email);
+      }}
+    >
+      <span className="text-center">Not on the list. Add {name.trim()} and check them in?</span>
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Their email"
+        aria-label={`Email for ${name.trim()}`}
+        className="bg-chrome-foreground/10 h-14 rounded-full px-5 text-lg outline-none focus-visible:outline-2 focus-visible:outline-current"
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        className="bg-chrome-foreground text-chrome h-14 rounded-full text-lg font-semibold disabled:opacity-60"
+      >
+        Add and check in
+      </button>
+    </form>
   );
 }

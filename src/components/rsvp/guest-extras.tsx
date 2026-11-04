@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Check, Copy, Gift, Share2, Ticket, Users } from "lucide-react";
+import { Banknote, Check, Copy, Gift, Share2, Ticket, Users } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, useTransition } from "react";
 
@@ -353,7 +353,7 @@ export function BringList({
                   {item.mine
                     ? "You're bringing this"
                     : item.names.length > 0
-                      ? `${item.names.join(", ")}${full ? "" : ` · ${item.slots - item.taken} more needed`}`
+                      ? `${item.names.join(", ")}${full ? "" : `, ${item.slots - item.taken} more needed`}`
                       : full
                         ? "Covered"
                         : item.slots > 1

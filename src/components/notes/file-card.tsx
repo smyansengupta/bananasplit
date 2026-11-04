@@ -6,14 +6,14 @@ import {
   FileType2,
   Lock,
   Presentation,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { familyOf, formatBytes, type FileFamily } from "@/lib/files/types";
 import { cn } from "@/lib/utils";
 
-export const FILE_ICONS: Record<FileFamily, LucideIcon> = {
+export const FILE_ICONS: Record<FileFamily, IconComponent> = {
   pdf: FileType2,
   image: FileImage,
   word: FileText,
@@ -59,15 +59,14 @@ export function FileCard({ file, orgSlug }: { file: FileCardData; orgSlug: strin
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 font-medium">
-          <span className="truncate">{file.name}</span>
+          <span className="min-w-0 break-words">{file.name}</span>
           {file.visibility === "PRIVATE" && (
             <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Only you" />
           )}
         </span>
-        <span className="text-muted-foreground block truncate text-xs">
-          {FILE_LABELS[family]} · {formatBytes(file.sizeBytes)} ·{" "}
-          {file.uploadedBy.name ?? "A member"},{" "}
-          {formatDistanceToNow(file.createdAt, { addSuffix: true })}
+        <span className="text-muted-foreground block text-xs">
+          {FILE_LABELS[family]}, {formatBytes(file.sizeBytes)}, {file.uploadedBy.name ?? "A member"}
+          , {formatDistanceToNow(file.createdAt, { addSuffix: true })}
         </span>
       </span>
     </Link>

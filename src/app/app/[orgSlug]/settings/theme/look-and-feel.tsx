@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, TriangleAlert } from "@/components/icons";
 import { useId, useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -57,11 +57,7 @@ export function LookAndFeel({
 
   return (
     <div className="divide-border/70 -my-1 divide-y">
-      <Row
-        id={`${groupId}-accent`}
-        title="Accent colour"
-        hint="Highlights, badges, selected states, progress and the RSVP page's date tile."
-      >
+      <Row id={`${groupId}-accent`} title="Accent colour" hint="Highlights, badges, progress.">
         <AccentField
           group={`${groupId}-accent-mode`}
           value={style.accent}
@@ -70,11 +66,7 @@ export function LookAndFeel({
           onChange={(accent) => set({ accent })}
         />
       </Row>
-      <Row
-        id={`${groupId}-glow`}
-        title="Glow"
-        hint="The light behind the top of the page, and the soft halo on create buttons, the selected item and focus."
-      >
+      <Row id={`${groupId}-glow`} title="Glow" hint="Page halo and focus glow.">
         <GlowField
           group={`${groupId}-glow-mode`}
           value={style.glow}
@@ -82,7 +74,7 @@ export function LookAndFeel({
           onChange={(glow) => set({ glow })}
         />
       </Row>
-      <Row id={`${groupId}-radius`} title="Corners" hint="Cards, buttons, fields and menus.">
+      <Row id={`${groupId}-radius`} title="Corners">
         <Choices
           name={`${groupId}-radius`}
           labelledBy={`${groupId}-radius`}
@@ -98,11 +90,7 @@ export function LookAndFeel({
           )}
         />
       </Row>
-      <Row
-        id={`${groupId}-size`}
-        title="Text size"
-        hint="Scales text and spacing together, so it also sets how dense the app feels."
-      >
+      <Row id={`${groupId}-size`} title="Text size" hint="Also sets density.">
         <Choices
           name={`${groupId}-size`}
           labelledBy={`${groupId}-size`}
@@ -122,7 +110,7 @@ export function LookAndFeel({
           )}
         />
       </Row>
-      <Row id={`${groupId}-heading`} title="Headings" hint="Page titles and big numbers.">
+      <Row id={`${groupId}-heading`} title="Headings">
         <Choices
           name={`${groupId}-heading`}
           labelledBy={`${groupId}-heading`}
@@ -149,7 +137,7 @@ export function LookAndFeel({
           )}
         />
       </Row>
-      <Row id={`${groupId}-body`} title="Body text" hint="Everything you read and click.">
+      <Row id={`${groupId}-body`} title="Body text">
         <Choices
           name={`${groupId}-body`}
           labelledBy={`${groupId}-body`}
@@ -183,7 +171,7 @@ function Row({
 }: {
   id: string;
   title: string;
-  hint: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -192,7 +180,7 @@ function Row({
         <p id={id} className="heading text-sm">
           {title}
         </p>
-        <p className="text-muted-foreground text-xs">{hint}</p>
+        {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -229,7 +217,6 @@ function Choices<T extends string>({
           {render?.(option.value)}
           <span className="space-y-0.5">
             <span className="block font-semibold">{option.label}</span>
-            <span className="text-muted-foreground block text-xs">{option.hint}</span>
           </span>
         </label>
       ))}
@@ -284,7 +271,6 @@ function AccentField({
             />
             <span className="space-y-0.5">
               <span className="block font-semibold">{option.label}</span>
-              <span className="text-muted-foreground block text-xs">{option.hint}</span>
             </span>
           </label>
         ))}
@@ -443,7 +429,6 @@ function GlowField({
             />
             <span className="space-y-0.5">
               <span className="block font-semibold">{option.label}</span>
-              <span className="text-muted-foreground block text-xs">{option.hint}</span>
             </span>
           </label>
         ))}

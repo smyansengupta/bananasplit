@@ -67,7 +67,7 @@ export async function storeNoteState(
   // saves nothing, like every other write (withOrgAction's space check).
   const space = await ctx.db.organization.findUnique({
     where: { id: ctx.organizationId },
-    select: { kind: true, plan: true, trialEndsAt: true },
+    select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true },
   });
   if (space && spaceRefusal(space, { feature: "files" })) return { ok: false, reason: "forbidden" };
 

@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { serialized } from "@/test/serialized-request";
+
 /**
  * Upload validation for /api/profile/avatar (Phase 2): same-site and
  * signed-in checks, the 4 MB cap (413 from Content-Length before the body
@@ -121,7 +123,7 @@ describe("POST /api/profile/avatar", () => {
   });
 
   it("refuses a 4.1 MB file with 413 even when the length header fits the envelope", async () => {
-    const response = await POST(formRequest({ bytes: png(Math.round(4.1 * MB)) }));
+    const response = await POST(await serialized(formRequest({ bytes: png(Math.round(4.1 * MB)) })));
     expect(response.status).toBe(413);
     expect(replaceMock).not.toHaveBeenCalled();
   });

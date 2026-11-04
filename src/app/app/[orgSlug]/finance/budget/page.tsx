@@ -8,12 +8,16 @@ import { planGate } from "@/server/billing/plan-gate";
 import { FinanceAccessGate } from "../finance-access-gate";
 import { getCategoriesForPeriod, getOrgPeriods } from "../queries";
 
-export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/finance/budget">) {
+export default async function BudgetPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/finance/budget">) {
   const { orgSlug } = await params;
+  const asked = (await searchParams).period;
   const planLock = await planGate(orgSlug, "finance");
   if (planLock) return planLock;
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
-  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  // Not an owner, admin or treasurer: who is, and what to do instead (never an error page).
   if (!can({ role }, "finance.manage")) {
     return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
   }
@@ -22,7 +26,10 @@ export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/f
     org.id,
     async ({ db }) => {
       const periods = await getOrgPeriods(db, org.id);
-      const activePeriod = periods.find((p) => p.isActive) ?? null;
+      const active = periods.find((p) => p.isActive) ?? null;
+      // ?period= looks at another period without making it the active one.
+      const activePeriod =
+        (typeof asked === "string" ? periods.find((p) => p.id === asked) : null) ?? active;
       if (!activePeriod) return { periods, activePeriod, categories: [], spent: [], counts: [] };
       const categories = await getCategoriesForPeriod(db, org.id, activePeriod.id);
       // Spent = money out that counts toward the balance: not voided, and not
@@ -53,6 +60,7 @@ export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/f
   return (
     <BudgetView
       orgId={org.id}
+      orgSlug={orgSlug}
       periods={periods.map((p) => ({
         id: p.id,
         label: p.label,
@@ -60,7 +68,8 @@ export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/f
         endsOn: toDateValue(p.endsOn),
         isActive: p.isActive,
       }))}
-      activePeriodId={activePeriod?.id ?? null}
+      activePeriodId={periods.find((p) => p.isActive)?.id ?? null}
+      viewedPeriodId={activePeriod?.id ?? null}
       categories={categories.map((c) => ({
         id: c.id,
         name: c.name,

@@ -1,3 +1,4 @@
+import { TASK_LAYOUTS } from "@/app/app/[orgSlug]/tasks/views";
 import type { SectionId } from "@/lib/nav/sidebar";
 
 /**
@@ -13,14 +14,15 @@ import type { SectionId } from "@/lib/nav/sidebar";
 /** `g` then one of these opens that section (when the club shows it). */
 export const GO_TO_KEYS: Record<SectionId, string> = {
   overview: "o",
+  inbox: "i",
   tasks: "t",
   calendar: "c",
-  "find-a-time": "a",
-  rsvps: "r",
+  meetings: "r",
   notes: "f",
   people: "p",
-  polls: "v",
+  forms: "v",
   databases: "d",
+  integrations: "n",
   finance: "m",
 };
 
@@ -151,9 +153,11 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
   if (has("tasks")) {
     const tasks: ShortcutRow[] = [];
     if (input.taskViews) {
+      // Built from the switcher itself, so the sheet can't name a layout
+      // that isn't there or put them in the wrong order.
       tasks.push({
-        keys: [["1"], ["2"], ["3"], ["4"], ["5"], ["6"]],
-        label: "Board, Week, List, Table, Roadmap or Dashboard",
+        keys: TASK_LAYOUTS.map((_, i) => [String(i + 1)]),
+        label: listOf(TASK_LAYOUTS.map((l) => l.label)),
       });
     }
     tasks.push(
@@ -178,6 +182,11 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
             keys: [["T"], ["M"], ["F"], ["W"]],
             label: "Due: today, tomorrow, Friday, next week (in the date menu)",
           },
+          {
+            keys: [["@"], ["#"]],
+            label:
+              "In a new task's title: @name sets the owner, #tag adds a tag, fri sets the date",
+          },
         ],
       },
       {
@@ -194,5 +203,24 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
       },
     );
   }
+  if (has("inbox")) {
+    groups.push({
+      title: "Inbox",
+      rows: [
+        { keys: [["J"], ["K"]], label: "Next or previous item" },
+        { keys: [["Enter"]], label: "Open it beside the list" },
+        { keys: [["O"]], label: "Open its page" },
+        { keys: [["E"], ["D"]], label: "Done (a task or an update)" },
+        { keys: [["S"]], label: "Snooze until tomorrow" },
+      ],
+    });
+  }
   return groups;
+}
+
+/** "A, B or C". */
+function listOf(items: readonly string[]): string {
+  return items.length <= 1
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 }

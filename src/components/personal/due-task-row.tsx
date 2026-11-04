@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 /**
  * One "Due soon" row: a checkbox that marks the task done in its own space
  * through the tasks action (the same checks as on the task's page, so a
- * paused club or a task you can't change says why), and the task's link.
+ * task you can't change says why), and the task's link.
  * The action refreshes the page, which drops the row; until then it shows
  * ticked and struck through.
  */
@@ -30,7 +30,7 @@ export function DueTaskRow({
   href: string;
   /** Which space it's in ("Personal", a club's name). */
   space: string;
-  /** "Overdue · Fri, Oct 9", "Today", "Thu, Oct 15". */
+  /** "Overdue, Fri, Oct 9", "Today", "Thu, Oct 15". */
   due: string;
   overdue: boolean;
 }) {
@@ -62,13 +62,13 @@ export function DueTaskRow({
         <Link
           href={href}
           className={cn(
-            "block truncate text-sm font-medium hover:underline",
+            "block text-sm font-medium break-words hover:underline",
             done && "text-muted-foreground line-through",
           )}
         >
           {title}
         </Link>
-        <p className="text-muted-foreground truncate text-xs">{space}</p>
+        <p className="text-muted-foreground text-xs break-words">{space}</p>
         {error && (
           <p role="alert" className="text-destructive mt-0.5 text-xs">
             {error}

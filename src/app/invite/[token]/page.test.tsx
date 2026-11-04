@@ -75,17 +75,17 @@ describe("/invite/[token], signed out", () => {
     expect(html).toContain("Continue with Google");
     expect(html).toContain(`href="${SIGN_IN_HREF}"`);
     expect(html).toContain(`href="${SIGN_UP_HREF}"`);
-    expect(html).toContain("with new@example.edu. You'll come back here.");
+    expect(html).toContain("with new@example.edu.");
     expect(html).not.toContain("New here?");
   });
 
-  it("offers a Sign in button and account creation without the Google client", async () => {
+  it("offers a Log in button and account creation without the Google client", async () => {
     vi.stubEnv("AUTH_GOOGLE_ID", "");
     vi.stubEnv("AUTH_GOOGLE_SECRET", "");
     const html = await render();
     expect(html).not.toContain("Continue with Google");
     expect(html).toContain(`href="${SIGN_IN_HREF}"`);
-    expect(html).toContain(">Sign in</a>");
+    expect(html).toContain(">Log in</a>");
     expect(html).toContain("New here?");
     expect(html).toContain(`href="${SIGN_UP_HREF}"`);
   });
@@ -96,25 +96,24 @@ describe("/invite/[token], signed in", () => {
     mocks.getSession.mockResolvedValue({ user: { id: "u_new", email: "new@example.edu" } });
   });
 
-  it("runs step 1 of the profile first, coming straight back", async () => {
+  it("readies a brand-new account first, coming straight back", async () => {
     mocks.needsProfileSetup.mockResolvedValue(true);
     await expect(render()).rejects.toMatchObject({
-      url: `/onboarding/profile/basics?callbackUrl=${encodeURIComponent(`/invite/${TOKEN}`)}`,
+      url: `/onboarding?callbackUrl=${encodeURIComponent(`/invite/${TOKEN}`)}`,
     });
   });
 
-  it("previews the club, then offers Join, with no price or trial", async () => {
+  it("previews the organization, then offers Join, with no price or trial", async () => {
     const html = await render();
     expect(html).toContain("Join Claude Builders Club");
     expect(html).toContain("You're invited to join as a member.");
-    expect(html).toContain("Invite for new@example.edu");
     expect(html).not.toMatch(/trial|\$\d|per month/i);
   });
 
   it("keeps the verified-address gate: the link alone doesn't prove the mailbox", async () => {
     mocks.getUserIdentity.mockResolvedValue({ email: "new@example.edu", emailVerified: null });
     const html = await render();
-    expect(html).toContain("Verify your email address to accept this invite.");
+    expect(html).toContain("Confirm your email first.");
     expect(html).not.toContain("Invite for new@example.edu");
   });
 

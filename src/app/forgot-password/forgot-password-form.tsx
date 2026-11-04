@@ -9,6 +9,7 @@ import { pill } from "@/components/brand/pill";
 import { cn } from "@/lib/utils";
 
 import { requestPasswordResetAction } from "./actions";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 
 /** Ask for a reset link; then "check your email", the same whether or not the address has an account. */
 export function ForgotPasswordForm({
@@ -44,11 +45,14 @@ export function ForgotPasswordForm({
 
   return (
     <>
-      <AuthTitle
-        title="Forgot your password?"
-        description="Enter your account's email and we'll send you a link to set a new one."
-      />
-      <form action={formAction} className="flex flex-col gap-5">
+      <AuthTitle title="Forgot your password?" description="We'll email you a link." />
+      <form
+        noValidate
+        onSubmit={highlightInvalid}
+        onInput={clearInvalid}
+        action={formAction}
+        className="flex flex-col gap-5"
+      >
         <BrandField id="email" label="Email">
           <BrandInput
             id="email"
@@ -57,7 +61,7 @@ export function ForgotPasswordForm({
             required
             autoComplete="email"
             autoFocus
-            placeholder="you@example.com"
+            placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />

@@ -58,6 +58,22 @@ describe("job-kind registry rules ('Background jobs' decision, item 7)", () => {
     ).toBe(false);
   });
 
+  it("reminder payloads name their offset and start, and the forms queued before offsets still parse", () => {
+    const fanout = jobKind("rsvp-fanout").payload;
+    const email = jobKind("rsvp-email").payload;
+    const startsAt = "2026-11-02T23:00:00.000Z";
+    expect(fanout.safeParse({ eventId: "e_1", stage: "reminder", offsetMinutes: 60, startsAt }).success).toBe(true);
+    expect(fanout.safeParse({ eventId: "e_1", stage: "reminder", startsAt }).success).toBe(false);
+    expect(fanout.safeParse({ eventId: "e_1", stage: "reminder", offsetMinutes: 40321, startsAt }).success).toBe(false);
+    expect(fanout.safeParse({ eventId: "e_1", stage: "day", startsAt }).success).toBe(true);
+    expect(fanout.safeParse({ eventId: "e_1", stage: "cancelled" }).success).toBe(true);
+    expect(
+      email.safeParse({ registrationId: "r_1", template: "reminder", offsetMinutes: 10, startsAt }).success,
+    ).toBe(true);
+    expect(email.safeParse({ registrationId: "r_1", template: "reminder", startsAt }).success).toBe(false);
+    expect(email.safeParse({ registrationId: "r_1", template: "reminder-hour", startsAt }).success).toBe(true);
+  });
+
   it("only implemented kinds are claimable, and the lease map covers them", () => {
     const implemented = implementedKinds();
     expect(implemented).toEqual(

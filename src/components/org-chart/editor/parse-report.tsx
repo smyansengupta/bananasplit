@@ -1,4 +1,4 @@
-import { BookOpenText, Cpu, FileQuestion, LayoutTemplate, PencilLine } from "lucide-react";
+import { BookOpenText, Cpu, FileQuestion, LayoutTemplate, PencilLine } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { claudeModelLabel, formatUsd } from "@/lib/org-chart/models";
@@ -6,7 +6,7 @@ import type { ParseMethod, ParseReport, ParseShape } from "@/lib/org-chart/types
 
 /**
  * Where this draft came from and what was understood, shown above the
- * editor so an admin knows what to check. Nothing here changes the draft;
+ * editor so whoever is editing knows what to check. Nothing here changes the draft;
  * the rule that nothing publishes without a human review is unchanged.
  */
 
@@ -31,7 +31,13 @@ export interface ParseReportPanelProps {
   confidence: number | null;
 }
 
-export function ParseReportPanel({ method, report, model, costUsd, confidence }: ParseReportPanelProps) {
+export function ParseReportPanel({
+  method,
+  report,
+  model,
+  costUsd,
+  confidence,
+}: ParseReportPanelProps) {
   if (!method) return null;
   const score = report?.confidence ?? confidence;
 
@@ -40,7 +46,7 @@ export function ParseReportPanel({ method, report, model, costUsd, confidence }:
       case "BUILTIN":
         return {
           icon: BookOpenText,
-          title: "Read by the portal's own parser",
+          title: "Read by Bananasplit's parser",
           detail: "No Claude API key was used and nothing was billed.",
         };
       case "CLAUDE":
@@ -48,14 +54,15 @@ export function ParseReportPanel({ method, report, model, costUsd, confidence }:
           icon: Cpu,
           title: `Read by ${claudeModelLabel(model)}`,
           detail:
-            "The portal's own parser could not read this document, so your organization's Claude key was used." +
+            "Bananasplit's parser couldn't read this document, so your organization's Claude key was used." +
             (costUsd !== null ? ` This import cost about ${formatUsd(costUsd)}.` : ""),
         };
       case "TEMPLATE":
         return {
           icon: LayoutTemplate,
-          title: "Started from the club template",
-          detail: "The common club roles are laid out for you. Fill in the people and edit anything that does not fit.",
+          title: "Started from the starter template",
+          detail:
+            "The common leadership roles are laid out for you. Fill in the people and edit anything that does not fit.",
         };
       case "MANUAL":
         return { icon: PencilLine, title: "Built by hand", detail: null };
@@ -64,22 +71,28 @@ export function ParseReportPanel({ method, report, model, costUsd, confidence }:
   const Icon = heading.icon;
 
   return (
-    <section aria-label="How this draft was read" className="space-y-3 rounded-xl border p-3 text-sm">
+    <section
+      aria-label="How this draft was read"
+      className="space-y-3 rounded-xl border p-3 text-sm"
+    >
       <div className="flex flex-wrap items-start gap-3">
         <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium">{heading.title}</p>
             {method === "BUILTIN" && score !== null && (
-              <Badge variant={score >= 0.9 ? "secondary" : "outline"}>{percent(score)} understood</Badge>
+              <Badge variant={score >= 0.9 ? "secondary" : "outline"}>
+                {percent(score)} understood
+              </Badge>
             )}
           </div>
           {heading.detail && <p className="text-muted-foreground">{heading.detail}</p>}
           {report && report.positions > 0 && (
             <p className="text-muted-foreground">
               Found {report.positions} position{report.positions === 1 ? "" : "s"} written as{" "}
-              {SHAPE_LABEL[report.shape]}: {report.identified} name a person or are marked open, {report.linked} report
-              to another position, and {report.linesUsed} of {report.linesConsidered} lines were placed.
+              {SHAPE_LABEL[report.shape]}: {report.identified} name a person or are marked open,{" "}
+              {report.linked} report to another position, and {report.linesUsed} of{" "}
+              {report.linesConsidered} lines were placed.
             </p>
           )}
         </div>
@@ -97,11 +110,12 @@ export function ParseReportPanel({ method, report, model, costUsd, confidence }:
         <details>
           <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
             <FileQuestion className="size-4" aria-hidden="true" />
-            {report.orphanCount} line{report.orphanCount === 1 ? "" : "s"} could not be placed under a position
+            {report.orphanCount} line{report.orphanCount === 1 ? "" : "s"} could not be placed under
+            a position
           </summary>
           <p className="text-muted-foreground mt-1">
-            Nothing was invented from these. If any of them belong to a role, add them to that position&apos;s
-            responsibilities.
+            Nothing was invented from these. If any of them belong to a role, add them to that
+            position&apos;s responsibilities.
           </p>
           <ul className="text-muted-foreground mt-1 max-h-48 space-y-0.5 overflow-auto pl-1">
             {report.orphanLines.map((line, i) => (

@@ -1,7 +1,6 @@
 "use client";
 
-import { Download } from "lucide-react";
-import Link from "next/link";
+import { Download } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -18,6 +17,8 @@ export interface ExportRow {
   expiresAt: string | null;
   downloadCount: number;
   requestedByName: string | null;
+  /** A signed download link when it's ready and the viewer may download it. */
+  downloadHref: string | null;
 }
 
 const fmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -40,13 +41,11 @@ const STATUS_VARIANT: Record<string, "success" | "destructive" | "info" | "secon
 
 export function ExportCard({
   orgId,
-  orgSlug,
   exports,
   expiryDays,
   personal = false,
 }: {
   orgId: string;
-  orgSlug: string;
   exports: ExportRow[];
   expiryDays: number;
   /** A Personal space: only you can download it, and there's no org chart. */
@@ -55,35 +54,32 @@ export function ExportCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  // Export again shows on the latest export, when it failed.
+  const latestFailed = exports[0]?.status === "FAILED" ? exports[0].id : null;
+
+  const request = (retryOf?: string) =>
+    startTransition(async () => {
+      setMessage(null);
+      const result = await requestExportAction(orgId, retryOf);
+      if (result.error) setMessage({ tone: "error", text: result.error });
+      else {
+        setMessage({ tone: "ok", text: "Requested. We'll notify you." });
+        router.refresh();
+      }
+    });
 
   return (
     <SettingsCard
       title="Export all data"
       description={
         personal
-          ? `A zip of your Personal tasks, calendar, polls and event pages, with their RSVPs and answers (JSON lines and CSV). It is prepared in the background and you get a notification when it is ready. Only you can download it, for ${expiryDays} days. One export per day.`
-          : `A zip of every table (JSON lines and CSV), uploaded receipts and org chart files. It is prepared in the background and you get a notification when it is ready. Only a signed-in owner can download it, for ${expiryDays} days. Integration keys are never included. One export per day.`
+          ? `A zip of everything in Personal (JSON and CSV). Only you can download it, for ${expiryDays} days. One per day.`
+          : `A zip of everything (JSON and CSV), receipts included, keys left out. Only owners can download it, for ${expiryDays} days. One per day.`
       }
       status={message && <SettingsStatus status={message} />}
       footer={
-        <Button
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              setMessage(null);
-              const result = await requestExportAction(orgId);
-              if (result.error) setMessage({ tone: "error", text: result.error });
-              else {
-                setMessage({
-                  tone: "ok",
-                  text: "Export requested. You'll be notified when it's ready.",
-                });
-                router.refresh();
-              }
-            })
-          }
-        >
-          {isPending ? "Requesting…" : "Export all data"}
+        <Button disabled={isPending} onClick={() => request()}>
+          {isPending ? "Requesting…" : "Export"}
         </Button>
       }
     >
@@ -99,20 +95,30 @@ export function ExportCard({
                   {fmt.format(new Date(e.createdAt))}
                 </span>
                 <span className="text-muted-foreground">
-                  {e.requestedByName ? ` · ${e.requestedByName}` : ""}
-                  {e.downloadCount > 0 ? ` · downloaded ${e.downloadCount}×` : ""}
+                  {e.requestedByName ? `, ${e.requestedByName}` : ""}
+                  {e.downloadCount > 0 ? `, downloaded ${e.downloadCount}×` : ""}
                 </span>
               </span>
               <span className="flex items-center gap-2">
                 <Badge variant={STATUS_VARIANT[e.status] ?? "secondary"}>
                   {STATUS[e.status] ?? e.status}
                 </Badge>
-                {e.status === "READY" && (
+                {e.id === latestFailed && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => request(e.id)}
+                  >
+                    Export again
+                  </Button>
+                )}
+                {e.downloadHref && (
                   <Button asChild variant="outline" size="sm">
-                    <Link href={`/app/${orgSlug}/settings/danger/exports/${e.id}`}>
+                    <a href={e.downloadHref}>
                       <Download data-icon="inline-start" aria-hidden="true" />
                       Download
-                    </Link>
+                    </a>
                   </Button>
                 )}
               </span>

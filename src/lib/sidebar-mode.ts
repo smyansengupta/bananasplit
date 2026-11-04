@@ -23,7 +23,7 @@ export const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const COOKIE_PREFIX = "sidebar_";
 
 /** FNV-1a (32-bit) in base 36: a short, stable, cookie-safe key for a user id. */
-function shortHash(text: string): string {
+export function shortHash(text: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);

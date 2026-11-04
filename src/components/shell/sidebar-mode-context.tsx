@@ -51,20 +51,24 @@ export function fadeLabel(rail: boolean): string {
   );
 }
 
-/** Quiet text, hover and hairline colours for the sidebar's current surface. */
+/**
+ * Quiet text, hover and hairline colours for the sidebar's current surface.
+ * A hover is a light wash of the accent, the same colour that fills the row
+ * you're on.
+ */
 export function surfaceTone(chrome: boolean) {
   return chrome
     ? {
         text: "text-chrome-foreground/75",
         quiet: "text-chrome-foreground/60",
-        hover: "hover:bg-chrome-foreground/10 hover:text-chrome-foreground",
+        hover: "hover:bg-chrome-accent/20 hover:text-chrome-foreground",
         line: "bg-chrome-foreground/15",
         border: "border-chrome-foreground/15",
       }
     : {
         text: "text-sidebar-foreground/75",
         quiet: "text-sidebar-foreground/60",
-        hover: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        hover: "hover:bg-brand-accent/15 hover:text-sidebar-foreground",
         line: "bg-sidebar-border",
         border: "border-sidebar-border",
       };

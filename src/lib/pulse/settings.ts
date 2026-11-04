@@ -36,7 +36,7 @@ export const PULSE_HOURS = Array.from({ length: 24 }, (_, hour) => ({
 }));
 
 export const PULSE_AUDIENCES: readonly { value: PulseAudience; label: string; hint: string }[] = [
-  { value: "EVERYONE", label: "Everyone", hint: "Every member of the club." },
+  { value: "EVERYONE", label: "Everyone", hint: "Every member of the organization." },
   { value: "OFFICERS", label: "Officers", hint: "Owners, admins and treasurers." },
 ];
 
@@ -88,7 +88,9 @@ export function pulseRecipients<M extends { userId: string; role: Role }>(
 }
 
 /** "Fridays at 5:00 PM, to everyone" for the settings page and the archive. */
-export function describePulseSchedule(settings: Pick<PulseSettings, "pulseDay" | "pulseHourLocal" | "pulseAudience">): string {
+export function describePulseSchedule(
+  settings: Pick<PulseSettings, "pulseDay" | "pulseHourLocal" | "pulseAudience">,
+): string {
   const day = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][
     settings.pulseDay
   ];

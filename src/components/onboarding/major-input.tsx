@@ -1,6 +1,6 @@
 "use client";
 
-import { GraduationCap } from "lucide-react";
+import { GraduationCap } from "@/components/icons";
 import { useId, useState } from "react";
 
 import { Input } from "@/components/ui/input";

@@ -33,6 +33,8 @@ vi.mock("@/app/app/[orgSlug]/notes/comment-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/notes/version-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/notes/embed-actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({}));
+vi.mock("@/app/app/[orgSlug]/links/actions", () => ({ addLinkAction: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/search/actions", () => ({ searchWorkspaceAction: vi.fn() }));
 // The AI import dialog (and the task and event actions behind it) isn't under test here.
 vi.mock("@/components/ai/action-items-import", () => ({ ActionItemsImport: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));

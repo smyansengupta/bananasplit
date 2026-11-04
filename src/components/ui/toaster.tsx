@@ -1,17 +1,21 @@
 "use client";
 
-import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { CheckCircle2, Loader2, X, XCircle } from "@/components/icons";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 /**
- * Small notices in the corner: "Note deleted · Undo". The store lives in
- * this module, so a toast raised just before a navigation (delete a note,
- * go back to the list) is still there on the next page; <Toaster /> is
- * mounted once in the app shell.
+ * Small notices in the corner: "Deleted", with Undo beside it. The store
+ * lives in this module, so a toast raised just before a navigation (delete
+ * a note, go back to the list) is still there on the next page; <Toaster />
+ * is mounted once in the app shell.
  *
- *   toast({ title: "Note deleted", action: { label: "Undo", run: () => restoreNote(...) } })
+ *   toast({ title: "Deleted", action: { label: "Undo", run: () => restoreNote(...) } })
+ *
+ * A success toast is a word or two ("Deleted", "Saved", "Copied"); the
+ * thing it happened to is already on screen, so it isn't repeated. Errors
+ * keep a description that says what to do.
  */
 
 export interface ToastAction {
@@ -68,6 +72,40 @@ export function toast(input: ToastInput): number {
   return id;
 }
 
+/**
+ * Does something that can be taken back, at once, and offers Undo: the
+ * app's answer to "Are you sure?". Nothing asks first unless it truly
+ * can't be undone (deleting the organization, emptying the trash, revoking
+ * an app); everything else runs and then says so.
+ *
+ *   await undoable({ title: "Deleted", run: () => deleteNote(id), undo: () => restoreNote(id) })
+ *
+ * `run` returns an error message (or throws) to fail; then an error toast
+ * shows instead and this resolves false.
+ */
+export async function undoable({
+  title,
+  run,
+  undo,
+}: {
+  title: ReactNode;
+  run: () => Promise<string | null | undefined | void> | string | null | undefined | void;
+  undo: ToastAction["run"];
+}): Promise<boolean> {
+  let error: string | null | undefined | void;
+  try {
+    error = await run();
+  } catch {
+    error = "That didn't work. Try again.";
+  }
+  if (typeof error === "string" && error) {
+    toast({ title: error, tone: "error" });
+    return false;
+  }
+  toast({ title, action: { label: "Undo", run: undo } });
+  return true;
+}
+
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -77,8 +115,40 @@ const snapshot = () => items;
 const NO_TOASTS: ToastItem[] = [];
 const serverSnapshot = () => NO_TOASTS;
 
+/**
+ * Ctrl Z (⌘Z) undoes the newest toast that offers Undo, when focus isn't in
+ * a field (where Ctrl Z belongs to the text). The toast handles it like a
+ * click on its Undo, so an error shows the same way.
+ */
+function useUndoKey() {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+      const latest = [...items].reverse().find((t) => t.action?.label === "Undo");
+      if (!latest) return;
+      event.preventDefault();
+      undoRequests.add(latest.id);
+      emit();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+}
+
+/** Toasts whose Undo was asked for by the keyboard; each card runs its own. */
+const undoRequests = new Set<number>();
+
 export function Toaster() {
   const list = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  useUndoKey();
   return (
     <div
       aria-live="polite"
@@ -96,6 +166,18 @@ export function Toaster() {
 function ToastCard({ item }: { item: ToastItem }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  // Ctrl Z asked for this one: the same as clicking its Undo.
+  const requested = useSyncExternalStore(
+    subscribe,
+    () => undoRequests.has(item.id),
+    () => false,
+  );
+  useEffect(() => {
+    if (!requested) return;
+    undoRequests.delete(item.id);
+    undoRef.current?.click();
+  }, [requested, item.id]);
   const Icon = item.tone === "error" ? XCircle : item.tone === "success" ? CheckCircle2 : null;
   return (
     <div
@@ -129,7 +211,7 @@ function ToastCard({ item }: { item: ToastItem }) {
           (item.description || error) && "py-1",
         )}
       >
-        <p className="truncate font-semibold">{item.title}</p>
+        <p className="font-semibold break-words">{item.title}</p>
         {item.description && (
           <p className="mt-0.5 text-xs text-[color-mix(in_oklab,var(--chrome-foreground)_66%,transparent)]">
             {item.description}
@@ -139,7 +221,9 @@ function ToastCard({ item }: { item: ToastItem }) {
       </div>
       {item.action && (
         <button
+          ref={undoRef}
           type="button"
+          aria-keyshortcuts={item.action.label === "Undo" ? "Control+Z Meta+Z" : undefined}
           disabled={running}
           onClick={async () => {
             setRunning(true);

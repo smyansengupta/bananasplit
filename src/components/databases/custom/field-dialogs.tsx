@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "@/components/icons";
 import { useState, useTransition, type CSSProperties } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -138,7 +138,7 @@ export function FieldNameDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Rename field</DialogTitle>
-          <DialogDescription>The data stays put; only the name changes.</DialogDescription>
+          <DialogDescription className="sr-only">Rename the field.</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -195,7 +195,7 @@ export function ChoicesDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Choices for “{field.name}”</DialogTitle>
-          <DialogDescription>Renaming a choice updates every row that has it.</DialogDescription>
+          <DialogDescription className="sr-only">Edit the choices.</DialogDescription>
         </DialogHeader>
         <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
           {choices.map((c, i) => (

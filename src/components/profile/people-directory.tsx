@@ -1,6 +1,18 @@
 "use client";
 
-import { ArrowUpRight, ChevronDown, LayoutGrid, List, Search, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CircleDot,
+  Clock,
+  LayoutGrid,
+  List,
+  Search,
+  Network,
+  Users,
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -9,41 +21,61 @@ import { loadPersonSheetAction, searchPeopleAction } from "@/app/app/[orgSlug]/p
 import { EmptyState } from "@/components/empty-state";
 import { useMediaQuery } from "@/components/org-chart/use-media-query";
 import { PinToggle } from "@/components/pins/pins-context";
+import { useLiveOnline } from "@/components/shell/presence-store";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { SearchField } from "@/components/ui/search-field";
 import { Segmented, chipClass } from "@/components/ui/segmented";
+import { ExpandChip, FilterPill, FiltersMenu } from "@/components/ui/toolbar-chips";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { personHref } from "@/lib/profile/href";
+import { isTypingTarget } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
-import type { DirectoryPerson, DirectoryTeam, PeopleSearchResult, PersonSheet } from "@/server/profiles/directory";
+import type { OrgChartSection } from "@/app/app/[orgSlug]/org-chart/chart-section";
+import type {
+  DirectoryPerson,
+  DirectoryTeam,
+  PeopleSearchResult,
+  PersonSheet,
+} from "@/server/profiles/directory";
 
-import { applyFilters, groupPeople, localMatch, teamName, type PeopleGroup } from "./directory-model";
+import { applyFilters, groupPeople, localMatch, type PeopleGroup } from "./directory-model";
 import {
   DIRECTORY_ROLES,
   directorySearch,
   NO_TEAM_KEY,
   type DirectoryQuery,
   type DirectoryRole,
+  type DirectorySort,
 } from "./directory-query";
 import { PersonProfile, ROLE_LABELS } from "./person-profile";
+import { majorAndYear } from "./profile-links";
 
 /**
- * The people directory (Moonstone 12.1 and 12.2): search as you type
- * (the database does the matching, typo-tolerant, with an instant local
- * preview while it answers), filter pills for team, role, year and Free
- * now, sort by team, name or newest, grid or dense list, and the profile
- * sheet beside the list (full screen on phones). ↑ ↓ move between people,
+ * The people directory (Moonstone 12.1 and 12.2), with the same toolbar as
+ * Tasks: the view (grid, list, or the published org chart), who to show (everyone, online
+ * now, free now), one Filters chip (the sort, team, role, year), and the
+ * search at the right ("/" focuses it, the database does the matching,
+ * typo-tolerant, with an instant local preview while it answers), and
+ * what's narrowing the list underneath, each removable. A green dot is
+ * someone in the app now, kept live by the shell's heartbeat
+ * (presence-store.ts). The profile opens over the list (full screen on
+ * phones). ↑ ↓ move between people,
  * Esc closes the sheet, and the whole state lives in the URL (?person=).
  * Big clubs render in pages of RENDER_STEP as you scroll, with an A-Z rail
  * when sorted by name.
@@ -64,6 +96,8 @@ export interface PeopleDirectoryProps {
   initialSheet: PersonSheet | null;
   search?: (orgId: string, q: string) => Promise<PeopleSearchResult>;
   loadSheet?: (orgId: string, userId: string) => Promise<PersonSheet | null>;
+  /** The Org chart view (?view=chart), rendered on the server. */
+  chart?: OrgChartSection;
 }
 
 type Row = { kind: "header"; group: PeopleGroup } | { kind: "person"; person: DirectoryPerson };
@@ -78,34 +112,66 @@ export function PeopleDirectory({
   orgSlug,
   orgTimezone,
   viewerId,
-  people,
+  people: rendered,
   teams,
   total,
   initial,
   initialSheet,
   search = searchPeopleAction,
   loadSheet = loadPersonSheetAction,
+  chart,
 }: PeopleDirectoryProps) {
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const isPhone = useMediaQuery("(max-width: 767px)");
   const [query, setQuery] = useState<DirectoryQuery>(initial);
   const [results, setResults] = useState<{ q: string; result: PeopleSearchResult } | null>(null);
   const [limit, setLimit] = useState(RENDER_STEP);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sheets, setSheets] = useState<Map<string, PersonSheet>>(
     () => new Map(initialSheet ? [[initialSheet.id, initialSheet]] : []),
   );
   const listRef = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const latest = useRef("");
+
+  // Who's online follows the shell's heartbeat; you're always here.
+  const live = useLiveOnline(orgId);
+  const people = useMemo(
+    () =>
+      rendered.map((p) => {
+        const online = p.id === viewerId || (live ? live.has(p.id) : p.online);
+        return online === p.online ? p : { ...p, online };
+      }),
+    [rendered, live, viewerId],
+  );
 
   const teamsByKey = useMemo(() => new Map(teams.map((t) => [t.key, t])), [teams]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  const roles = useMemo(() => DIRECTORY_ROLES.filter((r) => people.some((p) => p.role === r)), [people]);
+  const roles = useMemo(
+    () => DIRECTORY_ROLES.filter((r) => people.some((p) => p.role === r)),
+    [people],
+  );
   const years = useMemo(
     () => [...new Set(people.map((p) => p.gradYear).filter((y): y is number => y !== null))].sort(),
     [people],
   );
   const freeCount = useMemo(() => people.filter((p) => p.freeNow).length, [people]);
+  const onlineCount = useMemo(() => people.filter((p) => p.online).length, [people]);
+
+  // `/` focuses search from anywhere that is not already a field (as on Tasks).
+  useEffect(() => {
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.defaultPrevented || isTypingTarget(event)) return;
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const update = useCallback((patch: Partial<DirectoryQuery>) => {
     setQuery((q) => ({ ...q, ...patch }));
@@ -114,9 +180,13 @@ export function PeopleDirectory({
 
   // The URL follows the state (no navigation: history integrates with the router).
   useEffect(() => {
-    const qs = directorySearch(query);
+    const params = new URLSearchParams(directorySearch(query));
+    const position = new URLSearchParams(window.location.search).get("position");
+    if (query.view === "chart" && position) params.set("position", position);
+    const qs = params.toString();
     const next = qs ? `${pathname}?${qs}` : pathname;
-    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
+    if (next !== `${window.location.pathname}${window.location.search}`)
+      window.history.replaceState(null, "", next);
   }, [query, pathname]);
 
   // Server search: one request per pause, only the newest answer kept.
@@ -130,7 +200,11 @@ export function PeopleDirectory({
           if (latest.current === term) setResults({ q: term, result });
         })
         .catch(() => {
-          if (latest.current === term) setResults({ q: term, result: { ids: localMatch(people, term, teamsByKey).map((p) => p.id), close: false } });
+          if (latest.current === term)
+            setResults({
+              q: term,
+              result: { ids: localMatch(people, term, teamsByKey).map((p) => p.id), close: false },
+            });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
@@ -139,17 +213,25 @@ export function PeopleDirectory({
   const answered = term && results?.q === term ? results.result : null;
   const matched = useMemo(() => {
     if (!term) return people;
-    if (answered) return answered.ids.map((id) => byId.get(id)).filter((p): p is DirectoryPerson => Boolean(p));
+    if (answered)
+      return answered.ids.map((id) => byId.get(id)).filter((p): p is DirectoryPerson => Boolean(p));
     return localMatch(people, term, teamsByKey);
   }, [term, answered, people, byId, teamsByKey]);
   const filtered = useMemo(() => applyFilters(matched, query), [matched, query]);
+  // With no org chart, Team sorts by name: by team, everyone would sit
+  // under one "Not on the chart".
+  const sort = teams.length === 0 && query.sort === "team" ? "name" : query.sort;
   const groups = useMemo(
-    () => groupPeople(filtered, query.sort, teams, { ranked: Boolean(term) }),
-    [filtered, query.sort, teams, term],
+    () => groupPeople(filtered, sort, teams, { ranked: Boolean(term) }),
+    [filtered, sort, teams, term],
   );
   const ordered = useMemo(() => groups.flatMap((g) => g.people), [groups]);
   const rows = useMemo<Row[]>(
-    () => groups.flatMap((g) => [{ kind: "header" as const, group: g }, ...g.people.map((p) => ({ kind: "person" as const, person: p }))]),
+    () =>
+      groups.flatMap((g) => [
+        { kind: "header" as const, group: g },
+        ...g.people.map((p) => ({ kind: "person" as const, person: p })),
+      ]),
     [groups],
   );
   const visibleRows = rows.slice(0, limit);
@@ -159,9 +241,12 @@ export function PeopleDirectory({
   useEffect(() => {
     const el = sentinel.current;
     if (!el || limit >= rows.length || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + RENDER_STEP);
-    }, { rootMargin: "600px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + RENDER_STEP);
+      },
+      { rootMargin: "600px" },
+    );
     observer.observe(el);
     return () => observer.disconnect();
   }, [limit, rows.length]);
@@ -177,14 +262,18 @@ export function PeopleDirectory({
       .then((data) => {
         if (!live) return;
         if (!data) {
-          toast({ title: "That person isn't a member of this club anymore.", tone: "error" });
+          toast({
+            title: "That person isn't a member of this organization anymore.",
+            tone: "error",
+          });
           update({ person: null });
           return;
         }
         setSheets((m) => new Map(m).set(data.id, data));
       })
       .catch(() => {
-        if (live) toast({ title: "Couldn't load that profile. Check your connection.", tone: "error" });
+        if (live)
+          toast({ title: "Couldn't load that profile. Check your connection.", tone: "error" });
       });
     return () => {
       live = false;
@@ -193,7 +282,9 @@ export function PeopleDirectory({
 
   const focusCard = useCallback((id: string) => {
     requestAnimationFrame(() => {
-      const el = listRef.current?.querySelector<HTMLElement>(`[data-person-id="${CSS.escape(id)}"]`);
+      const el = listRef.current?.querySelector<HTMLElement>(
+        `[data-person-id="${CSS.escape(id)}"]`,
+      );
       el?.focus({ preventScroll: false });
       el?.scrollIntoView({ block: "nearest" });
     });
@@ -245,18 +336,37 @@ export function PeopleDirectory({
 
   // ---------------------------------------------------------- render
 
-  const activeFilters = Boolean(query.team || query.role || query.year || query.free);
+  const activeFilters = Boolean(
+    query.team || query.role || query.year || query.free || query.online,
+  );
+  const clearFilters = { team: null, role: null, year: null, free: false, online: false };
   const countText =
     filtered.length === total && !term && !activeFilters
       ? `${total} ${total === 1 ? "member" : "members"}`
       : `${filtered.length} of ${total} ${total === 1 ? "member" : "members"}`;
-  const letters = query.sort === "name" ? groups.map((g) => g.label) : [];
+  const letters = sort === "name" ? groups.map((g) => g.label) : [];
+  const sorts = SORTS.filter((o) => o.value !== "team" || teams.length > 0);
+  const show = query.online ? "online" : query.free ? "free" : "";
+  const teamOptions = [
+    ...teams.map((t) => ({
+      value: t.key,
+      label: t.name,
+      color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
+    })),
+    ...(people.some((p) => !p.teamKey) ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }] : []),
+  ];
+  const teamLabel = (key: string) =>
+    key === NO_TEAM_KEY ? "Not on the chart" : (teamsByKey.get(key)?.name ?? "Team");
 
   const jump = (letter: string) => {
     const index = rows.findIndex((r) => r.kind === "header" && r.group.label === letter);
     if (index < 0) return;
     if (index >= limit) setLimit(index + RENDER_STEP);
-    requestAnimationFrame(() => document.getElementById(`people-letter-${letter}`)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`people-letter-${letter}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
   };
 
   const profile = sheet ? (
@@ -282,175 +392,391 @@ export function PeopleDirectory({
     <SheetSkeleton />
   );
 
-  return (
-    <div className={cn("grid items-start gap-[18px]", selectedId && isDesktop && "grid-cols-[minmax(0,1fr)_380px]")}>
-      <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <SearchField
-            value={query.q}
-            onValueChange={(q) => update({ q: q.slice(0, 80) })}
-            onClear={() => update({ q: "" })}
-            placeholder="Search by name, title, team or major"
-            aria-label="Search people"
-            className="min-w-[220px] flex-1 sm:w-auto"
-            maxLength={80}
-            autoComplete="off"
-          />
-          <Segmented
-            label="Sort people"
-            value={query.sort}
-            onSelect={(sort) => update({ sort: sort as DirectoryQuery["sort"] })}
-            options={[
-              { value: "team", label: "Team" },
-              { value: "name", label: "Name" },
-              { value: "new", label: "Newest" },
-            ]}
-          />
-          <Segmented
-            label="Layout"
-            value={query.view}
-            onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
-            options={[
-              { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
-              { value: "list", label: "List", icon: List, compact: true, title: "Dense list" },
-            ]}
-          />
-        </div>
+  const isChart = query.view === "chart";
+  const phoneViews = (
+    <Segmented
+      label="View"
+      value={isChart ? "chart" : "list"}
+      onSelect={(v) => update({ view: v === "chart" ? "chart" : "list" })}
+      options={[
+        { value: "list", label: "People", icon: List, compact: true, title: "People" },
+        { value: "chart", label: "Org chart", icon: Network, compact: true, title: "Org chart" },
+      ]}
+    />
+  );
 
-        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
-          <button
-            type="button"
-            aria-pressed={query.free}
-            onClick={() => update({ free: !query.free })}
-            className={chipClass(query.free)}
-            title="Free now, from the busy times members share"
-          >
-            <span aria-hidden="true" className="bg-success size-2 rounded-full shadow-[0_0_0_3px_color-mix(in_oklab,var(--success)_24%,transparent)]" />
-            Free now{freeCount > 0 && <span className="figure opacity-70">{freeCount}</span>}
-          </button>
+  return (
+    <div className="grid items-start gap-[18px]">
+      <div className="space-y-3">
+        {/* A phone: the one list toolbar (as on Tasks and Files), with the view on its left (grid and list are one and the same there); the sort is in Filters. */}
+        {isChart ? (
+          <div className="flex items-center gap-2 md:hidden">
+            {phoneViews}
+            <span className="flex-1" />
+            {chart?.actions}
+          </div>
+        ) : (
+          <PhoneToolbar
+            leading={phoneViews}
+            filterCount={[query.team, query.role, query.year, show].filter(Boolean).length}
+            onFilters={() => setFiltersOpen(true)}
+            searchLabel="Search people"
+            searchActive={Boolean(query.q)}
+            search={
+              <SearchField
+                value={query.q}
+                onValueChange={(q) => update({ q: q.slice(0, 80) })}
+                onClear={() => update({ q: "" })}
+                placeholder="Search"
+                aria-label="Search people"
+                maxLength={80}
+                autoComplete="off"
+                autoFocus
+              />
+            }
+            onCancelSearch={() => update({ q: "" })}
+          />
+        )}
+
+        <FilterSheet
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          title="Filters"
+          description="Narrow the list."
+          canClear={activeFilters}
+          onClear={() => update(clearFilters)}
+        >
+          <FilterChoices
+            title="Sort"
+            value={sort}
+            onPick={(v) => update({ sort: v as DirectorySort })}
+            options={sorts.map((o) => ({ value: o.value, label: o.label }))}
+          />
+          <FilterChoices
+            title="Show"
+            value={show}
+            onPick={(v) => update({ online: v === "online", free: v === "free" })}
+            options={[
+              { value: "", label: "Everyone" },
+              { value: "online", label: `Online now (${onlineCount})`, color: "var(--success)" },
+              { value: "free", label: `Free now${freeCount > 0 ? ` (${freeCount})` : ""}` },
+            ]}
+          />
           {teams.length > 0 && (
-            <FilterMenu
-              label="Team"
-              value={query.team}
-              display={query.team === NO_TEAM_KEY ? "Not on the chart" : query.team ? teamsByKey.get(query.team)?.name : null}
-              allLabel="All teams"
-              options={[
-                ...teams.map((t) => ({ value: t.key, label: t.name, color: `var(--chart-${((t.slot - 1) % 5) + 1})` })),
-                ...(people.some((p) => !p.teamKey) ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }] : []),
-              ]}
-              onChange={(team) => update({ team })}
+            <FilterChoices
+              title="Team"
+              value={query.team ?? ""}
+              onPick={(v) => update({ team: v || null })}
+              options={[{ value: "", label: "All teams" }, ...teamOptions]}
             />
           )}
           {roles.length > 1 && (
-            <FilterMenu
-              label="Role"
-              value={query.role}
-              display={query.role ? ROLE_LABELS[query.role] : null}
-              allLabel="All roles"
-              options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
-              onChange={(role) => update({ role: role as DirectoryRole | null })}
+            <FilterChoices
+              title="Role"
+              value={query.role ?? ""}
+              onPick={(v) => update({ role: (v || null) as DirectoryRole | null })}
+              options={[
+                { value: "", label: "All roles" },
+                ...roles.map((r) => ({ value: r, label: ROLE_LABELS[r] })),
+              ]}
             />
           )}
           {years.length > 0 && (
-            <FilterMenu
-              label="Year"
-              value={query.year ? String(query.year) : null}
-              display={query.year ? `Class of ${query.year}` : null}
-              allLabel="All years"
-              options={years.map((y) => ({ value: String(y), label: `Class of ${y}` }))}
-              onChange={(year) => update({ year: year ? Number(year) : null })}
+            <FilterChoices
+              title="Year"
+              value={query.year ? String(query.year) : ""}
+              onPick={(v) => update({ year: v ? Number(v) : null })}
+              options={[
+                { value: "", label: "All years" },
+                ...years.map((y) => ({ value: String(y), label: `Class of ${y}` })),
+              ]}
             />
           )}
-          {activeFilters && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => update({ team: null, role: null, year: null, free: false })}>
-              <X aria-hidden="true" />
-              Clear filters
-            </Button>
-          )}
-          <span className="text-muted-foreground ml-auto text-[13px]" role="status" aria-live="polite">
-            {countText}
-            {close && " · close matches"}
-          </span>
-        </div>
+        </FilterSheet>
 
-        <div className="relative mt-2 flex gap-3">
-          <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
-            {people.length === 0 ? (
-              <EmptyState title="No members yet" description="Invite people to see them here." />
-            ) : filtered.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title="No one matches that"
-                description="Try a first name, a team or a year."
-                action={
-                  <Button type="button" variant="outline" size="sm" onClick={() => update({ q: "", team: null, role: null, year: null, free: false })}>
-                    Clear search and filters
-                  </Button>
-                }
-              />
+        {/* Wider: Tasks' bar, in Tasks' order (view, who, Filters with the sort, then search at the right). */}
+        <div className="@container/toolbar max-md:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              label="View"
+              value={query.view}
+              onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
+              options={[
+                { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
+                { value: "list", label: "List", icon: List, compact: true, title: "List" },
+                {
+                  value: "chart",
+                  label: "Org chart",
+                  icon: Network,
+                  compact: true,
+                  title: "Org chart",
+                },
+              ]}
+              labelsFrom="sr-only @[48rem]/toolbar:not-sr-only"
+              className="shrink-0"
+            />
+
+            {isChart ? (
+              <>
+                {chart?.summary && (
+                  <span className="text-muted-foreground min-w-0 truncate text-[13px]">
+                    {chart.summary}
+                  </span>
+                )}
+                <div className="ms-auto flex shrink-0 items-center gap-2">{chart?.actions}</div>
+              </>
             ) : (
-              <PeopleRows
-                rows={visibleRows}
-                view={query.view}
-                selectedId={selectedId}
-                viewerId={viewerId}
-                teamsByKey={teamsByKey}
-                onSelect={select}
-              />
-            )}
-            {limit < rows.length && (
-              <div ref={sentinel} className="text-muted-foreground py-6 text-center text-sm">
-                <Button type="button" variant="outline" size="sm" onClick={() => setLimit((n) => n + RENDER_STEP)}>
-                  Show more ({ordered.length - visibleRows.filter((r) => r.kind === "person").length} left)
-                </Button>
-              </div>
-            )}
-          </div>
-          {letters.length > 4 && (
-            <nav aria-label="Jump to a letter" className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex">
-              {letters.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => jump(l)}
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted grid size-6 place-items-center rounded-full text-[11px] font-semibold"
+              <>
+                {/* Who to show, as icons that say what they are on hover or focus (Tasks' Mine, My team, Everyone). */}
+                <div
+                  className="flex shrink-0 items-center gap-1"
+                  role="group"
+                  aria-label="Who to show"
                 >
-                  {l}
-                </button>
-              ))}
-            </nav>
-          )}
-        </div>
-      </section>
+                  <ExpandChip
+                    icon={Users}
+                    label="Everyone"
+                    active={!show}
+                    onClick={() => update({ online: false, free: false })}
+                  />
+                  <ExpandChip
+                    icon={CircleDot}
+                    label={`Online now (${onlineCount})`}
+                    active={show === "online"}
+                    onClick={() => update({ online: true, free: false })}
+                  />
+                  <ExpandChip
+                    icon={Clock}
+                    label={`Free now (${freeCount})`}
+                    active={show === "free"}
+                    onClick={() => update({ free: true, online: false })}
+                  />
+                </div>
 
-      {selectedId && isDesktop && (
-        <aside
-          aria-labelledby={sheet ? "person-sheet-title" : undefined}
-          aria-label={sheet ? undefined : "Profile"}
-          className="bg-raised rounded-card border-foreground/6 shadow-e2 sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto border"
-        >
-          <div className="relative">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close the profile"
-              className="absolute top-3 right-3 z-10"
-              onClick={() => {
-                const id = selectedId;
-                update({ person: null });
-                focusCard(id);
-              }}
-            >
-              <X aria-hidden="true" />
-            </Button>
-            {profile}
+                <FiltersMenu
+                  count={[query.team, query.role, query.year].filter(Boolean).length}
+                  items={[
+                    {
+                      name: "Sort by",
+                      node: (
+                        <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />
+                      ),
+                    },
+                    ...(teams.length > 0
+                      ? [
+                          {
+                            name: "Team",
+                            node: (
+                              <FilterMenu
+                                value={query.team}
+                                display={query.team ? teamLabel(query.team) : null}
+                                allLabel="All teams"
+                                options={teamOptions}
+                                onChange={(team) => update({ team })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(roles.length > 1
+                      ? [
+                          {
+                            name: "Role",
+                            node: (
+                              <FilterMenu
+                                value={query.role}
+                                display={query.role ? ROLE_LABELS[query.role] : null}
+                                allLabel="All roles"
+                                options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                                onChange={(role) => update({ role: role as DirectoryRole | null })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(years.length > 0
+                      ? [
+                          {
+                            name: "Year",
+                            node: (
+                              <FilterMenu
+                                value={query.year ? String(query.year) : null}
+                                display={query.year ? `Class of ${query.year}` : null}
+                                allLabel="All years"
+                                options={years.map((y) => ({
+                                  value: String(y),
+                                  label: `Class of ${y}`,
+                                }))}
+                                onChange={(year) => update({ year: year ? Number(year) : null })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+
+                <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+                  <SearchField
+                    ref={searchRef}
+                    value={query.q}
+                    onValueChange={(q) => update({ q: q.slice(0, 80) })}
+                    onClear={() => update({ q: "" })}
+                    hint="/"
+                    placeholder="Search people"
+                    aria-label="Search people"
+                    className="sm:max-w-56"
+                    maxLength={80}
+                    autoComplete="off"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        update({ q: "" });
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
-        </aside>
+        </div>
+
+        {/* What is narrowing the list, each removable on its own (as on Tasks). */}
+        {!isChart && (activeFilters || term) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {query.online && (
+              <FilterPill label="Online now" onClear={() => update({ online: false })} />
+            )}
+            {query.free && <FilterPill label="Free now" onClear={() => update({ free: false })} />}
+            {query.team && (
+              <FilterPill label={teamLabel(query.team)} onClear={() => update({ team: null })} />
+            )}
+            {query.role && (
+              <FilterPill label={ROLE_LABELS[query.role]} onClear={() => update({ role: null })} />
+            )}
+            {query.year && (
+              <FilterPill label={`Class of ${query.year}`} onClear={() => update({ year: null })} />
+            )}
+            {term && <FilterPill label={`“${term}”`} onClear={() => update({ q: "" })} />}
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground ms-1 text-xs underline-offset-4 hover:underline"
+              onClick={() => update({ q: "", ...clearFilters })}
+            >
+              Clear all
+            </button>
+            <span className="text-muted-foreground ms-auto text-[13px]">
+              {countText}
+              {close && ", close matches"}
+            </span>
+          </div>
+        )}
+        <span className="sr-only" role="status" aria-live="polite">
+          {countText}
+          {close && ", close matches"}
+        </span>
+      </div>
+
+      {isChart ? (
+        <div className="min-w-0">{chart?.body}</div>
+      ) : (
+        <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
+          <div className="relative flex gap-3">
+            <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
+              {people.length === 0 ? (
+                <EmptyState title="No members yet" />
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  title="No one matches that"
+                  action={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => update({ q: "", ...clearFilters })}
+                    >
+                      Clear all
+                    </Button>
+                  }
+                />
+              ) : (
+                <PeopleRows
+                  rows={visibleRows}
+                  view={isPhone ? "grid" : query.view === "grid" ? "grid" : "list"}
+                  selectedId={selectedId}
+                  viewerId={viewerId}
+                  teamsByKey={teamsByKey}
+                  hideNoTeam={isPhone && teams.length === 0}
+                  onSelect={select}
+                />
+              )}
+              {limit < rows.length && (
+                <div ref={sentinel} className="text-muted-foreground py-6 text-center text-sm">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLimit((n) => n + RENDER_STEP)}
+                  >
+                    Show {ordered.length - visibleRows.filter((r) => r.kind === "person").length}{" "}
+                    more
+                  </Button>
+                </div>
+              )}
+            </div>
+            {letters.length > 4 && (
+              <nav
+                aria-label="Jump to a letter"
+                className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex"
+              >
+                {letters.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => jump(l)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted grid size-6 place-items-center rounded-full text-[11px] font-semibold"
+                  >
+                    {l}
+                  </button>
+                ))}
+              </nav>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/*
+        A centred dialog, like the task editor and New event, rather than a
+        panel down the right: a profile is something you open, read and close,
+        not something you work alongside, and the list no longer has to give
+        up a third of its width whenever one is open.
+      */}
+      {isDesktop && (
+        <Dialog
+          open={Boolean(selectedId)}
+          onOpenChange={(open) => {
+            if (open) return;
+            const id = selectedId;
+            update({ person: null });
+            if (id) focusCard(id);
+          }}
+        >
+          <DialogContent
+            className="max-h-[calc(100dvh-4rem)] overflow-y-auto p-0 sm:max-w-lg"
+            aria-describedby={undefined}
+          >
+            <DialogTitle className="sr-only">{sheet?.name ?? "Profile"}</DialogTitle>
+            {selectedId && profile}
+          </DialogContent>
+        </Dialog>
       )}
 
       {!isDesktop && (
-        <Sheet open={Boolean(selectedId)} onOpenChange={(open) => !open && update({ person: null })}>
+        <Sheet
+          open={Boolean(selectedId)}
+          onOpenChange={(open) => !open && update({ person: null })}
+        >
           <SheetContent
             side="bottom"
             data-person-sheet
@@ -473,12 +799,15 @@ function PeopleRows({
   viewerId,
   teamsByKey,
   onSelect,
+  hideNoTeam = false,
 }: {
   rows: Row[];
   view: DirectoryQuery["view"];
   selectedId: string | null;
   viewerId: string;
   teamsByKey: ReadonlyMap<string, DirectoryTeam>;
+  /** A phone, in a club with no org chart: no "Not on the chart" on every card. */
+  hideNoTeam?: boolean;
   onSelect: (id: string) => void;
 }) {
   // Split the flat rows back into runs under each header.
@@ -495,15 +824,30 @@ function PeopleRows({
             id={`people-${group.key}`}
             className="text-muted-foreground mt-5 mb-2.5 flex scroll-mt-4 items-center gap-2 text-[13px] font-semibold first:mt-3"
           >
-            {group.color && <span aria-hidden="true" className="size-2 rounded-full" style={{ background: group.color }} />}
+            {group.color && (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full"
+                style={{ background: group.color }}
+              />
+            )}
             <span>{group.label}</span>
-            <span className="bg-secondary text-muted-foreground rounded-full px-2 text-xs leading-5">{group.people.length}</span>
+            <span className="bg-secondary text-muted-foreground rounded-full px-2 text-xs leading-5">
+              {group.people.length}
+            </span>
           </h2>
           {view === "grid" ? (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
               {people.map((p) => (
-                <li key={p.id} className="min-w-0">
-                  <PersonCard person={p} team={teamName(p, teamsByKey)} selected={p.id === selectedId} isSelf={p.id === viewerId} onSelect={onSelect} />
+                <li key={p.id} className="flex min-w-0">
+                  <PersonCard
+                    person={p}
+                    team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined}
+                    showNoTeam={!hideNoTeam}
+                    selected={p.id === selectedId}
+                    isSelf={p.id === viewerId}
+                    onSelect={onSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -511,7 +855,13 @@ function PeopleRows({
             <ul className="divide-border/70 flex flex-col divide-y">
               {people.map((p) => (
                 <li key={p.id}>
-                  <PersonRow person={p} team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined} selected={p.id === selectedId} isSelf={p.id === viewerId} onSelect={onSelect} />
+                  <PersonRow
+                    person={p}
+                    team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined}
+                    selected={p.id === selectedId}
+                    isSelf={p.id === viewerId}
+                    onSelect={onSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -522,34 +872,54 @@ function PeopleRows({
   );
 }
 
+/** Their picture, with a green dot while they're in the app. */
 function Presence({ person, size }: { person: DirectoryPerson; size: "lg" | "md" }) {
   return (
     <span className="relative inline-flex shrink-0">
       <UserAvatar user={person} size={size} />
-      {person.freeNow && (
+      {person.online && (
         <span
           aria-hidden="true"
-          className={cn("bg-success ring-card absolute right-0 bottom-0 rounded-full ring-2", size === "lg" ? "size-3" : "size-2.5")}
+          className={cn(
+            "bg-success ring-card absolute right-0 bottom-0 rounded-full ring-2",
+            size === "lg" ? "size-3" : "size-2.5",
+          )}
         />
       )}
     </span>
   );
 }
 
+/**
+ * A grid card: picture (with the online dot), name and pronouns, title,
+ * then team and role as chips, their major and class, and a last line
+ * for now: online, free, or when they were last here.
+ */
 function PersonCard({
   person,
   team,
+  showNoTeam,
   selected,
   isSelf,
   onSelect,
 }: {
   person: DirectoryPerson;
-  team: string;
+  team: DirectoryTeam | undefined;
+  /** "Not on the chart" when they have no team (not on a phone with no chart). */
+  showNoTeam: boolean;
   selected: boolean;
   isSelf: boolean;
   onSelect: (id: string) => void;
 }) {
   const name = person.name ?? "Unnamed member";
+  const studies = majorAndYear(person.major, person.gradYear);
+  const status = person.online
+    ? { text: "Online now", tone: "text-success font-medium" }
+    : person.freeNow
+      ? { text: "Free now", tone: "text-success font-medium" }
+      : person.seenAgo
+        ? { text: `Active ${person.seenAgo}`, tone: "text-muted-foreground" }
+        : null;
   return (
     <button
       type="button"
@@ -557,21 +927,41 @@ function PersonCard({
       aria-pressed={selected}
       onClick={() => onSelect(person.id)}
       className={cn(
-        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow flex w-full min-w-0 items-center gap-3 border p-3.5 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px hover:shadow-e1 motion-reduce:transform-none",
+        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow hover:shadow-e1 flex w-full min-w-0 flex-col gap-3 border p-4 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px motion-reduce:transform-none",
         selected && "ring-brand-accent shadow-e1 ring-2",
       )}
     >
-      <Presence person={person} size="lg" />
-      <span className="min-w-0">
-        <span className="block truncate text-sm leading-tight font-semibold">
-          {name}
-          {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+      <span className="flex min-w-0 items-start gap-3">
+        <Presence person={person} size="lg" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm leading-tight font-semibold break-words">
+            {name}
+            {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+          </span>
+          {person.pronouns && (
+            <span className="text-muted-foreground block text-xs">{person.pronouns}</span>
+          )}
+          {person.title && (
+            <span className="text-muted-foreground mt-0.5 block text-[13px] leading-snug break-words">
+              {person.title}
+            </span>
+          )}
         </span>
-        <span className="text-muted-foreground block truncate text-[13px]">
-          {[person.title, team].filter(Boolean).join(" · ")}
-        </span>
-        <span className="sr-only">{person.freeNow ? ", free now" : ""}</span>
       </span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {team ? (
+          <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip>
+        ) : (
+          showNoTeam && <span className="text-muted-foreground text-xs">Not on the chart</span>
+        )}
+        {person.role !== "MEMBER" && <Badge variant="secondary">{ROLE_LABELS[person.role]}</Badge>}
+      </span>
+      {(studies || status) && (
+        <span className="mt-auto flex min-w-0 flex-col gap-0.5 text-xs">
+          {studies && <span className="text-muted-foreground truncate">{studies}</span>}
+          {status && <span className={status.tone}>{status.text}</span>}
+        </span>
+      )}
     </button>
   );
 }
@@ -602,30 +992,86 @@ function PersonRow({
       )}
     >
       <Presence person={person} size="md" />
-      <span className="min-w-0 truncate font-semibold">
+      <span className="min-w-0 font-semibold break-words">
         {name}
-        {person.pronouns && <span className="text-muted-foreground ml-1.5 text-xs font-normal">{person.pronouns}</span>}
+        {person.pronouns && (
+          <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+            {person.pronouns}
+          </span>
+        )}
         {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+        {person.freeNow && <FreeNow className="ml-2" />}
+        {person.online && <span className="sr-only">, online now</span>}
       </span>
-      <span className="text-muted-foreground min-w-0 truncate">{person.title ?? "No title"}</span>
+      <span className="text-muted-foreground min-w-0 break-words">{person.title ?? ""}</span>
       <span className="hidden min-w-0 md:block">
-        {team ? <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip> : <span className="text-muted-foreground">Not on the chart</span>}
+        {team ? (
+          <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip>
+        ) : (
+          <span className="text-muted-foreground">Not on the chart</span>
+        )}
       </span>
       <span className="text-muted-foreground hidden md:block">{ROLE_LABELS[person.role]}</span>
-      <span className="text-muted-foreground figure hidden truncate md:block">{person.gradYear ? `Class of ${person.gradYear}` : ""}</span>
+      <span className="text-muted-foreground figure hidden md:block">
+        {person.gradYear ? `Class of ${person.gradYear}` : ""}
+      </span>
     </button>
   );
 }
 
+/** Free by their shared hours, now. */
+function FreeNow({ className }: { className?: string }) {
+  return <span className={cn("text-success text-xs font-medium", className)}>Free now</span>;
+}
+
+const SORTS: readonly { value: DirectorySort; label: string; short: string }[] = [
+  { value: "team", label: "Team", short: "Team" },
+  { value: "name", label: "Name", short: "Name" },
+  { value: "new", label: "Newest", short: "New" },
+  { value: "active", label: "Recently active", short: "Active" },
+];
+
+/** The sort, the first thing in the Filters panel. */
+function SortMenu({
+  sort,
+  sorts,
+  onSort,
+}: {
+  sort: DirectorySort;
+  sorts: readonly (typeof SORTS)[number][];
+  onSort: (sort: DirectorySort) => void;
+}) {
+  const current = SORTS.find((o) => o.value === sort) ?? SORTS[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={chipClass(false)} aria-label={`Sort by ${current.label}`}>
+          <ArrowUpDown className="size-3.5" aria-hidden="true" />
+          <span className="truncate">{current.label}</span>
+          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+        {sorts.map((o) => (
+          <DropdownMenuItem key={o.value} onSelect={() => onSort(o.value)}>
+            {o.label}
+            {o.value === sort && <Check className="ms-auto size-4" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** One filter in the Filters panel: its value (or "All …"), opening the choices. */
 function FilterMenu({
-  label,
   value,
   display,
   allLabel,
   options,
   onChange,
 }: {
-  label: string;
   value: string | null;
   display: string | null | undefined;
   allLabel: string;
@@ -636,7 +1082,7 @@ function FilterMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(Boolean(value))}>
-          {value && display ? `${label}: ${display}` : label}
+          <span className="truncate">{(value && display) || allLabel}</span>
           <ChevronDown aria-hidden="true" className="opacity-70" />
         </button>
       </DropdownMenuTrigger>
@@ -645,7 +1091,13 @@ function FilterMenu({
           <DropdownMenuRadioItem value="">{allLabel}</DropdownMenuRadioItem>
           {options.map((o) => (
             <DropdownMenuRadioItem key={o.value} value={o.value}>
-              {o.color && <span aria-hidden="true" className="size-2 rounded-full" style={{ background: o.color }} />}
+              {o.color && (
+                <span
+                  aria-hidden="true"
+                  className="size-2 rounded-full"
+                  style={{ background: o.color }}
+                />
+              )}
               {o.label}
             </DropdownMenuRadioItem>
           ))}

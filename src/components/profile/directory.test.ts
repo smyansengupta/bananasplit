@@ -22,6 +22,9 @@ function person(id: string, extra: Partial<DirectoryPerson> = {}): DirectoryPers
     joinedAt: "2026-01-01T00:00:00.000Z",
     teamKey: null,
     freeNow: null,
+    online: false,
+    lastSeenAt: null,
+    seenAgo: null,
     ...extra,
   };
 }
@@ -32,17 +35,17 @@ const teams: DirectoryTeam[] = [
 ];
 const teamsByKey = new Map(teams.map((t) => [t.key, t]));
 const people = [
-  person("u1", { name: "Maya Patel", title: "President", teamKey: "lead", role: "OWNER", gradYear: 2027, major: "Computer science", joinedAt: "2024-09-01T00:00:00.000Z", freeNow: true }),
-  person("u2", { name: "Lena Okafor", title: "Sponsorship chair", teamKey: "growth", gradYear: 2028, pronouns: "she/her", joinedAt: "2025-09-01T00:00:00.000Z" }),
+  person("u1", { name: "Maya Patel", title: "President", teamKey: "lead", role: "OWNER", gradYear: 2027, major: "Computer science", joinedAt: "2024-09-01T00:00:00.000Z", freeNow: true, online: true, lastSeenAt: "2026-10-31T12:00:00.000Z" }),
+  person("u2", { name: "Lena Okafor", title: "Sponsorship chair", teamKey: "growth", gradYear: 2028, pronouns: "she/her", joinedAt: "2025-09-01T00:00:00.000Z", lastSeenAt: "2026-10-30T09:00:00.000Z" }),
   person("u3", { name: "ben carter", title: "Member", gradYear: 2029, joinedAt: "2026-09-01T00:00:00.000Z", freeNow: false }),
-  person("u4", { name: "Élodie Roux", title: "VP Growth", teamKey: "growth", role: "ADMIN", gradYear: 2028 }),
+  person("u4", { name: "Élodie Roux", title: "VP Growth", teamKey: "growth", role: "ADMIN", gradYear: 2028, lastSeenAt: "2026-10-31T08:00:00.000Z" }),
 ];
 
 describe("directory query in the URL", () => {
   it("round-trips and drops defaults", () => {
-    const state = { ...EMPTY_QUERY, q: "vp", team: "growth", role: "ADMIN" as const, year: 2028, free: true, sort: "name" as const, view: "list" as const, person: "u4" };
+    const state = { ...EMPTY_QUERY, q: "vp", team: "growth", role: "ADMIN" as const, year: 2028, free: true, online: true, sort: "name" as const, view: "grid" as const, person: "u4" };
     const qs = directorySearch(state);
-    expect(qs).toBe("q=vp&team=growth&role=admin&year=2028&free=1&sort=name&view=list&person=u4");
+    expect(qs).toBe("q=vp&team=growth&role=admin&year=2028&free=1&online=1&sort=name&view=grid&person=u4");
     expect(parseDirectoryQuery(new URLSearchParams(qs))).toEqual(state);
     expect(directorySearch(EMPTY_QUERY)).toBe("");
   });
@@ -65,13 +68,14 @@ describe("directory list", () => {
     expect(localMatch(people, "", teamsByKey)).toHaveLength(4);
   });
 
-  it("filters by team (or no team), role, year and free now", () => {
+  it("filters by team (or no team), role, year, free now and online", () => {
     const f = (patch: Partial<typeof EMPTY_QUERY>) => applyFilters(people, { ...EMPTY_QUERY, ...patch }).map((p) => p.id);
     expect(f({ team: "growth" })).toEqual(["u2", "u4"]);
     expect(f({ team: "none" })).toEqual(["u3"]);
     expect(f({ role: "ADMIN" })).toEqual(["u4"]);
     expect(f({ year: 2028 })).toEqual(["u2", "u4"]);
     expect(f({ free: true })).toEqual(["u1"]);
+    expect(f({ online: true })).toEqual(["u1"]);
     expect(f({ team: "growth", year: 2029 })).toEqual([]);
   });
 
@@ -90,10 +94,18 @@ describe("directory list", () => {
   it("sorts by name into letters (accents folded) and by newest", () => {
     expect(groupPeople(people, "name", teams).map((g) => g.label)).toEqual(["B", "E", "L", "M"]);
     expect(letterOf({ name: "Élodie" })).toBe("E");
-    expect(letterOf({ name: "42 Club" })).toBe("#");
+    expect(letterOf({ name: "42 Organization" })).toBe("#");
     expect(letterOf({ name: null })).toBe("#");
     expect(groupPeople(people, "new", teams)[0].people.map((p) => p.id)).toEqual(["u3", "u4", "u2", "u1"]);
     expect(groupPeople([], "team", teams)).toEqual([]);
+  });
+
+  it("sorts by recently active: online first, then last seen, never seen last", () => {
+    const groups = groupPeople(people, "active", teams);
+    expect(groups.map((g) => [g.label, g.people.map((p) => p.id)])).toEqual([
+      ["Online now", ["u1"]],
+      ["Not online", ["u4", "u2", "u3"]],
+    ]);
   });
 });
 

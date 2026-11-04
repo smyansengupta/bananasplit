@@ -1,10 +1,11 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TasksProvider } from "@/components/tasks/tasks-context";
 import { WorkspaceProvider } from "@/components/tasks/workspace-context";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import {
   effectiveTimezone,
@@ -19,6 +20,8 @@ import {
 } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
+import { clubsUserRuns } from "@/server/personal/move";
+import { listFileRefOptions } from "@/server/notes/files";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
 import { getTaskDashboard } from "@/server/tasks/dashboard";
 import {
@@ -46,7 +49,6 @@ import { KanbanBoard } from "./kanban/kanban-board";
 import { TaskTable } from "./table/task-table";
 import { UpdatesView, type PostedUpdate } from "./updates/updates-view";
 import { WeeklyUpdateStrip, type WeeklyStatus } from "./updates/weekly-update-strip";
-import { WeekView } from "./week/week-view";
 import { WorkspaceHeader } from "./workspace-header";
 import { ListView } from "./list/list-view";
 import { RoadmapView } from "./roadmap/roadmap-view";
@@ -55,11 +57,15 @@ import {
   isDestination,
   parseScope,
   parseWorkspaceQuery,
+  PHONE_HIDDEN_LAYOUTS,
   TASK_LIST_VIEW,
   type WorkspaceQuery,
 } from "./views";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Phones, not tablets: iPads and Android tablets leave out "Mobile". */
+const PHONE_UA = /iPhone|iPod|Android.+Mobile|Mobile.+Firefox|Windows Phone/;
 
 function param(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -105,17 +111,25 @@ export default async function TasksPage({
   const positions = await getChartForPage(org.id);
   const chart = buildViewerChart(positions, user.id);
 
+  // A phone has no Board or Table (PHONE_HIDDEN_LAYOUTS), so a remembered
+  // Board or a shared ?view=table link opens the List on one, without
+  // touching the remembered layout.
+  const phone = PHONE_UA.test((await headers()).get("user-agent") ?? "");
   const ws: WorkspaceQuery = simple
     ? { ...parsed, view: TASK_LIST_VIEW, scope: parseScope(query.scope) ?? "all" }
     : !teamwork && isDestination(parsed.view)
-      ? { ...parsed, view: DEFAULT_TASK_LAYOUT }
-      : parsed;
+      ? { ...parsed, view: phone ? TASK_LIST_VIEW : DEFAULT_TASK_LAYOUT }
+      : phone && (PHONE_HIDDEN_LAYOUTS as readonly string[]).includes(parsed.view)
+        ? { ...parsed, view: TASK_LIST_VIEW }
+        : parsed;
 
   const base = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
     const labels = await getOrgLabels(db, org.id);
     const parents = await getOrgParents(db, org.id);
-    return { tz: effectiveTimezone(me, org), labels, parents };
+    // What `/` in a title or a description can point at.
+    const files = await listFileRefOptions(db, org.id);
+    return { tz: effectiveTimezone(me, org), labels, parents, files };
   });
   const todayKey = localDateKey(now, base.tz);
   const today = fromDateKey(todayKey);
@@ -152,6 +166,7 @@ export default async function TasksPage({
     dueFrom: dateParam(ws.dueFrom),
     dueTo: dateParam(ws.dueTo),
     flagged: ws.flagged,
+    overdue: ws.overdue,
     blockers: ws.blockers,
     visibility: ws.visibility,
   };
@@ -185,8 +200,11 @@ export default async function TasksPage({
     weekly,
   });
 
+  // In Personal, a task's menu can move it to an organization you run.
+  const moveTargets = isPersonalSpace(org) ? await clubsUserRuns(user.id) : [];
   return (
     <TasksProvider
+      moveTargets={moveTargets}
       org={{
         id: org.id,
         slug: org.slug,
@@ -198,6 +216,7 @@ export default async function TasksPage({
       viewer={{ userId: user.id, name: user.name, isAdmin, chart }}
       members={members}
       labels={base.labels}
+      files={base.files}
       parents={base.parents}
     >
       <WorkspaceProvider query={ws} hasReports={chart.subtree.length > 0} simple={simple}>
@@ -206,7 +225,7 @@ export default async function TasksPage({
           teamwork={teamwork && !simple}
           stats={stats}
         />
-        {ws.view === "week" && weekly && <WeeklyUpdateStrip status={weekly} />}
+        {ws.view === "list" && weekly && <WeeklyUpdateStrip status={weekly} />}
         {content}
       </WorkspaceProvider>
     </TasksProvider>
@@ -258,35 +277,15 @@ async function renderView(input: {
       );
     }
 
-    case "week": {
-      const limit = Math.min(
-        Math.max(Number.parseInt(param(query.limit) ?? "100", 10) || 100, 20),
-        1000,
-      );
-      const agenda = await withOrgTx(org.id, ({ db }) =>
-        getAgendaTasks(db, org.id, filters, {
-          completedSince: new Date(now.getTime() - 7 * DAY_MS),
-          limit,
-          today,
-        }),
-      );
-      return (
-        <WeekView
-          open={agenda.open}
-          completed={agenda.completed}
-          hasMore={agenda.hasMore}
-          moreLimit={limit + 100}
-        />
-      );
-    }
-
     case "roadmap": {
+      // The epics section: each epic once, on a week timeline, with its
+      // owner, how much is open and late, and a circle to finish it. Click
+      // one to open it; New epic is in the header's New task menu.
       const epics = await withOrgTx(org.id, ({ db }) =>
         getRoadmapEpics(db, org.id, filters, today),
       );
       return <RoadmapView epics={epics} />;
     }
-
     case "table": {
       const page = Math.max(1, Number.parseInt(param(query.page) ?? "1", 10) || 1);
       const { tasks, total } = await withOrgTx(org.id, ({ db }) =>

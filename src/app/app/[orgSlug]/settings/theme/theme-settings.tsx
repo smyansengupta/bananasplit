@@ -1,64 +1,47 @@
 "use client";
 
-import { Check, CheckCircle2, Flag, Palette, Plus, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Flag,
+  Loader2,
+  Palette,
+  Plus,
+  TriangleAlert,
+  Undo2,
+} from "@/components/icons";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   useDeferredValue,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
-  useTransition,
 } from "react";
 
-import { OrgBrand } from "@/components/theme/org-brand";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
-import { ACCENT_SCALE_NAMES, accentScale, withAccent, type AccentScale } from "@/lib/theme/accent";
+import { accentScale, withAccent } from "@/lib/theme/accent";
 import { formatRatio } from "@/lib/theme/color";
 import { tokenStyle } from "@/lib/theme/css";
 import { contrastWarnings, type ContrastWarning } from "@/lib/theme/contrast";
-import {
-  deriveDarkRoles,
-  deriveTheme,
-  TOKEN_NAMES,
-  type DerivedTheme,
-  type TokenMap,
-} from "@/lib/theme/derive";
+import { deriveDarkRoles, deriveTheme, type DerivedTheme, type TokenMap } from "@/lib/theme/derive";
 import {
   CUSTOM_PRESET_ID,
-  DEFAULT_PRESET_ID,
+  UNTHEMED_PRESET_ID,
   findPreset,
   presetGlow,
   THEME_PRESETS,
   type ThemePreset,
 } from "@/lib/theme/presets";
+import { DEFAULT_THEME_STYLE, type ThemeStyle } from "@/lib/theme/style";
 import {
-  DEFAULT_THEME_STYLE,
-  sameStyle,
-  styleDeclarations,
-  TEXT_SIZE_VALUES,
-  type ThemeStyle,
-} from "@/lib/theme/style";
-import {
-  ROLE_KEYS,
   ROLE_LABELS,
   type ColorMode,
   type LogoDisplayValue,
@@ -67,10 +50,8 @@ import {
 } from "@/lib/theme/types";
 import { cn } from "@/lib/utils";
 
-import { saveThemeStep } from "@/app/onboarding/profile/actions";
-
 import { resetOrgTheme, saveOrgTheme } from "./actions";
-import { choiceClass, THEME_SECTION } from "./choice";
+import { THEME_SECTION } from "./choice";
 import { LookAndFeel } from "./look-and-feel";
 import { ThemePreview } from "./theme-preview";
 
@@ -94,73 +75,39 @@ export interface ThemeDraft {
   style: ThemeStyle;
 }
 
-const MODE_OPTIONS: { value: ThemeModeValue; label: string; hint: string }[] = [
-  {
-    value: "SYSTEM",
-    label: "Match device",
-    hint: "Light or dark, following each member's device.",
-  },
-  { value: "LIGHT", label: "Light", hint: "Light until a member picks otherwise." },
-  { value: "DARK", label: "Dark", hint: "Dark until a member picks otherwise." },
+const MODE_OPTIONS: { value: ThemeModeValue; label: string }[] = [
+  { value: "SYSTEM", label: "Device" },
+  { value: "LIGHT", label: "Light" },
+  { value: "DARK", label: "Dark" },
 ];
-
-const LOGO_OPTIONS: { value: LogoDisplayValue; label: string; hint: string }[] = [
-  { value: "LOGO_AND_NAME", label: "Logo and name", hint: "A square mark beside the club name." },
-  {
-    value: "LOGO_ONLY",
-    label: "Logo only",
-    hint: "Best for a wordmark that already says the name.",
-  },
-  { value: "NAME_ONLY", label: "Name only", hint: "No logo in the sidebar or on public pages." },
-];
-
-function sameRoles(a: ThemeRoles | null, b: ThemeRoles | null): boolean {
-  if (a === null || b === null) return a === b;
-  return ROLE_KEYS.every((key) => a[key] === b[key]);
-}
-
-function sameDraft(a: ThemeDraft, b: ThemeDraft): boolean {
-  return (
-    a.preset === b.preset &&
-    a.mode === b.mode &&
-    a.lockMode === b.lockMode &&
-    a.logoDisplay === b.logoDisplay &&
-    sameRoles(a.light, b.light) &&
-    sameRoles(a.dark, b.dark) &&
-    sameStyle(a.style, b.style)
-  );
-}
 
 export function ThemeSettings({
   orgId,
-  orgSlug,
   orgName,
-  logo,
-  hasLogo,
   initial,
   isDefault,
   personalThemeName = null,
 }: {
   orgId: string;
-  orgSlug: string;
   orgName: string;
-  logo: unknown;
-  hasLogo: boolean;
   initial: ThemeDraft;
   isDefault: boolean;
   /** The viewer's own theme, which is what they see instead of this one. */
   personalThemeName?: string | null;
 }) {
   const { setTheme, resolvedTheme } = useTheme();
-  const router = useRouter();
-  const [usingOwn, setUsingOwn] = useState(personalThemeName !== null);
-  const [switching, startSwitch] = useTransition();
+  const [usingOwn] = useState(personalThemeName !== null);
   const [draft, setDraft] = useState<ThemeDraft>(initial);
   const [saved, setSaved] = useState<ThemeDraft>(initial);
   const [savedIsDefault, setSavedIsDefault] = useState(isDefault);
-  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [previewApp, setPreviewApp] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  // What the theme was before each change, newest last: Undo walks back.
+  const [history, setHistory] = useState<{ draft: ThemeDraft; wasDefault: boolean }[]>([]);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [showIssues, setShowIssues] = useState(false);
+  const savedRef = useRef(initial);
+  const savedDefaultRef = useRef(isDefault);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Radio groups are named per instance: a page Next keeps hidden (Activity)
   // or a streamed copy must not share a group with the visible one.
   const groupId = useId();
@@ -169,10 +116,13 @@ export function ThemeSettings({
     () => true,
     () => false,
   );
-  // The whole-app preview ends when this page is hidden or left.
-  useLayoutEffect(() => () => setPreviewApp(false), []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
-  const dirty = !sameDraft(draft, saved);
   // What the app paints with: the palettes plus Look and feel's accent (as
   // the save action and resolve.ts compute it).
   const palettes = useMemo(
@@ -192,21 +142,59 @@ export function ThemeSettings({
     [deferredPalettes],
   );
 
-  function update(patch: Partial<ThemeDraft>) {
-    setStatus(null);
+  /** Saves `next` for everyone; with `remember`, the theme before it goes on the Undo stack. */
+  async function persist(next: ThemeDraft, remember: boolean) {
+    setStatus("saving");
+    setError(null);
+    try {
+      const result = await saveOrgTheme(orgId, next);
+      if (!result.ok) {
+        setStatus("error");
+        setError(result.error);
+        return;
+      }
+      const presetId = findPreset(next.preset) ? next.preset : CUSTOM_PRESET_ID;
+      const stored = { ...next, preset: presetId };
+      if (remember) {
+        const before = { draft: savedRef.current, wasDefault: savedDefaultRef.current };
+        setHistory((h) => [...h.slice(-19), before]);
+      }
+      savedRef.current = stored;
+      savedDefaultRef.current = false;
+      setSaved(stored);
+      setSavedIsDefault(false);
+      setStatus("saved");
+      // The admin sees the mode they just chose (a mode picked earlier
+      // from the user menu would otherwise keep winning in this browser).
+      if (!usingOwn)
+        setTheme(next.mode === "LIGHT" ? "light" : next.mode === "DARK" ? "dark" : "system");
+    } catch {
+      setStatus("error");
+      setError("Couldn't save the theme. Try again.");
+    }
+  }
+
+  /**
+   * Every change applies for everyone as soon as it's made (Jack's call):
+   * no Save, no preview-then-commit, and Undo in the bar takes it back.
+   * Typing a colour is debounced so a half-typed hex isn't sent.
+   */
+  function update(patch: Partial<ThemeDraft>, delay = 450) {
     setDraft((current) => {
       const next = { ...current, ...patch };
       if (next.mode === "SYSTEM") next.lockMode = false;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => void persist(next, true), delay);
       return next;
     });
   }
 
   function choosePreset(preset: ThemePreset) {
-    update({ preset: preset.id, light: preset.light, dark: preset.dark });
+    update({ preset: preset.id, light: preset.light, dark: preset.dark }, 0);
   }
 
   function chooseCustom() {
-    update({ preset: CUSTOM_PRESET_ID });
+    update({ preset: CUSTOM_PRESET_ID }, 0);
   }
 
   function applyFix(warning: ContrastWarning) {
@@ -214,96 +202,91 @@ export function ThemeSettings({
     if (!fix) return;
     // The accent is Look and feel's while it overrides the palette.
     if (fix.role === "accent" && draft.style.accent) {
-      if (fix.mode === "light") update({ style: { ...draft.style, accent: fix.value } });
+      if (fix.mode === "light") update({ style: { ...draft.style, accent: fix.value } }, 0);
       return;
     }
     if (fix.mode === "light") {
-      update({ preset: CUSTOM_PRESET_ID, light: { ...draft.light, [fix.role]: fix.value } });
+      update({ preset: CUSTOM_PRESET_ID, light: { ...draft.light, [fix.role]: fix.value } }, 0);
     } else {
       const dark = draft.dark ?? deriveDarkRoles(draft.light);
-      update({ preset: CUSTOM_PRESET_ID, dark: { ...dark, [fix.role]: fix.value } });
+      update({ preset: CUSTOM_PRESET_ID, dark: { ...dark, [fix.role]: fix.value } }, 0);
     }
   }
 
-  function save() {
-    setStatus(null);
-    startTransition(async () => {
-      try {
-        const result = await saveOrgTheme(orgId, draft);
-        if (!result.ok) {
-          setStatus({ kind: "error", text: result.error });
-          return;
-        }
-        const presetId = findPreset(draft.preset) ? draft.preset : CUSTOM_PRESET_ID;
-        const stored = { ...draft, preset: presetId };
-        setDraft(stored);
-        setSaved(stored);
-        setSavedIsDefault(false);
-        setPreviewApp(false);
-        // The admin sees the mode they just chose (a mode picked earlier
-        // from the user menu would otherwise keep winning in this browser).
-        if (!usingOwn)
-          setTheme(draft.mode === "LIGHT" ? "light" : draft.mode === "DARK" ? "dark" : "system");
-        const count = result.warnings.length;
-        setStatus({
-          kind: "ok",
-          text:
-            count === 0
-              ? "Saved. The theme passes WCAG AA in light and dark."
-              : `Saved with ${count} contrast ${count === 1 ? "warning" : "warnings"}.`,
-        });
-      } catch {
-        setStatus({ kind: "error", text: "The theme could not be saved. Try again." });
+  /** Back one change: the theme as it was before the last one, saved again. */
+  async function undo() {
+    const last = history.at(-1);
+    if (!last) return;
+    if (timer.current) clearTimeout(timer.current);
+    setHistory((h) => h.slice(0, -1));
+    setDraft(last.draft);
+    if (last.wasDefault) {
+      setStatus("saving");
+      const result = await resetOrgTheme(orgId);
+      if (!result.ok) {
+        setStatus("error");
+        setError(result.error);
+        return;
       }
-    });
+      savedRef.current = last.draft;
+      savedDefaultRef.current = true;
+      setSaved(last.draft);
+      setSavedIsDefault(true);
+      setStatus("saved");
+      return;
+    }
+    await persist(last.draft, false);
   }
 
-  function reset() {
-    setStatus(null);
-    startTransition(async () => {
-      try {
-        const result = await resetOrgTheme(orgId);
-        if (!result.ok) {
-          setStatus({ kind: "error", text: result.error });
-          return;
-        }
-        const defaults = findPreset(DEFAULT_PRESET_ID)!;
-        const next: ThemeDraft = {
-          preset: DEFAULT_PRESET_ID,
-          mode: "SYSTEM",
-          lockMode: false,
-          logoDisplay: "LOGO_AND_NAME",
-          light: defaults.light,
-          dark: defaults.dark,
-          style: DEFAULT_THEME_STYLE,
-        };
-        setDraft(next);
-        setSaved(next);
-        setSavedIsDefault(true);
-        setPreviewApp(false);
-        setStatus({ kind: "ok", text: "Reset to the default theme." });
-      } catch {
-        setStatus({ kind: "error", text: "The theme could not be reset. Try again." });
+  /** Back to the default theme, with Undo to bring this one back. */
+  async function reset() {
+    if (timer.current) clearTimeout(timer.current);
+    const before = { draft: savedRef.current, wasDefault: savedDefaultRef.current };
+    setStatus("saving");
+    try {
+      const result = await resetOrgTheme(orgId);
+      if (!result.ok) {
+        setStatus("error");
+        setError(result.error);
+        return;
       }
-    });
+      const defaults = findPreset(UNTHEMED_PRESET_ID)!;
+      const next: ThemeDraft = {
+        preset: UNTHEMED_PRESET_ID,
+        mode: "LIGHT",
+        lockMode: false,
+        logoDisplay: saved.logoDisplay,
+        light: defaults.light,
+        dark: defaults.dark,
+        style: DEFAULT_THEME_STYLE,
+      };
+      setHistory((h) => [...h.slice(-19), before]);
+      savedRef.current = next;
+      savedDefaultRef.current = true;
+      setDraft(next);
+      setSaved(next);
+      setSavedIsDefault(true);
+      setStatus("saved");
+      if (!usingOwn) setTheme("light");
+    } catch {
+      setStatus("error");
+      setError("Couldn't reset the theme. Try again.");
+    }
   }
 
   const isCustom = draft.preset === CUSTOM_PRESET_ID || !findPreset(draft.preset);
   const lightWarnings = warnings.filter((w) => w.mode === "light");
   const darkWarnings = warnings.filter((w) => w.mode === "dark");
   // Preset cards render in the mode the viewer is in, like the app around them
-  // (dark, Moonstone's first mode, until the client knows).
-  const cardMode: ColorMode = hydrated && resolvedTheme === "light" ? "light" : "dark";
+  // (light, the default, until the client knows).
+  const cardMode: ColorMode = hydrated && resolvedTheme === "dark" ? "dark" : "light";
   const savedPreset = findPreset(saved.preset) ? saved.preset : CUSTOM_PRESET_ID;
 
   return (
     <div className="space-y-4.5 pb-4">
-      <WholeAppPreview enabled={previewApp} tokens={tokens} accents={accents} style={draft.style} />
-
       <section aria-labelledby="theme-presets" className={THEME_SECTION}>
         <SectionHeading id="theme-presets" title="Palette">
-          Start from a preset, or choose Custom to pick each colour. Every preset passes WCAG AA in
-          light and dark, and each card shows it in the mode you&apos;re in.
+          Every preset passes WCAG AA.
         </SectionHeading>
         <div
           role="radiogroup"
@@ -318,13 +301,7 @@ export function ThemeSettings({
               description={preset.description}
               tokens={presetTokens(preset)[cardMode]}
               mode={cardMode}
-              badge={
-                savedPreset === preset.id
-                  ? "In use"
-                  : preset.id === DEFAULT_PRESET_ID
-                    ? "Default"
-                    : null
-              }
+              badge={savedPreset === preset.id ? "In use" : null}
               selected={draft.preset === preset.id}
               onSelect={() => choosePreset(preset)}
             />
@@ -332,7 +309,7 @@ export function ThemeSettings({
           <PresetCard
             group={`${groupId}-preset`}
             name="Custom"
-            description="Your own five colours for light, and optionally dark."
+            description="Your own colours."
             tokens={tokens[cardMode]}
             mode={cardMode}
             badge={savedPreset === CUSTOM_PRESET_ID ? "In use" : null}
@@ -346,8 +323,7 @@ export function ThemeSettings({
       {isCustom && (
         <section aria-labelledby="theme-custom" className={THEME_SECTION}>
           <SectionHeading id="theme-custom" title="Custom colours">
-            Pick the five roles. Everything else (borders, muted text, hover states, charts, success
-            and warning colours) is derived from them.
+            Everything else is derived from these.
           </SectionHeading>
           <CustomThemeEditor
             light={draft.light}
@@ -358,10 +334,7 @@ export function ThemeSettings({
       )}
 
       <section aria-labelledby="theme-look" className={THEME_SECTION}>
-        <SectionHeading id="theme-look" title="Look and feel">
-          Fine-tune the palette: your own accent colour for highlights, badges and charts, the glow,
-          plus corners, text size and fonts. These apply to everyone, on every page of the club.
-        </SectionHeading>
+        <SectionHeading id="theme-look" title="Look and feel" />
         <LookAndFeel
           groupId={`${groupId}-look`}
           style={draft.style}
@@ -372,10 +345,32 @@ export function ThemeSettings({
         />
       </section>
 
+      <section aria-labelledby="theme-mode" className={THEME_SECTION}>
+        <SectionHeading id="theme-mode" title="Light and dark" />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Segmented
+            label="Default mode"
+            value={draft.mode}
+            onSelect={(mode) => update({ mode: mode as ThemeModeValue }, 0)}
+            options={MODE_OPTIONS}
+          />
+          {draft.mode !== "SYSTEM" && (
+            <div className="flex items-center gap-3">
+              <Switch
+                id="lock-mode"
+                checked={draft.lockMode}
+                onCheckedChange={(lockMode) => update({ lockMode }, 0)}
+              />
+              <Label htmlFor="lock-mode" className="font-normal">
+                Lock it for everyone
+              </Label>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section aria-labelledby="theme-preview" className={THEME_SECTION}>
-        <SectionHeading id="theme-preview" title="Preview">
-          Your colours on a mini Overview, in light and dark. Unsaved changes show here first.
-        </SectionHeading>
+        <SectionHeading id="theme-preview" title="Preview" />
         <div className="grid gap-5">
           <ThemePreview
             tokens={tokens.light}
@@ -392,25 +387,13 @@ export function ThemeSettings({
             orgName={orgName}
           />
         </div>
-        <div className="bg-muted/40 rounded-tile flex items-center gap-3 p-3">
-          <Switch id="preview-app" checked={previewApp} onCheckedChange={setPreviewApp} />
-          <Label htmlFor="preview-app" className="font-normal">
-            Preview on the whole app until I save or leave this page
-          </Label>
-        </div>
       </section>
 
-      <section aria-labelledby="theme-contrast" className={THEME_SECTION} aria-live="polite">
-        <SectionHeading id="theme-contrast" title="Contrast check">
-          WCAG AA: 4.5:1 for text, 3:1 for the focus ring and chart colours. A theme that fails can
-          still be saved, but some members may struggle to read it.
-        </SectionHeading>
-        {warnings.length === 0 ? (
-          <p className="bg-tint-success text-tint-success-foreground rounded-tile flex items-center gap-2 px-3.5 py-3 text-sm font-semibold">
-            <CheckCircle2 className="size-4" aria-hidden="true" />
-            Passes WCAG AA in light and dark.
-          </p>
-        ) : (
+      {warnings.length > 0 && showIssues && (
+        <section aria-labelledby="theme-contrast" className={THEME_SECTION}>
+          <SectionHeading id="theme-contrast" title="Contrast">
+            Text needs 4.5:1.
+          </SectionHeading>
           <div className="grid gap-4 lg:grid-cols-2">
             <WarningList mode="light" warnings={lightWarnings} onApply={applyFix} />
             <WarningList
@@ -420,141 +403,66 @@ export function ThemeSettings({
               derived={draft.dark === null}
             />
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section aria-labelledby="theme-mode" className={THEME_SECTION}>
-        <SectionHeading id="theme-mode" title="Light and dark mode">
-          The mode members see until they pick their own in the user menu.
-        </SectionHeading>
-        <OptionGroup
-          name={`${groupId}-mode`}
-          labelledBy="theme-mode"
-          options={MODE_OPTIONS}
-          value={draft.mode}
-          onChange={(mode) => update({ mode })}
-        />
-        <div className="bg-muted/40 rounded-tile flex items-start gap-3 p-3.5">
-          <Switch
-            id="lock-mode"
-            checked={draft.lockMode}
-            disabled={draft.mode === "SYSTEM"}
-            onCheckedChange={(lockMode) => update({ lockMode })}
-            aria-describedby="lock-mode-hint"
-          />
-          <div className="space-y-0.5">
-            <Label htmlFor="lock-mode">Lock the mode for everyone</Label>
-            <p id="lock-mode-hint" className="text-muted-foreground text-xs">
-              {draft.mode === "SYSTEM"
-                ? "Choose Light or Dark to lock it."
-                : `Members always see ${draft.mode === "LIGHT" ? "light" : "dark"} mode and cannot switch.`}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="theme-logo" className={THEME_SECTION}>
-        <SectionHeading id="theme-logo" title="Logo display">
-          How the logo shows in the sidebar and on the club&apos;s public poll and invite pages.{" "}
-          {hasLogo ? (
+      {/* Changes apply as they're made; this bar says so and holds Undo. */}
+      <div className="glass-light text-foreground sticky bottom-[calc(var(--shell-bottom,0px)+1rem)] z-10 flex flex-wrap items-center gap-2 rounded-[1.75rem] p-2 sm:rounded-full">
+        <span
+          role="status"
+          aria-live="polite"
+          className="inline-flex items-center gap-1.5 px-2 text-sm font-medium"
+        >
+          {status === "saving" ? (
             <>
-              Change the logo in{" "}
-              <Link
-                href={`/app/${orgSlug}/settings/general`}
-                className="text-foreground font-medium underline underline-offset-4"
-              >
-                General
-              </Link>
-              .
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              Saving
             </>
+          ) : status === "error" ? (
+            <span className="text-destructive">{error}</span>
           ) : (
             <>
-              No logo yet: upload one in{" "}
-              <Link
-                href={`/app/${orgSlug}/settings/general`}
-                className="text-foreground font-medium underline underline-offset-4"
-              >
-                General
-              </Link>
-              . Until then the sidebar shows the club&apos;s initials in the primary colour.
+              <Check className="text-success size-4" aria-hidden="true" />
+              {status === "saved" ? "Saved for everyone" : "Changes apply for everyone"}
             </>
           )}
-        </SectionHeading>
-        <OptionGroup
-          name={`${groupId}-logo`}
-          labelledBy="theme-logo"
-          options={LOGO_OPTIONS}
-          value={draft.logoDisplay}
-          onChange={(logoDisplay) => update({ logoDisplay })}
-        />
-        <div className="bg-sidebar text-sidebar-foreground rounded-tile ring-foreground/6 w-64 p-3 ring-1">
-          <OrgBrand name={orgName} logo={logo} display={draft.logoDisplay} />
-        </div>
-      </section>
-
-      {/* The one commit for the whole page: a floating bar that stays in reach. */}
-      <div className="glass-light text-foreground sticky bottom-[calc(var(--shell-bottom,0px)+1rem)] z-10 flex flex-wrap items-center gap-2 rounded-[1.75rem] p-2 sm:rounded-full">
-        <Button onClick={save} disabled={isPending || !dirty}>
-          {isPending ? "Saving…" : "Save theme"}
-        </Button>
+        </span>
+        {warnings.length === 0 ? (
+          <Badge variant="success">
+            <CheckCircle2 aria-hidden="true" />
+            Passes AA
+          </Badge>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowIssues((s) => !s)}
+            aria-expanded={showIssues}
+            className="focus-glow rounded-full outline-none"
+          >
+            <Badge variant="accent">
+              <TriangleAlert aria-hidden="true" />
+              {warnings.length} contrast {warnings.length === 1 ? "issue" : "issues"}
+            </Badge>
+          </button>
+        )}
+        <span className="flex-1" />
         <Button
           variant="outline"
-          onClick={() => {
-            setDraft(saved);
-            setStatus(null);
-            setPreviewApp(false);
-          }}
-          disabled={isPending || !dirty}
+          size="sm"
+          onClick={() => void undo()}
+          disabled={status === "saving" || history.length === 0}
         >
-          Discard changes
+          <Undo2 aria-hidden="true" />
+          Undo
         </Button>
-        <ResetButton disabled={isPending || savedIsDefault} onConfirm={reset} />
-        {status && (
-          <p
-            role="status"
-            className={cn(
-              "px-2 text-sm font-medium",
-              status.kind === "error"
-                ? "text-destructive"
-                : warnings.length > 0
-                  ? "text-warning"
-                  : "text-success",
-            )}
-          >
-            {status.text}
-          </p>
-        )}
-        {!status && dirty && (
-          <p className="text-muted-foreground inline-flex items-center gap-2 px-2 text-sm">
-            <span aria-hidden="true" className="bg-glow size-2 rounded-full" />
-            Unsaved changes
-          </p>
-        )}
-        {status?.kind === "ok" && usingOwn && (
-          <p className="text-warning flex flex-wrap items-center gap-2 px-2 text-sm">
-            Everyone else sees it now. You still see your own theme ({personalThemeName}).
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={switching}
-              onClick={() =>
-                startSwitch(async () => {
-                  const result = await saveThemeStep(null);
-                  if (!result.ok) return;
-                  setUsingOwn(false);
-                  setTheme(
-                    saved.mode === "LIGHT" ? "light" : saved.mode === "DARK" ? "dark" : "system",
-                  );
-                  setStatus({ kind: "ok", text: "Saved. You see the club theme now too." });
-                  router.refresh();
-                })
-              }
-            >
-              Show me the club theme
-            </Button>
-          </p>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void reset()}
+          disabled={status === "saving" || savedIsDefault}
+        >
+          Reset to default
+        </Button>
       </div>
     </div>
   );
@@ -578,14 +486,14 @@ function SectionHeading({
 }: {
   id: string;
   title: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="space-y-1">
       <h2 id={id} className="heading text-[17px]">
         {title}
       </h2>
-      <p className="text-muted-foreground max-w-prose text-sm">{children}</p>
+      {children && <p className="text-muted-foreground max-w-prose text-sm">{children}</p>}
     </div>
   );
 }
@@ -646,7 +554,7 @@ function PresetCard({
         />
         <span className="flex items-center gap-2 pr-7">
           {icon && <Palette className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />}
-          <span className="heading truncate text-[17px]">{name}</span>
+          <span className="heading text-[17px] break-words">{name}</span>
           {badge && (
             <Badge variant="secondary" className="ml-auto">
               {badge}
@@ -696,41 +604,6 @@ function PresetCard({
         </span>
       </span>
     </label>
-  );
-}
-
-function OptionGroup<T extends string>({
-  name,
-  labelledBy,
-  options,
-  value,
-  onChange,
-}: {
-  name: string;
-  labelledBy: string;
-  options: { value: T; label: string; hint: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-labelledby={labelledBy} className="grid gap-2.5 sm:grid-cols-3">
-      {options.map((option) => (
-        <label key={option.value} className={choiceClass(value === option.value)}>
-          <input
-            type="radio"
-            name={name}
-            value={option.value}
-            checked={value === option.value}
-            onChange={() => onChange(option.value)}
-            className="accent-foreground mt-0.5 size-4 shrink-0"
-          />
-          <span className="space-y-0.5">
-            <span className="block font-semibold">{option.label}</span>
-            <span className="text-muted-foreground block text-xs">{option.hint}</span>
-          </span>
-        </label>
-      ))}
-    </div>
   );
 }
 
@@ -793,77 +666,4 @@ function WarningList({
       </ul>
     </div>
   );
-}
-
-function ResetButton({ disabled, onConfirm }: { disabled: boolean; onConfirm: () => void }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" disabled={disabled}>
-          Reset to default
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Reset the theme?</DialogTitle>
-          <DialogDescription>
-            Everyone goes back to the default colours (Moonstone), the device&apos;s light or dark
-            mode, and the logo beside the name. You can pick a theme again at any time.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button variant="destructive" onClick={onConfirm}>
-              Reset theme
-            </Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * The optional whole-app preview: writes the draft's tokens and accent
- * scale (for the mode the viewer is in) and its Look and feel as inline
- * custom properties on <html>, which beat both globals.css and the org's
- * <style>. Everything it set is removed when it is switched off, on save,
- * on discard and when the page unmounts.
- */
-function WholeAppPreview({
-  enabled,
-  tokens,
-  accents,
-  style,
-}: {
-  enabled: boolean;
-  tokens: DerivedTheme;
-  accents: { light: AccentScale; dark: AccentScale };
-  style: ThemeStyle;
-}) {
-  const { resolvedTheme } = useTheme();
-  const mode: ColorMode = resolvedTheme === "dark" ? "dark" : "light";
-  const active = tokens[mode];
-  const scale = accents[mode];
-
-  useEffect(() => {
-    if (!enabled) return;
-    const root = document.documentElement;
-    const look = styleDeclarations(style);
-    for (const name of TOKEN_NAMES) root.style.setProperty(`--${name}`, active[name]);
-    for (const name of ACCENT_SCALE_NAMES) root.style.setProperty(`--color-${name}`, scale[name]);
-    for (const [name, value] of Object.entries(look)) root.style.setProperty(name, value);
-    root.style.fontSize = TEXT_SIZE_VALUES[style.textSize];
-    return () => {
-      for (const name of TOKEN_NAMES) root.style.removeProperty(`--${name}`);
-      for (const name of ACCENT_SCALE_NAMES) root.style.removeProperty(`--color-${name}`);
-      for (const name of Object.keys(look)) root.style.removeProperty(name);
-      root.style.removeProperty("font-size");
-    };
-  }, [enabled, active, scale, style]);
-
-  return null;
 }

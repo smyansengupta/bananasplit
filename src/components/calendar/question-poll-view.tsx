@@ -16,7 +16,7 @@ import {
   Users,
   Vote,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 
@@ -113,7 +113,7 @@ export function QuestionPoll({
 }) {
   const router = useRouter();
   const zone = useViewerTimeZone(timeZone);
-  const href = `/app/${orgSlug}/calendar/polls/${poll.id}`;
+  const href = `/app/${orgSlug}/forms/polls/${poll.id}`;
   const headingId = useId();
   const [confirmElement, confirm] = useConfirm();
 
@@ -196,7 +196,7 @@ export function QuestionPoll({
     });
     if (!deleted) return;
     toast({ title: "Poll deleted", description: poll.question });
-    router.push(`/app/${orgSlug}/calendar/polls`);
+    router.push(`/app/${orgSlug}/forms`);
   }
 
   async function removeOption(option: QuestionPollOptionView) {
@@ -228,10 +228,9 @@ export function QuestionPoll({
           <div className="min-w-0 flex-1 space-y-2">
             <p className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-xs font-medium">
               <Vote aria-hidden className="size-3.5" />
-              <span>Question</span>
-              <span aria-hidden>·</span>
+              <span>Question,</span>
               <span>
-                {poll.askedBy ? `Asked by ${poll.askedBy}, ` : "Asked "}
+                {poll.askedBy ? `asked by ${poll.askedBy}, ` : "asked "}
                 {shortDay(poll.createdAt, zone)}
               </span>
             </p>
@@ -534,10 +533,12 @@ function OptionRow({
             )}
             <span className="text-muted-foreground flex min-h-5 items-center justify-between gap-3 text-xs">
               <span className="flex items-center gap-1.5 tabular-nums">
-                {voteCount(row.votes)}
+                <span>
+                  {voteCount(row.votes)}
+                  {leading && ","}
+                </span>
                 {leading && (
                   <span className="text-foreground inline-flex items-center gap-1 font-semibold">
-                    <span aria-hidden>·</span>
                     {!isOpen && <Trophy aria-hidden className="size-3.5" />}
                     {isOpen ? "Leading" : "Top choice"}
                   </span>

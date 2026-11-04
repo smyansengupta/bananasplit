@@ -26,17 +26,18 @@ import {
 import {
   basicsSchema,
   clubRoleHref,
-  clubRoleSchema,
   detectLinkKind,
   gradYearChoices,
   joinMajor,
-  nextProfileStep,
+  nextSetupStep,
   onboardingHref,
-  previousProfileStep,
-  PROFILE_STEPS,
+  ORG_FLOW,
+  ORG_STEPS,
+  PERSONAL_STEPS,
+  previousSetupStep,
   schoolSchema,
+  setupStepHref,
   splitMajor,
-  unfinishedProfileSteps,
 } from "@/lib/onboarding/steps";
 import { applyPersonalTheme, parsePersonalTheme, personalThemeSchema } from "@/lib/theme/personal";
 import { DEFAULT_RESOLVED_THEME } from "@/lib/theme/resolve";
@@ -139,36 +140,42 @@ describe("join codes", () => {
   });
 });
 
-describe("profile setup steps", () => {
-  it("runs one flow of five steps, basics first, review last", () => {
-    expect(PROFILE_STEPS).toEqual(["basics", "school", "bio", "availability", "review"]);
-    expect(previousProfileStep("basics")).toBeNull();
-    expect(nextProfileStep("basics")).toBe("school");
-    expect(previousProfileStep("school")).toBe("basics");
-    expect(nextProfileStep("school")).toBe("bio");
-    expect(nextProfileStep("bio")).toBe("availability");
-    expect(nextProfileStep("availability")).toBe("review");
-    expect(nextProfileStep("review")).toBeNull();
+describe("onboarding steps", () => {
+  it("joins with one profile screen", () => {
+    expect(clubRoleHref("robotics")).toBe("/onboarding/join/robotics/profile");
   });
 
-  it("lists the skipped steps for the dashboard's Finish your profile", () => {
-    const empty = { major: null, gradYear: null, bio: null, links: [], blockedHours: 0 };
-    expect(unfinishedProfileSteps(empty)).toEqual(["school", "bio", "availability"]);
-    expect(
-      unfinishedProfileSteps({
-        major: "CS",
-        gradYear: null,
-        bio: null,
-        links: [{}],
-        blockedHours: 12,
-      }),
-    ).toEqual([]);
+  it("sets an organization up in three screens: name, invite, bring", () => {
+    expect(ORG_FLOW).toEqual(["basics", "invite", "bring"]);
+    // Back from the first step after creating edits the organization; no Back before it.
+    expect(previousSetupStep("org", "invite")).toBe("basics");
+    expect(previousSetupStep("org", "basics")).toBeNull();
+    expect(nextSetupStep("org", "invite")).toBe("bring");
+    // Bring is the last; then the Overview, where the rest waits.
+    expect(nextSetupStep("org", "bring")).toBeNull();
+    expect(ORG_STEPS).not.toContain("imessage" as never);
+    expect(ORG_STEPS).not.toContain("tools" as never);
+    expect(setupStepHref("org", "acme", "teams")).toBe("/onboarding/organization/acme/teams");
+  });
+
+  it("opens the other setup steps on their own, from the Overview", () => {
+    for (const step of ["import", "picture", "labels", "events", "teams", "emails", "profile"]) {
+      expect(ORG_STEPS).toContain(step as never);
+      expect(nextSetupStep("org", step as never)).toBeNull();
+      expect(previousSetupStep("org", step as never)).toBeNull();
+    }
+    expect(nextSetupStep("personal", "import")).toBe("labels");
+  });
+
+  it("sets the personal workspace up without iMessage, the profile last", () => {
+    expect(PERSONAL_STEPS).toEqual(["import", "labels", "emails", "profile"]);
+    expect(previousSetupStep("personal", "import")).toBeNull();
+    expect(setupStepHref("personal", "me-x", "emails")).toBe("/onboarding/personal/emails");
   });
 
   it("carries where sign-up started through /onboarding", () => {
     expect(onboardingHref(null)).toBe("/onboarding");
     expect(onboardingHref("/invite/tok")).toBe("/onboarding?callbackUrl=%2Finvite%2Ftok");
-    expect(clubRoleHref("robotics")).toBe("/onboarding/join/robotics");
   });
 
   it("keeps two majors in the one profile field", () => {
@@ -216,10 +223,6 @@ describe("profile setup steps", () => {
     expect(
       schoolSchema.safeParse({ major: "CS", gradYear: 2027, preferredTitle: "VP" }).success,
     ).toBe(false);
-    expect(clubRoleSchema.parse({ title: "  Head   of Events " }).title).toBe("Head of Events");
-    expect(clubRoleSchema.parse({ title: "  " }).title).toBeNull();
-    expect(clubRoleSchema.parse({}).title).toBeNull();
-    expect(clubRoleSchema.safeParse({ title: "x".repeat(81) }).success).toBe(false);
   });
 });
 

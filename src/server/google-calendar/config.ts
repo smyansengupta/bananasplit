@@ -14,7 +14,12 @@ import type { TxClient } from "@/server/db/context";
  * OrgSecret (kind REFRESH_TOKEN) read only through getSecret. The non-secret
  * config keys this module reads:
  *
- *   publicCalendarId    where PUBLIC events are mirrored (default "primary")
+ *   publicCalendarId    optional; where PUBLIC events are mirrored, and the
+ *                       calendar the one-time import reads. Without it
+ *                       (just connected, or "Don't mirror public events")
+ *                       PUBLIC events are never on Google and there is
+ *                       nothing to import from. Never a default: an unset
+ *                       calendar and an opt-out are the same choice, off.
  *   internalCalendarId  optional; where INTERNAL events are mirrored. Without
  *                       it INTERNAL events are never on Google at all.
  *
@@ -26,7 +31,7 @@ import type { TxClient } from "@/server/db/context";
  */
 
 export interface GoogleCalendarConfig {
-  publicCalendarId: string;
+  publicCalendarId: string | null;
   internalCalendarId: string | null;
 }
 
@@ -47,7 +52,7 @@ function calendarIdOrNull(value: unknown): string | null {
 
 export function parseGoogleConfig(config: unknown): GoogleCalendarConfig {
   const c = (config && typeof config === "object" ? config : {}) as Record<string, unknown>;
-  const publicCalendarId = calendarIdOrNull(c.publicCalendarId) ?? "primary";
+  const publicCalendarId = calendarIdOrNull(c.publicCalendarId);
   const internal = calendarIdOrNull(c.internalCalendarId);
   return {
     publicCalendarId,
@@ -93,9 +98,9 @@ export async function mergeIntegrationConfig(
 
 /**
  * The calendar an event belongs on, or null when it must not be on Google:
- * PUBLIC -> the public calendar; INTERNAL -> the internal calendar if one is
- * configured, otherwise nowhere (never the public one); deleted or merged ->
- * nowhere.
+ * PUBLIC -> the public calendar if one is configured, otherwise nowhere;
+ * INTERNAL -> the internal calendar if one is configured, otherwise nowhere
+ * (never the public one); deleted or merged -> nowhere.
  */
 export function targetCalendarFor(
   event: { visibility: EventVisibility; deletedAt: Date | null; mergedIntoId: string | null },

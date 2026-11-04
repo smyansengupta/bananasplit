@@ -1,4 +1,4 @@
-import { ExternalLink, Globe, Link as LinkIcon } from "lucide-react";
+import { ExternalLink, Globe, Link as LinkIcon } from "@/components/icons";
 
 import { linkDisplayText, type ProfileLink } from "@/lib/profile/links";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,8 @@ export function ProfileLinks({ links, className }: { links: ProfileLink[]; class
   return (
     <ul className={cn("flex flex-wrap gap-2", className)}>
       {links.map((link, index) => {
-        const Icon = link.kind === "website" ? Globe : link.kind === "other" ? LinkIcon : ExternalLink;
+        const Icon =
+          link.kind === "website" ? Globe : link.kind === "other" ? LinkIcon : ExternalLink;
         return (
           <li key={`${link.url}-${index}`}>
             <a
@@ -35,8 +36,8 @@ export function ProfileLinks({ links, className }: { links: ProfileLink[]; class
   );
 }
 
-/** "Computer Science · Class of 2028", or whichever part is set. */
+/** "Computer Science, Class of 2028", or whichever part is set. */
 export function majorAndYear(major: string | null, gradYear: number | null): string | null {
   const parts = [major, gradYear ? `Class of ${gradYear}` : null].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
+  return parts.length > 0 ? parts.join(", ") : null;
 }

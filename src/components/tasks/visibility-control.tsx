@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Lock } from "lucide-react";
+import { Globe, Lock } from "@/components/icons";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskVisibility } from "@/generated/prisma/enums";
@@ -24,7 +24,7 @@ const OPTIONS = [
     value: TaskVisibility.ORG,
     icon: Globe,
     label: "Everyone",
-    hint: "Anyone in the club can find and open this task.",
+    hint: "Anyone in the organization can find and open this task.",
   },
   {
     value: TaskVisibility.PRIVATE,

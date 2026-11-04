@@ -35,6 +35,8 @@ export interface ChartPosition {
   userId: string | null;
   user: ChartPerson | null;
   reportsToId: string | null;
+  /** Extra managers (dotted lines); the hand-down rule follows reportsToId only. */
+  alsoReportsToIds: string[];
   isOpen: boolean;
   isAdvisor: boolean;
   responsibilities: string[];
@@ -79,6 +81,7 @@ async function loadPublishedOrgChart(orgId: string): Promise<PublishedOrgChart |
         personName: true,
         userId: true,
         reportsToId: true,
+        alsoReportsToIds: true,
         isOpen: true,
         isAdvisor: true,
         responsibilities: true,

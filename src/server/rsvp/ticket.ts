@@ -94,7 +94,7 @@ export async function loadTicket(slug: string, code: string): Promise<TicketData
         location: e.location,
         timeZone: safeTimeZone(e.organization.timezone),
         hostName: e.organization.name,
-        doorHref: `/app/${e.organization.slug}/calendar/${target.eventId}/rsvp/door`,
+        doorHref: `/app/${e.organization.slug}/meetings/${target.eventId}/rsvp/door`,
       },
       cost:
         owes === null

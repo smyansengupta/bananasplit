@@ -19,51 +19,36 @@ async function slugOf(db: TxClient, orgId: string) {
   return org?.slug ?? null;
 }
 
-export const togglePinAction = withOrgAction(
-  async (ctx, pathname: string): Promise<PinResult> => {
-    const path = pathSchema.safeParse(pathname);
-    const slug = await slugOf(ctx.db, ctx.organizationId);
-    if (!path.success || !slug) return { ok: false, error: "This page can't be pinned." };
-    return togglePin(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
-  },
-  { whenPaused: "allow" },
-);
+export const togglePinAction = withOrgAction(async (ctx, pathname: string): Promise<PinResult> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return { ok: false, error: "This page can't be pinned." };
+  return togglePin(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
 
-export const unpinAction = withOrgAction(
-  async (ctx, pinId: string): Promise<void> => {
-    await unpin(ctx.db, ctx.organizationId, ctx.userId, z.string().max(64).parse(pinId));
-  },
-  { whenPaused: "allow" },
-);
+export const unpinAction = withOrgAction(async (ctx, pinId: string): Promise<void> => {
+  await unpin(ctx.db, ctx.organizationId, ctx.userId, z.string().max(64).parse(pinId));
+});
 
-export const recordVisitAction = withOrgAction(
-  async (ctx, pathname: string): Promise<void> => {
-    const path = pathSchema.safeParse(pathname);
-    const slug = await slugOf(ctx.db, ctx.organizationId);
-    if (!path.success || !slug) return;
-    await recordVisit(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
-  },
-  { whenPaused: "allow" },
-);
+export const recordVisitAction = withOrgAction(async (ctx, pathname: string): Promise<void> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return;
+  await recordVisit(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
 
 /** Pins a page (dragged onto Pinned, or a card's pin button). */
-export const pinPathAction = withOrgAction(
-  async (ctx, pathname: string): Promise<PinResult> => {
-    const path = pathSchema.safeParse(pathname);
-    const slug = await slugOf(ctx.db, ctx.organizationId);
-    if (!path.success || !slug) return { ok: false, error: "That can't be pinned." };
-    return pinPage(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
-  },
-  { whenPaused: "allow" },
-);
+export const pinPathAction = withOrgAction(async (ctx, pathname: string): Promise<PinResult> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return { ok: false, error: "That can't be pinned." };
+  return pinPage(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
 
-export const reorderPinsAction = withOrgAction(
-  async (ctx, ids: string[]): Promise<void> => {
-    const parsed = z.array(z.string().max(64)).max(50).parse(ids);
-    await reorderPins(ctx.db, ctx.organizationId, ctx.userId, parsed);
-  },
-  { whenPaused: "allow" },
-);
+export const reorderPinsAction = withOrgAction(async (ctx, ids: string[]): Promise<void> => {
+  const parsed = z.array(z.string().max(64)).max(50).parse(ids);
+  await reorderPins(ctx.db, ctx.organizationId, ctx.userId, parsed);
+});
 
 /** "Pin something": what the member can pin, matching `query` (as them, under RLS). */
 export const searchPinnablesAction = withOrgAction(
@@ -78,5 +63,4 @@ export const searchPinnablesAction = withOrgAction(
       z.string().max(200).catch("").parse(query),
     );
   },
-  { whenPaused: "allow" },
 );

@@ -12,8 +12,8 @@ import {
   Star,
   Target,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_MIME = "application/x-bananasplit-page";
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = { Users, CalendarDays, Target, ListChecks };
+const TEMPLATE_ICONS: Record<string, IconComponent> = { Users, CalendarDays, Target, ListChecks };
 
 export interface TreePage extends TreeNote {
   updatedAt?: Date | string;
@@ -117,7 +117,6 @@ export function NotesTree({
         title: template.title,
         contentJson: JSON.stringify(json),
         contentText: generateText(json, extensions).slice(0, 200_000),
-        visibility: "PRIVATE",
       });
       if (result.error || !result.noteId) {
         toast({ title: result.error ?? "Couldn't start from the template", tone: "error" });
@@ -160,7 +159,11 @@ export function NotesTree({
       e.dataTransfer.dropEffect = "move";
       setOver(parentId ?? "root");
     },
-    onDragLeave: () => setOver((o) => (o === (parentId ?? "root") ? null : o)),
+    // Crossing into the row's own chevron or title isn't leaving it.
+    onDragLeave: (e: React.DragEvent) => {
+      if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+      setOver((o) => (o === (parentId ?? "root") ? null : o));
+    },
     onDrop: (e: React.DragEvent) => {
       const id = e.dataTransfer.getData(PAGE_MIME);
       if (!id) return;
@@ -228,7 +231,7 @@ export function NotesTree({
           ) : (
             <FileText className="size-4 shrink-0" aria-hidden="true" />
           )}
-          <span className="truncate">{page.title || "Untitled"}</span>
+          <span className="min-w-0 break-words">{page.title || "Untitled"}</span>
         </Link>
         {children && (
           <button
@@ -297,7 +300,7 @@ export function NotesTree({
                   ) : (
                     <Star className="size-4 shrink-0" aria-hidden="true" />
                   )}
-                  <span className="truncate">{page.title || "Untitled"}</span>
+                  <span className="min-w-0 break-words">{page.title || "Untitled"}</span>
                 </Link>
               </li>
             ))}
@@ -335,7 +338,7 @@ export function NotesTree({
                 className="text-muted-foreground hover:bg-muted/60 flex h-8 w-full items-center gap-2 rounded-xl px-2.5 text-left text-[13px]"
               >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{t.title}</span>
+                <span className="min-w-0 break-words">{t.title}</span>
               </button>
             </li>
           );

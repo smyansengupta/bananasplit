@@ -21,11 +21,14 @@ import {
   MessageSquarePlus,
   Strikethrough,
   Underline as UnderlineIcon,
-} from "lucide-react";
+} from "@/components/icons";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
+import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
 import { dismissToast, toast } from "@/components/ui/toaster";
 import { NOTE_FIELD, type CollabUser } from "@/lib/collab/protocol";
 import { uploadNoteFile } from "@/lib/files/upload";
+import { linkRefOfHit } from "@/lib/links";
 import { bandFooter, bandHeader, paperPx } from "@/lib/notes/paper";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 import { cn } from "@/lib/utils";
@@ -301,6 +304,26 @@ export function NoteEditor({
       pages: () => placeRef.current.pages,
       selfId: () => placeRef.current.viewer.id || null,
       noteId: () => placeRef.current.noteId || null,
+      findItems: async (query) => {
+        const { orgId, noteId } = placeRef.current;
+        if (!orgId) return [];
+        const result = await searchWorkspaceAction(orgId, { query, scope: "all" });
+        return (result.groups ?? [])
+          .flatMap((g) => g.hits)
+          .flatMap((hit) => {
+            const ref = linkRefOfHit(hit);
+            // People are the mention list's; this note isn't a link to itself.
+            if (!ref || ref.kind === "person" || (ref.kind === "note" && ref.id === noteId)) {
+              return [];
+            }
+            return [{ ref, kind: hit.kind, title: hit.title, href: hit.href, detail: hit.detail }];
+          })
+          .slice(0, 6);
+      },
+      linkItem: (ref) => {
+        const { orgId, orgSlug, noteId } = placeRef.current;
+        if (orgId && noteId) void addLinkAction(orgId, orgSlug, { kind: "note", id: noteId }, ref);
+      },
       clickThread: (id) => clickThread.current?.(id),
       uploadImages: (files) => {
         if (!editableRef.current) return false;

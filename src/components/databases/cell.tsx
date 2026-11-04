@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Check, CircleAlert, Minus } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, Minus } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";
@@ -77,7 +77,7 @@ export function CellView({ cell }: { cell: Cell }) {
         <span className="flex min-w-0 items-center gap-2.5">
           <UserAvatar user={cell.user ?? { name: cell.name }} size="sm" />
           <span className="min-w-0">
-            <span className="block truncate font-medium">{cell.name}</span>
+            <span className="block font-medium break-words">{cell.name}</span>
             {cell.sub && <span className="text-muted-foreground block text-xs">{cell.sub}</span>}
           </span>
         </span>

@@ -5,17 +5,18 @@ import type {
   RSVPStatus,
 } from "@/generated/prisma/enums";
 
+import { tagToken } from "@/lib/tag-colors";
+
 /**
  * Labels and colour variables for the calendar's event kinds, visibility,
  * Google sync state and RSVP. Client-safe.
  *
- * KIND COLOURS ARE THEME TOKENS, not fixed values. Each kind names a CSS
- * variable, so an org's theme restyles the calendar with everything else
- * (Settings > Theme). --chart-1..5 are the derived categorical palette: it
- * is checked per theme for a lightness band, a chroma floor, colour-blind
- * separation between adjacent slots and 3:1 against both surfaces (see
- * src/lib/theme/chart.ts), which is exactly the guarantee a row of event
- * kinds needs. "Other" is the uncategorised one and takes the neutral.
+ * KIND COLOURS COME FROM THE TAG PALETTE (src/lib/tag-colors.ts), not
+ * from the org's theme. They were the derived chart slots, which meant a
+ * club's kinds changed colour whenever it changed theme and had almost
+ * none at all under a monochrome one. A kind is a label, not a data
+ * series: it keeps its colour. "Other" is the uncategorised one and takes
+ * the neutral. The chart slots are untouched and still belong to charts.
  *
  * Colour is never the only cue: every chip carries the kind in its
  * accessible name, and every tile, row and popover names it in text.
@@ -28,11 +29,11 @@ export interface KindMeta {
 }
 
 export const KIND_META: Record<EventKind, KindMeta> = {
-  WORKSHOP: { label: "Workshop", token: "--chart-1" },
-  INFO_SESSION: { label: "Info session", token: "--chart-2" },
-  HACKATHON: { label: "Hackathon", token: "--chart-3" },
-  SOCIAL: { label: "Social", token: "--chart-4" },
-  BOARD_MEETING: { label: "Board meeting", token: "--chart-5" },
+  WORKSHOP: { label: "Workshop", token: tagToken("navy") },
+  INFO_SESSION: { label: "Info session", token: tagToken("rust") },
+  HACKATHON: { label: "Hackathon", token: tagToken("forest") },
+  SOCIAL: { label: "Social", token: tagToken("ochre") },
+  BOARD_MEETING: { label: "Board meeting", token: tagToken("plum") },
   OTHER: { label: "Other", token: "--muted-foreground" },
 };
 
@@ -54,9 +55,20 @@ export function kindStyle(kind: EventKind): React.CSSProperties {
   return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
 }
 
-/** A chip's colour: its kind's, or the primary for a task's due date. */
-export function itemStyle(item: { kind: EventKind; task?: unknown }): React.CSSProperties {
-  return item.task ? { ["--kind" as string]: "var(--primary)" } : kindStyle(item.kind);
+/**
+ * Black or white, whichever reads on a SOLID fill of `--kind` (set as
+ * `color` beside `background: var(--kind)`), as block-card.tsx does.
+ */
+export const KIND_INK = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
+
+/** A chip's colour: its meeting type's, else its kind's, or the primary for a task's due date. */
+export function itemStyle(item: {
+  kind: EventKind;
+  typeColor?: string | null;
+  task?: unknown;
+}): React.CSSProperties {
+  if (item.task) return { ["--kind" as string]: "var(--primary)" };
+  return item.typeColor ? { ["--kind" as string]: item.typeColor } : kindStyle(item.kind);
 }
 
 export const VISIBILITY_META: Record<EventVisibility, { label: string; hint: string }> = {

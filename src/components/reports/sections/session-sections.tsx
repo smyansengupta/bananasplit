@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { reportLinks } from "@/server/reports/links";
@@ -29,7 +29,6 @@ export async function LastSessionSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="last-session"
       title="Last session"
-      description="Check-ins at the latest session in the range, against the session before it."
       viewHref={current ? reportLinks.sessionCheckIns(ctx.slug, current.id) : null}
       viewLabel="View check-ins"
       computedAt={result.computedAt}
@@ -106,7 +105,6 @@ export async function AttendanceSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="attendance"
       title="Attendance over time"
-      description="Check-ins per session, in date order."
       viewHref={reportLinks.checkIns(ctx.slug, ctx.link)}
       viewLabel="View check-ins"
       computedAt={result.computedAt}
@@ -181,7 +179,6 @@ export async function SessionTypesSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="session-types"
       title="Session breakdown"
-      description="Average check-ins per session, by type."
       viewHref={reportLinks.sessions(ctx.slug, ctx.link)}
       viewLabel="View sessions"
       computedAt={result.computedAt}
@@ -200,7 +197,7 @@ export async function SessionTypesSection({ ctx }: { ctx: ReportViewContext }) {
               label: kindLabel(row.kind),
               value: row.average,
               display: formatDecimal(row.average),
-              detail: `${formatCount(row.sessions)} ${row.sessions === 1 ? "session" : "sessions"} · median ${formatDecimal(row.median)} · best ${formatCount(row.max)}`,
+              detail: `${formatCount(row.sessions)} ${row.sessions === 1 ? "session" : "sessions"}, median ${formatDecimal(row.median)}, best ${formatCount(row.max)}`,
               href: reportLinks.sessions(ctx.slug, ctx.link, row.kind),
             }))}
           />

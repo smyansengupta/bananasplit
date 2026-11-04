@@ -9,6 +9,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ setTheme: vi.fn(), forcedTheme: undefined }) }));
 vi.mock("@/components/pins/pins-context", () => ({ usePins: () => ({ openPicker }) }));
 vi.mock("@/app/app/[orgSlug]/notes/actions", () => ({ createNote: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({ createTask: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/links/actions", () => ({ addLinkAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/search/actions", () => ({ searchWorkspaceAction: vi.fn() }));
 
 import { CommandPalette } from "./command-palette";

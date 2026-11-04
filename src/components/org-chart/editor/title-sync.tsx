@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight } from "@/components/icons";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,10 @@ export interface TitleMismatch {
 }
 
 /** Each linked member's first position whose title differs from their member title. */
-export function titleMismatches(positions: readonly DraftPosition[], members: readonly EditorMember[]): TitleMismatch[] {
+export function titleMismatches(
+  positions: readonly DraftPosition[],
+  members: readonly EditorMember[],
+): TitleMismatch[] {
   const byId = new Map(members.map((m) => [m.id, m]));
   const seen = new Set<string>();
   const out: TitleMismatch[] = [];
@@ -55,25 +58,49 @@ export function TitleSync({
   const list = titleMismatches(positions, members);
   if (list.length === 0) return null;
   return (
-    <section aria-labelledby="title-sync" className="bg-card edge rounded-card flex flex-col gap-3 p-[18px] sm:p-6">
+    <section
+      aria-labelledby="title-sync"
+      className="bg-card edge rounded-card flex flex-col gap-3 p-[18px] sm:p-6"
+    >
       <div className="flex items-center gap-2">
         <ArrowLeftRight className="text-muted-foreground size-4" aria-hidden="true" />
         <h2 id="title-sync" className="heading text-[15px]">
           Titles to sync
         </h2>
         <Badge variant="secondary">{list.length}</Badge>
+        {canSetTitles && list.length > 1 && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            disabled={busy !== null}
+            onClick={async () => {
+              setBusy("all");
+              try {
+                for (const { position, member } of list)
+                  await onSetMemberTitle(member.id, position.title.trim());
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Update all
+          </Button>
+        )}
       </div>
-      <p className="text-muted-foreground text-sm">
-        These positions and the members&apos; titles in Settings &gt; Members don&apos;t match. Keep either one.
-      </p>
+      <p className="text-muted-foreground text-sm">These titles differ. Keep either one.</p>
       <ul className="divide-border/70 flex flex-col divide-y">
         {list.map(({ position, member }) => (
-          <li key={position.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 text-sm">
+          <li
+            key={position.id}
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 text-sm"
+          >
             <UserAvatar user={member} size="md" />
             <span className="min-w-0 flex-1">
               <b className="font-semibold">{member.name}</b>
-              <span className="text-muted-foreground block truncate">
-                Chart: {position.title} · Member title: {member.title?.trim() || "none"}
+              <span className="text-muted-foreground block break-words">
+                Chart: {position.title}, member title: {member.title?.trim() || "none"}
               </span>
             </span>
             {canSetTitles && (
@@ -81,7 +108,7 @@ export function TitleSync({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={busy === member.id}
+                disabled={busy === member.id || busy === "all"}
                 onClick={async () => {
                   setBusy(member.id);
                   try {
@@ -95,7 +122,12 @@ export function TitleSync({
               </Button>
             )}
             {member.title?.trim() && (
-              <Button type="button" size="sm" variant="ghost" onClick={() => onUseMemberTitle(position.id, member.title!.trim())}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => onUseMemberTitle(position.id, member.title!.trim())}
+              >
                 Use &ldquo;{member.title.trim()}&rdquo;
               </Button>
             )}

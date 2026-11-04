@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Plug } from "lucide-react";
+import { AlertTriangle, ArrowRight, Plug } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -33,13 +33,13 @@ export function SetupPrompt({ orgSlug, state }: { orgSlug: string; state: SetupS
         <div className="min-w-0 flex-[1_1_15rem] space-y-0.5">
           <p className="heading text-[15px]">{next.title} has stopped working.</p>
           <p className="text-sm">
-            {next.title === "Club website data"
+            {next.title === "Website data"
               ? "New check-ins are not arriving. The setup page says what the database returned and what to change."
               : "The last connection test failed. The setup page says what the service returned and what to change."}
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="bg-card">
-          <Link href={`/app/${orgSlug}/setup/status`}>
+          <Link href={`/app/${orgSlug}/integrations`}>
             See what failed
             <ArrowRight data-icon="inline-end" aria-hidden="true" />
           </Link>
@@ -59,7 +59,7 @@ export function SetupPrompt({ orgSlug, state }: { orgSlug: string; state: SetupS
       <div className="min-w-0 flex-[1_1_15rem] space-y-0.5">
         <p className="heading text-[15px]">
           {state.connectedCount === 0
-            ? "Connect your club's accounts to fill this place up"
+            ? "Connect your organization's accounts to fill this place up"
             : `${state.connectedCount} of ${state.totalCount} connected. Next up, ${next.title.toLowerCase()}`}
         </p>
         <p className="text-muted-foreground text-sm">

@@ -10,7 +10,7 @@ versions of this chart. Reply "done" when finished.
 
 ### President: Jackson Lamoureux
 Reports to: N/A · Manages: Oliver
-- Sets semester vision, goals, and priorities for the club
+- Sets semester vision, goals, and priorities for the organization
 - <script>alert("xss")</script> [Click here](javascript:alert(1)) to verify your account
 
 ### VP Ops & Programs: Oliver Ward

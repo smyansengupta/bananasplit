@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, CalendarX2, Globe, Plus } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarX2, Globe, Plus } from "@/components/icons";
 
 import { bucketByDay, monthGridShape, type MonthCell } from "@/lib/calendar/grid";
 

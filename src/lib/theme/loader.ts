@@ -1,5 +1,7 @@
 import { unstable_cache } from "next/cache";
 
+import { normalizeJoinCode } from "@/lib/join-code";
+
 import { tags } from "@/server/cache/tags";
 import { withSystemOrgTx } from "@/server/db/context";
 
@@ -17,9 +19,10 @@ import { resolveTheme, type ResolvedTheme } from "./resolve";
  * page may show: the org's name, logo and theme. The in-app layout does not
  * use it: it reads the theme per request in getOrgContextBySlug.
  *
- * The org-id lookups use the 0B definer functions granted to app_service
- * (app.poll_org_id, app.invitation_by_token_hash) and return null for
- * anything unknown; they are not cached (one indexed lookup each).
+ * The org-id lookups use the definer functions granted to app_service
+ * (app.poll_org_id, app.invitation_by_token_hash, app.join_code_org_id) and
+ * return null for anything unknown; they are not cached (one indexed lookup
+ * each).
  */
 
 export interface OrgBranding {
@@ -109,5 +112,23 @@ export async function orgIdForInviteTokenHash(tokenHash: string): Promise<string
     const rows = await db.$queryRaw<{ organizationId: string }[]>`
       SELECT "organizationId" FROM app.invitation_by_token_hash(${tokenHash})`;
     return rows[0]?.organizationId ?? null;
+  });
+}
+
+/**
+ * The org a live invite code opens (turned on, org not being deleted), or
+ * null. For the public /join/[code] page and its link preview, whose visitor
+ * is usually signed out: app.join_code_org_id gives the org's id and nothing
+ * else, and what the page shows from there is getOrgBranding's public name
+ * and logo. Joining still goes through app.org_by_join_code, signed in.
+ */
+export async function orgIdForJoinCode(code: string): Promise<string | null> {
+  const normalized = normalizeJoinCode(code);
+  if (!normalized) return null;
+  return withSystemOrgTx(null, async ({ db }) => {
+    const rows = await db.$queryRaw<
+      { id: string | null }[]
+    >`SELECT app.join_code_org_id(${normalized}) AS id`;
+    return rows[0]?.id ?? null;
   });
 }

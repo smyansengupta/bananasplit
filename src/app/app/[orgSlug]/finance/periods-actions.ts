@@ -4,7 +4,9 @@ import { z } from "zod";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
+import { TransactionDirection } from "@/generated/prisma/client";
 import { DEFAULT_CATEGORY_NAMES } from "@/lib/finance/default-categories";
+import { countsTowardBalance } from "@/lib/finance/stats";
 import { fromDateValue } from "@/lib/finance/periods";
 import { withOrgAction } from "@/server/db/context";
 import { ensureActivePeriod } from "@/server/finance/periods";
@@ -30,9 +32,15 @@ interface ActionResult {
 }
 
 const periodInputSchema = z.object({
-  label: z.string().trim().min(1, "Give the period a name, like 2026–27.").max(100),
+  label: z.string().trim().min(1, "Give the period a name, like 2026 or Q3 2026.").max(100),
   startsOn: z.string(),
   endsOn: z.string(),
+});
+
+/** Only on create: what to bring over from the period it replaces (both on unless said). */
+const carryOverSchema = z.object({
+  copyAmounts: z.boolean().optional(),
+  carryBalance: z.boolean().optional(),
 });
 
 function parseRange(
@@ -48,9 +56,12 @@ function parseRange(
 }
 
 /**
- * Creates a new budget period and makes it the active one. Copies the
- * previous active period's categories with allocations zeroed out — the new
- * treasurer sets fresh numbers rather than inheriting last year's budget.
+ * Creates a new budget period and makes it the active one, picking up where
+ * the last one left off: its categories WITH their amounts (a club's budget
+ * is mostly the same year to year; `copyAmounts: false` starts them at
+ * zero), and its closing balance as the new period's starting balance (the
+ * money didn't go anywhere; `carryBalance: false` leaves it out). Before
+ * this, every new year started at $0 with nothing budgeted.
  */
 export const createBudgetPeriod = financeAction(
   async (ctx, input: unknown): Promise<ActionResult> => {
@@ -63,6 +74,9 @@ export const createBudgetPeriod = financeAction(
     }
     const range = parseRange(parsed.data.startsOn, parsed.data.endsOn);
     if ("error" in range) return range;
+    const carry = carryOverSchema.safeParse(input);
+    const copyAmounts = carry.success ? carry.data.copyAmounts !== false : true;
+    const carryBalance = carry.success ? carry.data.carryBalance !== false : true;
 
     const previousActive = await ctx.db.budgetPeriod.findFirst({
       where: { organizationId, isActive: true },
@@ -77,8 +91,27 @@ export const createBudgetPeriod = financeAction(
     }
 
     const categorySource = previousActive?.categories.length
-      ? previousActive.categories.map((c) => ({ name: c.name, sortOrder: c.sortOrder }))
-      : DEFAULT_CATEGORY_NAMES.map((name, i) => ({ name, sortOrder: i }));
+      ? previousActive.categories.map((c) => ({
+          name: c.name,
+          sortOrder: c.sortOrder,
+          allocatedCents: copyAmounts ? c.allocatedCents : 0,
+        }))
+      : DEFAULT_CATEGORY_NAMES.map((name, i) => ({ name, sortOrder: i, allocatedCents: 0 }));
+
+    // The closing balance of the period being replaced: what counts toward a
+    // balance there (countsTowardBalance), money in less money out.
+    let closingCents = 0;
+    if (previousActive && carryBalance) {
+      closingCents = previousActive.carriedInCents;
+      const rows = await ctx.db.transaction.findMany({
+        where: { organizationId, budgetPeriodId: previousActive.id, voidedAt: null },
+        select: { direction: true, amountCents: true, status: true },
+      });
+      for (const t of rows) {
+        if (!countsTowardBalance(t.status)) continue;
+        closingCents += t.direction === TransactionDirection.IN ? t.amountCents : -t.amountCents;
+      }
+    }
 
     const period = await ctx.db.budgetPeriod.create({
       data: {
@@ -87,11 +120,12 @@ export const createBudgetPeriod = financeAction(
         startsOn: range.startsOn,
         endsOn: range.endsOn,
         isActive: true,
+        carriedInCents: closingCents,
         categories: {
           create: categorySource.map((c) => ({
             organizationId,
             name: c.name,
-            allocatedCents: 0,
+            allocatedCents: c.allocatedCents,
             sortOrder: c.sortOrder,
           })),
         },
@@ -104,7 +138,7 @@ export const createBudgetPeriod = financeAction(
 );
 
 /**
- * One click from an empty Finance page: this school year with the starter
+ * One click from an empty Finance page: this year with the starter
  * categories (or the period the org already has, made active).
  */
 export const startBudget = financeAction(async (ctx): Promise<ActionResult> => {

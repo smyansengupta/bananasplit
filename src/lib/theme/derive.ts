@@ -269,7 +269,7 @@ export function deriveTokens(roles: ThemeRoles, options: DeriveOptions = {}): To
   const mutedStrong = mixOklab(background, text, dark ? 0.2 : 0.12);
   const thumb = dark ? mixOklab(muted, text, 0.13) : surface;
 
-  // Floating chrome (the collapsed sidebar, toasts, the phone tab bar): near
+  // Floating chrome (the collapsed sidebar, toasts, the phone menu button): near
   // black with the primary's hue in light mode, one step above the cards in dark.
   const p = hexToOklch(primary);
   const hueSource = p.C > 0.03 ? p : hexToOklch(background);
@@ -277,8 +277,8 @@ export function deriveTokens(roles: ThemeRoles, options: DeriveOptions = {}): To
     ? mixOklab(surface, text, 0.075)
     : oklchToHex({ L: 0.235, C: Math.min(hueSource.C, 0.035), h: hueSource.h });
   const chromeForeground = onFill(chrome, [text, background, surface, WHITE]);
-  // The accent as it sits on the chrome (the active item on the rail, the
-  // tab bar's create button): the accent itself, unless it is about as dark
+  // The accent as it sits on the chrome (the active item on the rail): the
+  // accent itself, unless it is about as dark
   // as the chrome (an ink accent in light mode); then the chrome's own label.
   const chromeAccent = contrastRatio(accent, chrome) >= 1.6 ? accent : chromeForeground;
 

@@ -162,7 +162,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   },
   {
     id: "chrome-label",
-    label: "Labels on the sidebar rail, toasts and the tab bar",
+    label: "Labels on the sidebar rail, toasts and the menu button",
     fg: "chrome-foreground",
     bg: "chrome",
     required: 4.5,

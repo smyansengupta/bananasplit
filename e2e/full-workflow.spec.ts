@@ -28,7 +28,7 @@ test("full workspace workflow", async ({ page }) => {
   await signUp(page, owner);
   await expect(page).toHaveURL(/\/onboarding\/profile\/basics/);
   await expect(page.getByText("Check your email")).toBeVisible();
-  await expect(page.getByLabel("Club name")).toHaveCount(0);
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
 
   await verifyEmail(page, owner.email);
   await expect(page.getByText("Check your email")).toHaveCount(0);
@@ -97,9 +97,9 @@ test("full workspace workflow", async ({ page }) => {
   await expect(page.getByText(/Saved|Saving/)).toBeVisible();
   await page.getByRole("button", { name: /^Share/ }).click();
   const share = page.getByRole("dialog");
-  await share.getByLabel("Everyone else in the club").selectOption("CLUB_VIEW");
+  await share.getByLabel("Everyone else in the organization").selectOption("CLUB_VIEW");
   await share.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByRole("button", { name: /Club can view/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Org can view/ })).toBeVisible();
 
   // --- create an availability poll, respond, and finalize into an event ---
   await page.goto(`/app/${orgSlug}/calendar/find-a-time/new`);

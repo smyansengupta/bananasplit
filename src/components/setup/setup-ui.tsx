@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, CircleDashed, Copy, RefreshCw, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Check, CircleDashed, Copy, RefreshCw, ShieldAlert } from "@/components/icons";
 import { useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";

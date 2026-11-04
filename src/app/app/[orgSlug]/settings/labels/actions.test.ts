@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 describe("createTag (inline, from any tag field)", () => {
-  it("lets a member make a tag while the club allows it, recording who made it", async () => {
+  it("lets a member make a tag while the organization allows it, recording who made it", async () => {
     fake.role = Role.MEMBER;
     const result = await createTag("org_1", { name: "  #catering " });
     expect(result).toMatchObject({ created: true, tag: { name: "catering" } });
@@ -69,11 +69,11 @@ describe("createTag (inline, from any tag field)", () => {
     expect(fake.db.$queryRaw).not.toHaveBeenCalled();
   });
 
-  it("refuses a member when the club keeps tags to admins", async () => {
+  it("refuses a member when the organization keeps tags to admins", async () => {
     fake.role = Role.MEMBER;
     fake.db = makeDb({ membersCanCreate: false });
     expect(await createTag("org_1", { name: "catering" })).toEqual({
-      error: "Only an owner or admin can make new tags in this club.",
+      error: "Only an owner or admin can make new tags in this organization.",
     });
     expect(fake.db.label.create).not.toHaveBeenCalled();
   });

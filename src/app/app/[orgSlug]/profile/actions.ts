@@ -9,6 +9,7 @@ import {
   type NotificationPreferences,
 } from "@/lib/notifications/preferences";
 import { profileDetailsSchema, profileFieldErrors, profileLinksSchema } from "@/lib/profile/schema";
+import { disconnectApps } from "@/server/connectors/connected-apps";
 import {
   rotateOwnIcsToken,
   turnOffOwnIcsFeed,
@@ -107,4 +108,26 @@ export async function turnOffCalendarFeed(): Promise<{ ok: boolean; error?: stri
     console.error("[profile] feed off failed", error instanceof Error ? error.message : error);
     return { ok: false, error: "Couldn't turn the feed off. Try again." };
   }
+}
+
+/**
+ * Disconnects one of the user's AI apps (`grantId`), or every one (null).
+ * The app's next request is refused at once; WorkOS forgets it after the
+ * response (src/server/connectors/connected-apps.ts).
+ */
+export async function disconnectAiApps(
+  grantId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (grantId !== null && (typeof grantId !== "string" || grantId.length === 0 || grantId.length > 100)) {
+    return { ok: false, error: "That app isn't connected." };
+  }
+  try {
+    await disconnectApps(user.id, grantId);
+  } catch (error) {
+    console.error("[profile] disconnect failed", error instanceof Error ? error.message : error);
+    return { ok: false, error: "Couldn't disconnect. Try again." };
+  }
+  refresh();
+  return { ok: true };
 }

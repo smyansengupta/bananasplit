@@ -1,11 +1,12 @@
 "use client";
 
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { listAiConnectionsAction } from "@/app/app/[orgSlug]/_shell/ai-actions";
 import type { AiConnectionId, AiConnectionInfo } from "@/lib/ai/types";
+import { FieldSelect } from "@/components/ui/field-select";
 
 /**
  * Which connected model reads the import, and where the data goes. Loaded
@@ -74,12 +75,12 @@ export function ConnectionPicker({
         <p className="text-muted-foreground mt-0.5 text-xs">
           An owner or admin can connect Claude, OpenAI, Gemini or another model in{" "}
           <Link
-            href={`/app/${orgSlug}/settings/integrations`}
+            href={`/app/${orgSlug}/integrations`}
             className="text-foreground font-medium underline underline-offset-4"
           >
             Admin panel › Integrations
           </Link>
-          . The club&apos;s own key pays for it.
+          . The organization&apos;s own key pays for it.
         </p>
       </div>
     );
@@ -90,23 +91,23 @@ export function ConnectionPicker({
         {list.length > 1 ? (
           <label className="flex items-center gap-2">
             <span className="text-muted-foreground">Read with</span>
-            <select
-              className="border-input bg-card rounded-field focus-visible:border-foreground h-8 border px-3 text-sm outline-none"
+            <FieldSelect
               value={selected?.id}
               onChange={(e) => onChoose(e.target.value as AiConnectionId)}
+              size="sm"
             >
               {list.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label} ({c.detail})
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </label>
         ) : (
           <span>
             <span className="text-muted-foreground">Read with </span>
             <span className="font-medium">{selected?.label}</span>
-            <span className="text-muted-foreground"> · {selected?.detail}</span>
+            <span className="text-muted-foreground">, {selected?.detail}</span>
           </span>
         )}
       </div>

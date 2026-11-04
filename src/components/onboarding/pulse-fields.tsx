@@ -28,7 +28,11 @@ export function PulseFields({
 }) {
   const set = (patch: Partial<PulseSettings>) => onChange({ ...value, ...patch });
   return (
-    <fieldset disabled={disabled} className="flex flex-col gap-6 disabled:opacity-60">
+    // min-w-0: a fieldset is otherwise as wide as its widest row, past a phone's edge.
+    <fieldset
+      disabled={disabled}
+      className="flex flex-col gap-6 disabled:opacity-60 max-md:min-w-0"
+    >
       <div className="flex flex-col gap-2">
         <span id="pulse-day-label" className="text-sm font-medium">
           Day
@@ -39,6 +43,7 @@ export function PulseFields({
             value={String(value.pulseDay)}
             onSelect={(v) => set({ pulseDay: Number(v) })}
             options={PULSE_DAYS.map((d) => ({ value: String(d.value), label: d.label }))}
+            className="max-md:flex max-md:w-full max-md:[&>button]:flex-1 max-md:[&>button]:justify-center max-md:[&>button]:px-0"
           />
         </div>
       </div>
@@ -67,7 +72,11 @@ export function PulseFields({
             label="Pulse audience"
             value={value.pulseAudience}
             onSelect={(v) => set({ pulseAudience: v as PulseSettings["pulseAudience"] })}
-            options={PULSE_AUDIENCES.map((a) => ({ value: a.value, label: a.label, title: a.hint }))}
+            options={PULSE_AUDIENCES.map((a) => ({
+              value: a.value,
+              label: a.label,
+              title: a.hint,
+            }))}
           />
         </div>
       </div>

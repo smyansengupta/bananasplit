@@ -14,8 +14,8 @@ import {
   TableColumnsSplit,
   TableRowsSplit,
   Trash2,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -170,7 +170,7 @@ export function TableInsertButton({ editor, active }: { editor: Editor; active: 
 
 interface TableTool {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   run: (e: Editor) => boolean;
   can: (e: Editor) => boolean;
   active?: (e: Editor) => boolean;
@@ -320,7 +320,7 @@ export function TableTools({ editor }: { editor: Editor }) {
       className="flex w-full flex-wrap items-center gap-0.5 border-t pt-1"
     >
       <span className="text-muted-foreground px-1.5 text-xs font-medium">
-        Table{state.size ? ` · ${state.size.rows} × ${state.size.cols}` : ""}
+        {state.size ? `${state.size.rows} × ${state.size.cols} table` : "Table"}
       </span>
       {TABLE_GROUPS.map((group, g) => (
         <div key={g} className="flex items-center gap-0.5">

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { withOrgAction } from "@/server/db/context";
+import { getClaudeKeyStatus } from "@/server/org-chart/claude";
 import {
   discardDraft,
   DRAFT_SOURCES,
@@ -26,7 +27,7 @@ const peopleAction: typeof withOrgAction = (handler, options) =>
 
 /**
  * Org chart Server Actions. Each runs in one withOrgAction transaction
- * (app_user, RLS); writes need orgchart.write (OWNER/ADMIN). OrgChartError
+ * (app_user, RLS); writes need orgchart.write (every member). OrgChartError
  * is caught OUTSIDE the transaction wrapper, so a refused rollback or
  * publish rolls back completely before its message is returned.
  */
@@ -98,22 +99,22 @@ export async function rollbackAction(organizationId: string, versionId: string) 
   return rescue(rollbackTx)(organizationId, versionId);
 }
 
-const retryTx = peopleAction(async (ctx, versionId: string) => {
-  await retryParse(ctx, id.parse(versionId));
+const retryTx = peopleAction(async (ctx, versionId: string, claudeKeySaved: boolean) => {
+  await retryParse(ctx, id.parse(versionId), claudeKeySaved);
   return { ok: true as const };
 });
 export async function retryParseAction(organizationId: string, versionId: string) {
-  return rescue(retryTx)(organizationId, versionId);
+  // Read before the transaction (members cannot read OrgIntegration). The
+  // boolean is only acted on inside it, after membership is checked.
+  const { saved } = await getClaudeKeyStatus(organizationId);
+  return rescue(retryTx)(organizationId, versionId, saved);
 }
 
 /** The side panel's open tasks for a member (any member may look). */
-const openTasksTx = peopleAction(
-  async (ctx, userId: string): Promise<OpenTasks> => {
-    requirePermission(ctx, "orgchart.view");
-    return getOpenTasks(ctx, id.parse(userId));
-  },
-  { whenPaused: "allow" },
-);
+const openTasksTx = peopleAction(async (ctx, userId: string): Promise<OpenTasks> => {
+  requirePermission(ctx, "orgchart.view");
+  return getOpenTasks(ctx, id.parse(userId));
+});
 export async function loadOpenTasksAction(organizationId: string, userId: string) {
   return openTasksTx(organizationId, userId);
 }

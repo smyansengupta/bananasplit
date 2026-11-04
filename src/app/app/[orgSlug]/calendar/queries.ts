@@ -1,5 +1,12 @@
-import type { EventKind, EventVisibility, Prisma, Role, RSVPStatus } from "@/generated/prisma/client";
+import type {
+  EventKind,
+  EventVisibility,
+  Prisma,
+  Role,
+  RSVPStatus,
+} from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
+import type { MeetingTypeLast } from "@/lib/meetings/meeting-types";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 import { noteVisibleWhere } from "@/server/notes/visibility";
@@ -45,6 +52,7 @@ export const calendarEventSelect = {
   endsAt: true,
   allDay: true,
   kind: true,
+  meetingType: true,
   visibility: true,
   location: true,
   googleSyncState: true,
@@ -140,6 +148,13 @@ export async function getViewerRsvps(
  * One event with its relations, as `viewerId` may see them. The relations
  * are read one query at a time: Prisma runs sibling includes concurrently,
  * which a single transaction connection cannot do.
+ *
+ * The row is read whole, so it carries every meeting field (`format`,
+ * `locationDetails`, `conferenceManaged`, `conferencePasscode`,
+ * `conferenceDialIn`, `conferenceSyncState`, `conferenceSyncError`, and the
+ * host's start link `conferenceHostUrl`). The row is the caller's to filter:
+ * the host link starts the meeting as its host, so a page hands it on only to
+ * someone who can edit the event (the meeting page does).
  */
 export async function getEventById(
   db: TxClient,
@@ -148,7 +163,9 @@ export async function getEventById(
   viewerId: string,
 ): Promise<EventWithRelations | null> {
   const include = eventInclude(viewerId);
-  const event = await db.event.findFirst({ where: { id: eventId, organizationId, deletedAt: null } });
+  const event = await db.event.findFirst({
+    where: { id: eventId, organizationId, deletedAt: null },
+  });
   if (!event) return null;
   const attendees = await db.eventAttendee.findMany({
     where: { organizationId, eventId },
@@ -216,9 +233,12 @@ export async function getOrgPolls(db: TxClient, organizationId: string, now = ne
     by: ["pollId", "userId", "guestKeyHash", "guestName"],
     where: { organizationId, pollId: { in: pollIds }, availability: { not: "NO" } },
   });
-  const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
+  const spanOf = new Map(
+    spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]),
+  );
   const respondentCount = new Map<string, number>();
-  for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
+  for (const r of respondents)
+    respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
   return polls.map((p) => ({
     ...p,
     firstSlotAt: spanOf.get(p.id)?.from ?? null,
@@ -331,4 +351,43 @@ export interface PollResultRows {
     guestKeyHash: string | null;
     availability: "YES" | "NO" | "IF_NEEDED";
   }[];
+}
+
+/**
+ * Each meeting type with its last meeting attached (MeetingType.last), so
+ * a new meeting of that type starts where the last one was: its place, its
+ * call, its length and its invitees. One read per type; clubs have a few.
+ */
+export async function getMeetingTypeDefaults(
+  db: TxClient,
+  organizationId: string,
+  types: readonly { name: string; color: string }[],
+): Promise<{ name: string; color: string; last?: MeetingTypeLast }[]> {
+  return Promise.all(
+    types.map(async (t) => {
+      const e = await db.event.findFirst({
+        where: { organizationId, meetingType: t.name, deletedAt: null, allDay: false },
+        orderBy: { startsAt: "desc" },
+        select: {
+          format: true,
+          location: true,
+          conferenceProvider: true,
+          startsAt: true,
+          endsAt: true,
+          attendees: { select: { userId: true } },
+        },
+      });
+      if (!e) return { ...t };
+      return {
+        ...t,
+        last: {
+          online: e.format === "ONLINE",
+          location: e.location,
+          conferenceProvider: e.conferenceProvider,
+          minutes: Math.max(15, Math.round((e.endsAt.getTime() - e.startsAt.getTime()) / 60_000)),
+          attendeeIds: e.attendees.map((a) => a.userId),
+        },
+      };
+    }),
+  );
 }

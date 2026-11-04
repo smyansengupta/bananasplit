@@ -6,9 +6,8 @@ import { inviteMember } from "@/app/app/[orgSlug]/settings/members/actions";
 import { brandInputClass } from "@/components/brand/fields";
 import { pill } from "@/components/brand/pill";
 import {
+  continueLinkClass,
   ContinuePill,
-  PreviewHeader,
-  PreviewTile,
   SetupCard,
   StepBody,
   StepError,
@@ -16,77 +15,100 @@ import {
   StepIntro,
 } from "@/components/onboarding/setup-shell";
 import { Role } from "@/generated/prisma/enums";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 import { cn } from "@/lib/utils";
 
-import { goToNextOrgStep } from "./actions";
+import { Segmented } from "@/components/ui/segmented";
+
+import { useGoNext } from "./step-flow";
 
 type InviteRole = typeof Role.ADMIN | typeof Role.TREASURER | typeof Role.MEMBER;
 
 const ROLES: { value: InviteRole; label: string }[] = [
-  { value: Role.ADMIN, label: "Admin" },
-  { value: Role.TREASURER, label: "Treasurer" },
   { value: Role.MEMBER, label: "Member" },
+  { value: Role.TREASURER, label: "Treasurer" },
+  { value: Role.ADMIN, label: "Admin" },
 ];
 
 const roleLabel = (role: string) =>
   ROLES.find((r) => r.value === role)?.label ?? role.charAt(0) + role.slice(1).toLowerCase();
 
-const AVATAR_TONES = ["bg-brand-accent", "bg-avatar-1", "bg-avatar-3", "bg-avatar-4 text-primary-foreground"] as const;
-
 /**
- * B6 · Invite officers: email invites (the same invites as Settings >
- * Members, valid for 7 days) and the club's code, which anyone can use to
- * join as a member. Then B7: bring things in from Personal (or straight
- * into the club as its admin when there's nothing to bring).
+ * Invite members: the invite code and link (anyone with it joins as a
+ * member), and email invites (the same as Settings > Members, valid for 7
+ * days). The box takes a whole list, pasted from a spreadsheet or another
+ * app's member export, so a team moves over in one go.
+ *
+ * Continue sends whatever is still in the box before moving on: typing a
+ * list and pressing Continue used to throw it away, because only "Send
+ * invites" sent. There is no Skip; with nothing typed, Continue is it.
  */
 export function InviteStep({
   orgId,
   orgSlug,
-  index,
-  total,
   backHref,
-  me,
   code,
   joinUrl,
   invites,
 }: {
   orgId: string;
   orgSlug: string;
-  index: number;
-  total: number;
-  backHref: string;
-  me: { name: string | null; email: string };
+  backHref: string | null;
   /** The club's code, when it's turned on. */
   code: string | null;
+  /** The absolute /join URL; the link copied is /join/<code>. */
   joinUrl: string;
   invites: { email: string; role: string }[];
 }) {
+  const { preview, goNext } = useGoNext("org", orgSlug, "invite");
   const [sent, setSent] = useState(invites);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<InviteRole>(Role.ADMIN);
+  const [role, setRole] = useState<InviteRole>(Role.MEMBER);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const [inviting, startInvite] = useTransition();
   const [finishing, startFinish] = useTransition();
 
+  /** Sends every address in the box; true when none failed. */
+  async function sendTyped(): Promise<boolean> {
+    // A list works too: commas, spaces, semicolons or new lines between them.
+    const emails = [
+      ...new Set(
+        email
+          .toLowerCase()
+          .split(/[\s,;]+/)
+          .filter(Boolean),
+      ),
+    ];
+    if (emails.length === 0) return true;
+    const done: { email: string; role: string }[] = [];
+    const failed: string[] = [];
+    let firstError: string | null = null;
+    for (const address of emails) {
+      const result = preview ? null : await inviteMember(orgId, { email: address, role });
+      if (result?.error) {
+        failed.push(address);
+        firstError ??= `${address}: ${result.error}`;
+      } else done.push({ email: address, role });
+    }
+    setSent((prev) => [...done, ...prev]);
+    setEmail(failed.join(", "));
+    if (firstError) setError(firstError);
+    return failed.length === 0;
+  }
+
   function invite(e: FormEvent) {
     e.preventDefault();
     setError(null);
     startInvite(async () => {
-      const result = await inviteMember(orgId, { email, role });
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-      setSent([{ email: email.trim().toLowerCase(), role }, ...sent]);
-      setEmail("");
+      await sendTyped();
     });
   }
 
   async function copy(what: "code" | "link") {
     if (!code) return;
     try {
-      await navigator.clipboard.writeText(what === "code" ? code : `${joinUrl}?code=${code}`);
+      await navigator.clipboard.writeText(what === "code" ? code : `${joinUrl}/${code}`);
       setCopied(what);
       setTimeout(() => setCopied(null), 1600);
     } catch {
@@ -94,122 +116,94 @@ export function InviteStep({
     }
   }
 
-  const finish = () => startFinish(() => goToNextOrgStep(orgSlug, "invite"));
+  const finish = () =>
+    startFinish(async () => {
+      setError(null);
+      if (await sendTyped()) await goNext();
+    });
 
   return (
-    <SetupCard
-      preview={
-        <>
-          <PreviewHeader meta="Who's joining" />
-          <PreviewTile className="flex-row items-center gap-3">
-            <span className="bg-primary text-primary-foreground grid size-9 flex-none place-items-center rounded-full text-[13px] font-bold">
-              {(me.name ?? me.email).trim()[0]?.toUpperCase()}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[14px] font-semibold">{me.name ?? me.email}</span>
-              <span className="text-muted-foreground text-[12px]">Owner · that&apos;s you</span>
-            </span>
-          </PreviewTile>
-          {sent.map((invite, i) => (
-            <PreviewTile key={invite.email} className="flex-row items-center gap-3">
-              <span
-                className={cn(
-                  "grid size-9 flex-none place-items-center rounded-full text-[13px] font-bold",
-                  AVATAR_TONES[i % AVATAR_TONES.length],
-                )}
-              >
-                {invite.email[0]?.toUpperCase()}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[14px] font-semibold">{invite.email}</span>
-                <span className="text-muted-foreground text-[12px]">
-                  {roleLabel(invite.role)} · invited
-                </span>
-              </span>
-            </PreviewTile>
-          ))}
-          {code && (
-            <p className="text-muted-foreground m-0 mt-auto text-[12px] leading-normal">
-              Anyone with the code <b className="text-muted-foreground font-mono">{code}</b> and a verified
-              email can join as a member.
-            </p>
-          )}
-        </>
-      }
-    >
-      <StepIntro index={index} total={total} title="Bring in your officers.">
-        Invite each officer by email, or share your invite code. Members can join with the code any
-        time.
+    <SetupCard>
+      <StepIntro title="Bring your people in.">
+        Share the link, or paste everyone&apos;s email.
       </StepIntro>
 
       <StepBody className="gap-5">
         {code && (
-          <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-[14px] px-4 py-3.5">
-            <span className="flex flex-col gap-1">
-              <span className="text-muted-foreground text-[13px] font-semibold">Your invite code</span>
-              <span
-                className="font-heading text-[30px] leading-none tracking-[0.12em]"
-                aria-label={`Invite code ${code.split("").join(" ")}`}
-              >
-                {code}
-              </span>
+          <div className="bg-muted/70 flex flex-col items-center gap-4 rounded-[20px] px-4 py-6">
+            <span
+              className="flex items-center gap-1.5"
+              aria-label={`Invite code ${code.split("").join(" ")}`}
+            >
+              {code.split("").map((ch, i) => (
+                <span key={i} className="contents">
+                  {i === 4 && <span className="text-muted-foreground px-0.5 text-[22px]">–</span>}
+                  <span
+                    aria-hidden="true"
+                    className="bg-card grid h-12 w-9 place-items-center rounded-[10px] font-mono text-[22px] font-bold shadow-[var(--elevation-1)] sm:w-10"
+                  >
+                    {ch}
+                  </span>
+                </span>
+              ))}
             </span>
-            <span className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => copy("code")}
-                className={pill({ tone: "outline", size: "sm" })}
-              >
-                {copied === "code" ? "Copied" : "Copy code"}
+            <span className="flex flex-wrap justify-center gap-2">
+              <button type="button" onClick={() => copy("link")} className={continueLinkClass}>
+                {copied === "link" ? "Link copied" : "Copy invite link"}
               </button>
               <button
                 type="button"
-                onClick={() => copy("link")}
-                className={pill({ tone: "outline", size: "sm" })}
+                onClick={() => copy("code")}
+                className={pill({ tone: "outline", size: "md" })}
               >
-                {copied === "link" ? "Copied" : "Copy link"}
+                {copied === "code" ? "Copied" : "Copy code"}
               </button>
             </span>
           </div>
         )}
 
-        <form onSubmit={invite} className="flex flex-col gap-2">
-          <label htmlFor="invite-email" className="text-[14px] font-semibold">
-            Invite an officer by email
+        <form
+          noValidate
+          onSubmit={(e) => {
+            // Red outline on an empty box, not the browser's bubble.
+            if (highlightInvalid(e)) return;
+            invite(e);
+          }}
+          onInput={clearInvalid}
+          className="flex flex-col gap-2"
+        >
+          <label htmlFor="invite-email" className="sr-only">
+            Invite by email
           </label>
           <div className="flex flex-wrap gap-2">
             <input
               id="invite-email"
-              type="email"
+              type="text"
+              inputMode="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="officer@example.com"
+              placeholder="Emails"
               autoComplete="off"
               className={cn(brandInputClass, "min-w-0 flex-[1_1_220px]")}
             />
-            <select
-              aria-label="Role"
+            <Segmented
+              label="Role"
               value={role}
-              onChange={(e) => setRole(e.target.value as InviteRole)}
-              className={cn(brandInputClass, "w-auto flex-none cursor-pointer pr-3")}
-            >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+              onSelect={(v) => setRole(v as InviteRole)}
+              options={ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              className="flex-none"
+            />
             <button
               type="submit"
               disabled={inviting || !email.trim()}
               className={cn(pill({ size: "field" }), "flex-none")}
             >
-              {inviting ? "Sending…" : "Send invite"}
+              {inviting ? "Sending…" : "Send"}
             </button>
           </div>
           <span className="text-muted-foreground text-[13px]">
-            The link is valid for 7 days. They sign in with this address to join.
+            Paste a whole list. Links last 7 days.
           </span>
         </form>
 
@@ -218,14 +212,14 @@ export function InviteStep({
             {sent.map((invite) => (
               <li
                 key={invite.email}
-                className="bg-card border-foreground/10 flex h-10 items-center gap-3 rounded-field border px-4"
+                className="bg-card border-foreground/10 rounded-field flex min-h-10 items-center gap-3 border px-4 py-2"
               >
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+                <span className="min-w-0 flex-1 text-[15px] font-semibold break-all">
                   {invite.email}
                 </span>
                 <span className="text-muted-foreground text-[13px]">{roleLabel(invite.role)}</span>
                 <span className="bg-tint-success text-tint-success-foreground rounded-full px-2 py-0.5 text-[11px] font-bold">
-                  ✓ Invited
+                  Invited
                 </span>
               </li>
             ))}
@@ -234,16 +228,9 @@ export function InviteStep({
       </StepBody>
 
       <StepError message={error} />
-      <StepFooter
-        back={{ href: backHref }}
-        skip={
-          sent.length === 0
-            ? { onClick: finish, disabled: finishing, label: "Skip for now" }
-            : undefined
-        }
-      >
+      <StepFooter back={backHref ? { href: backHref } : undefined}>
         <ContinuePill pending={finishing} pendingLabel="One moment…" onClick={finish}>
-          Continue
+          {email.trim() ? "Send and continue" : "Continue"}
         </ContinuePill>
       </StepFooter>
     </SetupCard>

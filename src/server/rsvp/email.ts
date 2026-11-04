@@ -1,5 +1,6 @@
 import { escapeHtml, safeHref } from "@/server/email/escape";
 import { EMAIL_COLORS as C, layout, paragraph, type RenderedEmail } from "@/server/email/templates";
+import { reminderLead } from "@/lib/meetings/reminders";
 import { mapsSearchUrl } from "@/lib/rsvp/format";
 
 import type { RsvpEmailTemplate } from "./service";
@@ -12,12 +13,14 @@ import type { RsvpEmailTemplate } from "./service";
 
 export interface RsvpMessageInput {
   template: RsvpEmailTemplate;
+  /** A "reminder": how many minutes before the start it goes out. */
+  offsetMinutes?: number;
   guestName: string;
   orgName: string;
   title: string;
   /** "Thursday, October 15, 6:00 – 7:00 PM EDT". */
   when: string;
-  /** "6:00 PM", for the hour-before text. */
+  /** "6:00 PM", for a reminder under a day out. */
   startTime: string;
   /** Null when the host hides it from this guest (guestPlace). */
   location: string | null;
@@ -32,6 +35,8 @@ export interface RsvpMessageInput {
   inviteUrl?: string | null;
   /** Split the cost: "$4 to the host: Venmo @maya, Cash App $maya". */
   chipIn?: string | null;
+  /** The event's .ics, so "Add to calendar" is one click from the email. */
+  calendarUrl?: string | null;
 }
 
 /**
@@ -57,9 +62,23 @@ export function guestPlace(
   };
 }
 
+/**
+ * How far off a reminder says the event is, in reminderLead's words ("in an
+ * hour", "tomorrow", "in 2 days"). A reminder a day or more out names the
+ * day rather than the time: an all-day event has no start time to give.
+ */
+function reminderWords(i: RsvpMessageInput): { lead: string; dayOrMore: boolean } {
+  const offset = i.offsetMinutes ?? 60;
+  return { lead: reminderLead(offset), dayOrMore: offset >= 1440 };
+}
+
 const COPY: Record<
   RsvpEmailTemplate,
-  { subject: (title: string) => string; lead: (i: RsvpMessageInput) => string; cta: string }
+  {
+    subject: (title: string, i: RsvpMessageInput) => string;
+    lead: (i: RsvpMessageInput) => string;
+    cta: string;
+  }
 > = {
   registered: {
     subject: (t) => `You're going: ${t}`,
@@ -68,8 +87,7 @@ const COPY: Record<
   },
   waitlisted: {
     subject: (t) => `You're on the waitlist: ${t}`,
-    lead: (i) =>
-      `${i.title} is full right now, so you're on the waitlist. If a spot opens up, it's yours and we'll email you straight away.`,
+    lead: (i) => `${i.title} is full, so you're on the waitlist. We'll email you if a spot opens.`,
     cta: "View your RSVP",
   },
   promoted: {
@@ -77,20 +95,23 @@ const COPY: Record<
     lead: (i) => `Good news: a spot opened up at ${i.title}, and it's yours. You're going.`,
     cta: "View your RSVP",
   },
-  "reminder-day": {
-    subject: (t) => `Tomorrow: ${t}`,
-    lead: (i) => `A reminder that ${i.title} is tomorrow.`,
-    cta: "View event",
-  },
-  "reminder-hour": {
-    subject: (t) => `Starting soon: ${t}`,
-    lead: (i) => `${i.title} starts at ${i.startTime}. Here's how to find it.`,
+  reminder: {
+    subject: (t, i) => {
+      const { lead, dayOrMore } = reminderWords(i);
+      if (lead === "tomorrow") return `Tomorrow: ${t}`;
+      return dayOrMore ? `Coming up ${lead}: ${t}` : `Starting ${lead}: ${t}`;
+    },
+    lead: (i) => {
+      const { lead, dayOrMore } = reminderWords(i);
+      return dayOrMore
+        ? `A reminder that ${i.title} is ${lead}.`
+        : `${i.title} starts ${lead}, at ${i.startTime}. Here's how to find it.`;
+    },
     cta: "View event",
   },
   "event-cancelled": {
     subject: (t) => `Cancelled: ${t}`,
-    lead: (i) =>
-      `${i.orgName} cancelled ${i.title}. You don't need to do anything; we're sorry for the change of plans.`,
+    lead: (i) => `${i.orgName} cancelled ${i.title}. You don't need to do anything.`,
     cta: "",
   },
 };
@@ -126,6 +147,24 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
     );
     text.push(`Online: ${input.joinUrl}`);
   }
+  if (input.calendarUrl && !cancelled) {
+    rows.push(
+      detailRow(
+        "Calendar",
+        `<a href="${safeHref(input.calendarUrl)}" style="color:${C.ink}">Add to calendar</a>`,
+      ),
+    );
+    text.push(`Add to calendar: ${input.calendarUrl}`);
+  }
+  if (!cancelled) {
+    rows.push(
+      detailRow(
+        "Plans changed",
+        `<a href="${safeHref(input.pageUrl)}" style="color:${C.ink}">Can't go</a>`,
+      ),
+    );
+    text.push(`Can't go: ${input.pageUrl}`);
+  }
   if (input.chipIn && !cancelled) {
     rows.push(detailRow("Chip in", escapeHtml(input.chipIn)));
     text.push(`Chip in: ${input.chipIn}`);
@@ -152,9 +191,12 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
   const details = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;width:100%;background:${C.page};border:1px solid ${C.line};border-radius:12px"><tr><td style="padding:12px 16px"><table role="presentation" cellpadding="0" cellspacing="0">${rows.join("")}</table></td></tr></table>`;
   const greeting = `Hi ${input.guestName.trim().split(/\s+/)[0] || "there"},`;
 
+  // A reminder for an online meeting that's close leads with the call.
+  const joinFirst =
+    input.template === "reminder" && Boolean(input.joinUrl) && (input.offsetMinutes ?? 60) < 1440;
+
   return layout({
-    subject: copy.subject(input.title),
-    eyebrow: input.orgName,
+    subject: copy.subject(input.title, input),
     bodyHtml: [
       `<h1 style="margin:0 0 12px;font-size:22px;line-height:1.25">${escapeHtml(input.title)}</h1>`,
       paragraph(greeting),
@@ -162,20 +204,23 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
       details,
     ].join(""),
     bodyText: [input.title, greeting, copy.lead(input), text.join("\n")].join("\n\n"),
-    cta: cancelled ? undefined : { label: copy.cta, url: input.pageUrl },
-    footer: `You're getting this because you signed up for ${input.title} with ${input.orgName}. To cancel, open the event page and choose "Can't go".`,
+    cta: cancelled
+      ? undefined
+      : joinFirst
+        ? { label: "Join the meeting", url: input.joinUrl! }
+        : { label: copy.cta, url: input.pageUrl },
+    footer: `You're getting this because you signed up for ${input.title} with ${input.orgName}.`,
   });
 }
 
 /** The reminder text (reminders only; the rest are email). */
 export function rsvpText(input: RsvpMessageInput): string | null {
+  if (input.template !== "reminder") return null;
   const where = input.location ? ` at ${input.location}` : input.joinUrl ? " online" : "";
-  if (input.template === "reminder-day") {
-    return `Reminder: ${input.title} is tomorrow, ${input.when}${where}. Details: ${input.pageUrl}`;
+  const { lead, dayOrMore } = reminderWords(input);
+  if (dayOrMore) {
+    return `Reminder: ${input.title} is ${lead}, ${input.when}${where}. Details: ${input.pageUrl}`;
   }
-  if (input.template === "reminder-hour") {
-    const directions = input.locationDetails ? ` ${input.locationDetails}` : "";
-    return `${input.title} starts at ${input.startTime}${where}.${directions} Details: ${input.pageUrl}`;
-  }
-  return null;
+  const directions = input.locationDetails ? ` ${input.locationDetails}` : "";
+  return `${input.title} starts ${lead} (${input.startTime})${where}.${directions} Details: ${input.pageUrl}`;
 }

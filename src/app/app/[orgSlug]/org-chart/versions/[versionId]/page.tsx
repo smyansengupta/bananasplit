@@ -5,13 +5,13 @@ import { notFound } from "next/navigation";
 import { ChartList } from "@/components/org-chart/chart-list";
 import { RollbackButton } from "@/components/org-chart/rollback-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { diffCharts, type DiffChange, type DiffPosition } from "@/lib/org-chart/diff";
 import { personLabel, type ChartNodeDTO } from "@/lib/org-chart/types";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listVersions, loadVersion, type VersionDetail } from "@/server/org-chart/service";
 import { planGate } from "@/server/billing/plan-gate";
+import { ComparePicker } from "./compare-picker";
 
 export const metadata: Metadata = { title: "Org chart version" };
 
@@ -26,6 +26,7 @@ function toNodes(detail: VersionDetail): ChartNodeDTO[] {
       ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar }
       : null,
     reportsToId: p.reportsToId,
+    alsoReportsToIds: p.alsoReportsToIds,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
     responsibilities: p.responsibilities,
@@ -40,6 +41,7 @@ function toDiff(detail: VersionDetail): DiffPosition[] {
     key: n.key,
     title: n.title,
     reportsToKey: n.reportsToId ? (byId.get(n.reportsToId)?.key ?? null) : null,
+    alsoReportsToKeys: (n.alsoReportsToIds ?? []).flatMap((id) => byId.get(id)?.key ?? []),
     userId: n.userId,
     personLabel: personLabel(n),
     personName: n.isOpen ? null : (n.user?.name ?? n.personName),
@@ -60,6 +62,13 @@ function describe(change: DiffChange): string {
       return `Renamed ${change.from} to ${change.to}`;
     case "reparented":
       return `${change.title} now reports to ${change.to ?? "nobody (top of the chart)"} instead of ${change.from ?? "nobody"}`;
+    case "dotted":
+      return [
+        change.added.length ? `${change.title} now also reports to ${change.added.join(", ")}` : "",
+        change.removed.length ? `${change.title} no longer also reports to ${change.removed.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
     case "person":
       return `${change.title}: ${change.from} → ${change.to}`;
     case "advisor":
@@ -75,7 +84,7 @@ function describe(change: DiffChange): string {
   }
 }
 
-/** A read-only version (OWNER/ADMIN) with a diff against another version (?compare=). */
+/** A read-only version (any member) with a diff against another version (?compare=). */
 export default async function VersionPage({
   params,
   searchParams,
@@ -142,29 +151,15 @@ export default async function VersionPage({
       </div>
 
       <section className="space-y-3 rounded-xl border p-4">
-        <form className="flex flex-wrap items-center gap-2" method="get">
-          <label htmlFor="compare" className="text-sm font-medium">
-            Compare with
-          </label>
-          <select
-            id="compare"
-            name="compare"
-            defaultValue={other?.version.id ?? ""}
-            className="border-input bg-background h-8 rounded-lg border px-2.5 text-sm"
-          >
-            {versions
-              .filter((v) => v.id !== version.id)
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  v{v.number}
-                  {v.isActive ? " (published)" : ` (${v.status.toLowerCase()})`}
-                </option>
-              ))}
-          </select>
-          <Button type="submit" size="sm" variant="outline">
-            Compare
-          </Button>
-        </form>
+        <ComparePicker
+          value={other?.version.id ?? ""}
+          options={versions
+            .filter((v) => v.id !== version.id)
+            .map((v) => ({
+              id: v.id,
+              label: `v${v.number} (${v.isActive ? "published" : v.status.toLowerCase()})`,
+            }))}
+        />
         {other ? (
           changes.length === 0 ? (
             <p className="text-muted-foreground text-sm">

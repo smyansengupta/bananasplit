@@ -11,7 +11,6 @@ import {
   Gauge,
   ListFilter,
   Lock,
-  SlidersHorizontal,
   Table2,
   Tag,
   UserRound,
@@ -19,11 +18,13 @@ import {
   Globe,
   Rows3,
   X,
-} from "lucide-react";
+} from "@/components/icons";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Children, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { PHONE_HIDDEN_LAYOUTS, type TaskLayout } from "@/app/app/[orgSlug]/tasks/views";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user-avatar";
@@ -35,8 +36,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { SearchField } from "@/components/ui/search-field";
 import { chipClass, Segmented } from "@/components/ui/segmented";
+import { ExpandChip, FilterPill, FiltersMenu } from "@/components/ui/toolbar-chips";
 import { TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { hasModifier, isTypingTarget, overlayOpen, SCOPE_KEYS, TASK_KEYS } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -54,9 +57,13 @@ import { useTasks, useWorkspace } from "./tasks-context";
  * means a filtered view is a link you can paste into Slack, and going back
  * really goes back.
  *
- * Layout icons carry labels on desktop and shrink to icons on a phone; the
- * filters collapse behind one button with a count so the bar never wraps
- * into a wall of selects. Every control is the same height (h-7).
+ * Layout icons carry labels on desktop; the filters collapse behind one
+ * button with a count so the bar never wraps into a wall of selects. Every
+ * control is the same height (h-7).
+ *
+ * A phone gets its own one-row bar (MobileToolbar): whose work, the layout
+ * picker, Filters (a sheet with every filter, each with its name) and
+ * search, since six layout icons in a row meant nothing there.
  */
 
 const LAYOUT_ICONS = {
@@ -100,57 +107,84 @@ export function WorkspaceToolbar() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Layout: three shapes of the same question (none on the Free plan). */}
-        {ws.layouts.length > 0 && (
-          <Segmented
-            label="Layout"
-            value={ws.query.view}
-            onSelect={(v) => ws.setView(v as (typeof ws.layouts)[number]["value"])}
-            options={ws.layouts.map((layout, index) => ({
-              value: layout.value,
-              label: layout.label,
-              icon: LAYOUT_ICONS[layout.value],
-              compact: true,
-              title: `${layout.label}: ${layout.hint} (${index + 1})`,
-            }))}
-          />
-        )}
+      <MobileToolbar
+        onCommitSearch={commitSearch}
+        clearAll={() => router.push(`/app/${org.slug}/tasks?view=${ws.query.view}`)}
+      />
+      {/*
+        A container, not a viewport breakpoint. What makes this bar tighten is
+        the room it actually has, and that is not the window: docking or
+        railing the sidebar moves it by 150px, and a MacBook with the sidebar
+        out had the filters pushed onto a second row while the same window on
+        a desktop was fine. Everything below steps down on @[…]/toolbar.
 
-        {/*
+        Two things keep it whole at every width. It wraps rather than
+        overflowing, and the search block asks for 12rem, so when the rest of
+        the bar leaves less than that the search drops onto its own line
+        whole, instead of being squeezed to a slot nobody can type in. And
+        the layout names only appear with the room for them: six names are
+        most of the bar's width, and each button keeps its icon and its
+        tooltip without them.
+      */}
+      <div className="@container/toolbar max-md:hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Layout: three shapes of the same question (none on the Free plan). */}
+          {ws.layouts.length > 0 && (
+            <Segmented
+              label="Layout"
+              value={ws.query.view}
+              onSelect={(v) => ws.setView(v as (typeof ws.layouts)[number]["value"])}
+              options={ws.layouts.map((layout, index) => ({
+                value: layout.value,
+                label: layout.label,
+                icon: LAYOUT_ICONS[layout.value],
+                compact: true,
+                title: `${layout.label}: ${layout.hint} (${index + 1})`,
+              }))}
+              // The first thing to go when the bar tightens.
+              labelsFrom="sr-only @[64rem]/toolbar:not-sr-only"
+              className="shrink-0"
+            />
+          )}
+
+          {/*
           Scope: whose work, as icons that open up to say what they are on
           hover or focus. The team option only exists if you have reports.
         */}
-        <div className="flex items-center gap-1" role="group" aria-label="Whose tasks">
-          {ws.scopes.map((scope) => (
-            <ExpandChip
-              key={scope.value}
-              icon={SCOPE_ICONS[scope.value]}
-              label={scope.label}
-              active={ws.query.scope === scope.value && !pinnedMember}
-              onClick={() => ws.setScope(scope.value)}
-              title={SCOPE_KEYS[scope.value] && `${scope.label} (${SCOPE_KEYS[scope.value]})`}
-            />
-          ))}
-        </div>
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose tasks">
+            {ws.scopes.map((scope) => (
+              <ExpandChip
+                key={scope.value}
+                icon={SCOPE_ICONS[scope.value]}
+                label={scope.label}
+                active={ws.query.scope === scope.value && !pinnedMember}
+                onClick={() => ws.setScope(scope.value)}
+                title={SCOPE_KEYS[scope.value] && `${scope.label} (${SCOPE_KEYS[scope.value]})`}
+              />
+            ))}
+          </div>
 
-        {/* Filters: one chip that slides out Person, Epic, Tag and Status. */}
-        <FiltersMenu count={ws.filterCount + (ws.query.epicId ? 1 : 0)}>
-          {members.length > 1 && <PersonFilter />}
-          <EpicFilter />
-          {labels.length > 0 && <TagFilter />}
-          <StatusFilter />
-        </FiltersMenu>
-
-        <div className="ms-auto flex flex-1 items-center justify-end gap-2 sm:flex-none">
-          {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
-          {ws.query.view === "board" && <GroupMenu />}
-          <TaskSearch
-            key={ws.query.q ?? ""}
-            inputRef={searchRef}
-            initial={ws.query.q ?? ""}
-            onCommit={commitSearch}
+          {/* Filters: one chip that opens Person, Epic, Tag and Status. */}
+          <FiltersMenu
+            count={ws.filterCount + (ws.query.epicId ? 1 : 0)}
+            items={[
+              ...(members.length > 1 ? [{ name: "Person", node: <PersonFilter /> }] : []),
+              { name: "Epic", node: <EpicFilter /> },
+              ...(labels.length > 0 ? [{ name: "Tag", node: <TagFilter /> }] : []),
+              { name: "Status", node: <StatusFilter /> },
+            ]}
           />
+
+          <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+            {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
+            {ws.query.view === "board" && <GroupMenu />}
+            <TaskSearch
+              key={ws.query.q ?? ""}
+              inputRef={searchRef}
+              initial={ws.query.q ?? ""}
+              onCommit={commitSearch}
+            />
+          </div>
         </div>
       </div>
 
@@ -181,7 +215,9 @@ export function WorkspaceToolbar() {
                 ) : undefined
               }
               label={
-                ws.query.visibility === TaskVisibility.PRIVATE ? "Private only" : "Open to the club"
+                ws.query.visibility === TaskVisibility.PRIVATE
+                  ? "Private only"
+                  : "Open to the organization"
               }
               onClear={() => ws.setFilters({ visibility: undefined })}
             />
@@ -208,6 +244,9 @@ export function WorkspaceToolbar() {
           {ws.query.blockers && (
             <FilterPill label="Blockers" onClear={() => ws.setFilters({ blockers: false })} />
           )}
+          {ws.query.overdue && (
+            <FilterPill label="Overdue" onClear={() => ws.setFilters({ overdue: false })} />
+          )}
           {ws.query.flagged && (
             <FilterPill label="Flagged" onClear={() => ws.setFilters({ flagged: false })} />
           )}
@@ -232,6 +271,174 @@ export function WorkspaceToolbar() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The toolbar below md, the phone's one list toolbar (PhoneToolbar, as on
+ * Files and People): whose work as icons you flip between (Mine, My team,
+ * Everyone; their names are on them for screen readers and show from sm
+ * up), the layout picker, Filters (a FilterSheet: person, epic, tag,
+ * status, visibility, each under its name, with a count on the button),
+ * and a search icon that opens the search box over the row.
+ *
+ * The layouts are the ones a phone has (not the Board or Table: the page
+ * and the effect below see to it).
+ *
+ * The sheet's contents mount only while it is open, so its person filter
+ * doesn't add a second `p` shortcut behind the desktop one.
+ */
+function MobileToolbar({
+  onCommitSearch,
+  clearAll,
+}: {
+  onCommitSearch: (value: string) => void;
+  clearAll: () => void;
+}) {
+  const { members, labels, org } = useTasks();
+  const ws = useWorkspace();
+  const router = useRouter();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const pinnedPerson = ws.query.ownerId ?? ws.query.assigneeId;
+  const count = ws.filterCount + (ws.query.epicId ? 1 : 0);
+
+  // A phone the page didn't recognise (a narrow desktop window, say) still
+  // leaves the Board and Table. replace, and no cookie: the desktop keeps
+  // its layout.
+  const { view } = ws.query;
+  const { hrefWith } = ws;
+  useEffect(() => {
+    if (!(PHONE_HIDDEN_LAYOUTS as readonly string[]).includes(view)) return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    router.replace(hrefWith({ view: "list" }), { scroll: false });
+  }, [view, hrefWith, router]);
+  // The List first: it is a phone's main layout.
+  const layouts = ws.layouts
+    .filter((l) => !PHONE_HIDDEN_LAYOUTS.includes(l.value))
+    .sort((a, b) => Number(b.value === "list") - Number(a.value === "list"));
+  const current = layouts.find((l) => l.value === ws.query.view);
+
+  return (
+    <>
+      <PhoneToolbar
+        middle={
+          layouts.length > 1 && (
+            // The layouts a phone has, named, filling the room up to Filters.
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-10 w-full min-w-0 justify-between gap-1 rounded-full px-3"
+                  aria-label={`Layout: ${current?.label ?? "List"}`}
+                >
+                  <span className="truncate">{current?.label ?? "List"}</span>
+                  <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuLabel>Show tasks as</DropdownMenuLabel>
+                {layouts.map((l) => {
+                  const Icon = LAYOUT_ICONS[l.value];
+                  return (
+                    <DropdownMenuItem
+                      key={l.value}
+                      onSelect={() => ws.setView(l.value as TaskLayout)}
+                      className="min-h-12 gap-3"
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                      <span className="flex flex-col">
+                        <span className="font-medium">{l.label}</span>
+                        <span className="text-muted-foreground text-xs">{l.hint}</span>
+                      </span>
+                      {l.value === ws.query.view && (
+                        <Check className="ms-auto size-4" aria-hidden="true" />
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        }
+        leading={
+          <Segmented
+            label="Whose tasks"
+            value={pinnedPerson ? "" : ws.query.scope}
+            onSelect={(v) => ws.setScope(v as (typeof ws.scopes)[number]["value"])}
+            options={ws.scopes.map((scope) => ({
+              value: scope.value,
+              label: scope.label,
+              icon: SCOPE_ICONS[scope.value],
+              compact: true,
+              title: scope.label,
+            }))}
+            className="[&>button]:px-2.5"
+          />
+        }
+        filterCount={count}
+        onFilters={() => setFiltersOpen(true)}
+        searchLabel="Search tasks"
+        searchActive={Boolean(ws.query.q)}
+        search={
+          <TaskSearch
+            key={ws.query.q ?? ""}
+            initial={ws.query.q ?? ""}
+            onCommit={onCommitSearch}
+            className="w-full"
+            hint=""
+            autoFocus
+          />
+        }
+        onCancelSearch={() => {
+          if (ws.query.q) onCommitSearch("");
+        }}
+      />
+
+      <FilterSheet
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        title="Filter tasks"
+        description="The list shows only the tasks that match."
+        canClear={count > 0}
+        onClear={clearAll}
+      >
+        <div className="flex flex-wrap gap-2">
+          {members.length > 1 && <PersonFilter />}
+          <EpicFilter />
+          {labels.length > 0 && <TagFilter />}
+        </div>
+        {/* The header's Epics button, which a phone's header has no room for. */}
+        <Link
+          href={`/app/${org.slug}/tasks?view=roadmap`}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline"
+        >
+          <Layers className="size-4" aria-hidden="true" />
+          See all epics
+        </Link>
+        <FilterChoices
+          title="Status"
+          value={ws.query.status ?? ""}
+          onPick={(v) =>
+            ws.setFilters({ status: (v || undefined) as TaskStatus | "open" | undefined })
+          }
+          options={[
+            { value: "", label: "Any" },
+            { value: "open", label: "Open" },
+            ...Object.values(TaskStatus).map((s) => ({ value: s, label: STATUS_LABELS[s] })),
+          ]}
+        />
+        <FilterChoices
+          title="Visibility"
+          value={ws.query.visibility ?? ""}
+          onPick={(v) => ws.setFilters({ visibility: (v || undefined) as TaskVisibility })}
+          options={[
+            { value: "", label: "Everything I can see" },
+            { value: TaskVisibility.PRIVATE, label: "Private only" },
+            { value: TaskVisibility.ORG, label: "Open to the organization" },
+          ]}
+        />
+      </FilterSheet>
+    </>
   );
 }
 
@@ -395,7 +602,9 @@ function PersonFilter() {
           ) : (
             <>
               <UserRound className="size-3.5" aria-hidden="true" />
-              Person
+              {/* In a span like every other pill's label, so the filters
+                  panel can lay them all out the same way. */}
+              <span>Person</span>
             </>
           )}
           <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
@@ -478,10 +687,17 @@ function TaskSearch({
   initial,
   onCommit,
   inputRef,
+  className = "sm:max-w-56",
+  hint = "/",
+  autoFocus,
 }: {
   initial: string;
   onCommit: (value: string) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  className?: string;
+  /** The keyboard hint (none on a phone). */
+  hint?: string;
+  autoFocus?: boolean;
 }) {
   const [draft, setDraft] = useState(initial);
   return (
@@ -490,10 +706,11 @@ function TaskSearch({
       value={draft}
       onValueChange={setDraft}
       onClear={() => onCommit("")}
-      hint="/"
+      hint={hint}
+      autoFocus={autoFocus}
       placeholder="Search tasks"
       aria-label="Search tasks by title"
-      className="sm:max-w-56"
+      className={className}
       onKeyDown={(e) => {
         if (e.key === "Enter") onCommit(draft.trim());
         if (e.key === "Escape") {
@@ -506,31 +723,6 @@ function TaskSearch({
         if (draft.trim() !== initial) onCommit(draft.trim());
       }}
     />
-  );
-}
-
-function FilterPill({
-  label,
-  icon,
-  onClear,
-}: {
-  label: string;
-  icon?: React.ReactNode;
-  onClear: () => void;
-}) {
-  return (
-    <span className="bg-muted text-foreground inline-flex h-8 items-center gap-1.5 rounded-full ps-3.5 pe-1 text-[13px] font-medium">
-      {icon}
-      {label}
-      <button
-        type="button"
-        aria-label={`Remove filter ${label}`}
-        onClick={onClear}
-        className="text-muted-foreground hover:text-foreground hover:bg-background grid size-6 place-items-center rounded-full transition-colors"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
   );
 }
 
@@ -586,7 +778,7 @@ function StatusFilter() {
           {ws.query.visibility === TaskVisibility.PRIVATE && <Check className="ms-auto size-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => ws.setFilters({ visibility: TaskVisibility.ORG })}>
-          Open to the club
+          Open to the organization
           {ws.query.visibility === TaskVisibility.ORG && <Check className="ms-auto size-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -599,43 +791,6 @@ const SCOPE_ICONS: Record<string, typeof UserRound> = {
   team: UsersRound,
   all: Globe,
 };
-
-/**
- * A chip that is just its icon until you hover or focus it, then opens up
- * to say what it is (Mine, My team, Everyone). Filled when it's on.
- */
-function ExpandChip({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-  title,
-}: {
-  icon: typeof UserRound;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      aria-label={label}
-      title={title ?? label}
-      onClick={onClick}
-      className={cn(chipClass(active), "group/expand gap-0 px-3")}
-    >
-      <Icon className="size-4 flex-none" aria-hidden="true" />
-      <span
-        aria-hidden="true"
-        className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-300 ease-(--ease-ink) group-hover/expand:ms-1.5 group-hover/expand:max-w-32 group-hover/expand:opacity-100 group-focus-visible/expand:ms-1.5 group-focus-visible/expand:max-w-32 group-focus-visible/expand:opacity-100 motion-reduce:transition-none"
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
 
 /** Group the board: none, or a lane per epic (?lanes=epic). */
 function GroupMenu() {
@@ -670,107 +825,5 @@ function GroupMenu() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/**
- * The Filters chip. Hover it (or focus it, or tap it) and the filter pills
- * slide out beside it; it stays open while one of their menus is open, and
- * folds away again once the pointer leaves.
- */
-function FiltersMenu({ count, children }: { count: number; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const pills = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [open, setOpen] = useState(false);
-  const pillList = Children.toArray(children);
-  const show = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    setOpen(true);
-  };
-  // Only a pill's own menu (it lives in a portal) keeps the row out; the
-  // Filters chip's aria-expanded doesn't count, or it would never close.
-  const pillMenuOpen = () =>
-    Boolean(pills.current?.querySelector('[aria-expanded="true"], [data-state="open"]'));
-  // A short grace period, started once: moving the pointer around outside
-  // doesn't keep pushing it back (which made it feel slow to fold).
-  const hideSoon = () => {
-    if (timer.current) return;
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      if (pillMenuOpen()) return;
-      setOpen(false);
-    }, 120);
-  };
-
-  // While it's out: once the pointer is anywhere but the chip, the pills or
-  // an open pill menu, fold it away (also after a pill's menu closes with
-  // the pointer already elsewhere, when no pointerleave would fire).
-  useEffect(() => {
-    if (!open) return;
-    const onMove = (e: PointerEvent) => {
-      const target = e.target as Element | null;
-      if (!target) return;
-      if (ref.current?.contains(target)) return show();
-      if (target.closest("[data-radix-popper-content-wrapper]")) return;
-      hideSoon();
-    };
-    document.addEventListener("pointermove", onMove);
-    return () => document.removeEventListener("pointermove", onMove);
-    // show/hideSoon only touch refs and state setters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  return (
-    <div
-      ref={ref}
-      className="flex items-center gap-1"
-      onPointerEnter={show}
-      onPointerLeave={hideSoon}
-      onFocus={show}
-      onBlur={(e) => {
-        if (!ref.current?.contains(e.relatedTarget as Node | null)) hideSoon();
-      }}
-    >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
-        onClick={() => setOpen((v) => !v)}
-        className={chipClass(open || count > 0)}
-      >
-        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-        Filters
-        {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
-      </button>
-      <div
-        inert={!open}
-        className={cn(
-          "grid transition-[grid-template-columns] duration-[380ms] ease-(--ease-ink) motion-reduce:transition-none",
-          open ? "grid-cols-[1fr]" : "pointer-events-none grid-cols-[0fr]",
-        )}
-      >
-        {/*
-          The pills slide out one after another, and fold back in the other
-          order (last one first) while the row closes up behind them.
-        */}
-        <div ref={pills} className="flex min-w-0 items-center gap-1 overflow-hidden p-0.5">
-          {pillList.map((pill, i) => (
-            <span
-              key={i}
-              className={cn(
-                "flex transition-[opacity,transform] duration-200 ease-(--ease-ink) motion-reduce:transition-none",
-                open ? "translate-x-0 opacity-100" : "-translate-x-3 opacity-0",
-              )}
-              style={{
-                transitionDelay: `${(open ? i : pillList.length - 1 - i) * 40}ms`,
-              }}
-            >
-              {pill}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
