@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { keepBothAction, mergeRecordsAction } from "@/app/app/[orgSlug]/crm/people-actions";
+import { keepBothAction, mergeRecordsAction, undoMergeAction } from "@/app/app/[orgSlug]/crm/people-actions";
 import { CrmCard } from "@/components/crm/card/crm-card";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { EmptyState } from "@/components/empty-state";
@@ -94,12 +94,21 @@ export function MergeCard({ orgId, data }: { orgId: string; data: MergeCardData 
     setBusy(false);
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
+    const undoId = r.undoId;
     toast({
       title: `Merged into ${r.name || kept.name}.`,
       description:
         gone.activities || gone.deals
           ? `${plural(gone.activities, "activity", "activities")} and ${plural(gone.deals, "deal")} moved. ${gone.name} is in the trash, marked as merged.`
           : `${gone.name} is in the trash, marked as merged.`,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const u = await undoMergeAction(orgId, undoId).catch(() => null);
+          if (u?.ok) router.refresh();
+          return u && !u.ok ? u.error : u ? undefined : "That didn't undo. Try again.";
+        },
+      },
     });
     close();
     router.refresh();

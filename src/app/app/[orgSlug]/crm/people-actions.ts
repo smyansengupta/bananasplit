@@ -13,7 +13,7 @@ import { readContact } from "@/server/crm/assist";
 import { createCompany, updateCompany } from "@/server/crm/companies";
 import { createDeal } from "@/server/crm/deals";
 import { likelyExisting, type MergePayload } from "@/server/crm/dedupe";
-import { mergeCompanies, mergePeople } from "@/server/crm/merge";
+import { mergeCompanies, mergePeople, undoMerge } from "@/server/crm/merge";
 import { viewIds } from "@/server/crm/outreach/lists";
 import { createPerson, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
@@ -31,6 +31,15 @@ import { crmAction, toResult } from "./run";
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const ids = z.array(id).min(1).max(500);
 const DAY = 86_400_000;
+const LikelyDraft = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("person"),
+    name: z.string().max(200),
+    email: z.string().max(320).nullish(),
+    phone: z.string().max(40).nullish(),
+  }),
+  z.object({ kind: z.literal("company"), name: z.string().max(200), domain: z.string().max(253).nullish() }),
+]);
 /** Most people a hand-picked list holds. */
 const MAX_PICKED = 2000;
 
@@ -132,7 +141,7 @@ export const mergeRecordsAction = crmAction(
     if (kind === "company") {
       const r = await mergeCompanies(ctx, keep, drop);
       const kept = await ctx.db.crmCompany.findFirst({ where: { id: keep }, select: { name: true } });
-      return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0 };
+      return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0, undoId: r.undoId };
     }
     const r = await mergePeople(ctx, keep, drop);
     const input: Parameters<typeof updatePerson>[2] = {};
@@ -152,9 +161,12 @@ export const mergeRecordsAction = crmAction(
     }
     if (Object.keys(input).length) await updatePerson(ctx, keep, input, { source: "merge" });
     const kept = await ctx.db.crmPerson.findFirst({ where: { id: keep }, select: { name: true } });
-    return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0 };
+    return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0, undoId: r.undoId };
   },
 );
+
+/** Undo in the merge toast (or within 7 days): both records back as they were. */
+export const undoMergeAction = crmAction(async (ctx, _a, undoId: string) => undoMerge(ctx, id.parse(undoId)));
 
 /**
  * Keep both: the two aren't the same. A pending suggestion for the pair is
@@ -209,11 +221,9 @@ export const likelyExistingAction = crmAction(
       | { kind: "person"; name: string; email?: string | null; phone?: string | null }
       | { kind: "company"; name: string; domain?: string | null },
   ) => {
-    const clean = {
-      ...draft,
-      name: String(draft.name ?? "").slice(0, 200),
-    } as typeof draft;
-    return { match: await likelyExisting(ctx.db, ctx.organizationId, clean) };
+    const clean = LikelyDraft.safeParse(draft);
+    if (!clean.success) return { match: null };
+    return { match: await likelyExisting(ctx.db, ctx.organizationId, clean.data) };
   },
 );
 
