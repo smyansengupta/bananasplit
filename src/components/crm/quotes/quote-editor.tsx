@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   duplicateQuoteAction,
@@ -13,19 +13,12 @@ import {
   sendQuoteAction,
 } from "@/app/app/[orgSlug]/crm/quote-actions";
 import { Copy, Download, Plus, Send, Trophy, X } from "@/components/icons";
+import { useEscapeFirst } from "@/components/crm/card/card-panel";
 import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { CrmPicker } from "@/components/crm/crm-picker";
 import { ComposeButton } from "@/components/crm/outreach/compose";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -402,18 +395,25 @@ export function QuoteEditor({
         )}
       </div>
 
-      <Dialog open={Boolean(link)} onOpenChange={(o) => !o && setLink(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{word.title} {quote.number} is ready</DialogTitle>
-            <DialogDescription>
-              Send this link. They can read it, download the PDF and {quote.kind === "quote" ? "accept it by typing their name" : "see what's due"}.
-              It&apos;s shown once; sending again makes a new one.
-            </DialogDescription>
-          </DialogHeader>
-          <code className="bg-muted block rounded-md p-2 text-[12.5px] break-all">{link}</code>
-          <DialogFooter>
-            {quote.person?.email && link && (
+      {/* What comes next is asked right here in the card, never in a second dialog over it. */}
+      {link && (
+        <InlineStep
+          title={`${word.title} ${quote.number} is ready`}
+          description={
+            <>
+              Send this link. They can read it, download the PDF and{" "}
+              {quote.kind === "quote" ? "accept it by typing their name" : "see what's due"}. It&apos;s
+              shown once; sending again makes a new one.
+            </>
+          }
+          onClose={() => setLink(null)}
+        >
+          <code className="bg-background block rounded-md p-2 text-[12.5px] break-all">{link}</code>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLink(null)}>
+              Done
+            </Button>
+            {quote.person?.email && (
               // Through the CRM's own compose: previewed, tracked and on their timeline.
               <ComposeButton
                 orgId={orgId}
@@ -428,22 +428,22 @@ export function QuoteEditor({
             )}
             <Button
               onClick={() => {
-                if (link) void navigator.clipboard?.writeText(link).then(() => toast({ title: "Copied." }));
+                void navigator.clipboard?.writeText(link).then(() => toast({ title: "Copied." }));
               }}
             >
               <Copy className="size-4" aria-hidden="true" />
               Copy link
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </InlineStep>
+      )}
 
-      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Move {quote.number} to another deal</DialogTitle>
-            <DialogDescription>It moves with its lines and its link. The deal&apos;s company and person come with it.</DialogDescription>
-          </DialogHeader>
+      {moveOpen && (
+        <InlineStep
+          title={`Move ${quote.number} to another deal`}
+          description="It moves with its lines and its link. The deal's company and person come with it."
+          onClose={() => setMoveOpen(false)}
+        >
           <CrmPicker
             orgId={orgId}
             kind="deal"
@@ -462,15 +462,20 @@ export function QuoteEditor({
               );
             }}
           />
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setMoveOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </InlineStep>
+      )}
 
-      <Dialog open={paidOpen} onOpenChange={setPaidOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mark {quote.number} paid?</DialogTitle>
-            <DialogDescription>{formatMoney(quote.lines.length ? totals.totalCents : 0, quote.currency)} received.</DialogDescription>
-          </DialogHeader>
+      {paidOpen && (
+        <InlineStep
+          title={`Mark ${quote.number} paid?`}
+          description={`${formatMoney(quote.lines.length ? totals.totalCents : 0, quote.currency)} received.`}
+          onClose={() => setPaidOpen(false)}
+        >
           {canBook && (
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>
@@ -480,7 +485,7 @@ export function QuoteEditor({
               <Switch checked={book} onCheckedChange={setBook} />
             </label>
           )}
-          <DialogFooter>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setPaidOpen(false)}>
               Not yet
             </Button>
@@ -498,9 +503,48 @@ export function QuoteEditor({
             >
               Mark paid
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </InlineStep>
+      )}
     </div>
+  );
+}
+
+/**
+ * A next step asked inside the quote (its link, moving it, marking it
+ * paid): a tinted box under the buttons, scrolled into view, focus in it,
+ * Escape closes it and leaves the card open.
+ */
+function InlineStep({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEscapeFirst(onClose);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    ref.current?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <section
+      ref={ref}
+      tabIndex={-1}
+      data-card-panel
+      aria-label={title}
+      className="bg-muted space-y-3 rounded-2xl p-4 outline-none"
+    >
+      <div className="space-y-0.5">
+        <b className="block text-[15px]">{title}</b>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </div>
+      {children}
+    </section>
   );
 }

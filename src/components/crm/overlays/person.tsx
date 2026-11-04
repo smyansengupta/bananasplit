@@ -11,6 +11,7 @@ import { timeline } from "@/server/crm/activity";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { loadPerson } from "@/server/crm/records";
 import { conflictFor, contactable } from "@/server/crm/outreach/send";
+import { canStopEnrollment } from "@/server/crm/outreach/sequences";
 import { composeTemplates } from "@/server/crm/outreach/view";
 import { withOrgTx } from "@/server/db/context";
 
@@ -118,6 +119,24 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
         take: 50,
         select: { id: true, name: true },
       }),
+      // The series they're in now, and whether the viewer may take them out.
+      enrollments: (
+        await db.crmEnrollment.findMany({
+          where: { organizationId: orgId, personId, status: { in: ["ACTIVE", "PAUSED"] } },
+          orderBy: { startedAt: "asc" },
+          take: 10,
+          select: {
+            id: true,
+            senderId: true,
+            enrolledById: true,
+            sequence: { select: { name: true, createdById: true } },
+          },
+        })
+      ).map((e) => ({
+        id: e.id,
+        name: e.sequence.name,
+        canStop: shell.access.manager || canStopEnrollment(viewerId, e),
+      })),
     };
   });
   const recordP = withOrgTx(orgId, async ({ db }) => {
@@ -278,6 +297,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
     templates: data.templates,
     booking: data.booking,
     series: data.series,
+    enrollments: data.enrollments,
   };
   return <PersonCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

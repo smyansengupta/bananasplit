@@ -18,7 +18,7 @@ import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { QuoteBlock, SentLine, useQuoteSend, type DealQuoteView } from "@/components/crm/deals/deal-quote";
 import { TypeTag } from "@/components/crm/pipeline-view";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
-import { NeedsDialog, RecordFields } from "@/components/crm/record-fields";
+import { NeedsForm, RecordFields } from "@/components/crm/record-fields";
 import { Timeline, type TimelineItem } from "@/components/crm/timeline";
 import { EmptyState } from "@/components/empty-state";
 import { Input } from "@/components/ui/input";
@@ -239,6 +239,30 @@ export function DealCard({
           />
         }
         tabsAside={stages}
+        // A stage that needs something first asks for it here, in the card.
+        strip={
+          moving ? (
+            <NeedsForm
+              key={moving.stage.id}
+              className="bg-muted rounded-2xl p-4"
+              title={`Move to ${moving.stage.name}`}
+              needs={moving.needs}
+              fields={data.form}
+              orgId={orgId}
+              reasonPrompt={moving.reason}
+              onCancel={() => setMoving(null)}
+              onSubmit={async (fill) => {
+                const { closeReason, ...rest } = fill;
+                const m = moving;
+                setMoving(null);
+                await move(m.stage, {
+                  closeReason: (closeReason as string) ?? null,
+                  fill: Object.keys(rest).length ? rest : undefined,
+                });
+              }}
+            />
+          ) : undefined
+        }
         tabs={[
           { value: "overview", label: "Overview" },
           { value: "quote", label: data.invoice && won ? "Invoice" : "Quote" },
@@ -322,25 +346,6 @@ export function DealCard({
           );
         }}
       </CrmCard>
-      {moving && (
-        <NeedsDialog
-          title={`Move to ${moving.stage.name}`}
-          needs={moving.needs}
-          fields={data.form}
-          orgId={orgId}
-          reasonPrompt={moving.reason}
-          onCancel={() => setMoving(null)}
-          onSubmit={async (fill) => {
-            const { closeReason, ...rest } = fill;
-            const m = moving;
-            setMoving(null);
-            await move(m.stage, {
-              closeReason: (closeReason as string) ?? null,
-              fill: Object.keys(rest).length ? rest : undefined,
-            });
-          }}
-        />
-      )}
     </>
   );
 }

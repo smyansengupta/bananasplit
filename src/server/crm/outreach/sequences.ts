@@ -375,13 +375,29 @@ export async function enroll(
   return result;
 }
 
-export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Promise<void> {
+/**
+ * Take one person out of a series. Only whoever it sends as, whoever put
+ * them in, the series' maker or a CRM manager (`manager`) may: a member
+ * can't stop someone else's outreach.
+ */
+/** Whether this member may take someone out of a series (not counting CRM managers). */
+export function canStopEnrollment(
+  userId: string,
+  e: { senderId: string; enrolledById: string | null; sequence: { createdById: string | null } },
+): boolean {
+  return e.senderId === userId || e.enrolledById === userId || e.sequence.createdById === userId;
+}
+
+export async function stopEnrollment(actor: CrmActor, enrollmentId: string, manager = false): Promise<void> {
   const { db, organizationId } = actor;
   const e = await db.crmEnrollment.findFirst({
     where: { id: enrollmentId, organizationId, status: { in: ["ACTIVE", "PAUSED"] } },
-    select: { id: true },
+    select: { id: true, senderId: true, enrolledById: true, sequence: { select: { createdById: true } } },
   });
   if (!e) throw new CrmError("It already stopped.");
+  if (!manager && !canStopEnrollment(actor.userId, e)) {
+    throw new CrmError("Only whoever it sends as, whoever added them, the series' maker or a CRM manager can stop it.");
+  }
   await db.crmEnrollment.update({
     where: { id: e.id },
     data: { status: "STOPPED", stopReason: "stopped by hand", finishedAt: new Date(), nextRunAt: null },

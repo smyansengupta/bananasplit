@@ -2,16 +2,25 @@
 
 import { History, Merge, MoreHorizontal, RotateCcw, Trash2, Undo2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useState, type ReactNode } from "react";
 
-import { restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
+import {
+  restoreAction,
+  restoreToPointAction,
+  trashAction,
+  undoAction,
+} from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
-import { DialogHead } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
 import { crmBase } from "@/lib/crm/href";
 
+import { CardPanel, useCardPanel } from "./card/card-panel";
 import { useCrmOpen } from "./card/use-crm-open";
 
 /**
@@ -66,10 +75,15 @@ export function RecordActions({
   const router = useRouter();
   const { setOpen } = useCrmOpen();
   // Where History is open: over the card this sits in, never beside it.
-  const [historyHost, setHistoryHost] = useState<HTMLElement | null>(null);
-  const anchor = useRef<HTMLSpanElement>(null);
-  const showHistory = () =>
-    setHistoryHost(anchor.current?.closest<HTMLElement>("[data-slot=dialog-content]") ?? document.body);
+  const {
+    anchor: panelAnchor,
+    host: panelHost,
+    back: panelBack,
+    show: panelShow,
+    hide: panelHide,
+  } = useCardPanel();
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
+  const showHistory = () => panelShow(trigger);
   const merge = () => {
     if (kind !== "deal") setOpen({ kind: "merge", ids: [id] });
   };
@@ -81,7 +95,8 @@ export function RecordActions({
         variant="outline"
         onClick={async () => {
           const r = await restoreAction(orgId, kind, [id]).catch(() => null);
-          if (!r || !r.ok) toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
+          if (!r || !r.ok)
+            toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
           else toast({ title: "Restored." });
           router.refresh();
         }}
@@ -115,11 +130,17 @@ export function RecordActions({
 
   return (
     <>
-      <span ref={anchor} hidden />
+      <span ref={panelAnchor} hidden />
       {menu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon" title="History, merge, trash" aria-label="More: history, merge, trash">
+            <Button
+              ref={setTrigger}
+              variant="outline"
+              size="icon"
+              title="History, merge, trash"
+              aria-label="More: history, merge, trash"
+            >
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
@@ -145,11 +166,24 @@ export function RecordActions({
         </DropdownMenu>
       ) : (
         <>
-          <Button variant="outline" size="icon" title="History" aria-label="History" onClick={showHistory}>
+          <Button
+            ref={setTrigger}
+            variant="outline"
+            size="icon"
+            title="History"
+            aria-label="History"
+            onClick={showHistory}
+          >
             <History className="size-4" aria-hidden="true" />
           </Button>
           {canMerge && kind !== "deal" && (
-            <Button variant="outline" size="icon" title="Merge a duplicate into this one" aria-label="Merge a duplicate" onClick={merge}>
+            <Button
+              variant="outline"
+              size="icon"
+              title="Merge a duplicate into this one"
+              aria-label="Merge a duplicate"
+              onClick={merge}
+            >
               <Merge className="size-4" aria-hidden="true" />
             </Button>
           )}
@@ -167,19 +201,36 @@ export function RecordActions({
         </>
       )}
 
-      {historyHost && (
-        <HistoryPanel host={historyHost} name={name} onClose={() => setHistoryHost(null)}>
+      {panelHost && (
+        <CardPanel
+          host={panelHost}
+          title="History"
+          subtitle={`Every change to ${name}. Put it back to before any of them.`}
+          label={`History of ${name}`}
+          onClose={panelHide}
+          returnFocus={panelBack}
+        >
           <ol className="space-y-1 px-6 py-4 max-sm:px-4">
-            {history.length === 0 && <li className="text-muted-foreground text-sm">No changes yet.</li>}
+            {history.length === 0 && (
+              <li className="text-muted-foreground text-sm">No changes yet.</li>
+            )}
             {history.map((h) => (
-              <li key={h.id} className="border-border flex gap-3 border-b py-2.5 text-sm last:border-0">
+              <li
+                key={h.id}
+                className="border-border flex gap-3 border-b py-2.5 text-sm last:border-0"
+              >
                 <div className="min-w-0 flex-1">
                   <b>{h.label}</b>
                   <p className="text-muted-foreground break-words">
                     {h.oldValue || "Empty"} to {h.newValue || "Empty"}
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    {new Date(h.changedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {new Date(h.changedAt).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
                     {h.by ? `, ${h.by}` : h.source !== "user" ? `, ${h.source}` : ""}
                   </p>
                 </div>
@@ -216,49 +267,8 @@ export function RecordActions({
               </li>
             ))}
           </ol>
-        </HistoryPanel>
+        </CardPanel>
       )}
     </>
   );
-}
-
-/**
- * History over the card it was opened from: the card's own frame (the
- * DialogContent), covered by a panel with the shared header, whose Close
- * goes back to the card. Outside a card it covers the screen.
- */
-function HistoryPanel({
-  host,
-  name,
-  onClose,
-  children,
-}: {
-  /** The card's DialogContent, or the page's body outside a card. */
-  host: HTMLElement;
-  name: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  const card = host !== document.body;
-  const panel = (
-    <section
-      aria-label={`History of ${name}`}
-      className={
-        card
-          ? "bg-background absolute inset-0 z-10 flex flex-col"
-          : "bg-background fixed inset-0 z-50 flex flex-col"
-      }
-    >
-      <header className="border-border/60 shrink-0 border-b ps-6 pe-4 pt-4 pb-3.5 max-sm:ps-4">
-        <DialogHead
-          plainTitle
-          title={<h2 className="display-title truncate text-[26px] leading-tight max-sm:text-[22px]">History</h2>}
-          subtitle={`Every change to ${name}. Put it back to before any of them.`}
-          onClose={onClose}
-        />
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-    </section>
-  );
-  return createPortal(panel, host);
 }

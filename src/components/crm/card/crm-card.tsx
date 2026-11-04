@@ -111,6 +111,10 @@ export function CrmCard({
           // On a phone the card is the whole screen, rounded at the top.
           PHONE_FULL_SCREEN,
         )}
+        // A panel over the card (History, a follow-up series) takes Escape: it closes, the card stays.
+        onEscapeKeyDown={(e) => {
+          if (document.querySelector("[data-card-panel]")) e.preventDefault();
+        }}
         // A toast's Undo sits outside the card: clicking it mustn't close the card.
         onInteractOutside={(e) => {
           if (e.target instanceof Element && e.target.closest("[data-toaster]")) e.preventDefault();
