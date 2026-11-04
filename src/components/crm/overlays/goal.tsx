@@ -57,6 +57,7 @@ export async function GoalOverlay({ shell, open }: OverlayProps<"goal">) {
         viewerId: shell.user.id,
         members: shell.members,
         canEdit: shell.access.manager,
+        personal: shell.access.personal,
       }
     : null;
   return <GoalCard orgId={orgId} data={card} />;
