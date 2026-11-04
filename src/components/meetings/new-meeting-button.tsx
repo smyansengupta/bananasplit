@@ -3,7 +3,7 @@
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { Plus } from "@/components/icons";
 import dynamic from "next/dynamic";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { CalendarMember } from "@/components/calendar/member-picker";
@@ -57,7 +57,6 @@ export function NewMeetingButton({
   /** `create` in the header, the quieter `secondary` where an empty page repeats it. */
   variant?: "create" | "secondary";
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const params = useParams<{ orgSlug?: string }>();

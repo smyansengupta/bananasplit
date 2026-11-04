@@ -83,7 +83,7 @@ export function SettingsClose({
  */
 export function SettingsCloseFloat(props: Parameters<typeof SettingsClose>[0]) {
   return (
-    <div className="sticky top-20 z-20 float-right ms-3 h-9">
+    <div className="sticky top-6 z-20 float-right ms-3 h-9">
       <SettingsClose {...props} />
     </div>
   );
