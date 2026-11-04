@@ -421,12 +421,13 @@ describe("Admin panel navigation", () => {
       "Members",
       "Privacy",
       "Audit log",
+      "What's new",
       "Danger zone",
     ]);
     expect(labels("ADMIN")).not.toContain("Danger zone");
     expect(labels("ADMIN")).toContain("Audit log");
-    expect(labels("MEMBER")).toEqual(["Members"]);
-    expect(labels("TREASURER")).toEqual(["Members"]);
+    expect(labels("MEMBER")).toEqual(["Members", "What's new"]);
+    expect(labels("TREASURER")).toEqual(["Members", "What's new"]);
   });
 
   it("marks the sections an organization's plan lacks as locked, and none without a space", () => {
@@ -443,7 +444,8 @@ describe("Admin panel navigation", () => {
   it("gives Personal only its own settings, its plan and storage, and no team settings", () => {
     expect(settingsNavItems("me", "OWNER", PERSONAL).map((i) => i.label)).toEqual([
       "General",
-      "Plan",
+      "Plan and storage",
+      "What's new",
       "Danger zone",
     ]);
   });
