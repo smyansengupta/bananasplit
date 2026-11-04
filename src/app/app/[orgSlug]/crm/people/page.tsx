@@ -86,7 +86,6 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        settings={shell.access.manager}
         create={data.companies ? "company" : "person"}
         toolbar={
           <PeopleToolbar

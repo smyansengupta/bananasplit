@@ -52,7 +52,6 @@ export function CrmSettingsFrame({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        settings={viewer.manager || viewer.admin}
         title="CRM settings"
         create={false}
       />

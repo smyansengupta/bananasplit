@@ -113,7 +113,6 @@ export default async function CrmTodayPage({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        settings={shell.access.manager}
         toolbar={<TodayToolbar tabs={shell.tabs} />}
       />
       {!data.today.mine && !everyone && (
