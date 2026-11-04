@@ -1,12 +1,10 @@
 import { Suspense } from "react";
-import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { CrmSendingBanner } from "@/components/crm/settings/sending-paused";
 import { CrmStartedSection } from "@/components/crm/today/crm-started-section";
-import { TodayGoals } from "@/components/crm/today/today-goals";
+import { TodayAside, TodayAsideSkeleton, type TodayAsideData } from "@/components/crm/today/today-aside";
 import { TodayList } from "@/components/crm/today/today-list";
-import { TodayLog } from "@/components/crm/today/today-log";
 import { TodayToolbar } from "@/components/crm/today/today-toolbar";
 import { hrefWithOpen } from "@/lib/crm/overlay";
 import {
@@ -18,6 +16,8 @@ import {
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
 import { onItsOwn } from "@/server/crm/on-its-own";
+import { loadSendingHealth } from "@/server/crm/sending-health";
+import { loadCrmStarted } from "@/server/crm/started";
 import { comingUp, TODAY_GROUPS, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
@@ -69,20 +69,19 @@ export default async function CrmTodayPage({
   const q = one(sp.q)?.toLowerCase();
   const now = new Date();
 
-  // In parallel, each in its own transaction: the list (shared with Power
-  // hour, todayForShell), the right column, what's coming up (which needs
-  // to know whether the list is yours) and the card open over the page.
+  // In parallel, each in its own transaction, and in the order they're
+  // needed (the pool takes them first come, first served): the list (shared
+  // with Power hour, todayForShell) and the card open over the page, which
+  // the page waits for; then what streams in after it.
   const todayP = todayForShell(shell, who);
+  const overlayP = CrmOverlays({ shell, orgSlug, searchParams: sp });
   // My team is offered only to someone with people under them, as in Tasks.
   const teamP = personal ? Promise.resolve([]) : crmTeam(orgId, shell.user.id);
-  const sideP = withOrgTx(orgId, async ({ db }) => {
+  const viewerP = withOrgTx(orgId, async ({ db }) => {
     const me = await db.user.findUnique({
       where: { id: shell.user.id },
       select: { timezone: true },
     });
-    const tz = effectiveTimezone(me, shell.org);
-    const goals = await listGoals(db, orgId, localDateKey(now, tz), { current: true, take: 4 });
-    const log = await onItsOwn(db, orgId, { now, tz });
     const snooze = await db.inboxItemState.findFirst({
       where: {
         organizationId: orgId,
@@ -92,23 +91,37 @@ export default async function CrmTodayPage({
       },
       select: { snoozedUntil: true },
     });
-    return { tz, goals, log, snoozedUntil: snooze?.snoozedUntil ?? null };
+    return { tz: effectiveTimezone(me, shell.org), snoozedUntil: snooze?.snoozedUntil ?? null };
   });
-  const upcomingP = todayP.then((today) =>
-    withOrgTx(orgId, ({ db }) =>
-      comingUp(db, orgId, shell.user.id, { everyone: everyone || !today.mine, now }),
-    ),
-  );
-  const [today, side, upcoming, overlay, team] = await Promise.all([
-    todayP,
-    sideP,
-    upcomingP,
-    CrmOverlays({ shell, orgSlug, searchParams: sp }),
-    teamP,
-  ]);
-  // Goals name their member only when one is set for someone.
-  const names = side.goals.some((g) => g.ownerId) ? await crmMemberNames(orgId) : new Map<string, string>();
-  const data = { ...side, today, upcoming };
+  // The rest start now rather than after the list, and arrive on their own.
+  void loadCrmStarted({
+    organizationId: orgId,
+    userId: shell.user.id,
+    role: shell.role,
+    access: shell.access,
+  }).catch(() => null);
+  void loadSendingHealth(orgId).catch(() => null);
+  const asideP: Promise<TodayAsideData> = viewerP.then(async ({ tz }) => {
+    const [side, upcoming] = await Promise.all([
+      withOrgTx(orgId, async ({ db }) => ({
+        goals: await listGoals(db, orgId, localDateKey(now, tz), { current: true, take: 4 }),
+        log: await onItsOwn(db, orgId, { now, tz }),
+      })),
+      // Needs to know whether the list is yours.
+      todayP.then((today) =>
+        withOrgTx(orgId, ({ db }) =>
+          comingUp(db, orgId, shell.user.id, { everyone: everyone || !today.mine, now }),
+        ),
+      ),
+    ]);
+    // Goals name their member only when one is set for someone.
+    const names = side.goals.some((g) => g.ownerId) ? await crmMemberNames(orgId) : new Map<string, string>();
+    return { tz, goals: side.goals, names, upcoming, log: todayLog(side.log, now, tz) };
+  });
+  // Read by TodayAside below; if the page fails first, nobody is left waiting on it.
+  asideP.catch(() => null);
+  const [today, viewer, overlay, team] = await Promise.all([todayP, viewerP, overlayP, teamP]);
+  const data = { ...viewer, today };
 
   const rows = data.today.rows.filter(
     (r) =>
@@ -162,80 +175,9 @@ export default async function CrmTodayPage({
           }}
         />
         <aside className="flex min-w-0 flex-col gap-4">
-          <TodayGoals
-            canEdit={shell.access.manager}
-            goals={data.goals.map((g) => ({
-              id: g.id,
-              name: g.name,
-              metric: g.metric,
-              metricLabel: g.metricLabel,
-              who: g.ownerId ? (names.get(g.ownerId) ?? "A member") : null,
-              actual: g.attainment.actual,
-              target: g.target,
-              share: g.attainment.share,
-              pace: g.attainment.pace,
-              onTrack: g.attainment.onTrack,
-            }))}
-          />
-          {data.upcoming.length > 0 && (
-            <section className="bg-card ring-foreground/6 space-y-4 rounded-[22px] p-5 ring-1">
-              <h2 className="heading flex items-baseline gap-2 text-base">
-                Coming up
-                <span className="text-muted-foreground ms-auto text-sm font-normal">
-                  {data.upcoming[0]!.at.toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    timeZone: data.tz,
-                  })}
-                </span>
-              </h2>
-              {data.upcoming.map((m, i) => {
-                const mins = Math.round((m.at.getTime() - now.getTime()) / 60_000);
-                const soon =
-                  mins < 60
-                    ? `Starts in ${Math.max(1, mins)} min`
-                    : mins < 24 * 60
-                      ? `Starts in ${Math.round(mins / 60)} ${Math.round(mins / 60) === 1 ? "hour" : "hours"}`
-                      : m.at.toLocaleDateString("en-US", { weekday: "long", timeZone: data.tz });
-                return (
-                  <div
-                    key={m.id}
-                    className={i > 0 ? "border-border/60 space-y-2 border-t pt-3" : "space-y-2"}
-                  >
-                    <div>
-                      <b className="block text-[15px]">{m.subject}</b>
-                      {m.personName && (
-                        <span className="text-muted-foreground text-sm">
-                          {[m.personName, ...m.lines].join(", ")}
-                        </span>
-                      )}
-                    </div>
-                    {m.personId && i === 0 && mins < 24 * 60 ? (
-                      <div className="flex flex-nowrap items-center gap-2">
-                        <AmbientButton
-                          action={{
-                            key: "brief",
-                            label: "Open the brief",
-                            tone: "solid",
-                            reason: soon,
-                            href: hrefWithOpen(base, sp, { kind: "person", id: m.personId }),
-                          }}
-                        />
-                        <AmbientWhy className="min-w-0 truncate">{soon}</AmbientWhy>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">{soon}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </section>
-          )}
-          <TodayLog
-            {...todayLog(data.log, now, data.tz)}
-            seeAllHref={hrefWithOpen(base, sp, "log")}
-            automationsHref={`${base}/settings/automations`}
-          />
+          <Suspense fallback={<TodayAsideSkeleton />}>
+            <TodayAside data={asideP} canEdit={shell.access.manager} base={base} sp={sp} now={now} />
+          </Suspense>
         </aside>
       </div>
       {overlay}

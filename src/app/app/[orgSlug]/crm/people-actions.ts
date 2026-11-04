@@ -20,6 +20,7 @@ import { peopleListCounts } from "@/server/crm/people-view";
 import { listPipelines } from "@/server/crm/pipelines";
 import { createPerson, findCompanyByName, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
+import { getOrgMembersForPicker } from "@/server/members";
 
 import { checkInput, crmAction, toResult } from "./run";
 
@@ -222,6 +223,11 @@ const NEW_CARD_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * people picked on People (`person:<id>,<id>`), with their company when they
  * share one. Read after the card is open, so it never waits on this.
  */
+/** The create dialogs' people (Owner, Who): read when one opens, not with every CRM page. */
+export const pickerMembersAction = crmAction(async (ctx) => ({
+  members: await getOrgMembersForPicker(ctx.organizationId),
+}));
+
 export const newCardStartAction = crmAction(async (ctx, _a, raw: string) => {
   const orgId = ctx.organizationId;
   const none = {

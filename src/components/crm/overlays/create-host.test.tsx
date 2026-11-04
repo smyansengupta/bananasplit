@@ -23,6 +23,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/app/[orgSlug]/crm/actions", () => ({ searchCrmAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/crm/people-actions", () => ({
   likelyExistingAction: vi.fn(async () => ({ ok: true, match: null })),
+  pickerMembersAction: vi.fn(async () => ({ ok: true, members: [] })),
   newCardStartAction: mocks.newCardStart,
   newCompanyAction: vi.fn(),
   newDealAction: vi.fn(),
@@ -51,7 +52,8 @@ const data: CrmCreateData = {
   viewerId: "u1",
   personal: false,
   canSetGoals: true,
-  members: [],
+  viewerName: "Ada",
+  viewerRole: "OWNER",
   pipelines: [{ id: "p1", name: "Sales", stages: [{ id: "s1", name: "New" }] }],
   relationships: [],
   goal: { metric: "items_won", periodKey: "2026-Q4", today: "2026-11-04" },

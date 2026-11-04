@@ -12,12 +12,14 @@ import { authDb } from "@/server/db/clients";
 
 /** The account's session version, or null when the user no longer exists. */
 export const loadSessionVersion = cache(async (userId: string): Promise<number | null> => {
-  const user = await authDb.user.findUnique({
-    where: { id: userId },
-    select: { credential: { select: { sessionVersion: true } } },
-  });
+  // One statement: this runs before anything else on every request.
+  const rows = await authDb.$queryRaw<{ sessionVersion: number | null }[]>`
+    SELECT c."sessionVersion"
+    FROM "User" u LEFT JOIN "UserCredential" c ON c."userId" = u."id"
+    WHERE u."id" = ${userId}`;
+  const user = rows[0];
   if (!user) return null;
-  return user.credential?.sessionVersion ?? 0;
+  return user.sessionVersion ?? 0;
 });
 
 /**

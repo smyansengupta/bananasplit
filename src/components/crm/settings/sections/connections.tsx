@@ -8,7 +8,6 @@ import { importsToFix, recentImports } from "@/server/crm/import";
 import { loadOrgKeys } from "@/server/crm/org-keys";
 import { readPhoneStatus } from "@/server/crm/phone/connection";
 import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
-import { resolveActor } from "@/server/integrations/service";
 
 import { ExportCard, ImportCard, RowsToFix } from "../import-settings";
 import { PhoneDetails, PhoneProviderCard } from "../phone-settings";
@@ -30,9 +29,9 @@ const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "n
 export async function ConnectionsSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
   const { admin, personal } = shell.access;
-  const actor = await resolveActor(orgId);
-  const keys = can(actor, "integrations.view") ? await loadOrgKeys(orgId, actor) : null;
-  const [data, phone] = await Promise.all([
+  const actor = { userId: shell.user.id, role: shell.role };
+  const [keys, data, phone] = await Promise.all([
+    can(actor, "integrations.view") ? loadOrgKeys(orgId, actor) : null,
     withOrgTx(orgId, async ({ db, userId }) => ({
       recent: await recentImports(db, orgId, userId),
       fix: await importsToFix(db, orgId, userId),

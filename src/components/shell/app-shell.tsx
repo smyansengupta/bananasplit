@@ -64,7 +64,7 @@ export function AppShell({
   user,
   brand,
   pins = [],
-  counts = {},
+  counts: countsLater,
   sections,
   sectionPaths = [],
   role = null,
@@ -91,8 +91,8 @@ export function AppShell({
   pins?: SidebarPin[];
   /** The org's sidebar (Admin panel › Sidebar). */
   sections: NavSection[];
-  /** Small counts beside sidebar entries, by section id (Inbox, Forms, Finance). */
-  counts?: Record<string, number>;
+  /** Small counts beside sidebar entries, by section id (Inbox, Forms, Finance). They land after the page. */
+  counts?: Promise<Record<string, number>>;
   /**
    * Every section (path, name, icon) and whether the org turned it off:
    * members see a notice there, and search leaves it out for them.
@@ -124,6 +124,17 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const [mode, setMode] = useState<SidebarState>(sidebarMode);
+  // The last counts stay up until newer ones land.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let current = true;
+    void countsLater?.then((next) => {
+      if (current) setCounts(next);
+    });
+    return () => {
+      current = false;
+    };
+  }, [countsLater]);
   // Each opening is a new session (a fresh palette: empty box, no stale results).
   const [command, setCommand] = useState({ open: false, session: 0 });
   const setCommandOpen = (open: boolean) =>

@@ -13,6 +13,7 @@ export async function CrmStartedSection({ shell, orgSlug }: { shell: CrmShell; o
   const data = await loadCrmStarted({
     organizationId: shell.org.id,
     userId: shell.user.id,
+    role: shell.role,
     access: shell.access,
   });
   if (crmStartedProgress(viewer, data.state, data.skipped, data.without).complete) return null;

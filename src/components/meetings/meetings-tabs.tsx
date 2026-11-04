@@ -30,12 +30,14 @@ export function MeetingsTabs({
           label: "Meetings",
           count: counts?.upcoming,
           active: current === "upcoming",
+          warm: true,
         },
         {
           href: `${base}/calendar/find-a-time`,
           label: "Find a time",
           count: counts?.find,
           active: current === "find",
+          warm: true,
         },
         {
           href: `${base}/meetings/booking`,

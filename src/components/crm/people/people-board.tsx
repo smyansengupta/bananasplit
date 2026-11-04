@@ -1,6 +1,7 @@
 "use client";
 
-import { DealBoard, type BoardCard, type StageView } from "@/components/crm/pipeline-view";
+import { DealBoard } from "@/components/crm/lazy-parts";
+import type { BoardCard, StageView } from "@/components/crm/pipeline-view";
 import { EmptyState } from "@/components/empty-state";
 import type { EditField } from "@/lib/crm/record-form";
 

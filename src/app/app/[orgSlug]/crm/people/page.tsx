@@ -13,6 +13,7 @@ import { ownerParamFor } from "@/lib/crm/scope";
 import type { EditField } from "@/lib/crm/record-form";
 import { customFieldsFor } from "@/server/crm/databases";
 import { peoplePage } from "@/server/crm/people-view";
+import { loadSendingHealth } from "@/server/crm/sending-health";
 import { PAGE } from "@/server/crm/queries";
 import { withOrgTx } from "@/server/db/context";
 
@@ -51,25 +52,25 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
   const relationships = shell.access.settings?.relationshipTypes ?? [];
   // The members, the list and the card open over it load at once, each in its own transaction.
   const membersP = crmMembers(orgId);
+  const namesP = membersP.then((members) => new Map(members.map((m) => [m.id, m.name])));
+  // Read inside the list; an empty CRM never gets there.
+  namesP.catch(() => null);
   // My team (?owner=team, as Tasks' scope): the viewer and the people under them on the org chart.
   const team = shell.access.personal ? [] : await crmTeam(orgId, shell.user.id);
   const query: Search = typeof sp.owner === "string" ? { ...sp, owner: ownerParamFor(sp.owner, team) } : sp;
-  const [members, { data, boardFields }, overlay] = await Promise.all([
-    membersP,
-    membersP.then((members) => {
-      const names = new Map(members.map((m) => [m.id, m.name]));
-      return withOrgTx(orgId, async ({ db }) => {
-        const data = await peoplePage(db, orgId, shell.user.id, shell.roles, query, {
-          names,
-          relationships,
-          pipelines: shell.pipelines,
-        });
-        const boardFields = data.board ? await customFieldsFor(db, orgId, "deal", data.board.pipeline.id) : [];
-        return { data, boardFields };
-      });
-    }),
-    CrmOverlays({ shell, orgSlug, searchParams: sp }),
-  ]);
+  const listP = withOrgTx(orgId, async ({ db }) => {
+    const data = await peoplePage(db, orgId, shell.user.id, shell.roles, query, {
+      names: namesP,
+      relationships,
+      pipelines: shell.pipelines,
+    });
+    const boardFields = data.board ? await customFieldsFor(db, orgId, "deal", data.board.pipeline.id) : [];
+    return { data, boardFields };
+  });
+  const overlayP = CrmOverlays({ shell, orgSlug, searchParams: sp });
+  // The banner starts now rather than after the list, and arrives on its own.
+  void loadSendingHealth(orgId).catch(() => null);
+  const [members, { data, boardFields }, overlay] = await Promise.all([membersP, listP, overlayP]);
 
   const base = `/app/${orgSlug}/crm`;
   const reportHref = data.board ? `${base}/reports/deals/${data.board.pipeline.id}` : null;

@@ -1,3 +1,6 @@
+import { cache } from "react";
+
+import type { Role } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   canSkipCrmStep,
@@ -13,7 +16,6 @@ import {
 } from "@/lib/crm/started";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgTx, type OrgContext } from "@/server/db/context";
-import { resolveActor } from "@/server/integrations/service";
 
 import { CrmError, type CrmAccess } from "./access";
 import { bringInCounts, type BringInCounts } from "./bring-in";
@@ -39,12 +41,32 @@ export interface CrmStartedData {
   inbound: boolean;
 }
 
-export async function loadCrmStarted(input: {
+async function readOrgKeys(organizationId: string, userId: string, role: Role) {
+  try {
+    return await loadOrgKeys(organizationId, { userId, role });
+  } catch {
+    return null;
+  }
+}
+
+export function loadCrmStarted(input: {
   organizationId: string;
   userId: string;
+  role: Role;
   access: CrmAccess;
 }): Promise<CrmStartedData> {
-  const { organizationId, userId, access } = input;
+  return readCrmStarted(input.organizationId, input.userId, input.role, input.access);
+}
+
+/** Once per request (the arguments are the cache's key): Today starts it early, the panel reads the same answer. */
+const readCrmStarted = cache(async (
+  organizationId: string,
+  userId: string,
+  role: Role,
+  access: CrmAccess,
+): Promise<CrmStartedData> => {
+  // Saved keys are the organization's own: only an owner or admin reads them.
+  const viewP = access.admin ? readOrgKeys(organizationId, userId, role) : Promise.resolve(undefined);
   const read = await withOrgTx(organizationId, async ({ db }) => {
     const member = await db.crmMemberSettings.findFirst({
       where: { organizationId, userId },
@@ -86,23 +108,20 @@ export async function loadCrmStarted(input: {
     };
   });
 
-  // Saved keys are the organization's own: only an owner or admin reads them.
   let ai = false;
   let phone = false;
   const without: CrmStartedKey[] = [];
-  if (access.admin) {
-    try {
-      const view = await loadOrgKeys(organizationId, await resolveActor(organizationId));
-      const saved = (group: string) =>
-        view.keys.some((k) => k.group === group && k.status !== "none");
-      ai = saved("ai");
-      phone = view.keys.some(
-        (k) => (k.id === "telnyx" || k.id === "twilio") && k.status !== "none",
-      );
-      if (!view.aiOnPlan) without.push("ai");
-    } catch {
-      without.push("ai", "phone");
-    }
+  const view = await viewP;
+  if (view === null) {
+    without.push("ai", "phone");
+  } else if (view) {
+    const saved = (group: string) =>
+      view.keys.some((k) => k.group === group && k.status !== "none");
+    ai = saved("ai");
+    phone = view.keys.some(
+      (k) => (k.id === "telnyx" || k.id === "twilio") && k.status !== "none",
+    );
+    if (!view.aiOnPlan) without.push("ai");
   }
 
   return {
@@ -121,7 +140,7 @@ export async function loadCrmStarted(input: {
     counts: read.org?.counts ?? null,
     inbound: Boolean(inboundDomain()),
   };
-}
+});
 
 async function writeOwnSkip(ctx: OrgContext, step: CrmStartedKey, skipped: boolean): Promise<void> {
   const { db, organizationId, userId } = ctx;

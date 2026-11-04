@@ -1,4 +1,4 @@
-import { AskCard } from "@/components/crm/cards/ask-card";
+import { AskCard } from "@/components/crm/lazy-parts";
 
 import type { OverlayProps } from "./crm-overlays";
 

@@ -26,6 +26,7 @@ export function CrmTabs({ tabs, className }: { tabs: readonly ResolvedCrmTab[]; 
         icon: CRM_ICONS[t.icon] ?? Columns3,
         active: crmTabActive(t, pathname),
         count: t.count,
+        warm: true,
       }))}
     />
   );

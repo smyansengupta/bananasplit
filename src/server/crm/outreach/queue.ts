@@ -83,28 +83,23 @@ export interface QueueOptions {
   now?: Date;
 }
 
-export async function followUpQueue(
+/** The queue's first two reasons: the mail waiting on a reply, and the steps waiting on someone. */
+type WaitingOn = { reasons: { personId: string; reason: QueueReason }[] };
+
+/**
+ * Those two read on their own, so a caller with a transaction to spare can
+ * run them beside followUpQueue (`waiting`). Reads only.
+ */
+export async function waitingOn(
   db: TxClient,
   organizationId: string,
   viewerId: string,
-  roles: ReadonlyMap<string, RoleOwner>,
   options: QueueOptions,
-): Promise<QueueItem[]> {
+): Promise<WaitingOn> {
   const now = options.now ?? new Date();
-  const limit = options.limit ?? 60;
-  // Whose: the viewer, or the viewer and their team (My team).
   const who = [viewerId, ...(options.team ?? [])];
   const whoIs = who.length === 1 ? viewerId : { in: who };
-  const held = who.flatMap((id) => rolesHeldBy(id, roles));
-  const ownedBy: Prisma.CrmPersonWhereInput = options.mine
-    ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
-    : {};
-  const reasons = new Map<string, QueueReason[]>();
-  const add = (id: string, r: QueueReason) => {
-    const list = reasons.get(id) ?? [];
-    if (!list.some((x) => x.kind === r.kind)) list.push(r);
-    reasons.set(id, list);
-  };
+  const out: WaitingOn["reasons"] = [];
 
   // Replies waiting: their last message in a thread came in, nothing went out after.
   const inbound = await db.crmEmailMessage.findMany({
@@ -145,7 +140,7 @@ export async function followUpQueue(
   }
   for (const m of waiting) {
     const personId = from.get(m.activityId!);
-    if (personId) add(personId, { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id });
+    if (personId) out.push({ personId, reason: { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id } });
   }
 
   // Sequence steps waiting on someone.
@@ -164,8 +159,43 @@ export async function followUpQueue(
   });
   for (const s of steps) {
     const pid = s.targets[0]?.targetId;
-    if (pid) add(pid, { kind: "step", label: s.subject ?? "A sequence step", at: s.occurredAt, ref: s.id });
+    if (pid) out.push({ personId: pid, reason: { kind: "step", label: s.subject ?? "A sequence step", at: s.occurredAt, ref: s.id } });
   }
+  return { reasons: out };
+}
+
+export async function followUpQueue(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  roles: ReadonlyMap<string, RoleOwner>,
+  options: QueueOptions & {
+    /**
+     * waitingOn with these same options, already asked for in its own
+     * transaction: this one holds its connection until that answers, which
+     * can't jam the pool only because it was asked for first.
+     */
+    waiting?: Promise<WaitingOn>;
+  },
+): Promise<QueueItem[]> {
+  const now = options.now ?? new Date();
+  const limit = options.limit ?? 60;
+  // Whose: the viewer, or the viewer and their team (My team).
+  const who = [viewerId, ...(options.team ?? [])];
+  const whoIs = who.length === 1 ? viewerId : { in: who };
+  const held = who.flatMap((id) => rolesHeldBy(id, roles));
+  const ownedBy: Prisma.CrmPersonWhereInput = options.mine
+    ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
+    : {};
+  const reasons = new Map<string, QueueReason[]>();
+  const add = (id: string, r: QueueReason) => {
+    const list = reasons.get(id) ?? [];
+    if (!list.some((x) => x.kind === r.kind)) list.push(r);
+    reasons.set(id, list);
+  };
+
+  // Replies and steps, here unless they're already on their way.
+  const waiting = options.waiting ?? (await waitingOn(db, organizationId, viewerId, { ...options, now }));
 
   // Follow-ups due.
   const due = await db.crmPerson.findMany({
@@ -245,6 +275,8 @@ export async function followUpQueue(
       add(p.id, { kind: "cold", label: "Going cold", at: p.lastContactedAt });
     }
   }
+
+  for (const r of (await waiting).reasons) add(r.personId, r.reason);
 
   // Snoozed rows stay away.
   const snoozed = await db.inboxItemState.findMany({
