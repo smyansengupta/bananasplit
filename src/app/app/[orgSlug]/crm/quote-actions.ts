@@ -2,14 +2,12 @@
 
 import type { QuoteKind } from "@/lib/crm/quotes";
 import {
-  createQuote,
   duplicateQuote,
   markPaid,
   moveQuote,
   moveToWon,
   saveQuote,
   sendQuote,
-  type QuoteDraftInput,
   type QuoteSaveInput,
 } from "@/server/crm/quotes";
 import { CrmError } from "@/server/crm/access";
@@ -17,8 +15,6 @@ import { CrmError } from "@/server/crm/access";
 import { crmAction } from "./run";
 
 /** Quotes and invoices (src/server/crm/quotes.ts), each in one member transaction. */
-
-export const createQuoteAction = crmAction(async (ctx, _a, input: QuoteDraftInput) => createQuote(ctx, input));
 
 export const saveQuoteAction = crmAction(async (ctx, _a, id: string, input: QuoteSaveInput) => saveQuote(ctx, id, input));
 

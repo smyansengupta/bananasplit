@@ -14,11 +14,10 @@ import { bulkTrash, bulkUpdate, restoreToPoint, undoBatch, type BulkPatch } from
 import { createCompany, restoreCompanies } from "@/server/crm/companies";
 import { convertDatabase, previewConvert, type ConvertPreview, type ConvertResult } from "@/server/crm/convert";
 import { addCrmField, deleteCrmField, updateCrmField } from "@/server/crm/databases";
-import { addDealPerson, createDeal, moveDeal, removeDealPerson, restoreDeals, type MoveResult } from "@/server/crm/deals";
+import { createDeal, moveDeal, restoreDeals, type MoveResult } from "@/server/crm/deals";
 import { resolveDuplicate, scanDuplicates } from "@/server/crm/dedupe";
 import { saveForm } from "@/server/crm/forms";
 import { startImport, type ImportLog } from "@/server/crm/import";
-import { mergeCompanies, mergePeople } from "@/server/crm/merge";
 import { createPerson, restorePeople } from "@/server/crm/people";
 import { archivePipeline, createPipeline, saveStages, updatePipeline, type PipelineSettingsInput, type StageInput } from "@/server/crm/pipelines";
 import { runSetup, type SetupResult } from "@/server/crm/setup";
@@ -182,16 +181,6 @@ export const moveDealAction = crmAction(
   },
 );
 
-export const addDealPersonAction = crmAction(async (ctx, dealId: string, personId: string, role?: string) => {
-  await addDealPerson(ctx, dealId, personId, role ?? null);
-  return {};
-});
-
-export const removeDealPersonAction = crmAction(async (ctx, dealId: string, personId: string) => {
-  await removeDealPerson(ctx, dealId, personId);
-  return {};
-});
-
 const LOGGABLE: CrmActivityKind[] = ["NOTE", "CALL", "EMAIL", "MEETING", "TEXT", "TASK"];
 
 export const logActivityAction = crmAction(
@@ -276,11 +265,6 @@ export const restoreToPointAction = crmAction(
 );
 
 // ---- Duplicates and merging ---------------------------------------------------------
-
-export const mergeAction = crmAction(async (ctx, kind: "person" | "company", keepId: string, dropId: string) => {
-  const r = kind === "person" ? await mergePeople(ctx, keepId, dropId) : await mergeCompanies(ctx, keepId, dropId);
-  return { conflicts: r.conflicts.length, moved: r.moved, undoId: r.undoId };
-});
 
 export const resolveDuplicateAction = crmAction(
   async (ctx, suggestionId: string, decision: { accept: false } | { accept: true; keepId: string }) => {

@@ -34,14 +34,6 @@ import { listPeople, saveList, type ListFilters } from "@/server/crm/outreach/li
 import { checkSender } from "@/server/crm/outreach/mailbox";
 import { savePlanExtras, startPlan } from "@/server/crm/outreach/plans";
 import { saveMemberSettings } from "@/server/crm/outreach/member";
-import {
-  addDeliverable,
-  createGuestLink,
-  removeDeliverable,
-  revokeGuestLink,
-  setDeliverableDone,
-  type DeliverableInput,
-} from "@/server/crm/outreach/partners";
 import { snoozeQueueItem } from "@/server/crm/outreach/queue";
 import { ensureSelfUpdateLink, turnOffSelfUpdate } from "@/server/crm/outreach/self-update";
 import { cancelEmail, composeEmail, contactable, discardDraft, type ComposeInput } from "@/server/crm/outreach/send";
@@ -385,27 +377,6 @@ export const giveOwnerAction = outreachAction(async (ctx, _a, personIds: string[
 });
 
 // ---- What we owe them, guest links, self-update -----------------------------------------------------
-
-export const addDeliverableAction = outreachAction(async (ctx, _a, dealId: string, input: DeliverableInput) => addDeliverable(ctx, dealId, input));
-
-export const setDeliverableDoneAction = outreachAction(async (ctx, _a, id: string, done: boolean, proof?: string | null) => {
-  await setDeliverableDone(ctx, id, done, proof);
-  return {};
-});
-
-export const removeDeliverableAction = outreachAction(async (ctx, _a, id: string) => {
-  await removeDeliverable(ctx, id);
-  return {};
-});
-
-export const createGuestLinkAction = outreachAction(async (ctx, _a, dealId: string, expiresInDays: number | null) =>
-  createGuestLink(ctx, dealId, expiresInDays),
-);
-
-export const revokeGuestLinkAction = outreachAction(async (ctx, _a, id: string) => {
-  await revokeGuestLink(ctx, id);
-  return {};
-});
 
 export const selfUpdateLinkAction = outreachAction(async (ctx, _a, personId: string, on: boolean) => {
   if (!on) {

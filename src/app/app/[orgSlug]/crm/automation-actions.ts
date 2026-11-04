@@ -1,10 +1,9 @@
 "use server";
 
-import type { CrmForecastCategory, CrmWorkflowStatus } from "@/generated/prisma/client";
+import type { CrmWorkflowStatus } from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requireUser } from "@/lib/auth/session";
 import { mapDescribed, type DescribeContext } from "@/lib/crm/describe";
-import { parsePeriodKey } from "@/lib/crm/forecast";
 import { STARTER_RULES } from "@/lib/crm/scoring";
 import type { WorkflowObject } from "@/lib/crm/workflows";
 import { ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
@@ -13,9 +12,7 @@ import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError, requireCrm, requireManager } from "@/server/crm/access";
 import { assertUnderCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
-import { updateDeal } from "@/server/crm/deals";
 import { describeContext, describeRequest } from "@/server/crm/describe";
-import { saveForecastCall } from "@/server/crm/forecast";
 import { deleteGoal, saveGoal } from "@/server/crm/goals";
 import { deleteScoreRule, saveScoreRule } from "@/server/crm/scoring";
 import { dryRunWorkflow, type DryRunResult } from "@/server/crm/workflow-engine";
@@ -214,18 +211,4 @@ export const deleteGoalAction = crmAction(async (ctx, id: string) => {
   return {};
 });
 
-export const saveForecastCallAction = crmAction(
-  async (ctx, input: { pipelineId: string; periodKey: string; amount: number; count: number; note?: string | null }) => {
-    const period = parsePeriodKey(input.periodKey);
-    if (!period) throw new CrmError("Pick a quarter or a year.");
-    await saveForecastCall(ctx, input, period);
-    return {};
-  },
-);
-
 /** A member marks an item Commit, Best case, Pipeline or Left out. */
-export const setForecastCategoryAction = crmAction(async (ctx, dealId: string, category: CrmForecastCategory) => {
-  if (!["PIPELINE", "BEST_CASE", "COMMIT", "OMITTED"].includes(category)) throw new CrmError("Pick a forecast category.");
-  await updateDeal(ctx, dealId, { forecastCategory: category });
-  return {};
-});
