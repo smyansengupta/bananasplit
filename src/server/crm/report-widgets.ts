@@ -574,7 +574,7 @@ export async function crmWidgetPayload(
           }),
           max: 100,
           caption: null,
-          empty: "No goals for this quarter or year. Set them on the CRM's Forecast tab.",
+          empty: "No goals for this quarter or year. Add one on the CRM's Today tab.",
         },
       };
     }

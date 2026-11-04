@@ -113,7 +113,7 @@ export const stopEnrollmentAction = outreachAction(async (ctx, _a, enrollmentId:
   return {};
 });
 
-// ---- Plans (a sequence as the Outreach tab shows it) ---------------------------------
+// ---- Plans (a sequence as its plan card shows it) -------------------------------------
 
 /** A new plan: a draft sequence with an email and a follow-up, ready to edit. */
 export const createPlanAction = outreachAction(async (ctx, _a, name?: string) => {
