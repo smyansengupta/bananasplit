@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Phone } from "@/components/icons";
 import { Card } from "@/components/ui/card";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmCallsHref, crmRecordHref } from "@/lib/crm/href";
 import type { RoleOwner } from "@/server/crm/owners";
 import { readPhoneStatus } from "@/server/crm/phone/connection";
 import { dialQueue } from "@/server/crm/phone/queue";
@@ -43,8 +43,8 @@ export async function TodayCalls({
       <h2 className="heading flex items-center gap-2 text-base">
         <Phone className="text-muted-foreground size-4" aria-hidden="true" />
         Calls to make
-        <Link href={`/app/${orgSlug}/crm/calls`} className="text-muted-foreground ms-auto text-sm font-normal underline-offset-2 hover:underline">
-          Open the dialer
+        <Link href={crmCallsHref(orgSlug)} className="text-muted-foreground ms-auto text-sm font-normal underline-offset-2 hover:underline">
+          All calls
         </Link>
       </h2>
       <ul className="divide-border divide-y">

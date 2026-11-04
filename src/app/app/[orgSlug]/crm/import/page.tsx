@@ -1,6 +1,6 @@
-import { BackLink } from "@/components/back-link";
+import { CrmHeader } from "@/components/crm/chrome/crm-header";
+import { CrmToolbar } from "@/components/crm/chrome/crm-toolbar";
 import { Importer, type TargetOption } from "@/components/crm/importer";
-import { PageHeader } from "@/components/page-header";
 import { builtinFields, type CrmObject } from "@/lib/crm/fields";
 import { customFieldsFor } from "@/server/crm/databases";
 import { recentImports } from "@/server/crm/import";
@@ -10,7 +10,11 @@ import { crmShell } from "../shell";
 
 export const metadata = { title: "Import" };
 
-/** Import a file into the CRM, or turn one of the organization's databases into records. */
+/**
+ * Import a file into the CRM, or turn one of the organization's databases
+ * into records. A page, not a card: matching a sheet's columns needs the
+ * room. It wears the CRM's own header and tab switch (People stays lit).
+ */
 export default async function CrmImportPage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/import">) {
   const { orgSlug } = await params;
   const sp = (await searchParams) as Record<string, string | undefined>;
@@ -39,11 +43,16 @@ export default async function CrmImportPage({ params, searchParams }: PageProps<
     return { targets, databases, recent: await recentImports(db, orgId, shell.user.id) };
   });
   return (
-    <div className="space-y-7">
-      <div className="space-y-3">
-        <BackLink href={`/app/${orgSlug}/crm/people`} label="People" />
-        <PageHeader title="Import" description="From a spreadsheet, a phone's contacts, or the CRM you're leaving." />
-      </div>
+    <div>
+      <CrmHeader
+        orgSlug={orgSlug}
+        title="Import"
+        create={false}
+        toolbar={<CrmToolbar tabs={shell.tabs} />}
+      />
+      <p className="text-muted-foreground -mt-3 mb-6 max-w-prose text-[15px]">
+        People, companies or deals from a spreadsheet, a phone&apos;s contacts, or the CRM you&apos;re leaving.
+      </p>
       <Importer
         orgId={orgId}
         orgSlug={orgSlug}

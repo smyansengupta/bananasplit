@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { handoverBrief } from "@/lib/crm/outreach/brief";
+import { crmSettingsHref } from "@/lib/crm/settings-sections";
 import type { TxClient } from "@/server/db/context";
 import { notifyUsers } from "@/server/notifications";
 
@@ -72,11 +73,11 @@ export async function memberLeft(db: TxClient, organizationId: string, userId: s
     body: [
       n.people ? `${n.people} ${n.people === 1 ? "person" : "people"}` : null,
       n.companies ? `${n.companies} ${n.companies === 1 ? "company" : "companies"}` : null,
-      n.deals ? `${n.deals} open item${n.deals === 1 ? "" : "s"}` : null,
+      n.deals ? `${n.deals} open deal${n.deals === 1 ? "" : "s"}` : null,
     ]
       .filter(Boolean)
       .join(", "),
-    linkUrl: org ? `/app/${org.slug}/crm/handover?from=${userId}` : null,
+    linkUrl: org ? crmSettingsHref(org.slug, "team") : null,
     dedupeKey: `crm-left:${userId}:${new Date().toISOString().slice(0, 10)}`,
   });
 }
@@ -112,7 +113,7 @@ export async function chartHoldersChanging(
     const deals = await db.crmDeal.count({ where: { organizationId, ownerRoleKey: p.key, deletedAt: null, closedAt: null } });
     const total = people + companies + deals;
     if (total === 0) continue;
-    const link = org ? `/app/${org.slug}/crm/handover?role=${encodeURIComponent(p.key)}` : null;
+    const link = org ? crmSettingsHref(org.slug, "you", `?role=${encodeURIComponent(p.key)}`) : null;
     if (p.userId) {
       await notifyUsers(db, organizationId, [p.userId], {
         type: "CRM_HANDOVER",
@@ -225,7 +226,7 @@ export async function handOver(
         type: "CRM_HANDOVER",
         title: `${total} relationship${total === 1 ? "" : "s"} handed to you from ${from?.name ?? "a former member"}`,
         body: "Read the handover brief for each before you reach out.",
-        linkUrl: org ? `/app/${org.slug}/crm/handover?for=me` : null,
+        linkUrl: org ? crmSettingsHref(org.slug, "you") : null,
         actorId: userId,
         dedupeKey: `crm-handover:${batch}:${newMember}`,
       });

@@ -58,7 +58,7 @@ export interface RecentImport {
 const OBJECTS: { value: Obj; label: string }[] = [
   { value: "person", label: "People" },
   { value: "company", label: "Companies" },
-  { value: "deal", label: "Pipeline items" },
+  { value: "deal", label: "Deals" },
 ];
 
 export function Importer({

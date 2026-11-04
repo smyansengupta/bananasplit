@@ -10,10 +10,15 @@ import { ensureMemberSettings } from "@/server/crm/outreach/member";
 import { withOrgTx } from "@/server/db/context";
 
 import { DetailsCard, YourMailCard } from "../you-settings";
+import { HandedToYou } from "./handover";
 import type { SectionProps } from "./types";
 
-/** You: your name and signature, your mail and the CRM, and your booking link. Only you see these. */
-export async function YouSection({ shell, orgSlug }: SectionProps) {
+/**
+ * You: your name and signature, your mail and the CRM, your booking link,
+ * and the people handed to you lately (?role= for a position's). Only you
+ * see these.
+ */
+export async function YouSection({ shell, orgSlug, sp }: SectionProps) {
   const orgId = shell.org.id;
   const data = await withOrgTx(orgId, async ({ db, userId }) => ({
     settings: await ensureMemberSettings(db, orgId, userId),
@@ -52,6 +57,7 @@ export async function YouSection({ shell, orgSlug }: SectionProps) {
           </p>
         )}
       </SettingsCard>
+      <HandedToYou shell={shell} orgSlug={orgSlug} role={sp.role} />
     </>
   );
 }
