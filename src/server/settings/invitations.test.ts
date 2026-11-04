@@ -61,6 +61,8 @@ function makeSystemDb() {
     },
     invitation: { update: vi.fn() },
     notification: { createMany: vi.fn() },
+    // No CRM here: the new-member Inbox line (crmMemberJoined) has nothing to say.
+    crmSettings: { findUnique: vi.fn(async () => null) },
   };
 }
 

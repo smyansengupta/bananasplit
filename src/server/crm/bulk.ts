@@ -2,6 +2,7 @@ import { CrmError, requireCrm, type CrmActor } from "./access";
 import { restoreCompanies, trashCompanies, updateCompany, type CompanyInput } from "./companies";
 import { moveDeal, restoreDeals, trashDeals, updateDeal, type DealInput } from "./deals";
 import { historyOf, newBatchId, valuesAt, type HistoryTarget } from "./history";
+import { crmGivenInBulk } from "./inbox-notify";
 import { restorePeople, trashPeople, updatePerson, type PersonInput } from "./people";
 
 
@@ -54,6 +55,11 @@ export async function bulkUpdate(
       void _s;
       if ((await updateDeal(actor, id, rest, opts)).changed.length || p.stageId) changed++;
     }
+  }
+  // Given to someone else: one Inbox line for them, not one per record.
+  const to = (patch as { ownerId?: string | null }).ownerId;
+  if (to && changed > 0) {
+    await crmGivenInBulk(actor.db, actor.organizationId, { to, byUserId: actor.userId, kind: object, count: changed, batchId });
   }
   return { batchId, changed };
 }

@@ -541,6 +541,10 @@ enum NotificationType {
   CRM_REPLY
   CRM_REVIEW
   CRM_HANDOVER
+  // CRM Inbox items (src/server/crm/inbox-notify.ts): someone new, a booking, a deal or quote
+  CRM_NEW
+  CRM_BOOKED
+  CRM_DEAL
 }
 
 model Notification {

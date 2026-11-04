@@ -532,7 +532,7 @@ export const JOB_KINDS = {
     afterEligible: true,
     handler: () => import("@/server/crm/events").then((m) => m.crmEventJob),
     description:
-      "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
+      "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows, webhooks and Inbox lines; enqueued only when one of them could want it (src/server/crm/events.ts).",
   }),
   "crm-workflow-call": kind({
     payload: z.object({ runId: id, index: z.number().int().min(0).max(50) }).strict(),

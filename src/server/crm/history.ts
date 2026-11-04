@@ -90,13 +90,15 @@ export async function writeHistory(
       batchId: input.batchId ?? null,
       changedAt: input.at ?? new Date(),
     })),
-  });  await emitCrmEvent(db, input.organizationId, {
+  });
+  await emitCrmEvent(db, input.organizationId, {
     type: "record.changed",
     targetKind: input.targetKind,
     targetId: input.targetId,
     fields: input.changes.map((c) => c.field),
     userId: input.userId,
     source: input.source,
+    batchId: input.batchId ?? null,
   });
 }
 

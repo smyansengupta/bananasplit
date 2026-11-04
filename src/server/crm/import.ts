@@ -20,6 +20,7 @@ import { logActivity } from "./activity";
 import { companyByDomain, createCompany, updateCompany, type CompanyInput } from "./companies";
 import { customFieldsFor } from "./databases";
 import { createDeal } from "./deals";
+import { crmImportDone } from "./inbox-notify";
 import { createPerson, personByEmail, updatePerson, type PersonInput } from "./people";
 
 /**
@@ -570,7 +571,7 @@ export async function runImportTurn(actor: CrmActor, importId: string, max = TUR
   const { db, organizationId } = actor;
   const row = await db.crmView.findFirst({
     where: { id: importId, organizationId, objectKind: "import" },
-    select: { id: true, filters: true, columns: true },
+    select: { id: true, name: true, createdById: true, filters: true, columns: true },
   });
   if (!row) return { left: 0 };
   const state = readState(row.filters);
@@ -626,6 +627,15 @@ export async function runImportTurn(actor: CrmActor, importId: string, max = TUR
   });
   if (finished) {
     await enqueueJob(db, { orgId: organizationId, kind: "crm-refresh", key: organizationId, payload: {} });
+    // One Inbox line for the whole file, never one per row.
+    await crmImportDone(db, organizationId, row.createdById ?? actor.userId, {
+      fileName: row.name,
+      object: state.object,
+      created: state.created,
+      updated: state.updated,
+      skipped: state.skipped,
+      importId: row.id,
+    });
   }
   return { left: rows.length - end };
 }

@@ -15,6 +15,7 @@ import {
 import { withSystemOrgTx, type OrgContext, type TxClient } from "@/server/db/context";
 
 import { withAutomationScope, type CrmEventPayload } from "./events";
+import { crmHeldBack } from "./inbox-notify";
 import { rolePositions, type RoleOwner } from "./owners";
 import { actAs } from "./system-actor";
 import { runAction, type ActionContext } from "./workflow-actions";
@@ -236,6 +237,15 @@ export async function runWorkflowOn(
           finishedAt: new Date(),
         },
       });
+      // A step it held back or couldn't do: whoever it acts for hears, once a run.
+      const held = log.filter((e) => !e.ok);
+      if (held.length > 0) {
+        await crmHeldBack(db, organizationId, [acting.userId], {
+          title: `"${workflow.name}" held something back`,
+          why: held.map((e) => e.detail).join(" ").slice(0, 600),
+          key: `run-${run.id}`,
+        });
+      }
       return { status: failed ? ("FAILED" as const) : ("DONE" as const), runId: run.id, log };
     });
   } catch (error) {

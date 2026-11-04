@@ -11,10 +11,13 @@ import { webhookEventsFor } from "./webhooks/events";
  * react to. Every change to a person, company or item already passes through
  * writeHistory, which emits `record.changed` here; outreach emits the rest
  * (an email replied to, a meeting booked, a form answered). An event becomes
- * a `crm-event` job only when the organization has a workflow switched on,
- * so a CRM without automations pays one indexed count per change and no
- * jobs. Imports and merges don't fire workflows (a 5,000-row import is not
- * 5,000 "person added" events). Payloads are ids and field names only.
+ * a `crm-event` job when the organization has a workflow switched on, a
+ * webhook listening, or when it could be an Inbox line (someone new, given
+ * to someone, a deal won or lost, a form answered: inbox-notify.ts), so a
+ * member's own edits to their own records queue nothing. Imports and merges
+ * don't fire workflows (a 5,000-row import is not 5,000 "person added"
+ * events; the import says so once), and a bulk edit (a batch) tells the
+ * Inbox once, where it ran. Payloads are ids and field names only.
  */
 
 export type CrmEventType =
@@ -39,6 +42,8 @@ export interface CrmEvent {
   sourceId?: string;
   /** user | ai | automation | connector | system ... (automation changes don't re-fire their own workflow). */
   source?: string;
+  /** A bulk edit's batch: its Inbox line is written once, where the edit ran (not in the payload). */
+  batchId?: string | null;
 }
 
 /**
@@ -66,7 +71,13 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
     select: { workflowTriggers: true, webhookEvents: true },
   });
   if (!s) return;
-  if (s.workflowTriggers.length === 0 && !webhookWants(s.webhookEvents, event)) return;
+  if (
+    s.workflowTriggers.length === 0 &&
+    !webhookWants(s.webhookEvents, event) &&
+    !(await inboxWants(db, organizationId, event))
+  ) {
+    return;
+  }
   const stamp = Date.now().toString(36);
   const scope = automationScope.getStore();
   await enqueueJob(db, {
@@ -84,6 +95,36 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
       ...(scope ? { workflowId: scope.workflowId, depth: scope.depth } : {}),
     },
   });
+}
+
+/** Cheap, payload-only: could this event be an Inbox line? */
+export function inboxMayWant(event: { type: string; targetKind: string; fields?: readonly string[] }): boolean {
+  if (event.type === "form.submitted") return true;
+  if (event.type !== "record.changed") return false;
+  const f = event.fields ?? [];
+  if (f.includes("created") || f.includes("ownerId") || f.includes("ownerRoleKey")) return true;
+  return event.targetKind === "deal" && f.includes("stageId");
+}
+
+/**
+ * Whether the Inbox could want it, read in the caller's transaction: not a
+ * member adding their own, keeping their own or closing their own, and not
+ * a batch (a bulk edit writes its one line itself).
+ */
+async function inboxWants(db: TxClient, organizationId: string, event: CrmEvent): Promise<boolean> {
+  if (event.batchId || !inboxMayWant(event)) return false;
+  const byMember = !event.source || event.source === "user" || event.source === "ai";
+  if (event.type !== "record.changed" || !byMember || !event.userId) return true;
+  const where = { id: event.targetId, organizationId };
+  const rec =
+    event.targetKind === "person"
+      ? await db.crmPerson.findFirst({ where, select: { ownerId: true, ownerRoleKey: true } })
+      : event.targetKind === "company"
+        ? await db.crmCompany.findFirst({ where, select: { ownerId: true, ownerRoleKey: true } })
+        : await db.crmDeal.findFirst({ where, select: { ownerId: true, ownerRoleKey: true } });
+  if (!rec) return false;
+  // Theirs, and they did it: nothing to tell anyone.
+  return rec.ownerId !== event.userId || Boolean(rec.ownerRoleKey);
 }
 
 function webhookWants(listening: readonly string[], event: CrmEvent): boolean {
@@ -117,6 +158,8 @@ export function onCrmEvent(load: () => Promise<Listener>): void {
 
 // Outgoing webhooks (Phase 5, src/server/crm/webhooks).
 onCrmEvent(() => import("./webhooks").then((m) => m.webhookListener));
+// The Inbox: someone new, given to someone, a deal won or lost, a form answered.
+onCrmEvent(() => import("./inbox-notify").then((m) => m.inboxListener));
 
 export const crmEventJob: JobHandler<CrmEventPayload> = async (run) => {
   const orgId = run.organizationId;

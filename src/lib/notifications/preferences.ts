@@ -54,6 +54,9 @@ export const notificationPreferencesSchema = z
 /** Types that stay off until the user turns them on (Tasks). */
 export const DEFAULT_OFF_TYPES: ReadonlySet<NotificationType> = new Set([
   NotificationType.TASK_COMMENTED,
+  // Someone new in the CRM comes in bursts (forms, booking pages): the Inbox
+  // always has it; it's emailed only when the member turns it on.
+  NotificationType.CRM_NEW,
 ]);
 
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
@@ -243,8 +246,14 @@ export const NOTIFICATION_TYPE_META: Record<
   CRM_ASSIGNED: { label: "A person or item in the CRM is given to me", group: "org" },
   CRM_FOLLOW_UP: { label: "A follow-up in the CRM is due", group: "org" },
   CRM_REPLY: { label: "Someone in the CRM replies to me", group: "org" },
-  CRM_REVIEW: { label: "A CRM suggestion waits for my review", group: "org" },
+  CRM_REVIEW: {
+    label: "Something in the CRM waits for my OK: a draft to send, paused sending, something held back",
+    group: "org",
+  },
   CRM_HANDOVER: { label: "CRM relationships are handed to me", group: "org" },
+  CRM_NEW: { label: "Someone new comes into the CRM for me", group: "org" },
+  CRM_BOOKED: { label: "Someone books a meeting with me", group: "org" },
+  CRM_DEAL: { label: "A deal of mine is won or lost, or a quote is opened or accepted", group: "org" },
 };
 
 export const NOTIFICATION_GROUP_LABELS: Record<NotificationGroup, string> = {

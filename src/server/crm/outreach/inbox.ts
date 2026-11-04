@@ -1,3 +1,4 @@
+import { crmRecordHref } from "@/lib/crm/href";
 import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "../owners";
@@ -36,13 +37,12 @@ export async function crmInboxItems(
     .slice(0, 20);
   return items.map((i) => {
     const first = i.reasons[0]!;
-    const path = i.targetKind === "company" ? "companies" : "people";
     return {
       key: i.key,
       id: i.id,
       title: i.name,
       meta: i.reasons.map((r) => r.label).join(", "),
-      href: `/app/${orgSlug}/crm/${path}/${i.id}`,
+      href: crmRecordHref(orgSlug, i.targetKind === "company" ? "company" : "person", i.id),
       urgent: i.urgent,
       group: first.kind === "reply" || first.kind === "step" || i.urgent ? "overdue" : first.kind === "followup" ? "today" : "review",
     };
@@ -68,9 +68,9 @@ export async function crmReviewRow(
   return {
     key: "crm:review",
     id: "review",
-    title: n === 1 ? "1 suggestion to review in the CRM" : `${n} suggestions to review in the CRM`,
-    meta: "Drafts, changes and new people waiting for a yes",
-    href: `/app/${orgSlug}/crm/queue?mine=1`,
+    title: n === 1 ? "1 thing to approve in the CRM" : `${n} things to approve in the CRM`,
+    meta: "Drafts, changes and new people waiting for your OK",
+    href: `/app/${orgSlug}/crm?show=approve`,
     urgent: false,
     group: "review",
   };

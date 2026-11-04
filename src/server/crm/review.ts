@@ -19,7 +19,6 @@ import {
 import { builtinField, customKey } from "@/lib/crm/fields";
 import { NotFoundError } from "@/lib/auth/errors";
 import type { OrgContext, TxClient } from "@/server/db/context";
-import { notifyUser } from "@/server/notifications";
 import { createTask, deleteTask, loadTaskEnv, TaskError } from "@/server/tasks/service";
 
 import { CrmError, requireCrm, type CrmActor } from "./access";
@@ -28,9 +27,10 @@ import { undoBatch } from "./bulk";
 import { createCompany, trashCompanies, updateCompany, type CompanyInput } from "./companies";
 import { moveDeal, updateDeal, type DealInput } from "./deals";
 import { newBatchId } from "./history";
+import { crmToApprove } from "./inbox-notify";
 import { createPerson, personByEmail, trashPeople, updatePerson, type PersonInput } from "./people";
 import { recordEnrichment } from "./enrichment-store";
-import { dropThread } from "./outreach/send";
+import { discardDraft, dropThread } from "./outreach/send";
 
 /**
  * The review queue (docs/features/crm.md, differentiator 6): one place where
@@ -109,17 +109,15 @@ export async function proposeChange(
     select: { id: true },
   });
   if (input.assigneeId && input.assigneeId !== input.proposedById) {
-    const org = await db.organization.findUnique({ where: { id: input.organizationId }, select: { slug: true } });
-    if (org) {
-      await notifyUser(db, input.organizationId, input.assigneeId, {
-        type: "CRM_REVIEW",
-        title: input.title.slice(0, 200),
-        body: input.summary ?? "Waiting for your review in the CRM.",
-        linkUrl: `/app/${org.slug}/crm/queue`,
-        actorId: input.proposedById ?? null,
-        dedupeKey: `crm-review:${row.id}`,
-      });
-    }
+    // Their Inbox, folded with others that came at once ("5 drafts wait for your OK").
+    await crmToApprove(db, input.organizationId, {
+      userId: input.assigneeId,
+      title: input.title,
+      summary: input.summary ?? null,
+      target: input.target ?? null,
+      actorId: input.proposedById ?? null,
+      suggestionId: row.id,
+    });
   }
   return { id: row.id, duplicate: false };
 }
@@ -632,6 +630,11 @@ export async function rejectSuggestion(ctx: CrmActor, id: string): Promise<void>
     where: { id: row.id },
     data: { status: "REJECTED", reviewedById: ctx.userId, reviewedAt: new Date() },
   });
+  // A draft turned down leaves compose too, so a sequence waiting on it carries on without it.
+  if (row.kind === "DRAFT_EMAIL") {
+    const draftId = (row.payload as { draftId?: unknown } | null)?.draftId;
+    if (typeof draftId === "string") await discardDraft(ctx.db, ctx.organizationId, draftId);
+  }
 }
 
 /**

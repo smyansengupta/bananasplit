@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  Handshake,
   type IconComponent,
   Inbox,
   MessageSquare,
@@ -62,7 +63,17 @@ import { DeclineButton, ReplyBox } from "./row-actions";
 export type InboxView = "needs" | "updates" | "snoozed";
 
 export type InboxCategory =
-  "meeting" | "task" | "approval" | "form" | "mention" | "comment" | "assigned" | "alert" | "signal" | "other";
+  | "meeting"
+  | "task"
+  | "approval"
+  | "form"
+  | "mention"
+  | "comment"
+  | "assigned"
+  | "crm"
+  | "alert"
+  | "signal"
+  | "other";
 
 /** One row of the Inbox, whatever it is. */
 export interface InboxRow {
@@ -108,6 +119,7 @@ const CATEGORY_LABEL: Record<InboxCategory, string> = {
   mention: "Mentions",
   comment: "Comments",
   assigned: "Assigned",
+  crm: "CRM",
   alert: "Alerts",
   signal: "CRM signals",
   other: "Other",
@@ -117,6 +129,7 @@ const CATEGORY_ORDER: InboxCategory[] = [
   "mention",
   "comment",
   "assigned",
+  "crm",
   "task",
   "meeting",
   "approval",
@@ -135,6 +148,7 @@ const LOOK: Record<InboxCategory, { icon: IconComponent; tint: string }> = {
   mention: { icon: AtSign, tint: "bg-tint-accent text-tint-accent-foreground" },
   comment: { icon: MessageSquare, tint: "bg-tint-info text-tint-info-foreground" },
   assigned: { icon: UserPlus, tint: "bg-tint-success text-tint-success-foreground" },
+  crm: { icon: Handshake, tint: "bg-tint-info text-tint-info-foreground" },
   alert: { icon: ShieldAlert, tint: "bg-tint-danger text-tint-danger-foreground" },
   signal: { icon: Activity, tint: "bg-tint-accent text-tint-accent-foreground" },
   other: { icon: Bell, tint: "bg-muted text-muted-foreground" },

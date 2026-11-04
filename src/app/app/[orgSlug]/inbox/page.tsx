@@ -260,7 +260,7 @@ export default async function InboxPage({
       peek: { kind: "form", id: f.id },
     })),
     // People the CRM says to reach today (replies, steps, follow-ups, new ones).
-    ...data.crm.map((c): InboxRow => ({ ...c, kind: "crm", category: "assigned", peek: null })),
+    ...data.crm.map((c): InboxRow => ({ ...c, kind: "crm", category: "crm", peek: null })),
   ];
 
   needs.push(
@@ -434,6 +434,15 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   EVENT_CANCELLED: "meeting",
   SECURITY_ALERT: "alert",
   INTEGRATION_ERROR: "alert",
+  // The CRM's lines (src/server/crm/inbox-notify.ts) share one chip.
+  CRM_ASSIGNED: "crm",
+  CRM_FOLLOW_UP: "crm",
+  CRM_REPLY: "crm",
+  CRM_REVIEW: "crm",
+  CRM_HANDOVER: "crm",
+  CRM_NEW: "crm",
+  CRM_BOOKED: "crm",
+  CRM_DEAL: "crm",
 };
 
 /**

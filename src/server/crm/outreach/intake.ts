@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { normalizeEmail } from "@/lib/crm/dedupe";
+import { crmRecordHref } from "@/lib/crm/href";
 import { applyMap, readDestination, type CrmDestination } from "@/lib/crm/outreach/form-map";
 import { readRouting, routeOwner, type Routing } from "@/lib/crm/outreach/assign";
 import { readQuestions } from "@/lib/forms/questions";
@@ -181,7 +182,7 @@ async function intake(
         type: "CRM_ASSIGNED",
         title: `${name ?? email} is yours: new from ${form.title}`.slice(0, 300),
         body: routed.why === "round-robin" ? "Given to you in turn." : `The rule ${routed.why}.`,
-        linkUrl: org ? `/app/${org.slug}/crm/people/${personId}` : null,
+        linkUrl: org ? crmRecordHref(org.slug, "person", personId) : null,
         dedupeKey: `crm-route:${personId}`,
       });
     }
