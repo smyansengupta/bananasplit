@@ -11,6 +11,7 @@ import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { tags } from "@/server/cache/tags";
+import { crmMemberJoined } from "@/server/crm/inbox-notify";
 import { withSystemOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
 import { notifyUser } from "@/server/notifications";
@@ -342,6 +343,8 @@ export async function joinWithCode(
         data: { useCount: { increment: 1 } },
         select: { organizationId: true },
       });
+      // The CRM's managers hear about a new member (only once the CRM is set up).
+      await crmMemberJoined(db, org.organizationId, user.id);
       await writeOrgAuditLog(db, {
         organizationId: org.organizationId,
         action: "join_code.used",

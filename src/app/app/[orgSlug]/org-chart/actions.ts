@@ -10,13 +10,16 @@ import {
   DRAFT_SOURCES,
   getOpenTasks,
   OrgChartError,
+  placeSelfInDraft,
   publishDraft,
   retryParse,
+  reviewPlacement,
   rollbackToVersion,
   saveDraft,
   startDraft,
   type DraftSource,
   type OpenTasks,
+  type PlacementResult,
   type PublishResult,
   type SaveDraftResult,
 } from "@/server/org-chart/service";
@@ -117,4 +120,27 @@ const openTasksTx = peopleAction(async (ctx, userId: string): Promise<OpenTasks>
 });
 export async function loadOpenTasksAction(organizationId: string, userId: string) {
   return openTasksTx(organizationId, userId);
+}
+
+/** A member's answer to "Where do you sit on the org chart?" (any member). */
+const placeSelfTx = peopleAction(
+  (ctx, versionId: string, choice: unknown): Promise<PlacementResult> =>
+    placeSelfInDraft(ctx, id.parse(versionId), choice),
+);
+export async function placeSelfAction(organizationId: string, versionId: string, choice: unknown) {
+  return rescue(placeSelfTx)(organizationId, versionId, choice);
+}
+
+/** Approves or turns down a member's answer (admins). */
+const reviewPlacementTx = peopleAction(
+  (ctx, versionId: string, positionId: string, approve: boolean): Promise<PlacementResult> =>
+    reviewPlacement(ctx, id.parse(versionId), id.parse(positionId), approve === true),
+);
+export async function reviewPlacementAction(
+  organizationId: string,
+  versionId: string,
+  positionId: string,
+  approve: boolean,
+) {
+  return rescue(reviewPlacementTx)(organizationId, versionId, positionId, approve);
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { NudgeButton } from "@/components/tasks/overdue-actions";
+import { FOLLOW_UP_TEXT, NudgeButton } from "@/components/tasks/overdue-actions";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import type { WaitingOnOthers as OthersData } from "@/lib/overview/waiting-on-others-text";
@@ -51,7 +51,17 @@ export function WaitingOnOthers({ orgId, data }: { orgId: string; data: OthersDa
             ) : (
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {row.state === "overdue" && <Badge variant="destructive">Overdue</Badge>}
-                <NudgeButton orgId={orgId} taskId={row.taskId} person={row.person} />
+                {row.state === "overdue" ? (
+                  <NudgeButton orgId={orgId} taskId={row.taskId} person={row.person} />
+                ) : (
+                  <NudgeButton
+                    orgId={orgId}
+                    taskId={row.taskId}
+                    person={row.person}
+                    label="Follow up"
+                    text={FOLLOW_UP_TEXT}
+                  />
+                )}
               </span>
             )}
           </li>

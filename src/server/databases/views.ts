@@ -96,6 +96,7 @@ export async function listDatabases(
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
   const out: DatabaseSummary[] = [];
+  let crmAdded: boolean | undefined;
   for (const d of defs) {
     if (d.kind === "CUSTOM") {
       // Club-made: its own visibility, and members may edit when it says so.
@@ -115,6 +116,27 @@ export async function listDatabases(
       continue;
     }
     if (!hasSource(d.kind)) continue;
+    if (d.kind === "CRM_PEOPLE" || d.kind === "CRM_COMPANIES" || d.kind === "CRM_PIPELINE") {
+      // The CRM's databases: listed while the CRM is added; their rows are
+      // the CRM's own records, which the CRM's RLS decides (OWN access too).
+      crmAdded ??= await db.orgSettings
+        .findUnique({ where: { organizationId }, select: { addOns: true } })
+        .then((s) => Boolean(s?.addOns.includes("crm")));
+      if (!crmAdded || !isListed(d.memberVisibility, tier, true)) continue;
+      out.push({
+        id: d.id,
+        key: d.key,
+        name: d.name,
+        icon: d.icon,
+        kind: d.kind,
+        memberVisibility: d.memberVisibility,
+        allowEdits: d.allowEdits,
+        columns: d.columns,
+        description: d.description,
+        canEdit: false,
+      });
+      continue;
+    }
     const visible = await canViewKind(db, organizationId, d.kind, tier);
     if (!isListed(d.memberVisibility, tier, visible)) continue;
     out.push({

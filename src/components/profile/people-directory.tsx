@@ -98,6 +98,8 @@ export interface PeopleDirectoryProps {
   loadSheet?: (orgId: string, userId: string) => Promise<PersonSheet | null>;
   /** The Org chart view (?view=chart), rendered on the server. */
   chart?: OrgChartSection;
+  /** Owners and admins: the sheet's Hand one off on anyone's profile. */
+  canManageTasks?: boolean;
 }
 
 type Row = { kind: "header"; group: PeopleGroup } | { kind: "person"; person: DirectoryPerson };
@@ -120,6 +122,7 @@ export function PeopleDirectory({
   search = searchPeopleAction,
   loadSheet = loadPersonSheetAction,
   chart,
+  canManageTasks = false,
 }: PeopleDirectoryProps) {
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -369,28 +372,47 @@ export function PeopleDirectory({
     );
   };
 
-  const profile = sheet ? (
-    <PersonProfile
-      person={sheet}
-      orgSlug={orgSlug}
-      viewerId={viewerId}
-      timeZone={orgTimezone}
-      headingId="person-sheet-title"
-      onSelectPerson={(id) => (byId.has(id) ? select(id) : undefined)}
-      extraActions={
-        <>
-          <PinToggle href={personHref(orgSlug, sheet.id)} label={sheet.name ?? "member"} />
-          <Button asChild variant="outline" size="icon-sm" aria-label="Open the full page">
-            <Link href={personHref(orgSlug, sheet.id)}>
-              <ArrowUpRight aria-hidden="true" />
-            </Link>
-          </Button>
-        </>
-      }
-    />
-  ) : (
-    <SheetSkeleton />
-  );
+  // Pin and Open the full page: in the row of buttons on a phone's sheet, and
+  // under the black Close on the desktop popup, as on every other popup.
+  const profileActions = (popup: boolean) =>
+    sheet ? (
+      <>
+        <PinToggle
+          href={personHref(orgSlug, sheet.id)}
+          label={sheet.name ?? "member"}
+          className={popup ? "border-input size-9 border" : undefined}
+        />
+        <Button
+          asChild
+          variant="outline"
+          size="icon-sm"
+          className={popup ? "size-9" : undefined}
+          aria-label="Open the full page"
+        >
+          <Link href={personHref(orgSlug, sheet.id)}>
+            <ArrowUpRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </>
+    ) : null;
+
+  const profileFor = (popup: boolean) =>
+    sheet ? (
+      <PersonProfile
+        person={sheet}
+        orgId={orgId}
+        canManageTasks={canManageTasks}
+        orgSlug={orgSlug}
+        viewerId={viewerId}
+        timeZone={orgTimezone}
+        headingId="person-sheet-title"
+        onSelectPerson={(id) => (byId.has(id) ? select(id) : undefined)}
+        extraActions={popup ? undefined : profileActions(false)}
+      />
+    ) : (
+      <SheetSkeleton />
+    );
+  const profile = profileFor(false);
 
   const isChart = query.view === "chart";
   const phoneViews = (
@@ -767,7 +789,10 @@ export function PeopleDirectory({
             aria-describedby={undefined}
           >
             <DialogTitle className="sr-only">{sheet?.name ?? "Profile"}</DialogTitle>
-            {selectedId && profile}
+            {selectedId && profileFor(true)}
+            {selectedId && sheet && (
+              <div className="absolute top-[58px] right-4 flex gap-1.5">{profileActions(true)}</div>
+            )}
           </DialogContent>
         </Dialog>
       )}

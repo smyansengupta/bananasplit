@@ -6,16 +6,24 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import { createReportAction } from "@/app/app/[orgSlug]/databases/reports/report-actions";
 import { WidgetBoard } from "@/components/boards/widget-board";
-import { Check, ChevronDown, Globe, Lock } from "@/components/icons";
+import { Check, ChevronDown } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { Segmented } from "@/components/ui/segmented";
-import { shapeName, type BoardWidget } from "@/lib/boards";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { BoardWidget } from "@/lib/boards";
 import {
   WIDGETS,
   boardTypes,
   fillRows,
   naturalSize,
   newWidget,
+  suggestedLayout,
   suggestedWidgets,
   widgetTitle,
   widgetUses,
@@ -24,13 +32,23 @@ import {
   type SourceSummary,
   type WidgetType,
 } from "@/lib/reports/catalog";
+import type { ReadyReport } from "@/lib/reports/crm-ready";
 import { joinedSummary, type ReportJoin } from "@/lib/reports/join";
-import type { ReportSchedule } from "@/lib/reports/schedule";
 import { cn } from "@/lib/utils";
 
 import { ReportIcon } from "./icons";
-import { JoinPanel, ScheduleFields } from "./report-options";
+import { JoinPanel } from "./report-options";
+import {
+  AccessPicker,
+  CopyField,
+  OutsideSharing,
+  useDraftSharing,
+  type ReportAccessChoice,
+} from "./share-fields";
 import { WidgetSettings } from "./widget-settings";
+
+const toLayout = (widgets: readonly ReportWidget[]): BoardWidget[] =>
+  widgets.map(({ id, type, w, h }) => ({ id, type, w, h }));
 
 function SourceCard({
   source,
@@ -59,7 +77,7 @@ function SourceCard({
         <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
           <ReportIcon name={source.icon} className="size-4" />
         </span>
-        <b className="min-w-0 flex-1 truncate">{source.name}</b>
+        <b className="min-w-0 flex-1 leading-snug break-words">{source.name}</b>
         {on && <Check className="size-4" aria-hidden="true" />}
       </span>
       <span className="text-muted-foreground line-clamp-2 text-[13px]">
@@ -80,8 +98,9 @@ function SourceCard({
 /**
  * New report, as a walkthrough: pick a database, pick widgets (the ones that
  * suit its fields are already ticked, each saying which field it reads and
- * opening its settings), then arrange them on a board the way Home works,
- * name it and choose who sees it. Nothing is saved until Save report.
+ * opening its settings), then arrange them on a board the way Home works.
+ * Save report asks who sees it, in the organization and outside it. Nothing
+ * is saved until then.
  */
 export function ReportWizard({
   orgId,
@@ -89,12 +108,15 @@ export function ReportWizard({
   sources,
   isAdmin,
   initialSource,
+  ready = [],
 }: {
   orgId: string;
   orgSlug: string;
   sources: SourceSummary[];
   isAdmin: boolean;
   initialSource: string | null;
+  /** The CRM's ready-made reports, offered first: one click starts from their widgets. */
+  ready?: ReadyReport[];
 }) {
   const router = useRouter();
   const first = sources.find((s) => s.key === initialSource) ?? null;
@@ -102,7 +124,6 @@ export function ReportWizard({
   const [sourceKey, setSourceKey] = useState<string | null>(first?.key ?? null);
   const base = sources.find((s) => s.key === sourceKey) ?? null;
   const [join, setJoin] = useState<ReportJoin | null>(null);
-  const [schedule, setSchedule] = useState<ReportSchedule | null>(null);
   const joined = join ? sources.find((s) => s.key === join.source) : null;
   // The widgets read the joined database's fields too.
   const source = useMemo(
@@ -112,7 +133,11 @@ export function ReportWizard({
   const [picked, setPicked] = useState<ReportWidget[]>(() => (first ? suggest(first) : []));
   const [open, setOpen] = useState<string | null>(null);
   const [title, setTitle] = useState(first?.name ?? "");
-  const [access, setAccess] = useState<"ORGANIZATION" | "PRIVATE">("ORGANIZATION");
+  const [access, setAccess] = useState<ReportAccessChoice>("ORGANIZATION");
+  const sharing = useDraftSharing();
+  const [asking, setAsking] = useState(false);
+  /** Saved with its link on: the link, shown once, before going to the report. */
+  const [made, setMade] = useState<{ id: string; link: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, start] = useTransition();
@@ -137,6 +162,18 @@ export function ReportWizard({
       setTitle(s.name);
       setOpen(null);
     }
+  }
+
+  /** A ready-made report: its database, name and widgets, straight to the widgets step. */
+  function pickReady(r: ReadyReport) {
+    const s = sources.find((x) => x.key === r.source);
+    if (!s) return;
+    setSourceKey(s.key);
+    setJoin(null);
+    setPicked(r.widgets);
+    setTitle(r.title);
+    setOpen(null);
+    go(1);
   }
 
   // The widgets at their catalog sizes, in full rows with no gaps.
@@ -169,10 +206,15 @@ export function ReportWizard({
         access,
         widgets: picked,
         join,
-        schedule: schedule && access !== "ORGANIZATION" ? { ...schedule, to: "me" } : schedule,
+        share:
+          access === "ORGANIZATION" ? { link: sharing.link, invites: sharing.invites } : undefined,
       });
       if (!result.ok) {
         setError(result.error);
+        return;
+      }
+      if (result.link) {
+        setMade({ id: result.id, link: result.link });
         return;
       }
       router.push(`/app/${orgSlug}/databases/reports/${result.id}`);
@@ -265,29 +307,6 @@ export function ReportWizard({
     );
   };
 
-  const preview = source && (
-    <aside
-      className="bg-muted/45 rounded-card flex flex-col gap-3 p-4 lg:sticky lg:top-6"
-      aria-label="Preview"
-    >
-      <p className="text-sm font-semibold">
-        {picked.length} widget{picked.length === 1 ? "" : "s"}
-      </p>
-      <div className="grid auto-rows-[3rem] grid-cols-4 gap-1.5">
-        {arranged.map((w) => (
-          <div
-            key={w.id}
-            title={`${widgetTitle(w, source)}, ${shapeName(w.w, w.h)}`}
-            className="bg-card text-foreground flex min-w-0 items-start rounded-[10px] p-2 text-[11.5px] leading-tight font-semibold shadow-sm"
-            style={{ gridColumn: `span ${w.w}`, gridRow: `span ${w.h ?? 1}` }}
-          >
-            <span className="line-clamp-2 break-words">{widgetTitle(w, source)}</span>
-          </div>
-        ))}
-      </div>
-    </aside>
-  );
-
   return (
     <div className="space-y-6">
       <input
@@ -309,6 +328,36 @@ export function ReportWizard({
               Pick any database. You choose what to show from it next.
             </p>
           </div>
+          {ready.length > 0 && (
+            <div className="space-y-2.5">
+              <h3 className="text-muted-foreground text-[13px] font-semibold">
+                Ready-made for your CRM
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {ready.map((r) => (
+                  <button
+                    key={`${r.kind}:${r.source}`}
+                    type="button"
+                    onClick={() => pickReady(r)}
+                    className="bg-card focus-glow rounded-card ring-foreground/8 hover:shadow-e2 flex h-full min-w-0 flex-col gap-2 p-4 text-left ring-1 transition-[box-shadow,transform] outline-none hover:-translate-y-0.5"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
+                        <ReportIcon
+                          name={sources.find((s) => s.key === r.source)?.icon}
+                          className="size-4"
+                        />
+                      </span>
+                      <b className="min-w-0 flex-1 leading-snug break-words">{r.title}</b>
+                    </span>
+                    <span className="text-muted-foreground line-clamp-2 text-[13px]">
+                      {r.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {custom.length > 0 && (
             <div className="space-y-2.5">
               <h3 className="text-muted-foreground text-[13px] font-semibold">Your databases</h3>
@@ -370,39 +419,31 @@ export function ReportWizard({
               Picked for {source.name} from its fields. Change the field any widget uses.
             </p>
           </div>
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="space-y-5">
-              <div className="space-y-2.5">
-                <h3 className="text-muted-foreground text-[13px] font-semibold">Suggested</h3>
-                <ul className="flex flex-col gap-2">
-                  {available.filter((t) => suggested.has(t)).map(widgetRow)}
-                </ul>
-              </div>
-              {available.some((t) => !suggested.has(t)) && (
-                <div className="space-y-2.5">
-                  <h3 className="text-muted-foreground text-[13px] font-semibold">
-                    Also fits {source.name}
-                  </h3>
-                  <ul className="flex flex-col gap-2">
-                    {available
-                      .filter((t) => !suggested.has(t))
-                      .slice(0, showAll ? undefined : 4)
-                      .map(widgetRow)}
-                  </ul>
-                  {!showAll && available.filter((t) => !suggested.has(t)).length > 4 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAll(true)}
-                    >
-                      Show all {available.length} widgets
-                    </Button>
-                  )}
-                </div>
-              )}
+          <div className="space-y-5">
+            <div className="space-y-2.5">
+              <h3 className="text-muted-foreground text-[13px] font-semibold">Suggested</h3>
+              <ul className="flex flex-col gap-2">
+                {available.filter((t) => suggested.has(t)).map(widgetRow)}
+              </ul>
             </div>
-            {preview}
+            {available.some((t) => !suggested.has(t)) && (
+              <div className="space-y-2.5">
+                <h3 className="text-muted-foreground text-[13px] font-semibold">
+                  Also fits {source.name}
+                </h3>
+                <ul className="flex flex-col gap-2">
+                  {available
+                    .filter((t) => !suggested.has(t))
+                    .slice(0, showAll ? undefined : 4)
+                    .map(widgetRow)}
+                </ul>
+                {!showAll && available.filter((t) => !suggested.has(t)).length > 4 && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+                    Show all {available.length} widgets
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           {footer(
             <Button
@@ -413,7 +454,7 @@ export function ReportWizard({
                 go(2);
               }}
             >
-              Next: arrange and share
+              Next: arrange
             </Button>,
             () => go(0),
           )}
@@ -425,8 +466,8 @@ export function ReportWizard({
           <WidgetBoard
             key={source.key}
             types={boardTypes(source, isAdmin)}
-            initialLayout={picked.map(({ id, type, w, h }) => ({ id, type, w, h }))}
-            customized={false}
+            initialLayout={toLayout(picked)}
+            customized
             titles={Object.fromEntries(picked.map((w) => [w.id, widgetTitle(w, source)]))}
             bodies={Object.fromEntries(
               picked.map((w) => [
@@ -443,14 +484,28 @@ export function ReportWizard({
             refreshOnSave={false}
             noun="this report"
             fillGaps
-            editHint="Arrange it once; anyone who can edit it changes it later."
+            editHint="Add, remove and arrange the widgets here."
+            resetLabel="Back to the suggested widgets"
             intro={
               <h2 id="arrange" className="heading text-[22px]">
-                Arrange and share
+                Arrange it
               </h2>
             }
             onSave={async (layout: BoardWidget[] | null) => {
-              if (!layout) return { ok: true };
+              if (!layout) {
+                // Reset: the suggested widgets, laid out afresh; Undo brings these back.
+                const before = picked;
+                const suggested = suggestedLayout(source, isAdmin);
+                setPicked(suggested);
+                return {
+                  ok: true,
+                  layout: toLayout(suggested),
+                  undo: async () => {
+                    setPicked(before);
+                    return { ok: true, layout: toLayout(before) };
+                  },
+                };
+              }
               setPicked((list) => {
                 const byId = new Map(list.map((w) => [w.id, w]));
                 return layout.map((b) => {
@@ -463,51 +518,89 @@ export function ReportWizard({
               return { ok: true };
             }}
           />
-          <div className="bg-card ring-foreground/6 rounded-card edge grid gap-5 p-6 ring-1 sm:grid-cols-2">
-            <div className="grid gap-1.5 text-sm">
-              <span className="font-semibold" id="who-sees">
-                Who can see it
-              </span>
-              <Segmented
-                label="Who can see it"
-                value={access}
-                onSelect={(v) => setAccess(v as "ORGANIZATION" | "PRIVATE")}
-                options={[
-                  { value: "ORGANIZATION", label: "Everyone", icon: Globe },
-                  { value: "PRIVATE", label: "Only you", icon: Lock },
-                ]}
-                className="w-fit"
-              />
-              <span className="text-muted-foreground text-xs">
-                Each person sees only the {source.name.toLowerCase()} rows they can open themselves.
-              </span>
-            </div>
-            <div className="sm:col-span-2">
-              <ScheduleFields
-                schedule={schedule}
-                onChange={setSchedule}
-                shared={access === "ORGANIZATION"}
-              />
-            </div>
-          </div>
-          {error && (
-            <p
-              role="alert"
-              className="bg-tint-danger text-tint-danger-foreground rounded-tile px-3 py-2 text-sm"
-            >
-              {error}
-            </p>
-          )}
           {footer(
             <Button
               type="button"
-              disabled={saving || !title.trim() || picked.length === 0}
-              onClick={save}
+              disabled={!title.trim() || picked.length === 0}
+              onClick={() => {
+                setError(null);
+                setAsking(true);
+              }}
             >
-              {saving ? "Saving..." : "Save report"}
+              Save report
             </Button>,
             () => go(1),
           )}
+          <Dialog
+            open={asking}
+            onOpenChange={(next) => {
+              if (saving) return;
+              if (!next && made) router.push(`/app/${orgSlug}/databases/reports/${made.id}`);
+              setAsking(next);
+            }}
+          >
+            <DialogContent className="sm:max-w-lg">
+              {made ? (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Saved</DialogTitle>
+                    <DialogDescription>
+                      Anyone with this link can view it. Copy it now: it shows only once.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <CopyField value={made.link} label="View-only link" />
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      onClick={() => router.push(`/app/${orgSlug}/databases/reports/${made.id}`)}
+                    >
+                      Open report
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Save report</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Who can see {title.trim() || "this report"}.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-6">
+                    <AccessPicker value={access} onSelect={setAccess} disabled={saving} />
+                    {access === "ORGANIZATION" ? (
+                      <OutsideSharing {...sharing.fields} pending={saving} />
+                    ) : (
+                      <p className="text-muted-foreground text-[13px]">
+                        Pick Organization to share it outside the organization too.
+                      </p>
+                    )}
+                    {error && (
+                      <p
+                        role="alert"
+                        className="bg-tint-danger text-tint-danger-foreground rounded-tile px-3 py-2 text-sm"
+                      >
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={saving}
+                      onClick={() => setAsking(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="button" disabled={saving} onClick={save}>
+                      {saving ? "Saving…" : "Save report"}
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
         </section>
       )}
     </div>

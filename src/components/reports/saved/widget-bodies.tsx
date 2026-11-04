@@ -7,6 +7,14 @@ import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions"
 import { Stat } from "@/components/reports/stat";
 import { CHOICE_COLOR_CLASS } from "@/lib/databases/fields";
 import { formatValue, shortDay, type WidgetPayload } from "@/lib/reports/compute";
+import { QuietButton } from "@/components/crm/reports/quiet-button";
+import { WEEKDAYS } from "@/lib/crm/crm-reports";
+import {
+  formatCrmValue,
+  type CrmGridPayload,
+  type CrmListPayload,
+  type CrmStatPayload,
+} from "@/lib/reports/crm-widgets";
 import { cn } from "@/lib/utils";
 
 /**
@@ -76,6 +84,191 @@ function Spark({ values, label }: { values: number[]; label: string }) {
         vectorEffect="non-scaling-stroke"
       />
     </svg>
+  );
+}
+
+/** A CRM stat: the number, its change, its parts, and a few rows behind it. */
+function CrmStat({ d, orgId }: { d: CrmStatPayload; orgId?: string }) {
+  if (d.empty && (d.value === null || d.value === 0)) {
+    return (
+      <div className="flex h-full flex-col justify-between gap-3">
+        <span className="numeral text-muted-foreground text-[40px] leading-none">{d.value === 0 ? "0" : "None"}</span>
+        <span className="text-muted-foreground text-xs">{d.empty}</span>
+        {d.parts.length > 0 && (
+          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {d.parts.map((p) => (
+              <div key={p.label} className="flex gap-1.5">
+                <dt className="text-muted-foreground">{p.label}</dt>
+                <dd className="font-semibold tabular-nums">{p.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="numeral text-[40px] leading-none">{formatCrmValue(d.value, d.format, d.currency)}</span>
+        <Delta pct={d.deltaPct} label="on the period before" />
+      </div>
+      <span className="text-muted-foreground text-xs">
+        {d.previous !== null ? `${formatCrmValue(d.previous, d.format, d.currency)} the period before. ` : ""}
+        {d.caption}
+      </span>
+      {d.parts.length > 0 && (
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {d.parts.map((p) => (
+            <div key={p.label} className="rounded-tile bg-muted/50 px-3 py-2">
+              <dt className="text-muted-foreground text-[11px]">{p.label}</dt>
+              <dd className="text-sm font-semibold tabular-nums">{p.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {d.rows.length > 0 && (
+        <ul className="divide-border -mx-1 divide-y">
+          {d.rows.map((r) => (
+            <li key={r.key}>
+              {r.href ? (
+                <Link href={r.href} className="hover:bg-muted/60 rounded-field flex items-baseline gap-2 px-1 py-1.5 text-sm">
+                  <b className="min-w-0 flex-1 truncate font-medium">{r.label}</b>
+                  {r.detail && <span className="text-muted-foreground shrink-0 text-xs">{r.detail}</span>}
+                </Link>
+              ) : (
+                <span className="flex items-baseline gap-2 px-1 py-1.5 text-sm">
+                  <b className="min-w-0 flex-1 truncate font-medium">{r.label}</b>
+                  {r.detail && <span className="text-muted-foreground shrink-0 text-xs">{r.detail}</span>}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {orgId && d.queue && d.queue.length > 0 && <QuietButton orgId={orgId} ids={d.queue} />}
+    </div>
+  );
+}
+
+/** A CRM ranked list: one bar per row (or a column, by month), its value as text. */
+function CrmList({ d }: { d: CrmListPayload }) {
+  // A funnel with nobody at its top has nothing to show.
+  if (d.rows.length === 0 || d.max === 0) return <Empty>{d.empty}</Empty>;
+  if (d.shape === "columns") {
+    const max = Math.max(0, ...d.rows.map((r) => r.value));
+    return (
+      <div className="flex h-full flex-col gap-2">
+        <ul aria-label={d.caption ?? "By month"} className="flex h-36 items-end gap-2">
+          {d.rows.map((r) => (
+            <li key={r.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+              <span className="text-muted-foreground text-xs font-semibold tabular-nums">{r.display}</span>
+              <span
+                aria-hidden="true"
+                className="w-full max-w-11 rounded-t-xl rounded-b-sm"
+                style={{
+                  height: `${max > 0 ? Math.max(4, Math.round((r.value / max) * 96)) : 4}px`,
+                  background: r.value > 0 ? "var(--chart-1)" : "var(--muted)",
+                }}
+              />
+              <span className="text-muted-foreground text-xs">{r.label}</span>
+            </li>
+          ))}
+        </ul>
+        {d.caption && <p className="text-muted-foreground text-xs">{d.caption}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {d.headline && (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="numeral text-[40px] leading-none">{d.headline.value}</span>
+          <span className="text-muted-foreground text-xs">{d.headline.detail}</span>
+        </div>
+      )}
+      {d.caption && <p className="text-muted-foreground text-xs">{d.caption}</p>}
+      <BarList
+        label={d.caption ?? "CRM"}
+        max={d.max ?? undefined}
+        items={d.rows.map((r) => ({
+          key: r.key,
+          label: r.label,
+          value: r.value,
+          display: r.display,
+          detail:
+            r.links && r.links.length > 0 ? (
+              <span>
+                {r.links.map((l, i) => (
+                  <span key={l.key}>
+                    {i > 0 ? ", " : ""}
+                    <Link href={l.href} className="hover:text-foreground underline-offset-2 hover:underline">
+                      {l.label}
+                    </Link>
+                  </span>
+                ))}
+                {r.detail ? ` ${r.detail}` : ""}
+              </span>
+            ) : (
+              (r.detail ?? null)
+            ),
+          href: r.href ?? null,
+        }))}
+      />
+    </div>
+  );
+}
+
+/** Reply rate by weekday and part of the day: darker is better. */
+function CrmGrid({ d }: { d: CrmGridPayload }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <table className="w-full border-separate border-spacing-1 text-center text-xs">
+        <thead>
+          <tr>
+            <th />
+            {WEEKDAYS.map((day) => (
+              <th key={day} className="text-muted-foreground font-semibold">
+                {day}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {d.rows.map((r) => (
+            <tr key={r.part}>
+              <th className="text-muted-foreground pe-1 text-start font-medium">{r.part}</th>
+              {r.cells.map((c) => {
+                const share = c.rate !== null && d.max > 0 ? c.rate / d.max : 0;
+                return (
+                  <td
+                    key={c.day}
+                    title={
+                      c.rate !== null
+                        ? `${r.part}, ${c.day}: ${Math.round(c.rate * 100)}% replied of ${c.sent}`
+                        : `${c.sent} sent, too few to read`
+                    }
+                    className={cn(
+                      "h-8 rounded-full font-semibold tabular-nums",
+                      share > 0.6 ? "text-background" : "text-foreground",
+                    )}
+                    style={{
+                      background:
+                        c.rate !== null
+                          ? `color-mix(in oklab, var(--foreground) ${Math.round(share * 100)}%, var(--card))`
+                          : "var(--muted)",
+                    }}
+                  >
+                    {c.rate !== null ? `${Math.round(c.rate * 100)}%` : ""}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-muted-foreground text-xs">{d.caption}</p>
+    </div>
   );
 }
 
@@ -454,6 +647,7 @@ export function WidgetBody({
                   orgId={taskActions.orgId}
                   taskId={r.id}
                   person={{ id: r.ownerId, name: r.owner }}
+                  size="icon-sm"
                 />
               )}
               {late && (
@@ -686,6 +880,40 @@ export function WidgetBody({
         </div>
       );
     }
+    case "crm-reached":
+    case "crm-reply-rate":
+    case "crm-first-reply":
+    case "crm-overdue":
+    case "crm-cold":
+    case "crm-velocity":
+    case "crm-talked-to":
+    case "crm-won":
+    case "crm-open":
+    case "crm-sent":
+    case "crm-unsubscribes":
+      return <CrmStat d={payload.data} />;
+    case "crm-quiet":
+      return <CrmStat d={payload.data} orgId={taskActions?.orgId} />;
+    case "crm-by-member":
+    case "crm-campaigns":
+    case "crm-conversion":
+    case "crm-time-in-stage":
+    case "crm-by-source":
+    case "crm-raised-by-source":
+    case "crm-goals":
+    case "crm-converted":
+    case "crm-top-issues":
+    case "crm-won-months":
+    case "crm-deals-by-stage":
+    case "crm-deals-by-owner":
+    case "crm-deals-by-type":
+    case "crm-people-months":
+    case "crm-people-by-relationship":
+    case "crm-people-by-owner":
+    case "crm-replies-by-plan":
+      return <CrmList d={payload.data} />;
+    case "crm-best-time":
+      return <CrmGrid d={payload.data} />;
     case "journey": {
       const d = payload.data;
       const first = d.steps[0]?.count ?? 0;

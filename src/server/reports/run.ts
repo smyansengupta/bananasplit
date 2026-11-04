@@ -24,6 +24,8 @@ import { reportTier } from "./tier";
 import type { AttendanceReport, RetentionReport } from "./types";
 import { getVisibleReports } from "./visibility";
 import { loadSource, type SourceViewer } from "./sources";
+import { crmInsightLines, isCrmWidget } from "@/lib/reports/crm-widgets";
+import { crmWidgetPayload } from "@/server/crm/report-widgets";
 
 /** The viewer of a report, from a transaction's member context. */
 export async function reportViewer(ctx: {
@@ -118,7 +120,25 @@ export async function runReport(
         if (seesNames) c.payload = { type: "stopped", data: await queryStopped(v.db, args) };
         break;
       default:
+        // The CRM's outreach and pipeline widgets read the CRM's own tables, as this viewer.
+        if (isCrmWidget(c.widget.type) && source.crm) {
+          c.payload = await crmWidgetPayload(
+            { db: v.db, organizationId: v.organizationId, slug: v.slug, tz: v.tz, range: { from: range.from, to: range.to }, crm: source.crm },
+            c.widget.type,
+          );
+        }
         break;
+    }
+  }
+  // The CRM widgets' own sentences lead the built-in reading (Claude's reading stays as it was).
+  const crmLines = crmInsightLines(computed);
+  if (crmLines.length > 0) {
+    for (const c of computed) {
+      if (c.payload?.type !== "insights" || c.payload.data.byClaude) continue;
+      const lines = c.payload.data.lines;
+      const warn = [...crmLines, ...lines].filter((l) => l.tone === "warn");
+      const rest = [...crmLines, ...lines].filter((l) => l.tone !== "warn");
+      c.payload = { type: "insights", data: { ...c.payload.data, lines: [...warn, ...rest].slice(0, 5) } };
     }
   }
   return { source, range, computed };
@@ -133,6 +153,8 @@ function forModel(type: string, data: unknown): unknown {
   if (type === "stopped") return { total: (data as { total: number }).total };
   if (type === "regulars") return { people: (data as { rows: unknown[] }).rows.length };
   if (type === "table") return { rows: (data as { total: number }).total };
+  // Top issues as grouped, never the people behind every issue.
+  if (type === "crm-top-issues") return { ...(data as object), issues: undefined };
   return data;
 }
 

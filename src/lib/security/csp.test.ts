@@ -17,6 +17,9 @@ import {
   STATIC_SECURITY_HEADERS,
 } from "./csp";
 
+/** The CRM softphone's hosts (Phase 5), at the end of every connect-src. */
+const SOFTPHONE = "wss://rtc.telnyx.com https://rtc.telnyx.com wss://*.twilio.com https://*.twilio.com";
+
 const env = (vars: Record<string, string>) => vars as unknown as NodeJS.ProcessEnv;
 
 function directives(policy: string): Map<string, string> {
@@ -104,9 +107,9 @@ describe("nonce policy (0A Fix 13)", () => {
     });
     expect(sentryOrigin(withSentry)).toBe("https://o123.ingest.us.sentry.io");
     expect(directives(buildNonceCsp("n", { env: withSentry })).get("connect-src")).toBe(
-      "'self' https://o123.ingest.us.sentry.io",
+      `'self' https://o123.ingest.us.sentry.io ${SOFTPHONE}`,
     );
-    expect(policy.get("connect-src")).toBe("'self'");
+    expect(policy.get("connect-src")).toBe(`'self' ${SOFTPHONE}`);
   });
 
   it("allows the live-collaboration WebSocket only while collaboration is on", () => {
@@ -117,12 +120,12 @@ describe("nonce policy (0A Fix 13)", () => {
     };
     const connect = (vars: Record<string, string>) =>
       directives(buildNonceCsp("n", { env: env(vars) })).get("connect-src");
-    expect(connect({ ...collab, COLLAB_ENABLED: "true" })).toBe("'self' wss://collab.example.org");
+    expect(connect({ ...collab, COLLAB_ENABLED: "true" })).toBe(`'self' wss://collab.example.org ${SOFTPHONE}`);
     // On whenever a server is configured; COLLAB_ENABLED="false" switches it off.
-    expect(connect(collab)).toBe("'self' wss://collab.example.org");
-    expect(connect({ ...collab, COLLAB_ENABLED: "false" })).toBe("'self'");
+    expect(connect(collab)).toBe(`'self' wss://collab.example.org ${SOFTPHONE}`);
+    expect(connect({ ...collab, COLLAB_ENABLED: "false" })).toBe(`'self' ${SOFTPHONE}`);
     // Enabled but unusable (no secret): collaboration stays off, and so does the origin.
-    expect(connect({ ...collab, COLLAB_ENABLED: "true", COLLAB_SECRET: "" })).toBe("'self'");
+    expect(connect({ ...collab, COLLAB_ENABLED: "true", COLLAB_SECRET: "" })).toBe(`'self' ${SOFTPHONE}`);
   });
 });
 

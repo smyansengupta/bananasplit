@@ -44,6 +44,8 @@ export interface HomeBuiltIn {
   thisWeek: number;
   newReportHref: string | null;
   report: { title: string; href: string } | null;
+  /** Its ambient button (Reconnect, when the website sync that fills it stopped). */
+  ambient?: ReactNode;
 }
 
 const TINTS = [
@@ -188,6 +190,7 @@ export function DatabasesHome({
                 <span className="numeral w-16 text-right text-[18px]">
                   {b.count.toLocaleString("en-US")}
                 </span>
+                {b.ambient}
                 <span
                   className={cn(
                     "w-24 text-right text-xs font-semibold tabular-nums",

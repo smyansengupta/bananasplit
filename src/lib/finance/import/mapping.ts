@@ -134,7 +134,7 @@ const HEADER_RULES: readonly [ColumnRole, RegExp][] = [
   ["amount", /\bamount\b|^(total|cost|costs|price|value|sum|net|usd|dollars|\$)$/],
   ["type", /^(type|transaction type|kind|in out|in or out|direction|debit credit|dr cr|income expense|income or expense|flow)$/],
   ["category", /^(category|categories|budget line|line item|account|class|tag|bucket|group|committee|fund|budget category|expense category|expense type)$/],
-  ["counterparty", /^(payee|vendor|merchant|from|to|paid to|paid by|store|company|sponsor|who|person|name|recipient|payer|purchaser|purchased by|submitted by|member|bought by)$/],
+  ["counterparty", /^(payee|vendor|merchant|from|to|paid to|paid by|store|company|partner|sponsor|who|person|name|recipient|payer|purchaser|purchased by|submitted by|member|bought by)$/],
   ["paymentMethod", /^(method|payment method|paid with|paid via|via|card|payment type|account used|funding source|source)$/],
   ["description", /^(description|desc|item|items|memo|details|detail|purpose|what|what for|for|transaction|particulars|narrative|note|reason|event|expense name|purchase|title)$/],
   ["notes", /^(notes|comments|comment|remarks)$/],
@@ -315,7 +315,8 @@ const BALANCE_WORDS = /starting balance|opening balance|beginning balance|carry 
 export function inferKind(direction: Direction | null, text: string, hint?: TransactionKind | null): TransactionKind {
   if (hint && direction && kindFits(hint, direction)) return hint;
   if (direction !== "IN") return TransactionKind.EXPENSE;
-  if (/sponsor/i.test(text)) return TransactionKind.SPONSORSHIP;
+  // SPONSORSHIP is shown as a Deal; sheets still say "sponsor" too.
+  if (/sponsor|\bdeals?\b/i.test(text)) return TransactionKind.SPONSORSHIP;
   if (/allocat|\bsga\b|student government|student activit|funding award/i.test(text)) return TransactionKind.ALLOCATION;
   if (BALANCE_WORDS.test(text)) return TransactionKind.ADJUSTMENT;
   return TransactionKind.OTHER_INCOME;

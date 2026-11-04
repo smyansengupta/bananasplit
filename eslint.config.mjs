@@ -127,7 +127,12 @@ const COLLAB_BRIDGE = ["src/app/api/collab/**"];
  * report's maker or a member its schedule names. Adding a path here is a
  * security review item.
  */
-const REPORT_JOBS = ["src/server/reports/schedule-jobs.ts"];
+const REPORT_JOBS = [
+  "src/server/reports/schedule-jobs.ts",
+  // A report shared outside the organization, read as its maker after the
+  // link or invite was checked on the service path (src/server/reports/shared-view.ts).
+  "src/server/reports/shared-as-maker.ts",
+];
 
 /**
  * AI connectors (docs/features/ai-connectors.md): they verify an AuthKit
@@ -437,6 +442,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude Code's local worktrees (each a full checkout with its own lint).
     ".claude/**",
+    // Cloudflare Workers (workers/*): their own package, runtime and deploy.
+    "workers/**",
   ]),
 ]);
 

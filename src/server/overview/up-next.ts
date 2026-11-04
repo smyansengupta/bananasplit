@@ -2,8 +2,14 @@ import type { ItemRef } from "@/lib/overview/types";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
+import { joinable, type HomeAct } from "@/lib/overview/home-acts";
 import { agendaItems } from "@/lib/overview/insights";
-import { arrangeUpNext, taskTone, type UpNextCandidate } from "@/lib/overview/up-next";
+import {
+  UP_NEXT_LIMIT,
+  arrangeUpNext,
+  taskTone,
+  type UpNextCandidate,
+} from "@/lib/overview/up-next";
 import { pollHref } from "@/lib/polls/paths";
 import { addDaysToKey, dueDateKey, localDateKey } from "@/lib/tasks/dates";
 import type { MyOpenTask } from "@/server/tasks/queries";
@@ -46,12 +52,27 @@ export interface UpNextContext {
   lastActions?: ReadonlyMap<string, LastMeetingActions>;
   /** Seats taken on an event's RSVP page, where the viewer may see the count. */
   seats?: ReadonlyMap<string, number>;
+  /** Check-ins so far against RSVPs, for events under way or just ended (where the viewer may see them). */
+  turnout?: ReadonlyMap<string, { rsvps: number; checkIns: number }>;
+  /** Call links of meetings and events about to start or under way, by id. */
+  joinUrls?: ReadonlyMap<string, string>;
 }
 
 /** At most this many chips on a card: it's a card, not the Linked panel. */
 const CARD_CHIPS = 3;
 
+/** An event's moment on Up next: about to start, or under way. */
+export type UpNextLive = "soon" | "now";
+
 export interface UpNextBlock extends UpNextCandidate {
+  /** Starting within a quarter of an hour ("soon") or under way ("now"): the card goes live. */
+  live?: UpNextLive;
+  /** When a meeting or event ends; it stays on Up next until then. */
+  until?: Date;
+  /** A meeting or event that ended in the last two hours (notes, photos, thanks). */
+  ended?: boolean;
+  /** An event under way with check-ins: it takes two of Up next's columns. */
+  wide?: boolean;
   /** The event's kind, so its card can take that kind's colour. */
   eventKind?: EventKind | null;
   /** A task's status now, so Done on the card can be undone back to it. */
@@ -68,9 +89,33 @@ export interface UpNextBlock extends UpNextCandidate {
   choices?: { id: string; label: string }[];
   /** What it's linked to, as chips. */
   chips?: ItemRef[];
+  /** Its ambient buttons right now (Join, Open check-in, Add notes), two at most. */
+  acts?: HomeAct[];
+  /** A task nobody owns: the card offers Take it instead of Done. */
+  grabs?: boolean;
+  /**
+   * The organization it's from, when that isn't the page's own (Personal
+   * Home gathers your organizations' cards): its buttons act there.
+   */
+  orgId?: string;
+}
+
+/** The open task nobody owns that's due soonest: anyone can take it. */
+export interface UpForGrabs {
+  id: string;
+  title: string;
+  dueDate: Date | null;
+  status: TaskStatus;
+  parentTask: { title: string } | null;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+/** A meeting or event counts down for its last hour, and goes live for the last quarter. */
+const COUNTDOWN_MIN = 60;
+const LIVE_MIN = 15;
+/** How long a meeting or event stays on Up next after it ends. */
+export const JUST_ENDED_MS = 2 * 60 * 60 * 1000;
 
 export function buildUpNext(input: {
   orgSlug: string;
@@ -84,8 +129,14 @@ export function buildUpNext(input: {
   rsvps: ReadonlyMap<string, RSVPStatus>;
   going: ReadonlyMap<string, EventGoing>;
   polls: readonly PollStat[];
+  /** Meetings and events that ended in the last JUST_ENDED_MS (getRecentlyEnded). */
+  ended?: readonly CalendarEventSummary[];
   /** "{kind}:{id}" of the cards this member hid (UpNextDismissal). */
   hidden?: ReadonlySet<string>;
+  /** A task nobody owns yet, offered with Take it. */
+  upForGrabs?: UpForGrabs | null;
+  /** Cards from other spaces, ordered in with these (Personal Home's organizations). */
+  others?: readonly UpNextBlock[];
   context?: UpNextContext;
 }) {
   const base = `/app/${input.orgSlug}`;
@@ -151,6 +202,33 @@ export function buildUpNext(input: {
     });
   }
 
+  // Up for grabs: nobody owns it, so it waits on whoever takes it.
+  const grabs = input.upForGrabs;
+  if (grabs && !blocks.some((b) => b.id === grabs.id)) {
+    const dueKey = grabs.dueDate ? dueDateKey(grabs.dueDate) : null;
+    blocks.push({
+      id: grabs.id,
+      kind: "task",
+      grabs: true,
+      taskStatus: grabs.status,
+      tone: "answer",
+      // No date: it waits behind everything dated.
+      at: grabs.dueDate ?? new Date(input.now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      kicker: "Up for grabs",
+      title: grabs.title,
+      subtitle: [
+        dueKey ? `Due ${dueLabel(dueKey, input.todayKey).text}.` : null,
+        "Nobody owns it yet.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      chips: chipsOf(linked(`task:${grabs.id}`)),
+      faces: [],
+      facesTotal: 0,
+      href: `${base}/tasks/${grabs.id}`,
+    });
+  }
+
   const seen = new Set<string>();
   for (const [kind, list] of [
     ["meeting", input.meetings],
@@ -161,7 +239,24 @@ export function buildUpNext(input: {
       seen.add(event.id);
       const rsvp = input.rsvps.get(event.id) ?? null;
       const going = input.going.get(event.id);
-      const when = whenWord(event.startsAt, event.allDay, input.zones, input.now);
+      // Rounded up, so a card never says "In 0 min" before it starts.
+      const mins = Math.ceil((event.startsAt.getTime() - input.now.getTime()) / MINUTE_MS);
+      const underWay =
+        !event.allDay &&
+        event.startsAt.getTime() <= input.now.getTime() &&
+        event.endsAt.getTime() > input.now.getTime();
+      const live: UpNextLive | undefined = event.allDay
+        ? undefined
+        : underWay
+          ? "now"
+          : mins <= LIVE_MIN
+            ? "soon"
+            : undefined;
+      const when = underWay
+        ? "Happening now"
+        : !event.allDay && mins > 0 && mins <= COUNTDOWN_MIN
+          ? `In ${mins} min`
+          : whenWord(event.startsAt, event.allDay, input.zones, input.now);
       const waiting = rsvp === "PENDING";
       const count = going?.going ?? 0;
       const detail = ctx.details?.get(event.id);
@@ -191,6 +286,44 @@ export function buildUpNext(input: {
         if (seats !== undefined && detail?.capacity)
           reasons.push(`${seats} of ${detail.capacity} seats taken.`);
       }
+      // Event day: under way, once people start checking in, an event shows
+      // its check-ins counting up against its RSVPs, across two columns.
+      const t = underWay && kind === "event" ? ctx.turnout?.get(event.id) : undefined;
+      const takeover =
+        t && t.checkIns > 0
+          ? {
+              figure: String(t.checkIns),
+              figureLabel: t.rsvps > 0 ? `checked in, of ${t.rsvps} RSVPs` : "checked in so far",
+              wide: true,
+            }
+          : null;
+      // Ambient buttons: the call's Join once it's close, the door once an
+      // event is on, an agenda for tomorrow's meeting that has none.
+      const acts: HomeAct[] = [];
+      const url = ctx.joinUrls?.get(event.id);
+      if (live && joinable(url))
+        acts.push({ kind: "join", href: url, reason: when, external: true });
+      if (underWay && kind === "event") {
+        acts.push({
+          kind: "check-in",
+          href: `${base}/calendar/${event.id}/rsvp/door`,
+          reason: "Happening now",
+        });
+      }
+      const tomorrow = addDaysToKey(input.todayKey, 1);
+      if (
+        kind === "meeting" &&
+        detail &&
+        agendaItems(detail.description ?? null).length === 0 &&
+        (dayOf(event) === tomorrow || dayOf(event) === input.todayKey) &&
+        !underWay
+      ) {
+        acts.push({
+          kind: "draft-agenda",
+          href: `${base}/meetings/${event.id}`,
+          reason: "No agenda yet",
+        });
+      }
       // Its linked tasks are its own business; Up next shows the rest.
       chips.push(...linked(`event:${event.id}`).filter((c) => c.ref.kind !== "task"));
       blocks.push({
@@ -199,21 +332,66 @@ export function buildUpNext(input: {
         tone: waiting ? "answer" : "quiet",
         eventKind: event.kind,
         at: event.startsAt,
+        until: event.endsAt,
+        ...(live ? { live } : {}),
         kicker: event.location ? `${when}, ${event.location}` : when,
         title: event.title,
         subtitle: reasons.length > 0 ? reasons.join(" ") : null,
         chips: chipsOf(chips),
-        ...(count > 0
-          ? {
-              figure: String(count),
-              figureLabel: rsvp === "YES" ? "going, including you" : "going",
-            }
-          : {}),
+        ...(takeover ??
+          (count > 0
+            ? {
+                figure: String(count),
+                figureLabel: rsvp === "YES" ? "going, including you" : "going",
+              }
+            : {})),
         faces: going?.faces ?? [],
         facesTotal: count,
         href: `${base}/calendar/${event.id}`,
+        ...(acts.length > 0 ? { acts: acts.slice(0, 2) } : {}),
       });
     }
+  }
+
+  // Just ended: for two hours, the notes and action items (a meeting) or
+  // photos and thanks (an event), while it's fresh.
+  for (const event of input.ended ?? []) {
+    if (seen.has(event.id)) continue;
+    seen.add(event.id);
+    const meeting = input.meetings.some((m) => m.id === event.id) || isMeeting(event);
+    const count = input.going.get(event.id)?.going ?? 0;
+    // An event's turnout once it's over: how many came against how many said yes.
+    const came = meeting ? undefined : ctx.turnout?.get(event.id);
+    blocks.push({
+      id: event.id,
+      kind: meeting ? "meeting" : "event",
+      tone: "quiet",
+      eventKind: event.kind,
+      at: event.endsAt,
+      until: event.endsAt,
+      ended: true,
+      kicker: "Just ended",
+      title: event.title,
+      subtitle: meeting
+        ? "Add the notes and action items while it's fresh."
+        : "Add notes or photos while it's fresh.",
+      ...(came && came.checkIns > 0
+        ? {
+            figure: String(came.checkIns),
+            figureLabel: came.rsvps > 0 ? `came, of ${came.rsvps} who said yes` : "came",
+          }
+        : count > 0
+          ? { figure: String(count), figureLabel: "said they'd go" }
+          : {}),
+      faces: input.going.get(event.id)?.faces ?? [],
+      facesTotal: count,
+      href: meeting ? `${base}/meetings/${event.id}` : `${base}/calendar/${event.id}`,
+      acts: [
+        meeting
+          ? { kind: "add-notes", href: `${base}/meetings/${event.id}`, reason: "Just ended" }
+          : { kind: "thank-you", href: `${base}/calendar/${event.id}`, reason: "Just ended" },
+      ],
+    });
   }
 
   for (const poll of input.polls) {
@@ -244,12 +422,27 @@ export function buildUpNext(input: {
     });
   }
 
+  blocks.push(...(input.others ?? []));
+
   // Nothing that has already happened. Each kind has its own reason to have
   // slipped through (an event that ran, a poll that closed, a task whose due
   // date passed while it stayed open), and the one rule covers all of them.
   const live = blocks.filter((b) => !isPast(b, input.now));
   const hidden = input.hidden ?? new Set<string>();
-  return arrangeUpNext(live.filter((b) => !hidden.has(`${b.kind}:${b.id}`)));
+  const shown = live.filter((b) => !hidden.has(`${b.kind}:${b.id}`));
+  // One event-day card at most: two would leave no room for anything else.
+  const firstWide = shown.find((b) => b.wide);
+  const single = shown.map((b) => (b.wide && b !== firstWide ? { ...b, wide: false } : b));
+  const slots = arrangeUpNext(single);
+  if (!slots.some((s) => s.item.wide)) return slots.map(narrow);
+  // It takes two columns, so the row holds three cards, not four. If the
+  // trim drops it, the rest go back to one column each.
+  const three = arrangeUpNext(single, UP_NEXT_LIMIT - 1);
+  return three.some((s) => s.item.wide) ? three : slots.map(narrow);
+}
+
+function narrow<S extends { item: UpNextBlock }>(slot: S): S {
+  return slot.item.wide ? { ...slot, item: { ...slot.item, wide: false } } : slot;
 }
 
 /** How long an open poll with no closing date stays in Up next. */
@@ -266,6 +459,12 @@ function addDays(from: Date, days: number): Date {
  * An event that has finished, or a poll whose moment has passed, is.
  */
 function isPast(block: UpNextBlock, now: Date): boolean {
-  if (block.kind === "task") return false;
-  return block.at.getTime() <= now.getTime();
+  if (block.kind === "task" || block.ended) return false;
+  // A meeting or event stays until it ends; a poll until it closes.
+  return (block.until ?? block.at).getTime() <= now.getTime();
+}
+
+/** A meeting as the Overview lists them (getUpcomingEvents): a board meeting, or "... meeting". */
+function isMeeting(event: CalendarEventSummary): boolean {
+  return event.kind === "BOARD_MEETING" || /meeting/i.test(event.title);
 }

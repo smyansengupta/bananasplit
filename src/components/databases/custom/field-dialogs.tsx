@@ -23,30 +23,35 @@ import {
   LIMITS,
   type Choice,
   type FieldDef,
+  type FieldOptions,
   type FieldType,
 } from "@/lib/databases/fields";
 import { cn } from "@/lib/utils";
 
 import { choiceColor } from "../styles";
 import { FieldIcon } from "./field-icon";
+import { FieldOptionsEditor, needsOptions, optionsReady, startingOptions } from "./field-options";
 
-/** The "+" at the end of the header row: a name and a type. */
+/** The "+" at the end of the header row: a name and a type (and a relation's or AI field's settings). */
 export function NewFieldPopover({
   onAdd,
 }: {
-  onAdd: (name: string, type: FieldType) => Promise<boolean>;
+  onAdd: (name: string, type: FieldType, options: FieldOptions) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<FieldType>("TEXT");
+  const [options, setOptions] = useState<FieldOptions>({});
   const [pending, start] = useTransition();
+  const ready = Boolean(name.trim()) && optionsReady(type, options);
 
   function submit() {
-    if (!name.trim()) return;
+    if (!ready) return;
     start(async () => {
-      if (await onAdd(name.trim(), type)) {
+      if (await onAdd(name.trim(), type, options)) {
         setName("");
         setType("TEXT");
+        setOptions({});
         setOpen(false);
       }
     });
@@ -64,7 +69,7 @@ export function NewFieldPopover({
           <Plus className="size-4" aria-hidden="true" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-3 p-4">
+      <PopoverContent align="end" className="max-h-[80vh] w-80 space-y-3 overflow-y-auto p-4">
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -99,7 +104,10 @@ export function NewFieldPopover({
                   role="radio"
                   aria-checked={type === t}
                   title={FIELD_TYPE_META[t].hint}
-                  onClick={() => setType(t)}
+                  onClick={() => {
+                    setType(t);
+                    setOptions(startingOptions(t));
+                  }}
                   className={cn(
                     "rounded-field flex h-9 items-center gap-2 px-2.5 text-left text-[13px] transition-colors",
                     type === t
@@ -113,7 +121,16 @@ export function NewFieldPopover({
               ))}
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={!name.trim() || pending}>
+          {needsOptions(type) && (
+            <FieldOptionsEditor
+              key={type}
+              type={type}
+              options={options}
+              onChange={setOptions}
+              idPrefix="new-field"
+            />
+          )}
+          <Button type="submit" className="w-full" disabled={!ready || pending}>
             {pending ? "Adding…" : "Add field"}
           </Button>
         </form>

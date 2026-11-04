@@ -1,19 +1,68 @@
 import { UserPlus } from "@/components/icons";
 
 import { PageHeader } from "@/components/page-header";
+import {
+  PeopleAmbient,
+  type Newcomer,
+  type WaitingInvite,
+} from "@/components/profile/people-ambient";
 import { parseDirectoryQuery } from "@/components/profile/directory-query";
 import { PeopleDirectory } from "@/components/profile/people-directory";
 import { Button } from "@/components/ui/button";
+import {
+  inviteReason,
+  joinedThisWeek,
+  newcomerReason,
+  staleInviteDays,
+} from "@/lib/ambient/people";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
+import { INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
-import { getPersonSheet, loadDirectory } from "@/server/profiles/directory";
+import { getPersonSheet, loadDirectory, saidHiTo } from "@/server/profiles/directory";
 import { planGate } from "@/server/billing/plan-gate";
+import type { DirectoryPerson } from "@/server/profiles/directory";
 
 import { InviteDialog } from "../settings/members/invite-dialog";
 import { loadOrgChartSection } from "../org-chart/chart-section";
+
+/** How many newcomers and waiting invites show over the list. */
+const AMBIENT_ROWS = 5;
+
+/**
+ * Who's new this week and which invites have waited three days, for the
+ * ambient rows over the list. Request-time, outside the render body
+ * (react-hooks/purity).
+ */
+function ambientRows(
+  people: DirectoryPerson[],
+  invites: { id: string; email: string; expiresAt: Date }[],
+  viewerId: string,
+): { newcomers: Newcomer[]; waiting: WaitingInvite[] } {
+  const now = new Date();
+  const newcomers = people
+    .filter((p) => p.id !== viewerId && joinedThisWeek(p.joinedAt, now))
+    .slice(0, AMBIENT_ROWS)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      user: p,
+      reason: newcomerReason(p.joinedAt, Boolean(p.teamKey), now),
+      hasTeam: Boolean(p.teamKey),
+    }));
+  const waiting = invites
+    .map((i) => {
+      // A resend restarts the expiry, so the last send is a week before it.
+      const sentAt = new Date(i.expiresAt.getTime() - INVITATION_EXPIRY_DAYS * 86_400_000);
+      const days = staleInviteDays(sentAt.toISOString(), now);
+      return days === null ? null : { id: i.id, email: i.email, reason: inviteReason(days) };
+    })
+    .filter((i): i is WaitingInvite => i !== null)
+    .slice(0, AMBIENT_ROWS);
+  return { newcomers, waiting };
+}
 
 /**
  * People (Moonstone 12.1): every current member of this org with their
@@ -37,7 +86,7 @@ export default async function PeoplePage({
   const orgId = organization.id;
   const canInvite = can({ role }, "members.invite");
 
-  const [directory, joinCode, chart] = await Promise.all([
+  const [directory, joinCode, chart, invites] = await Promise.all([
     loadDirectory(orgId, organization.timezone),
     canInvite
       ? withOrgTx(orgId, ({ db }) => getOrCreateJoinCode(db, orgId, user.id))
@@ -48,6 +97,17 @@ export default async function PeoplePage({
       role,
       selectedKey: typeof raw.position === "string" ? raw.position : null,
     }),
+    // Invites still out, for Resend invite (those who may invite).
+    canInvite
+      ? withOrgTx(orgId, ({ db }) =>
+          db.invitation.findMany({
+            where: { organizationId: orgId, acceptedAt: null },
+            orderBy: { expiresAt: "asc" },
+            take: 50,
+            select: { id: true, email: true, expiresAt: true },
+          }),
+        )
+      : Promise.resolve([]),
   ]);
   const initialSheet = query.person
     ? await getPersonSheet(
@@ -60,6 +120,19 @@ export default async function PeoplePage({
   const initial = initialSheet || !query.person ? query : { ...query, person: null };
 
   const { total, teams, people } = directory;
+  const rows = ambientRows(people, invites, user.id);
+  // Said hi already, and on a team: nothing left to do for them.
+  const greeted = await saidHiTo(
+    organization.id,
+    user.id,
+    rows.newcomers.map((n) => n.id),
+  );
+  const ambient = {
+    ...rows,
+    newcomers: rows.newcomers
+      .map((n) => ({ ...n, saidHi: greeted.has(n.id) }))
+      .filter((n) => !n.saidHi || !n.hasTeam),
+  };
   const link = joinCode
     ? {
         code: joinCode.code,
@@ -89,6 +162,14 @@ export default async function PeoplePage({
           )
         }
       />
+      {query.view !== "chart" && (
+        <PeopleAmbient
+          orgId={orgId}
+          orgSlug={orgSlug}
+          newcomers={ambient.newcomers}
+          invites={ambient.waiting}
+        />
+      )}
       <PeopleDirectory
         orgId={orgId}
         orgSlug={orgSlug}
@@ -100,6 +181,7 @@ export default async function PeoplePage({
         initial={initial}
         initialSheet={initialSheet}
         chart={chart}
+        canManageTasks={can({ role }, "tasks.manageAll")}
       />
     </div>
   );

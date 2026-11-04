@@ -6,15 +6,25 @@ import { EmptyState } from "@/components/empty-state";
 import { ChartList } from "@/components/org-chart/chart-list";
 import { ChartView } from "@/components/org-chart/chart-view";
 import { StartChart, type StartPreviewPerson } from "@/components/org-chart/quick/start-chart";
+import {
+  PlacementProgress,
+  SelfPlaceCard,
+  type PlaceOption,
+} from "@/components/org-chart/self-place";
 import { Button } from "@/components/ui/button";
 import type { Role } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
-import { planFromMembers } from "@/lib/org-chart/outline";
+import { toValidationNodes, type DraftPosition } from "@/lib/org-chart/draft";
+import { outlineOrder, planFromMembers } from "@/lib/org-chart/outline";
+import { bestGuess, choosablePositions, placementSummary } from "@/lib/org-chart/self-place";
 import { chartTeams } from "@/lib/org-chart/teams";
 import type { ChartNodeDTO } from "@/lib/org-chart/types";
-import { withOrgTx } from "@/server/db/context";
+import { validateChart } from "@/lib/org-chart/validate";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
+import { positionSelect } from "@/server/org-chart/positions";
 import { getPublishedOrgChart } from "@/server/org-chart/queries";
+import { ASK_DRAFT_MODEL, getAskDraft } from "@/server/org-chart/service";
 
 import { ChartHeaderActions } from "./chart-header-actions";
 
@@ -48,15 +58,37 @@ export async function loadOrgChartSection({
   selectedKey: string | null;
 }): Promise<OrgChartSection> {
   const canEdit = can({ role }, "orgchart.write");
+  const canInvite = can({ role }, "members.invite");
   const chart = await getPublishedOrgChart(organization.id);
+  const { user } = await getOrgContextBySlug(orgSlug);
+  // The open draft and its positions (none while a document is being read).
   const openDraft = canEdit
-    ? await withOrgTx(organization.id, ({ db }) =>
-        db.orgChartVersion.findFirst({
+    ? await withOrgTx(organization.id, async ({ db }) => {
+        const draft = await db.orgChartVersion.findFirst({
           where: { organizationId: organization.id, status: "DRAFT" },
           orderBy: { createdAt: "desc" },
-          select: { id: true, number: true },
-        }),
-      )
+          select: {
+            id: true,
+            number: true,
+            parseModel: true,
+            parseStatus: true,
+            editVersion: true,
+          },
+        });
+        if (!draft) return null;
+        if (draft.parseStatus && draft.parseStatus !== "READY") return { ...draft, positions: [] };
+        const rows = await db.orgChartPosition.findMany({
+          where: { organizationId: organization.id, versionId: draft.id },
+          select: positionSelect,
+          orderBy: [{ rank: "asc" }, { id: "asc" }],
+        });
+        const positions: DraftPosition[] = rows.map((r) => ({
+          ...r,
+          reportsTo: r.reportsToId,
+          alsoReportsTo: r.alsoReportsToIds,
+        }));
+        return { ...draft, positions };
+      })
     : null;
   const base = `/app/${orgSlug}/org-chart`;
   const draftHref = openDraft ? `${base}/drafts/${openDraft.id}` : null;
@@ -104,6 +136,26 @@ export async function loadOrgChartSection({
         .join(", ")
     : null;
 
+  // A draft with nothing left to fix or check, and no answers waiting: Publish.
+  // Members can't read drafts, so theirs comes by the service path.
+  const asking = canEdit
+    ? openDraft?.parseModel === ASK_DRAFT_MODEL
+      ? openDraft
+      : null
+    : await getAskDraft(organization.id, user.id);
+  const answers = asking ? placementSummary(asking.positions) : null;
+  const ready =
+    openDraft &&
+    openDraft.positions.length > 0 &&
+    validateChart(toValidationNodes(openDraft.positions)).length === 0 &&
+    !answers?.pending.length
+      ? {
+          versionId: openDraft.id,
+          editVersion: openDraft.editVersion,
+          setTitles: can({ role }, "members.setTitle"),
+        }
+      : null;
+
   const actions = (
     <ChartHeaderActions
       orgId={organization.id}
@@ -111,8 +163,67 @@ export async function loadOrgChartSection({
       hasChart={Boolean(chart)}
       canEdit={canEdit}
       draft={draftHref && openDraft ? { href: draftHref, number: openDraft.number } : null}
+      ready={ready}
     />
   );
+
+  // "Ask everyone where they sit": the question for anyone who hasn't
+  // answered, and how it's going for an admin.
+  let ask: ReactNode = null;
+  if (asking && answers) {
+    const people = await withOrgTx(organization.id, ({ db }) =>
+      db.membership.findMany({
+        where: { organizationId: organization.id },
+        select: { userId: true, title: true, user: { select: { name: true } } },
+      }),
+    );
+    const names = new Map(people.map((m) => [m.userId, m.user.name]));
+    const byId = new Map(asking.positions.map((p) => [p.id, p]));
+    const placeLabel = (p: DraftPosition): string => {
+      const manager = p.reportsTo ? byId.get(p.reportsTo) : undefined;
+      return manager ? `${p.title}, under ${manager.title}` : p.title;
+    };
+    const me = people.find((m) => m.userId === user.id);
+    const question =
+      me && !answers.placed.has(user.id) ? (
+        <SelfPlaceCard
+          orgId={organization.id}
+          versionId={asking.id}
+          options={choosablePositions(asking.positions, user.id).map((p): PlaceOption => ({
+            id: p.id,
+            label: placeLabel(p),
+          }))}
+          guessId={bestGuess(asking.positions, { id: user.id, title: me.title })?.id ?? null}
+          managers={outlineOrder(asking.positions)
+            .map((o) => o.position)
+            .filter((p) => !p.isAdvisor)
+            .map((p) => ({ id: p.id, label: p.title }))}
+        />
+      ) : null;
+    const progress = canInvite ? (
+      <PlacementProgress
+        orgId={organization.id}
+        orgSlug={orgSlug}
+        versionId={asking.id}
+        placed={answers.placed.size}
+        total={people.length}
+        pending={answers.pending.map((a) => ({
+          positionId: a.position.id,
+          name: names.get(a.userId) ?? "A member",
+          label: placeLabel(a.position),
+          added: a.added,
+        }))}
+      />
+    ) : null;
+    if (question || progress) {
+      ask = (
+        <div className="flex flex-wrap items-start gap-5 *:min-w-0 *:flex-[1_1_380px]">
+          {question}
+          {progress}
+        </div>
+      );
+    }
+  }
 
   // No chart and no draft: the ways to start one, drafted from the members.
   // The preview only needs the top of the chart, so it reads a capped page
@@ -155,13 +266,14 @@ export async function loadOrgChartSection({
         })
       : null;
 
-  const body =
+  const view =
     chart && nodes.length > 0 ? (
       <Suspense fallback={<ChartList nodes={nodes} hrefFor={hrefFor} />}>
         <ChartView
           orgId={organization.id}
           orgSlug={orgSlug}
           orgName={organization.name}
+          canInvite={canInvite}
           nodes={nodes}
           teams={namedTeams}
           mode="chart"
@@ -177,7 +289,7 @@ export async function loadOrgChartSection({
         memberCount={start.memberCount}
         preview={start.preview}
       />
-    ) : (
+    ) : ask ? null : (
       <EmptyState
         title="No org chart yet"
         action={
@@ -197,6 +309,15 @@ export async function loadOrgChartSection({
         }
       />
     );
+
+  const body = ask ? (
+    <div className="space-y-6">
+      {ask}
+      {view}
+    </div>
+  ) : (
+    view
+  );
 
   return { summary, actions, body };
 }

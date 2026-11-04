@@ -5,8 +5,10 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { LinkedSection } from "@/components/links/linked-section";
 import { MarkDoneBanner } from "@/components/tasks/mark-done-banner";
+import { TaskPageAmbient } from "@/components/tasks/task-page-ambient";
 import { TaskPageEditor } from "@/components/tasks/task-page-editor";
 import { TasksProvider } from "@/components/tasks/tasks-context";
+import { agendaMeetingFor } from "@/lib/ambient/tasks";
 import { can } from "@/lib/auth/permissions";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -44,11 +46,50 @@ export default async function TaskPage({
     const comments = await getComments(db, org.id, taskId);
     // What `/` in a title or a description can point at.
     const files = await listFileRefOptions(db, org.id);
-    return { task, labels, parents, files, comments, tz: effectiveTimezone(me, org) };
+    // Meetings it's linked to, either way round: Add to agenda for this week's.
+    const links = await db.itemLink.findMany({
+      where: {
+        organizationId: org.id,
+        OR: [
+          { fromKind: "task", fromId: taskId, toKind: "event" },
+          { toKind: "task", toId: taskId, fromKind: "event" },
+        ],
+      },
+      select: { fromKind: true, fromId: true, toId: true },
+    });
+    const meetings = links.length
+      ? await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            id: { in: links.map((l) => (l.fromKind === "event" ? l.fromId : l.toId)) },
+            deletedAt: null,
+            mergedIntoId: null,
+          },
+          select: { id: true, title: true, startsAt: true, description: true },
+        })
+      : [];
+    return {
+      task,
+      labels,
+      parents,
+      files,
+      comments,
+      meetings,
+      tz: effectiveTimezone(me, org),
+    };
   });
   if (!data) notFound();
 
   const { task } = data;
+  // Editing an agenda is editing the meeting (owners and admins).
+  const agenda = can({ role }, "events.write")
+    ? agendaMeetingFor(task.id, data.meetings, new Date())
+    : null;
+  const agendaWhen = agenda
+    ? new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: data.tz }).format(
+        new Date(agenda.startsAt),
+      )
+    : "";
   // In Personal, a task's menu can move it to an organization you run.
   const moveTargets = isPersonalSpace(org) ? await clubsUserRuns(user.id) : [];
   return (
@@ -76,6 +117,19 @@ export default async function TaskPage({
       <div className="mx-auto max-w-2xl space-y-4">
         <BackLink href={`/app/${orgSlug}/tasks`} label="Tasks" />
         {offerDone && <MarkDoneBanner task={task} />}
+        <TaskPageAmbient
+          task={task}
+          meeting={
+            agenda
+              ? {
+                  id: agenda.id,
+                  title: agenda.title,
+                  when: agendaWhen,
+                  description: agenda.description,
+                }
+              : null
+          }
+        />
         <TaskPageEditor task={task} initialComments={data.comments} />
         <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "task", id: task.id }} />
       </div>

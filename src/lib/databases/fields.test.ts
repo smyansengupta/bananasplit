@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aiStoredType,
+  MAX_RELATION_LINKS,
+  readRelation,
   choicesFromValues,
   choicesVersion,
   convertValue,
@@ -226,6 +229,114 @@ describe("templates", () => {
       expect(["TEXT", "NUMBER", "EMAIL", "PHONE", "URL"]).toContain(t.fields[0]!.type);
       const names = t.fields.map((f) => f.name.toLowerCase());
       expect(new Set(names).size).toBe(names.length);
+    }
+  });
+});
+
+describe("RELATION and AI fields", () => {
+  const people = field("RELATION", { target: { kind: "person" } });
+
+  it("readRelation keeps well-formed links, each once, and drops the rest", () => {
+    expect(
+      readRelation([
+        { kind: "person", id: "p1" },
+        { kind: "person", id: "p1" },
+        { kind: "company", id: "c1" },
+        { kind: "planet", id: "x" },
+        { kind: "person", id: "bad id!" },
+        "p2",
+        null,
+      ]),
+    ).toEqual([
+      { kind: "person", id: "p1" },
+      { kind: "company", id: "c1" },
+    ]);
+    expect(readRelation({ kind: "deal", id: "d1" })).toEqual([{ kind: "deal", id: "d1" }]);
+    expect(readRelation("p1")).toEqual([]);
+    expect(readRelation(undefined)).toEqual([]);
+  });
+
+  it("stores links of the field's kind only, never typed text", () => {
+    expect(parseCell(people, [{ kind: "person", id: "p1" }])).toEqual(
+      ok([{ kind: "person", id: "p1" }]),
+    );
+    expect(parseCell(people, [])).toEqual(ok(null));
+    expect(parseCell(people, "Maya Patel").ok).toBe(false);
+    expect(parseCell(people, [{ kind: "company", id: "c1" }]).ok).toBe(false);
+    expect(parseCell(people, [{ kind: "planet", id: "x" }]).ok).toBe(false);
+  });
+
+  it("holds one link when single, and at most MAX_RELATION_LINKS otherwise", () => {
+    const one = field("RELATION", { target: { kind: "person" }, single: true });
+    const two = [
+      { kind: "person", id: "p1" },
+      { kind: "person", id: "p2" },
+    ];
+    expect(parseCell(one, two.slice(0, 1)).ok).toBe(true);
+    expect(parseCell(one, two).ok).toBe(false);
+    const many = Array.from({ length: MAX_RELATION_LINKS + 1 }, (_, i) => ({
+      kind: "person",
+      id: `p${i}`,
+    }));
+    expect(parseCell(people, many).ok).toBe(false);
+    expect(parseCell(people, many.slice(0, MAX_RELATION_LINKS)).ok).toBe(true);
+  });
+
+  it("an AI field stores what its output type stores", () => {
+    const choices = [
+      { id: "y", label: "Yes", color: "green" as const },
+      { id: "n", label: "No", color: "red" as const },
+    ];
+    expect(parseCell(field("AI", { output: "TEXT" }), " A robotics nonprofit ")).toEqual(
+      ok("A robotics nonprofit"),
+    );
+    expect(parseCell(field("AI", {}), "Plain text by default")).toEqual(
+      ok("Plain text by default"),
+    );
+    expect(parseCell(field("AI", { output: "NUMBER" }), "1,200")).toEqual(ok(1200));
+    expect(parseCell(field("AI", { output: "NUMBER" }), "lots").ok).toBe(false);
+    expect(parseCell(field("AI", { output: "URL" }), "example.org")).toEqual(
+      ok("https://example.org/"),
+    );
+    expect(parseCell(field("AI", { output: "SELECT", choices }), "yes")).toEqual(ok("y"));
+    expect(parseCell(field("AI", { output: "SELECT", choices }), "Maybe").ok).toBe(false);
+    expect(aiStoredType({ output: "SELECT" })).toBe("SELECT");
+    expect(aiStoredType({})).toBe("TEXT");
+  });
+
+  it("links and typed values never turn into each other; a relation stays one", () => {
+    const link = [{ kind: "person", id: "p1" }];
+    expect(convertValue(people, field("TEXT"), link)).toBeNull();
+    expect(convertValue(field("TEXT"), people, "Maya Patel")).toBeNull();
+    expect(convertValue(people, people, link)).toEqual(link);
+    // A relation retargeted at companies drops its people.
+    expect(
+      convertValue(people, field("RELATION", { target: { kind: "company" } }), link),
+    ).toBeNull();
+  });
+
+  it("shows how many links a cell has, and an AI value as its output type", () => {
+    const names = new Map<string, string>();
+    expect(displayText(people, [{ kind: "person", id: "p1" }], names)).toBe("1 link");
+    expect(
+      displayText(
+        people,
+        [
+          { kind: "person", id: "p1" },
+          { kind: "person", id: "p2" },
+        ],
+        names,
+      ),
+    ).toBe("2 links");
+    expect(displayText(people, [], names)).toBe("");
+    const choices = [{ id: "y", label: "Yes", color: "green" as const }];
+    expect(displayText(field("AI", { output: "SELECT", choices }), "y", names)).toBe("Yes");
+    expect(displayText(field("AI", { output: "TEXT" }), "Hello", names)).toBe("Hello");
+  });
+
+  it("imports never guess a relation or an AI field", () => {
+    for (const samples of [["p1", "p2"], ['[{"kind":"person","id":"p1"}]'], ["Yes", "No"]]) {
+      expect(["RELATION", "AI"]).not.toContain(inferFieldType(samples, "Event"));
     }
   });
 });

@@ -8,6 +8,14 @@ import {
   type ReportWidget,
   type SourceSummary,
 } from "./catalog";
+import type {
+  CrmGridPayload,
+  CrmGridWidget,
+  CrmListPayload,
+  CrmListWidget,
+  CrmStatPayload,
+  CrmStatWidget,
+} from "./crm-widgets";
 
 /**
  * What each saved-report widget shows, worked out from its source's rows.
@@ -159,7 +167,8 @@ export interface OverduePayload {
 }
 
 export interface TablePayload {
-  columns: { id: string; name: string; numeric: boolean }[];
+  /** `personal`: an email or phone column, which a view shared outside the organization hides. */
+  columns: { id: string; name: string; numeric: boolean; personal?: boolean }[];
   rows: { id: string; href: string | null; cells: string[] }[];
   total: number;
   filterLabel: string | null;
@@ -274,7 +283,10 @@ export type WidgetPayload =
   | { type: "reach"; data: ReachPayload }
   | { type: "when"; data: WhenPayload }
   | { type: "regulars"; data: RegularsPayload }
-  | { type: "stopped"; data: StoppedPayload };
+  | { type: "stopped"; data: StoppedPayload }
+  | { type: CrmStatWidget; data: CrmStatPayload }
+  | { type: CrmListWidget; data: CrmListPayload }
+  | { type: CrmGridWidget; data: CrmGridPayload };
 
 // ---- Dates -------------------------------------------------------------------
 
@@ -885,6 +897,7 @@ function computeTable(w: ReportWidget, s: LoadedSource): TablePayload {
       id: f.id,
       name: f.name,
       numeric: f.type === "NUMBER" || f.type === "CURRENCY",
+      personal: f.type === "EMAIL" || f.type === "PHONE",
     })),
     rows: [...rows]
       .reverse()

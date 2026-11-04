@@ -25,9 +25,12 @@ export interface DeadlineItem {
   notStarted: boolean;
 }
 
-export type DeadlineTone = "soon" | "later" | "warn";
+/** Warms as the day nears: later (grey), soon (this week), close (two days or less), warn. */
+export type DeadlineTone = "close" | "soon" | "later" | "warn";
 
 export interface DeadlineRow extends DeadlineItem {
+  /** Due within two days (today, tomorrow or the day after): Start it, when nobody has. */
+  soon?: boolean;
   /** "Wed" within the week, else "Nov 8". */
   tag: string;
   tone: DeadlineTone;
@@ -77,6 +80,11 @@ export function warningText(item: DeadlineItem, todayKey: string): string {
   return `${item.title} ${when} with no answers yet.`;
 }
 
+function toneOf(days: number): DeadlineTone {
+  if (days <= 2) return "close";
+  return days < 7 ? "soon" : "later";
+}
+
 export function buildDeadlines(
   items: readonly DeadlineItem[],
   todayKey: string,
@@ -89,11 +97,17 @@ export function buildDeadlines(
   const rows = sorted.slice(0, limit).map((i): DeadlineRow => ({
     ...i,
     tag: deadlineTag(i.dayKey, todayKey),
-    tone: warn?.key === i.key ? "warn" : daysBetweenKeys(todayKey, i.dayKey) < 7 ? "soon" : "later",
+    tone: warn?.key === i.key ? "warn" : toneOf(daysBetweenKeys(todayKey, i.dayKey)),
+    soon: daysBetweenKeys(todayKey, i.dayKey) <= 2,
   }));
   // The warned one stays in the list even past the first few.
   if (warn && !rows.some((r) => r.key === warn.key)) {
-    rows[rows.length - 1] = { ...warn, tag: deadlineTag(warn.dayKey, todayKey), tone: "warn" };
+    rows[rows.length - 1] = {
+      ...warn,
+      tag: deadlineTag(warn.dayKey, todayKey),
+      tone: "warn",
+      soon: daysBetweenKeys(todayKey, warn.dayKey) <= 2,
+    };
     rows.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
   }
   return { rows, total: items.length, insight: warn ? warningText(warn, todayKey) : null };

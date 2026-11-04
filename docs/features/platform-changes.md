@@ -60,14 +60,15 @@ What changed for every club, where it lives, and what it needs. Stacked on
 
 A board of widgets each member arranges (`MemberPrefs.financeWidgets`):
 numbers, charts (monthly bars, balance over time, category donut, by type),
-budget vs. actual, runway, sponsorships and lists. "Add transaction" is the
+budget vs. actual, runway, deals and lists. "Add transaction" is the
 first thing on the page. The registry is `src/lib/finance/widgets.ts`.
 
-A sponsorship is **cash** or **credits** (`Sponsorship.type`). Cash works as
+A deal (a `Sponsorship` row; Finance › Deals, once called Sponsorships) is
+**cash** or **credits** (`Sponsorship.type`). Cash works as
 before: reaching Received books an IN transaction. Credits (cloud, API or
 software credits) carry a dollar value for the pipeline but never reach the
 ledger: no transaction is booked, and they stay out of the balance, the
-runway and the cash Committed/Received totals. The Sponsorships page and the
+runway and the cash Committed/Received totals. The Deals page and the
 dashboard card show them on their own lines.
 
 ## Databases
@@ -202,7 +203,7 @@ ask first in one themed dialog (`src/components/ui/confirm-dialog.tsx`;
   erased: Delete voids with the reason "Deleted", lists hide them ("Show
   deleted transactions" brings them back into view) and Restore or Undo
   un-voids, all in the finance audit log. Receipts, categories, periods,
-  sponsorships and sponsors can be deleted as well.
+  deals and partners can be deleted as well.
 - Events and labels use the same dialog.
 
 **Notes always save.** The autosave (`use-autosave.ts`) never drops an

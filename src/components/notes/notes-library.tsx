@@ -17,6 +17,7 @@ import {
   NotebookText,
   Upload,
   Trash2,
+  Users,
 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -26,6 +27,7 @@ import { deleteNote, restoreNote } from "@/app/app/[orgSlug]/notes/actions";
 import {
   removeNoteFileAction,
   restoreNoteFileAction,
+  updateNoteFileAction,
 } from "@/app/app/[orgSlug]/notes/files-actions";
 import {
   createFolderAction,
@@ -34,6 +36,7 @@ import {
   updateFolderAction,
 } from "@/app/app/[orgSlug]/notes/folder-actions";
 import { emptyTrashAction } from "@/app/app/[orgSlug]/settings/plan/storage/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
 import { moveToEntries, type MoveTarget } from "@/components/personal/move-to-organization";
@@ -123,6 +126,8 @@ export interface LibraryFile {
   excerpt: string | null;
   folderId: string | null;
   canMove: boolean;
+  /** Why it should be shared with everyone (src/lib/ambient/files.ts), when it should. */
+  share?: string | null;
 }
 
 export interface TrashNote {
@@ -721,6 +726,22 @@ export function NotesLibrary({
               {formatBytes(f.sizeBytes)}, {f.uploaderName},{" "}
               {formatDistanceToNow(f.createdAt, { addSuffix: true })}
             </p>
+            {f.share && (
+              <AmbientActions
+                className="mt-1 items-start"
+                actions={[
+                  {
+                    key: "share",
+                    label: "Share with everyone",
+                    icon: Users,
+                    reason: f.share,
+                    ariaLabel: `Share ${f.name} with everyone`,
+                    run: () => updateNoteFileAction(orgId, f.id, { visibility: "ORGANIZATION" }),
+                    done: "Everyone in the organization can open it now",
+                  },
+                ]}
+              />
+            )}
           </div>
         </Link>
         <div className={cardActions}>

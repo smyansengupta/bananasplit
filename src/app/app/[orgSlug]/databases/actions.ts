@@ -17,7 +17,9 @@ import {
   addManualSignup,
   assertCanEdit,
   DatabaseEditError,
+  closePoll,
   deleteAttendance,
+  deletePoll,
   deleteSignup,
   importBallotDefinition,
   linkContactToMember,
@@ -30,7 +32,9 @@ import {
   setSignupSuppressed,
   updateBallotDefinition,
 } from "@/server/databases/admin";
+import { mergePlan } from "@/lib/ambient/databases";
 import { mergeContacts, splitContactEmail } from "@/server/databases/contacts";
+import { likelyDuplicates } from "@/server/databases/duplicates";
 import { AppError } from "@/server/db/errors";
 import { withOrgAction, withOrgTx, withSystemOrgTx } from "@/server/db/context";
 import {
@@ -220,6 +224,45 @@ export async function mergeSessionsAction(
       ),
     );
     return result.moved;
+  });
+}
+
+/**
+ * "Merge N" (Sessions, Possible duplicates): every likely pair at once, each
+ * keeping the session the page suggests (more check-ins, then the website's).
+ * Each merge is its own transaction and audit row, like Merge on one pair; a
+ * pair that can't merge by itself (two website sessions) is left for a look.
+ */
+export async function mergeLikelyDuplicatesAction(organizationId: string) {
+  return run(async () => {
+    const actor = await authorizeServiceWrite(organizationId, DatabaseKind.SESSIONS);
+    const plan = await withOrgTx(organizationId, async ({ db }) => {
+      const org = await db.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { timezone: true },
+      });
+      const { events, pairs } = await likelyDuplicates(db, organizationId, org.timezone || "UTC");
+      return mergePlan(pairs, events);
+    });
+    let merged = 0;
+    for (const m of plan) {
+      try {
+        await withSystemOrgTx(organizationId, { userId: actor.userId }, (ctx) =>
+          mergeEvents(
+            { ...ctx, organizationId, userId: actor.userId, role: actor.role, kind: "system" },
+            m.survivorId,
+            m.loserId,
+          ),
+        );
+        merged += 1;
+      } catch (error) {
+        if (!(error instanceof EventMergeError || error instanceof NotFoundError)) throw error;
+      }
+    }
+    if (plan.length > 0 && merged === 0) {
+      throw new EventMergeError("These can't be merged by themselves. Merge them one at a time.");
+    }
+    return { merged, left: plan.length - merged };
   });
 }
 
@@ -446,6 +489,31 @@ export async function updateDefinitionAction(
       linkedEventId: form.linkedEventId,
       isTest: form.isTest,
     });
+    return reevaluateAsService(organizationId, out.slug);
+  });
+}
+
+/**
+ * Deletes a poll and its votes for good (editors of the Ballots database):
+ * authorized as the member, then done on the service path, which can reach
+ * every ballot of the poll (see deletePoll).
+ */
+export async function deletePollAction(organizationId: string, id: string) {
+  return run(async () => {
+    const pollId = z.string().min(1).max(100).parse(id);
+    const actor = await authorizeServiceWrite(organizationId, DatabaseKind.BALLOTS);
+    return withSystemOrgTx(organizationId, { userId: actor.userId }, ({ db }) =>
+      deletePoll(db, organizationId, pollId),
+    );
+  });
+}
+
+const closePollTx = databasesAction((ctx, id: string) => closePoll(ctx, id));
+
+/** "Close now": the poll stops counting votes cast from now on. */
+export async function closePollAction(organizationId: string, id: string) {
+  return run(async () => {
+    const out = await closePollTx(organizationId, z.string().min(1).max(100).parse(id));
     return reevaluateAsService(organizationId, out.slug);
   });
 }

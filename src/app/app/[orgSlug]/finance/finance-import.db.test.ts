@@ -106,7 +106,8 @@ describe("finance setup and imports (db)", () => {
     });
     expect(res.error).toBeUndefined();
     expect(res.outcome?.created).toBe(3);
-    const label = `${thisYear - 1}–${String(thisYear % 100).padStart(2, "0")}`;
+    // Budget periods are calendar years (src/lib/finance/periods.ts).
+    const label = String(thisYear - 1);
     expect(res.outcome?.periods).toEqual(
       expect.arrayContaining([
         { label, created: true, count: 2 },

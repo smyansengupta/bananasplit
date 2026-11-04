@@ -32,6 +32,7 @@ vi.mock("@/server/db/context", () => ({
         event: { findMany: mocks.findMany, findFirst: async () => null },
         eventRegistration: { groupBy: mocks.groupBy },
         eventAttendee: { findMany: mocks.attendees },
+        orgAuditLog: { findMany: async () => [] },
         note: { findMany: mocks.notes },
         availabilityPoll: { count: async () => 0 },
       },

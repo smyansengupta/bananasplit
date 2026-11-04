@@ -170,7 +170,7 @@ export const updateBudgetPeriod = financeAction(
 
 /**
  * Deletes a period that holds no money yet (no transactions or
- * sponsorships, voided ones included: the ledger keeps every row). Its
+ * deals, voided ones included: the ledger keeps every row). Its
  * categories go with it. Deleting the active period activates the latest
  * remaining one.
  */
@@ -192,7 +192,7 @@ export const deleteBudgetPeriod = financeAction(
     if (transactions > 0 || sponsorships > 0) {
       const what = [
         transactions > 0 ? `${transactions} transaction${transactions === 1 ? "" : "s"}` : null,
-        sponsorships > 0 ? `${sponsorships} sponsorship${sponsorships === 1 ? "" : "s"}` : null,
+        sponsorships > 0 ? `${sponsorships} deal${sponsorships === 1 ? "" : "s"}` : null,
       ]
         .filter(Boolean)
         .join(" and ");
@@ -285,6 +285,49 @@ export const updateCategory = financeAction(
       data: { name: parsed.data.name, allocatedCents: parsed.data.allocatedCents },
     });
     return {};
+  },
+);
+
+/**
+ * Move money (Budget, on a line past 90%): moves `cents` of budget from one
+ * category to another in the same period, both written together and logged
+ * in the finance audit.
+ */
+export const moveBudget = financeAction(
+  async (ctx, fromId: string, toId: string, cents: number): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    if (!Number.isInteger(cents) || cents <= 0 || cents > 1_000_000_000) {
+      return { error: "Pick an amount to move." };
+    }
+    if (fromId === toId) return { error: "Pick two different categories." };
+    const [from, to] = await Promise.all(
+      [fromId, toId].map((id) =>
+        ctx.db.budgetCategory.findFirst({
+          where: { id, organizationId: ctx.organizationId },
+          select: { id: true, name: true, budgetPeriodId: true, allocatedCents: true },
+        }),
+      ),
+    );
+    if (!from || !to) return { error: "Category not found." };
+    if (from.budgetPeriodId !== to.budgetPeriodId) {
+      return { error: "Both categories must be in the same budget period." };
+    }
+    if (from.allocatedCents < cents) return { error: `${from.name} doesn't have that much.` };
+    await ctx.db.budgetCategory.update({
+      where: { id: from.id },
+      data: { allocatedCents: from.allocatedCents - cents },
+    });
+    await ctx.db.budgetCategory.update({
+      where: { id: to.id },
+      data: { allocatedCents: to.allocatedCents + cents },
+    });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "BUDGET_MOVE",
+      before: { [from.id]: from.allocatedCents, [to.id]: to.allocatedCents },
+      after: { [from.id]: from.allocatedCents - cents, [to.id]: to.allocatedCents + cents },
+    });
+    return { periodId: from.budgetPeriodId };
   },
 );
 

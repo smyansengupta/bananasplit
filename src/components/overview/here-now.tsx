@@ -4,6 +4,7 @@ import { Users } from "@/components/icons";
 import Link from "next/link";
 
 import { useLivePeople, type OnlinePeople } from "@/components/shell/presence-store";
+import { AmbientButton } from "@/components/ambient/ambient-button";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { hereFinding } from "@/lib/overview/here-now";
@@ -153,6 +154,16 @@ export function HereNow({
             {finding.page.label}
           </Link>
           .
+          <AmbientButton
+            className="ms-2 align-middle"
+            action={{
+              key: "join-them",
+              label: "Join them",
+              icon: Users,
+              reason: `${finding.people.length} people are on the same page`,
+              href: finding.page.href,
+            }}
+          />
         </Insight>
       )}
     </div>

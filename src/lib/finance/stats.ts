@@ -37,7 +37,7 @@ export interface RunwayInput {
   balanceCents: number;
   /** The period's outgoing transactions that count toward the balance. */
   spending: readonly { amountCents: number; occurredAt: Date }[];
-  /** Sponsorships committed or invoiced but not received yet. */
+  /** Deals committed or invoiced but not received yet. */
   expectedIncomeCents: number;
   /** Start times of the period's meetings, held and still scheduled. */
   meetingStarts: readonly Date[];
@@ -46,7 +46,7 @@ export interface RunwayInput {
 
 export interface Runway {
   status: RunwayStatus;
-  /** The status once the expected sponsorships arrive. */
+  /** The status once the expected deals arrive. */
   statusWithExpected: RunwayStatus;
   spentCents: number;
   meetingsHeld: number;
@@ -62,7 +62,7 @@ export interface Runway {
   limitedHistory: boolean;
   /** When the balance reaches zero at the current burn rate; null when nothing is being spent. */
   runOutDate: Date | null;
-  /** The same, counting expected sponsorships as income still to come. */
+  /** The same, counting expected deals as income still to come. */
   runOutDateWithExpected: Date | null;
   /** The balance on the period's last day at the current burn rate. */
   projectedEndBalanceCents: number;

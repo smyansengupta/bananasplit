@@ -117,7 +117,7 @@ export default async function FinanceAddOnPage({
         tint="success"
         name="Finance"
         status={<StatusTag tone={added ? "on" : "off"}>{added ? "Added" : "Not added"}</StatusTag>}
-        summary="Budgets, expenses with receipts, reimbursements and sponsorships, in one set of books."
+        summary="Budgets, expenses with receipts, reimbursements and deals, in one set of books."
         action={action}
       />
 
@@ -161,7 +161,7 @@ export default async function FinanceAddOnPage({
                 ["Who sees the books", "Owners, admins and treasurers"],
                 ["Who can submit expenses", "Every member, from New"],
                 ["Budget periods", "A quarter or a calendar year"],
-                ["Plan", "Team; sponsorships and runway on Team Advanced"],
+                ["Plan", "Team; deals and runway on Team Advanced"],
                 ["Turning it off", "Hides it; every record is kept"],
               ]}
             />
@@ -313,12 +313,12 @@ export default async function FinanceAddOnPage({
       </section>
 
       <FeatureCard
-        id="f-sponsors"
-        title="Sponsorships, from first ask to paid"
-        lead="Each sponsor keeps a contact and notes, and each sponsorship moves through six stages."
+        id="f-deals"
+        title="Deals, from first ask to paid"
+        lead="Each partner keeps a contact and notes, and each deal moves through six stages."
         extra={
           <Steps
-            label="Sponsorship stages"
+            label="Deal stages"
             steps={[
               { name: "Prospect", tint: "muted" },
               { name: "Committed", tint: "info" },
@@ -332,14 +332,14 @@ export default async function FinanceAddOnPage({
         details={[
           [
             "Cash or credits",
-            "Credits (cloud, software) count toward sponsorships but never your balance",
+            "Credits (cloud, software) count toward deals but never your balance",
           ],
         ]}
         panel="amber"
         preview={
           <Mini className="gap-3 p-5">
             <span className="flex flex-wrap items-center gap-2 text-sm">
-              <b className="flex-1">Sponsorships</b>
+              <b className="flex-1">Deals</b>
               <span className="text-muted-foreground text-[12.5px]">
                 $4,500 committed, $2,500 received
               </span>

@@ -220,6 +220,19 @@
   --tag-ochre:#7f5900;
   --tag-forest:#1c6340;
   --tag-teal:#00616f;
+  /*
+   * Kind fills: an event kind's colour as a solid block (Up next, This week).
+   * In light mode they are the kind's tag colour; dark mode has its own set
+   * (the Home colour set), lifted to sit on a dark page. Text on them is
+   * black or white by lightness (KIND_INK).
+   */
+  --fill-workshop:var(--tag-navy);
+  --fill-info:var(--tag-rust);
+  --fill-hackathon:var(--tag-forest);
+  --fill-social:var(--tag-ochre);
+  --fill-board:var(--tag-plum);
+  /* Waiting on you, or due very soon: banana in dark mode, the ochre tag in light. */
+  --attention:var(--tag-ochre);
   --radius: 0.875rem;
   --radius-scale: 1;
   /* The glow as light: the corona behind the page top, halos, focus. */
@@ -329,6 +342,13 @@
   --tag-ochre:#c79a23;
   --tag-forest:#3cb87f;
   --tag-teal:#35a9b8;
+  /* The dark-mode colour set: blue, teal, pink, orange and plum (with green, brick and banana for status). */
+  --fill-workshop:#3987e5;
+  --fill-info:#267c8b;
+  --fill-hackathon:#d55181;
+  --fill-social:#d95926;
+  --fill-board:#8748a9;
+  --attention:#f2c230;
   --glow-strength: 16%;
   --haze-strength: 5%;
   --elevation-1: 0 18px 40px -24px rgb(0 0 0 / 0.8);
@@ -512,6 +532,96 @@
     .corona::before {
       animation: none;
     }
+  }
+}
+
+/*
+ * Something live right now (a meeting under way, a call people are in): a
+ * small dot that breathes. Only on things that are truly live, and still
+ * with reduced motion.
+ */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+  animation: live-breathe 2.4s ease-in-out infinite;
+}
+@keyframes live-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/*
+ * A number that changed since your last look rolls to its new value once
+ * (TickNumber), and a row you haven't seen slides in with a tint that fades
+ * (Arrive). Still with reduced motion.
+ */
+.tick-roll {
+  display: inline-block;
+  height: 1lh;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.tick-roll > span {
+  display: flex;
+  flex-direction: column;
+  animation: tick-roll 0.7s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.tick-roll > span[data-dir="down"] {
+  animation-direction: reverse;
+}
+@keyframes tick-roll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+.row-arrive {
+  border-radius: 12px;
+  animation: row-arrive 4.5s ease-out both;
+}
+@keyframes row-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  60% {
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick-roll > span {
+    animation: none;
+    transform: translateY(-50%);
+  }
+  .tick-roll > span[data-dir="down"] {
+    transform: none;
+  }
+  .row-arrive {
+    animation: none;
   }
 }
 

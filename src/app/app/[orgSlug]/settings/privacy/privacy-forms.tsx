@@ -15,6 +15,7 @@ import {
   updateBallotVisibility,
   updateConnectorsEnabled,
   updateDatabaseVisibility,
+  updateMemberCanDeleteDatabases,
   updatePrivacy,
 } from "./actions";
 
@@ -306,5 +307,45 @@ export function ConnectorsSwitchForm({
         />
       </Row>
     </SettingsCard>
+  );
+}
+
+/**
+ * Databases card, first row: whether members who can edit a database may
+ * also delete it for good. Saves as it changes.
+ */
+export function DatabaseDeleteSwitch({ orgId, value: initial }: { orgId: string; value: boolean }) {
+  const router = useRouter();
+  const [value, setValue] = useState(initial);
+  const { status, error, save } = useSaveOnChange(
+    async (next: boolean) => {
+      const result = await updateMemberCanDeleteDatabases(orgId, next);
+      if (result.error) {
+        setValue(!next);
+        return result.error;
+      }
+      router.refresh();
+      return null;
+    },
+    { initial },
+  );
+  return (
+    <Row
+      id="member-can-delete-databases"
+      label="Members can delete databases"
+      help="Members who can edit a database can also delete it for good. Off: only owners and admins can."
+    >
+      <div className="flex items-center gap-3">
+        <SavedMark status={status} error={error} />
+        <Switch
+          id="member-can-delete-databases"
+          checked={value}
+          onCheckedChange={(next) => {
+            setValue(next);
+            void save(next);
+          }}
+        />
+      </div>
+    </Row>
   );
 }

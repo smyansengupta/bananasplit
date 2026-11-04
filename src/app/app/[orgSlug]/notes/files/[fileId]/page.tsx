@@ -3,13 +3,17 @@ import { BackLink } from "@/components/back-link";
 import { LinkedSection } from "@/components/links/linked-section";
 import { notFound } from "next/navigation";
 
+import { updateNoteFileAction } from "@/app/app/[orgSlug]/notes/files-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { FILE_ICONS, FILE_LABELS } from "@/components/notes/file-card";
 import { DocumentPreview, FileActions, FileDetails } from "@/components/notes/file-preview";
+import { fileToShare } from "@/lib/ambient/files";
 import { can } from "@/lib/auth/permissions";
 import { isPersonalSpace } from "@/lib/billing/space";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { fileLinkCount } from "@/server/notes/ambient";
 import { listFolders } from "@/server/notes/folders";
 import { docxToHtml, FileRejectedError, readNoteFile } from "@/server/notes/files";
 import { planGate } from "@/server/billing/plan-gate";
@@ -71,8 +75,20 @@ export default async function NoteFilePage({
   const src = `/api/orgs/${encodeURIComponent(org.id)}/files/${encodeURIComponent(row.id)}`;
   const canRemove = row.uploadedBy.id === user.id || can({ role }, "members.invite");
   const personal = isPersonalSpace(org);
-  const folders = await withOrgTx(org.id, ({ db }) => listFolders(db, org.id, user.id));
+  const { folders, links } = await withOrgTx(org.id, async ({ db }) => ({
+    folders: await listFolders(db, org.id, user.id),
+    links: await fileLinkCount(db, org.id, row.id),
+  }));
   const inFolder = row.folderId ? folders.find((f) => f.id === row.folderId) : undefined;
+  // Only the uploader can open it, but the organization uses it: share it.
+  const share = fileToShare({
+    visibility: row.visibility,
+    uploadedById: row.uploadedBy.id,
+    viewerId: user.id,
+    personal,
+    links,
+    folderName: inFolder?.name ?? null,
+  });
   const back = inFolder
     ? {
         href: `/app/${orgSlug}/notes?folder=${encodeURIComponent(inFolder.id)}`,
@@ -123,6 +139,23 @@ export default async function NoteFilePage({
             personal={personal}
           />
         </div>
+        {share && (
+          <AmbientActions
+            why
+            actions={[
+              {
+                key: "share",
+                label: "Share with everyone",
+                reason: share.reason,
+                tone: "spark",
+                run: updateNoteFileAction.bind(null, org.id, row.id, {
+                  visibility: "ORGANIZATION",
+                }),
+                done: "Everyone in the organization can open it now",
+              },
+            ]}
+          />
+        )}
         <FileActions
           orgId={org.id}
           orgSlug={orgSlug}

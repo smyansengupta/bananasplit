@@ -26,6 +26,7 @@ import {
   CheckSquare,
   ClipboardList,
   Clock,
+  Eye,
   Filter,
   FolderOpen,
   GripVertical,
@@ -37,6 +38,7 @@ import {
   Link2,
   ListChecks,
   NotebookText,
+  Pencil,
   PiggyBank,
   Pin,
   Plus,
@@ -46,6 +48,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Sunrise,
   Table2,
   Target,
   Ticket,
@@ -72,6 +75,7 @@ import {
   type RefObject,
 } from "react";
 
+import { AmbientWhy } from "@/components/ambient/ambient-button";
 import { ShapeIcon, ShapePicker } from "@/components/boards/shape-picker";
 import { Badge } from "@/components/ui/badge";
 import { InBar } from "@/components/ui/bar-slot";
@@ -95,6 +99,9 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
+import { ambientLayout } from "@/lib/overview/ambient";
+import { packSegment } from "@/lib/overview/pack";
+import type { WidgetScore } from "@/lib/overview/priority";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +153,169 @@ const SPAN: Record<number, string> = {
 };
 
 /**
+ * Ambient is one grid, eight columns on a wide screen, two on a tablet, one
+ * on a phone. Now's widgets are small, so they sit two across (four columns
+ * each) until the widest screens. On two columns a full-size widget takes
+ * both; Now's pair up, and a lone one (or the last of an odd count) takes both.
+ */
+const BAND_SPAN_LG: Record<number, string> = {
+  1: "lg:col-span-1",
+  2: "lg:col-span-2",
+  3: "lg:col-span-3",
+  4: "lg:col-span-4",
+  5: "lg:col-span-5",
+  6: "lg:col-span-6",
+  7: "lg:col-span-7",
+  8: "lg:col-span-8",
+};
+const BAND_SPAN_XL: Record<number, string> = {
+  1: "xl:col-span-1",
+  2: "xl:col-span-2",
+  3: "xl:col-span-3",
+  4: "xl:col-span-4",
+  5: "xl:col-span-5",
+  6: "xl:col-span-6",
+  7: "xl:col-span-7",
+  8: "xl:col-span-8",
+};
+function bandSpan(band: { span: number; square: boolean; full: boolean }): string {
+  const two = band.full ? "sm:col-span-2" : "sm:col-span-1";
+  return band.square
+    ? cn("col-span-1", two, band.full ? "lg:col-span-8" : "lg:col-span-4", BAND_SPAN_XL[band.span])
+    : cn("col-span-1", two, BAND_SPAN_LG[band.span]);
+}
+
+const PACK_GAP = 18;
+/**
+ * Ambient's grid. Until the widgets are measured it's an ordinary grid;
+ * then usePacked places each one itself (data-packed).
+ */
+const PACKED_GRID =
+  "grid grid-cols-1 items-start gap-4.5 sm:grid-cols-2 lg:grid-cols-8 data-[packed]:block sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+
+/** Columns Ambient may use at a width: three on a wide screen, two on a tablet, one on a phone. */
+function packColumns(width: number): number {
+  if (width >= 960) return 3;
+  return width >= 560 ? 2 : 1;
+}
+
+/**
+ * Places Ambient's widgets (packSegment): each as tall as what's in it, in
+ * columns that all end at the same line, so there's no hole anywhere. A
+ * wide widget (data-wide) takes a whole row. Again whenever a widget or the
+ * board changes size.
+ */
+function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const items = () =>
+      Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
+    const PLACED = ["position", "left", "top", "width", "min-height"];
+    const reset = (item: HTMLElement) => PLACED.forEach((p) => item.style.removeProperty(p));
+    let frame = 0;
+    // Placing again gives the same sizes, so the observer seeing our own
+    // changes settles after one more frame.
+    const fit = () => {
+      frame = 0;
+      el.setAttribute("data-packed", "");
+      const width = el.getBoundingClientRect().width;
+      const list = items().filter((item) => getComputedStyle(item).display !== "none");
+      list.forEach((item) => {
+        reset(item);
+        item.style.setProperty("position", "absolute");
+      });
+      const heightAt = (item: HTMLElement, w: number) => {
+        item.style.setProperty("width", `${w}px`);
+        return item.getBoundingClientRect().height;
+      };
+      const colWidth = (k: number) => (width - PACK_GAP * (k - 1)) / k;
+      // Wide widgets split the rest into segments.
+      const segments: HTMLElement[][] = [[]];
+      const order: (HTMLElement | HTMLElement[])[] = [];
+      for (const item of list) {
+        if (item.hasAttribute("data-wide")) {
+          order.push(item);
+          segments.push([]);
+        } else {
+          const seg = segments[segments.length - 1]!;
+          if (seg.length === 0) order.push(seg);
+          seg.push(item);
+        }
+      }
+      let top = 0;
+      for (const part of order) {
+        if (part instanceof HTMLElement) {
+          const h = heightAt(part, width);
+          part.style.setProperty("left", "0px");
+          part.style.setProperty("top", `${top}px`);
+          top += h + PACK_GAP;
+          continue;
+        }
+        const seg = packSegment(
+          (k) => part.map((item) => heightAt(item, colWidth(k))),
+          part.length,
+          packColumns(width),
+          PACK_GAP,
+        );
+        const w = colWidth(seg.cols);
+        const heights = part.map((item) => heightAt(item, w));
+        seg.columns.forEach((column, k) => {
+          let y = top;
+          for (const i of column) {
+            const item = part[i]!;
+            const h = heights[i]! + seg.extra[i]!;
+            item.style.setProperty("left", `${k * (w + PACK_GAP)}px`);
+            item.style.setProperty("top", `${y}px`);
+            if (seg.extra[i]! > 0) item.style.setProperty("min-height", `${h}px`);
+            y += h + PACK_GAP;
+          }
+        });
+        top += seg.height + PACK_GAP;
+      }
+      el.style.setProperty("height", `${Math.max(0, top - PACK_GAP)}px`);
+    };
+    fit();
+    const watch = new ResizeObserver(() => {
+      if (!frame) frame = requestAnimationFrame(fit);
+    });
+    watch.observe(el);
+    for (const item of items()) watch.observe(item);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      watch.disconnect();
+      el.removeAttribute("data-packed");
+      el.style.removeProperty("height");
+      for (const item of items()) reset(item);
+    };
+  }, [grid, key]);
+}
+
+/** Home's two layouts: Ambient arranges itself, Custom is the member's own. */
+export type BoardMode = "ambient" | "custom";
+
+/** What a board needs to offer Ambient (Home only). */
+export interface AmbientProps {
+  mode: BoardMode;
+  /** Widget types with nothing to show right now. */
+  resting: readonly string[];
+  /** Widget types that need only one column right now (Here now with just you). */
+  compact: readonly string[];
+  /**
+   * Widgets Ambient shows whether or not they're on the member's board
+   * (From your apps, what their role is for). Never saved to Custom.
+   */
+  extras?: readonly BoardWidget[];
+  /** Widget types the member's role brings into You, right after My tasks. */
+  promoted?: readonly string[];
+  /** What's going on, by widget type (scoreHome): the highest leads. */
+  scores?: Readonly<Record<string, WidgetScore>>;
+  /** Late at night: what scores low rests until morning. */
+  night?: boolean;
+  onMode: (mode: BoardMode) => Promise<{ ok: boolean; error?: string }>;
+}
+
+/**
  * A row is as tall as a column is wide, so 1 by 1 is a square: the board is
  * a size container and --board-row is one column's width (the gap is 4.5,
  * 1.125rem). A widget with rows spans them and is exactly that tall.
@@ -177,7 +347,19 @@ const collision: CollisionDetection = (args) => {
 
 const noSubscribe = () => () => {};
 
-export type SaveBoard = (layout: BoardWidget[] | null) => Promise<{ ok: boolean; error?: string }>;
+/**
+ * What a save sends back. A Reset (null) may answer with the board it put
+ * back, which the board shows at once, and an undo that puts the old one
+ * back exactly (a report's widget settings too) and answers with that board.
+ */
+export type SaveBoardResult = {
+  ok: boolean;
+  error?: string;
+  layout?: BoardWidget[];
+  undo?: () => Promise<{ ok: boolean; error?: string; layout?: BoardWidget[] }>;
+};
+
+export type SaveBoard = (layout: BoardWidget[] | null) => Promise<SaveBoardResult>;
 
 /**
  * The board's widgets slide to their new places when the layout changes
@@ -253,6 +435,7 @@ export function WidgetBoard({
   refreshOnSave = true,
   noun = "your board",
   fillGaps = false,
+  ambient,
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -302,6 +485,12 @@ export function WidgetBoard({
   noun?: string;
   /** Close up the rows when a widget is added or removed (a saved report). */
   fillGaps?: boolean;
+  /**
+   * Offers Ambient beside Custom (Home). In Ambient the board is laid out in
+   * bands by src/lib/overview/ambient.ts, resting widgets step aside, and
+   * there's nothing to drag; Custom is the board as the member arranged it.
+   */
+  ambient?: AmbientProps;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
@@ -311,7 +500,23 @@ export function WidgetBoard({
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
+  const [mode, setMode] = useState<BoardMode>(ambient?.mode ?? "custom");
+  // Nothing moves while you're looking: what leads is held from when the
+  // page opened, and takes the latest only when you come back to the tab.
+  const [scores, setScores] = useState(ambient?.scores);
+  const latestScores = useRef(ambient?.scores);
+  useEffect(() => {
+    latestScores.current = ambient?.scores;
+  }, [ambient?.scores]);
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible") setScores(latestScores.current);
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, []);
   const grid = useRef<HTMLDivElement>(null);
+  const packed = useRef<HTMLDivElement>(null);
   const beforeDrag = useRef<BoardWidget[] | null>(null);
   const lastSwap = useRef<string | null>(null);
   const meta = new Map(types.map((t) => [t.type, t]));
@@ -328,7 +533,7 @@ export function WidgetBoard({
   /** Set by a Reset: take the next layout the server sends. */
   const takeNext = useRef(false);
 
-  function persist(next: BoardWidget[] | null) {
+  function persist(next: BoardWidget[] | null, then?: (result: SaveBoardResult) => void) {
     setError(null);
     start(async () => {
       const result = await onSave(next);
@@ -336,8 +541,13 @@ export function WidgetBoard({
         setError(result.error ?? "Couldn't save the layout. Check your connection and try again.");
         return;
       }
-      // Reset: the server's default arrives with the refresh; take it then.
-      if (next === null) takeNext.current = true;
+      // Reset: when the save says what it put back, show it now. Otherwise
+      // the server's default arrives with the refresh; take it then.
+      if (next === null) {
+        if (result.layout) take(result.layout);
+        else takeNext.current = true;
+      }
+      then?.(result);
       if (refreshOnSave) router.refresh();
     });
   }
@@ -345,6 +555,11 @@ export function WidgetBoard({
   // The board saves as you go: every change (a remove, an add, a drag) is
   // sent a moment after the last one, so there is no Save or Cancel.
   const saved = useRef(JSON.stringify(initialLayout));
+  /** Shows a board that is already saved (what a Reset or its Undo put back). */
+  function take(next: BoardWidget[]) {
+    saved.current = JSON.stringify(next);
+    setLayout(next);
+  }
   useEffect(() => {
     if (dragId) return;
     const now = JSON.stringify(layout);
@@ -411,17 +626,26 @@ export function WidgetBoard({
 
   function reset() {
     const before = layout;
-    persist(null);
-    toast({
-      title: resetLabel,
-      action: {
-        label: "Undo",
-        run: () => {
-          setLayout(before);
-          saved.current = "";
+    // The toast comes once it's done, so its Undo has what it needs.
+    persist(null, (result) =>
+      toast({
+        title: resetLabel,
+        action: {
+          label: "Undo",
+          run: async () => {
+            if (!result.undo) {
+              setLayout(before);
+              saved.current = "";
+              return;
+            }
+            const back = await result.undo();
+            if (!back.ok) return back.error ?? "Couldn't put it back. Try again.";
+            take(back.layout ?? before);
+            if (refreshOnSave) router.refresh();
+          },
         },
-      },
-    });
+      }),
+    );
   }
 
   // Unchanged is the same array, so a resize that hasn't crossed into the
@@ -483,6 +707,52 @@ export function WidgetBoard({
     setFresh(id);
   };
 
+  /** Ambient or Custom. Custom shows the member's own board; Edit arranges it. */
+  function switchMode(next: BoardMode) {
+    if (!ambient || next === mode) return;
+    const was = mode;
+    setMode(next);
+    setEditing(false);
+    setError(null);
+    start(async () => {
+      const result = await ambient.onMode(next);
+      if (result.ok) {
+        // Some widgets draw differently in Ambient (Here now with only you in).
+        router.refresh();
+        return;
+      }
+      setMode(was);
+      setEditing(false);
+      setError(result.error ?? "Couldn't switch the layout. Try again.");
+    });
+  }
+  const bands =
+    ambient && mode === "ambient"
+      ? ambientLayout(
+          [
+            ...layout,
+            ...(ambient.extras ?? []).filter((x) => !layout.some((w) => w.type === x.type)),
+          ],
+          {
+            resting: new Set(ambient.resting),
+            compact: new Set(ambient.compact),
+            promoted: new Set(ambient.promoted ?? []),
+            // Packed: widgets keep their own widths and slot in under each other.
+            fill: false,
+            scores: new Map(Object.entries(scores ?? {})),
+            night: ambient.night,
+          },
+        )
+      : null;
+
+  // Ambient packs its widgets (no holes); measured again whenever the arrangement changes.
+  usePacked(
+    packed,
+    bands
+      ? bands.rows.map((r) => r.items.map((i) => `${i.widget.id}:${i.span}`).join()).join("|")
+      : null,
+  );
+
   const body = (w: BoardWidget) =>
     (bodies ? (bodies[w.id] ?? bodies[w.type]) : renderBody?.(w.type)) ?? null;
   const dragged = dragId ? layout.find((w) => w.id === dragId) : undefined;
@@ -496,17 +766,19 @@ export function WidgetBoard({
           <InBar>
             {/* + stays put; Customize becomes Reset and Done (a check) while on. */}
             <div className={cn("flex items-center gap-2 max-md:hidden", readOnly && "hidden")}>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label="Add a widget"
-                title="Add a widget"
-                disabled={layout.length >= MAX_WIDGETS}
-                onClick={() => setAdding(true)}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-              </Button>
+              {!(ambient && mode === "ambient") && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Add a widget"
+                  title="Add a widget"
+                  disabled={layout.length >= MAX_WIDGETS}
+                  onClick={() => setAdding(true)}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                </Button>
+              )}
               {editing ? (
                 <>
                   <Button
@@ -523,19 +795,27 @@ export function WidgetBoard({
                   <Button
                     type="button"
                     size="icon"
-                    aria-label="Done customizing"
+                    aria-label={ambient ? "Done editing" : "Done customizing"}
                     title="Done"
                     onClick={() => setEditing(false)}
                   >
                     <Check className="size-4" aria-hidden="true" />
                   </Button>
                 </>
+              ) : ambient ? (
+                mode === "custom" && (
+                  <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Edit
+                  </Button>
+                )
               ) : (
                 <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                   <SlidersHorizontal className="size-4" aria-hidden="true" />
                   Customize
                 </Button>
               )}
+              {ambient && <ModeSwitch mode={mode} disabled={pending} onChange={switchMode} />}
             </div>
           </InBar>
         </div>
@@ -564,7 +844,7 @@ export function WidgetBoard({
 
       {notice}
 
-      {layout.length === 0 ? (
+      {(bands ? bands.rows.length === 0 && bands.resting.length === 0 : layout.length === 0) ? (
         <div className="text-muted-foreground rounded-block border-border flex flex-col items-center gap-3 border-[1.5px] border-dashed p-10 text-sm">
           <span className="bg-muted grid size-14 place-items-center rounded-full">
             <LayoutGrid className="size-6" aria-hidden="true" />
@@ -593,32 +873,87 @@ export function WidgetBoard({
         >
           <SortableContext items={layout.map((w) => w.id)} strategy={() => null}>
             <div className="@container">
-              <div ref={grid} className={cn(GRID, "relative")}>
-                {layout.map((w) => {
-                  const known = meta.get(w.type);
-                  if (!known) return null;
-                  const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
-                  return (
-                    <BoardItem
-                      key={w.id}
-                      widget={w}
-                      meta={m}
-                      readOnly={readOnly}
-                      editing={editing}
-                      dragging={dragId === w.id}
-                      fresh={fresh === w.id}
-                      hiddenOnPhone={hiddenOnPhone.includes(w.type)}
-                      actions={!editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null}
-                      measure={measure}
-                      onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
-                      onNudge={(by) => nudge(w.id, by)}
-                      onRemove={() => remove(w.id)}
-                    >
-                      {body(w)}
-                    </BoardItem>
-                  );
-                })}
-              </div>
+              {bands ? (
+                <div className="flex flex-col gap-4.5">
+                  <div ref={packed} className={cn(PACKED_GRID, "relative")}>
+                    {bands.rows.flatMap((row) =>
+                      row.items.map((item, index) => {
+                        const m = meta.get(item.widget.type);
+                        const n = row.items.length;
+                        if (!m) return null;
+                        return (
+                          <BoardItem
+                            key={item.widget.id}
+                            widget={item.widget}
+                            meta={m}
+                            readOnly
+                            editing={false}
+                            dragging={false}
+                            fresh={fresh === item.widget.id}
+                            hiddenOnPhone={hiddenOnPhone.includes(item.widget.type)}
+                            actions={
+                              headerActions?.[item.widget.id] ?? headerActions?.[item.widget.type]
+                            }
+                            measure={measure}
+                            onShape={() => {}}
+                            onNudge={() => {}}
+                            onRemove={() => remove(item.widget.id)}
+                            band={{
+                              name: row.band,
+                              span: item.span,
+                              square: row.band === "now",
+                              compact: item.compact,
+                              lead: item.lead,
+                              full:
+                                row.band !== "now" || n === 1 || (n % 2 === 1 && index === n - 1),
+                            }}
+                          >
+                            {body(item.widget)}
+                          </BoardItem>
+                        );
+                      }),
+                    )}
+                  </div>
+                  {/* Only what's on their board: an extra Home added isn't theirs to miss. */}
+                  {bands.resting.some((w) => layout.some((l) => l.id === w.id)) && (
+                    <RestingLine
+                      night={ambient?.night}
+                      titles={bands.resting
+                        .filter((w) => layout.some((l) => l.id === w.id))
+                        .map((w) => meta.get(w.type)?.title ?? w.type)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div ref={grid} className={cn(GRID, "relative")}>
+                  {layout.map((w) => {
+                    const known = meta.get(w.type);
+                    if (!known) return null;
+                    const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
+                    return (
+                      <BoardItem
+                        key={w.id}
+                        widget={w}
+                        meta={m}
+                        readOnly={readOnly}
+                        editing={editing}
+                        dragging={dragId === w.id}
+                        fresh={fresh === w.id}
+                        hiddenOnPhone={hiddenOnPhone.includes(w.type)}
+                        actions={
+                          !editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null
+                        }
+                        measure={measure}
+                        onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
+                        onNudge={(by) => nudge(w.id, by)}
+                        onRemove={() => remove(w.id)}
+                      >
+                        {body(w)}
+                      </BoardItem>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </SortableContext>
           {/* On the body: the page's own transforms would put a fixed overlay off. */}
@@ -720,6 +1055,7 @@ function BoardItem({
   onShape,
   onNudge,
   onRemove,
+  band,
   children,
 }: {
   widget: BoardWidget;
@@ -734,6 +1070,20 @@ function BoardItem({
   onShape: (w: number, h: number | null) => void;
   onNudge: (by: number) => void;
   onRemove: () => void;
+  /**
+   * Laid out by Ambient: its columns of the band, whether it's in Now (two
+   * across until the widest screens), and whether it takes both columns on
+   * a tablet.
+   */
+  band?: {
+    /** Which band it's in ("you", "now"...), on the element as data-band. */
+    name: string;
+    span: number;
+    square: boolean;
+    compact: boolean;
+    full: boolean;
+    lead?: string;
+  };
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
@@ -801,17 +1151,20 @@ function BoardItem({
       id={`w-${w.id}`}
       aria-label={m.title}
       data-widget-id={w.id}
+      data-band={band?.name}
+      data-wide={band && !band.square && band.span >= 6 ? "" : undefined}
       data-frame={bare ? "bare" : "card"}
       onPointerDown={coarse ? undefined : drag}
-      style={w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
+      style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
       className={cn(
-        SPAN[w.w] ?? SPAN[1],
+        band ? bandSpan(band) : (SPAN[w.w] ?? SPAN[1]),
         hiddenOnPhone && "max-md:hidden",
         "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color,box-shadow]",
         bare
           ? "rounded-block"
           : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
-        w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
+        // Packed Ambient shows every widget whole: nothing beside it needs evening up.
+        band ? null : w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
         editing &&
           "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
         editing && !coarse && "touch-none",
@@ -869,6 +1222,7 @@ function BoardItem({
         <h2 className={cn("heading min-w-0 text-[17px] break-words", editing && "truncate")}>
           {m.title}
         </h2>
+        {band?.lead && <AmbientWhy className="text-[12.5px]">{band.lead}</AmbientWhy>}
         {actions && <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>}
         {editing && (
           // Pressing a control here is a click, not the start of a drag.
@@ -896,7 +1250,9 @@ function BoardItem({
           "min-h-0 flex-1",
           bare
             ? "flex flex-col"
-            : "overflow-auto overscroll-contain rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
+            : // The page keeps scrolling past a widget: a long one scrolls inside, then hands
+              // the wheel back to the page (no overscroll-contain, which trapped it there).
+              "overflow-auto rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
           editing && "opacity-70",
         )}
       >
@@ -928,5 +1284,89 @@ function BoardItem({
         </span>
       )}
     </section>
+  );
+}
+
+/** The widgets resting in Ambient, named in one quiet line so they read as resting, not lost. */
+function RestingLine({ titles, night }: { titles: string[]; night?: boolean }) {
+  const list =
+    titles.length === 1
+      ? titles[0]
+      : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+  return (
+    <p className="text-muted-foreground rounded-tile ring-border flex items-center gap-2.5 px-4 py-3 text-[13px] ring-1 ring-inset">
+      <Eye className="size-4 shrink-0" aria-hidden="true" />
+      <span>
+        {night
+          ? `${list} ${titles.length === 1 ? "rests" : "rest"} until morning.`
+          : `${list} ${titles.length === 1 ? "is" : "are"} resting until there's something new to show.`}
+      </span>
+    </p>
+  );
+}
+
+/** Ambient or Custom, as one two-way switch. */
+function ModeSwitch({
+  mode,
+  disabled,
+  onChange,
+}: {
+  mode: BoardMode;
+  disabled: boolean;
+  onChange: (mode: BoardMode) => void;
+}) {
+  const options = [
+    { value: "ambient" as const, label: "Ambient", Icon: Sunrise, hint: "Home arranges itself" },
+    {
+      value: "custom" as const,
+      label: "Custom",
+      Icon: SlidersHorizontal,
+      hint: "Arrange it yourself",
+    },
+  ];
+  // One tab stop; the arrow keys move between the two, as a radio group does.
+  // While a switch is saving, clicks are ignored rather than the buttons
+  // greyed out, so focus stays put.
+  const pick = (value: BoardMode) => {
+    if (!disabled) onChange(value);
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const next = mode === "ambient" ? "custom" : "ambient";
+    e.currentTarget.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
+    pick(next);
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Layout"
+      aria-busy={disabled || undefined}
+      onKeyDown={onKeyDown}
+      className="bg-card ring-border inline-flex h-9 items-center rounded-full p-[3px] ring-1 ring-inset"
+    >
+      {options.map(({ value, label, Icon, hint }) => {
+        const on = mode === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            data-mode={value}
+            title={hint}
+            onClick={() => pick(value)}
+            className={cn(
+              "focus-glow inline-flex h-full items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors outline-none",
+              on ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

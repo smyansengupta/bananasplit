@@ -6,8 +6,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, useTransition } from "react";
 
 import { startDraftAction } from "@/app/app/[orgSlug]/org-chart/actions";
+import { InviteDialog } from "@/app/app/[orgSlug]/settings/members/invite-dialog";
+import { AmbientButton } from "@/components/ambient/ambient-button";
+import { UserPlus } from "@/components/icons";
 import { indexChart } from "@/lib/org-chart/tree";
-import type { ChartNodeDTO } from "@/lib/org-chart/types";
+import { nodeVariant, type ChartNodeDTO } from "@/lib/org-chart/types";
 import { cn } from "@/lib/utils";
 
 import { PositionPanel } from "./position-panel";
@@ -19,7 +22,9 @@ const ChartCanvas = dynamic(() => import("./chart-canvas"), { ssr: false });
  * The published chart: the lazy canvas (or the server-rendered list with
  * ?view=list) plus the side panel, deep-linked with ?position={key}.
  * Until the canvas module loads, the server-rendered list is shown in its
- * place, so the page is readable without JavaScript.
+ * place, so the page is readable without JavaScript. For someone who can
+ * invite, an open role shows Invite someone: the invite dialog, with that
+ * position open beside it.
  */
 
 export function ChartView({
@@ -32,6 +37,7 @@ export function ChartView({
   listFallback,
   canEdit,
   draftHref,
+  canInvite = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -46,6 +52,8 @@ export function ChartView({
   canEdit: boolean;
   /** An open MANUAL draft to continue, if any. */
   draftHref: string | null;
+  /** May invite members (members.invite). */
+  canInvite?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -56,6 +64,7 @@ export function ChartView({
   const [focus, setFocus] = useState<{ id: string; nonce: number } | null>(null);
   const [pending, startTransition] = useTransition();
   const [editError, setEditError] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const selectedKey = searchParams.get("position");
   const selected = selectedKey ? (index.byKey.get(selectedKey) ?? null) : null;
@@ -87,6 +96,30 @@ export function ChartView({
       setFocus({ id: node.id, nonce: Date.now() });
     },
     [setPosition],
+  );
+
+  const nodeActions = useCallback(
+    (node: ChartNodeDTO) => {
+      const variant = nodeVariant(node);
+      if (!canInvite || (variant !== "open" && variant !== "empty")) return null;
+      return (
+        <AmbientButton
+          action={{
+            key: "invite",
+            label: "Invite someone",
+            icon: UserPlus,
+            reason: "An open role",
+            ariaLabel: `Invite someone to be ${node.title}`,
+            // Opens the dialog in place; nothing to wait for, so the button stays.
+            run: async () => {
+              setPosition(node.key);
+              setInviteOpen(true);
+            },
+          }}
+        />
+      );
+    },
+    [canInvite, setPosition],
   );
 
   const onEdit = canEdit
@@ -122,6 +155,7 @@ export function ChartView({
               rightInset={isDesktop && selected ? 448 : 0}
               onReady={() => setReady(true)}
               showMiniMap={nodes.length > 12}
+              nodeActions={canInvite ? nodeActions : undefined}
               exportName={`${orgSlug}-org-chart`}
               exportTitle={orgName ? `${orgName} org chart` : "Org chart"}
             />
@@ -147,6 +181,15 @@ export function ChartView({
         onNavigate={onNavigate}
         onEdit={onEdit && !pending ? onEdit : undefined}
       />
+      {canInvite && (
+        <InviteDialog
+          orgId={orgId}
+          orgSlug={orgSlug}
+          link={null}
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+        />
+      )}
     </>
   );
 }

@@ -1,7 +1,6 @@
 import {
   CalendarDays,
   Database,
-  Globe,
   Plus,
   Table2,
   Upload,
@@ -21,6 +20,8 @@ import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { fmtDateTime } from "@/server/databases/format";
 import { listDatabases } from "@/server/databases/views";
+import { websiteSyncConnected } from "@/server/integrations/website-sync";
+import { withoutStaleWebsiteData } from "@/lib/databases/website-sync";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadSetupState } from "@/server/setup/progress";
 import { loadSyncStatus } from "@/server/sync/status";
@@ -30,7 +31,9 @@ import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 
+import { DatabaseAmbient } from "@/components/databases/database-ambient";
 import { DatabasesHome } from "@/components/databases/databases-home";
+import { syncStopped } from "@/lib/ambient/databases";
 import { displayText } from "@/lib/databases/fields";
 import { loadFields } from "@/server/databases/custom";
 import {
@@ -88,8 +91,9 @@ const VISIBILITY_COPY: Record<string, string> = {
 
 /**
  * The Databases index: the databases this viewer may open (Settings > Privacy
- * decides). In Personal, only the ones its owner makes: no built-in club
- * data, data source or reports.
+ * decides). In Personal, only the ones its owner makes and the CRM's
+ * People, Companies and pipelines once it's added: no built-in club data,
+ * data source or reports.
  */
 export default async function DatabasesPage({
   params,
@@ -101,9 +105,15 @@ export default async function DatabasesPage({
   const sp = await searchParams;
   const { organization, role, user, settings } = await getOrgContextBySlug(orgSlug);
   const personal = isPersonalSpace(organization);
+  // Without a connected website sync, the databases only it fills (Ballots)
+  // stay off this page; their pages still open by URL, and the sync is
+  // connected from Admin panel › Integrations. Asked on the service path,
+  // outside the page's transaction.
+  const websiteSync = !personal && (await websiteSyncConnected(organization.id, user.id));
   const isAdmin = can({ role }, "databases.write");
-  // A data source fills a club's built-in databases; Personal Plus's data
-  // connection is for calendar sync.
+  // A data source (the website's Supabase export) fills a club's built-in
+  // databases, which Personal doesn't list; Personal's databases are fed by
+  // the CRM's (email, calls and meetings) and by imports.
   const connections = !personal && spaceIncludes(organization, "integrations");
   const canConnect = connections && can({ role }, "integrations.write");
   const showReports =
@@ -114,7 +124,10 @@ export default async function DatabasesPage({
   const { databases, counts, sync, dataStep, pinned, home } = await withOrgTx(
     organization.id,
     async ({ db }) => {
-      const list = await listDatabases(db, organization.id, role);
+      const list = withoutStaleWebsiteData(
+        await listDatabases(db, organization.id, role),
+        websiteSync,
+      );
       const counts: Record<string, number> = {};
       for (const d of list) {
         if (d.kind === "SESSIONS") {
@@ -140,6 +153,18 @@ export default async function DatabasesPage({
         } else if (d.kind === "CUSTOM") {
           counts[d.key] = await db.databaseRecord.count({
             where: { organizationId: organization.id, databaseId: d.id, deletedAt: null },
+          });
+        } else if (d.kind === "CRM_PEOPLE") {
+          counts[d.key] = await db.crmPerson.count({
+            where: { organizationId: organization.id, deletedAt: null },
+          });
+        } else if (d.kind === "CRM_COMPANIES") {
+          counts[d.key] = await db.crmCompany.count({
+            where: { organizationId: organization.id, deletedAt: null },
+          });
+        } else if (d.kind === "CRM_PIPELINE") {
+          counts[d.key] = await db.crmDeal.count({
+            where: { organizationId: organization.id, deletedAt: null, pipeline: { databaseId: d.id } },
           });
         }
       }
@@ -261,6 +286,11 @@ export default async function DatabasesPage({
   );
   const sourceOf = (d: (typeof databases)[number]) =>
     syncedKinds.has(d.kind) ? "Supabase" : "Bananasplit";
+  // The website sync stopped: Reconnect on each database it fills (admins).
+  const stopped = isAdmin ? syncStopped(sync) : null;
+  const stoppedKinds = new Set(
+    stopped && sync ? sync.streams.map((st) => SYNCED_KIND[st.stream]).filter(Boolean) : [],
+  );
 
   const setupRow = "flex flex-wrap items-center gap-x-6 gap-y-3 py-4 first:pt-0 last:pb-0";
 
@@ -313,7 +343,8 @@ export default async function DatabasesPage({
         ]
       : []),
     ...[...withData, ...(showAll ? empty : [])].map((d) => {
-      const source = BUILT_IN_SOURCE[d.kind] ?? null;
+      // The CRM's databases report like any database (src/server/crm/reports.ts).
+      const source = d.kind.startsWith("CRM_") ? `custom:${d.id}` : (BUILT_IN_SOURCE[d.kind] ?? null);
       const n = counts[d.key] ?? 0;
       return {
         key: d.key,
@@ -326,6 +357,18 @@ export default async function DatabasesPage({
         thisWeek: home.weekly[d.key]?.thisWeek ?? 0,
         report: source ? reportFor(source) : null,
         newReportHref: source ? newReport(source) : null,
+        ambient:
+          stopped && stoppedKinds.has(d.kind) ? (
+            <DatabaseAmbient
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              why={false}
+              reconnect={{
+                href: `/app/${orgSlug}/integrations?app=data-source`,
+                reason: stopped.reason,
+              }}
+            />
+          ) : undefined,
       };
     }),
   ];
@@ -402,40 +445,20 @@ export default async function DatabasesPage({
                     </div>
                   </li>
                 )}
-                {/* A club's built-in data: sessions from its calendar, and its website's. */}
+                {/* A club's built-in data: sessions from its calendar. */}
                 {!personal && (
-                  <>
-                    <li className={setupRow}>
-                      <IconChip icon={CalendarDays} />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">Start from the calendar</p>
-                        <p className="text-muted-foreground text-sm">
-                          Every event becomes a session, ready for check-ins.
-                        </p>
-                      </div>
-                      <Button asChild variant="outline">
-                        <Link href={`/app/${orgSlug}/calendar`}>Open the calendar</Link>
-                      </Button>
-                    </li>
-                    <li className={setupRow}>
-                      <IconChip icon={Globe} />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">Website database</p>
-                        <p className="text-muted-foreground text-sm">
-                          Sync check-ins, sign-ups and votes from Supabase.
-                        </p>
-                      </div>
-                      <Button asChild variant={connecting ? "secondary" : "ghost"}>
-                        <Link
-                          href={`/app/${orgSlug}/databases?connect=1#connect`}
-                          scroll={false}
-                          aria-current={connecting ? "step" : undefined}
-                        >
-                          Connect
-                        </Link>
-                      </Button>
-                    </li>
-                  </>
+                  <li className={setupRow}>
+                    <IconChip icon={CalendarDays} />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-semibold">Start from the calendar</p>
+                      <p className="text-muted-foreground text-sm">
+                        Every event becomes a session, ready for check-ins.
+                      </p>
+                    </div>
+                    <Button asChild variant="outline">
+                      <Link href={`/app/${orgSlug}/calendar`}>Open the calendar</Link>
+                    </Button>
+                  </li>
                 )}
               </ul>
             </CardContent>
@@ -545,18 +568,6 @@ export default async function DatabasesPage({
             detail: s.detail,
           }))}
         />
-      )}
-      {/* Admins only (databases.write and integrations.write); hidden while the connect panel below is open. */}
-      {isAdmin && !sync && !needsSetup && canConnect && !(showAll && connecting && dataStep) && (
-        <p className="text-muted-foreground text-sm">
-          Website database?{" "}
-          <Link
-            className="hover:text-foreground underline underline-offset-2"
-            href={`/app/${orgSlug}/databases?connect=1&all=1#connect`}
-          >
-            Connect it
-          </Link>
-        </p>
       )}
       {showAll && connecting && dataStep && !needsSetup && (
         <Card id="connect" className="scroll-mt-20">

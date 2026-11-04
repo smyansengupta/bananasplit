@@ -30,6 +30,8 @@ export interface OutgoingEmail {
   subject: string;
   html: string;
   text: string;
+  /** Extra headers (List-Unsubscribe, Message-ID, In-Reply-To): CRM outreach. */
+  headers?: Record<string, string>;
 }
 
 export interface SendOptions {
@@ -80,6 +82,7 @@ export function resendTransport(apiKey: string): EmailTransport {
           subject: message.subject,
           html: message.html,
           text: message.text,
+          ...(message.headers ? { headers: message.headers } : {}),
         },
         options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
       );
@@ -119,6 +122,7 @@ export function sinkTransport(dir: string = MAIL_DIR): EmailTransport {
             replyTo: message.replyTo ?? null,
             subject: message.subject,
             text: message.text,
+            ...(message.headers ? { headers: message.headers } : {}),
           },
           null,
           2,

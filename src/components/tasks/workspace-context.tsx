@@ -56,6 +56,7 @@ const PARAM: Partial<Record<keyof WorkspaceQuery, string>> = {
   flagged: "flagged",
   overdue: "overdue",
   blockers: "blockers",
+  unowned: "unowned",
   visibility: "visibility",
 };
 
@@ -127,6 +128,7 @@ export function WorkspaceProvider({
             flagged: false,
             overdue: false,
             blockers: false,
+            unowned: false,
             visibility: undefined,
           }),
         ),

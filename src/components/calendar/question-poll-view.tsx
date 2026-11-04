@@ -38,6 +38,8 @@ import { Input } from "@/components/ui/input";
 import { TickMeter } from "@/components/ui/meters";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
+import { AmbientActions } from "@/components/ambient/ambient-button";
+import { pollClosingSoon } from "@/lib/ambient/calendar";
 import {
   applyMyVote,
   MIN_OPTIONS,
@@ -296,6 +298,23 @@ export function QuestionPoll({
             </Badge>
           )}
         </div>
+        {/* Closing within a day: close it now, and everyone sees the results. */}
+        {pollClosingSoon(poll, new Date()) && (
+          <AmbientActions
+            why
+            className="items-start"
+            actions={[
+              {
+                key: "close-now",
+                label: "Close now and post results",
+                reason: `Closes ${moment(poll.closesAt!, zone)}`,
+                tone: "spark",
+                run: () => setQuestionPollClosed(orgId, poll.id, true),
+                done: "Poll closed, results are up",
+              },
+            ]}
+          />
+        )}
       </header>
 
       {poll.isOpen && memberCount !== undefined && memberCount > 0 && (

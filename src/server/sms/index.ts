@@ -55,6 +55,54 @@ export interface SmsResult {
 
 const SMS_DIR = path.join(process.cwd(), ".data", "sms");
 
+/**
+ * Where an organization's own texts go (the CRM, on its Telnyx or Twilio
+ * key): live in production; the sink locally and on previews unless
+ * SMS_DELIVERY=live; nowhere with SMS_DELIVERY=off.
+ */
+export function orgSmsDelivery(env: Env = process.env): SmsDelivery {
+  const raw = (env.SMS_DELIVERY ?? "").trim().toLowerCase();
+  if (raw === "off") return "off";
+  if (env.VERCEL_ENV === "preview") return "sink";
+  if (raw === "sink") return "sink";
+  if (raw === "live") return "live";
+  return env.VERCEL ? "live" : "sink";
+}
+
+/**
+ * Sends one text on an organization's own provider (the CRM's two-way
+ * texting, src/server/crm/phone/texts.ts). The caller passes the provider
+ * call; this decides whether it runs (live), is written to the sink, or is
+ * held (off), exactly as for the platform's own texts. Outside any
+ * transaction.
+ */
+export async function sendOrgSms(
+  to: string,
+  body: string,
+  send: () => Promise<string | null>,
+  options: { env?: Env } = {},
+): Promise<SmsResult> {
+  assertNoTx("sms send");
+  const env = options.env ?? process.env;
+  const delivery = orgSmsDelivery(env);
+  if (delivery === "off") return { id: null, delivery };
+  if (delivery === "sink") {
+    const id = `sms-${randomBytes(6).toString("hex")}`;
+    if (!env.VERCEL) {
+      await mkdir(SMS_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      await writeFile(
+        path.join(SMS_DIR, `${stamp}-${id}.json`),
+        JSON.stringify({ id, sentAt: new Date().toISOString(), to, body }, null, 2),
+        "utf8",
+      );
+    }
+    console.info(`[sms:sink] organization text (${id}) not sent: SMS sink`);
+    return { id, delivery };
+  }
+  return { id: await send(), delivery };
+}
+
 /** Sends one text. Outside any transaction. */
 export async function sendSms(
   to: string,

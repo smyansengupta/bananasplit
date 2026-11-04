@@ -33,11 +33,14 @@ export function MeetingTasks({
   orgSlug,
   eventId,
   initial,
+  ambient = null,
 }: {
   orgId: string;
   orgSlug: string;
   eventId: string;
   initial: MeetingTask[];
+  /** From its notes and while it's on (components/meetings/meeting-ambient). */
+  ambient?: React.ReactNode;
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initial);
@@ -103,6 +106,7 @@ export function MeetingTasks({
         {tasks.length > 0 && <Badge variant="secondary">{open}</Badge>}
       </CardHeader>
       <CardContent className="space-y-2">
+        {ambient && <div className="pb-1">{ambient}</div>}
         {tasks.length > 0 && (
           <ul className="-mx-2">
             {tasks.map((t) => (

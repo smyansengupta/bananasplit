@@ -15,6 +15,12 @@ import {
   type ReportWidget,
   type WidgetConfig,
 } from "@/lib/reports/catalog";
+import type { ReadyKind } from "@/lib/reports/crm-ready";
+import { appUrl } from "@/lib/app-url";
+import { failedSend, rangeOfCopy } from "@/lib/ambient/reports";
+import { writeOrgAuditLog } from "@/server/audit";
+import { enqueueJob } from "@/server/jobs/enqueue";
+import { reportSendJobs } from "@/server/reports/ambient";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { resolveAiCredentials } from "@/server/ai/connections";
 import { AiImportError } from "@/server/ai/generate";
@@ -33,9 +39,11 @@ import {
   archiveReport,
   canEditReport,
   createReport,
+  deleteReport,
   getReport,
   listReports,
   restoreReport,
+  restoreReportWidgets,
   saveInsights,
   saveReportLayout,
   saveSchedule,
@@ -44,6 +52,14 @@ import {
   updateReportDetails,
   type CreateReportInput,
 } from "@/server/reports/saved";
+import {
+  addReportInvites,
+  getReportSharing,
+  removeReportInvite,
+  setReportLink,
+  type ReportSharing,
+} from "@/server/reports/share";
+import { readyReportId } from "@/server/reports/ready";
 import { listSources } from "@/server/reports/sources";
 
 /**
@@ -70,16 +86,26 @@ function failure(error: unknown): { ok: false; error: string } {
   throw error;
 }
 
+/** The view-only link a token opens (shown once, to the editor who made it). */
+function linkUrl(token: string): string {
+  return appUrl(`/r/${token}`);
+}
+
+/** Where invited people open a report (they sign in with the invited address). */
+function inviteUrl(reportId: string): string {
+  return appUrl(`/r/invite/${reportId}`);
+}
+
 export async function createReportAction(
   organizationId: string,
   input: CreateReportInput,
-): Promise<ReportResult<{ id: string }>> {
+): Promise<ReportResult<{ id: string; link: string | null }>> {
   try {
-    const id = await reportsAction(async (ctx) => {
+    const made = await reportsAction(async (ctx) => {
       requirePermission(ctx, "reports.view");
       return createReport(await reportViewer(ctx), input);
     })(organizationId);
-    return { ok: true, id };
+    return { ok: true, id: made.id, link: made.linkToken ? linkUrl(made.linkToken) : null };
   } catch (error) {
     return failure(error);
   }
@@ -100,12 +126,13 @@ export async function createSuggestedReport(
       for (const type of suggestedWidgets(source, can(ctx, "databases.write"))) {
         widgets.push(newWidget(type, source, widgets));
       }
-      return createReport(v, {
+      const made = await createReport(v, {
         title: source.name,
         source: source.key,
         access: "ORGANIZATION",
         widgets: fillRows(widgets),
       });
+      return made.id;
     })(organizationId);
     return { ok: true, id };
   } catch (error) {
@@ -113,15 +140,152 @@ export async function createSuggestedReport(
   }
 }
 
+/**
+ * One of the CRM's ready-made reports (Deals, People, Outreach): the one
+ * there is, or made now (Reports home, and the CRM's Report buttons the
+ * first time).
+ */
+export async function openReadyReport(
+  organizationId: string,
+  kind: ReadyKind,
+  sourceKey: string,
+): Promise<ReportResult<{ id: string }>> {
+  try {
+    const id = await reportsAction(async (ctx) => {
+      requirePermission(ctx, "reports.view");
+      if (!(["deals", "people", "outreach"] as const).includes(kind)) {
+        throw new ReportInputError("That report isn't one the CRM has.");
+      }
+      const found = await readyReportId(await reportViewer(ctx), kind, sourceKey, { make: true });
+      if (!found) throw new ReportInputError("That database isn't there, or you can't see it.");
+      return found;
+    })(organizationId);
+    return { ok: true, id };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * A board save. A Reset (null) answers with the widgets it put back and the
+ * ones it replaced, settings included, for the board to show at once and
+ * for its Undo (restoreReportWidgetsAction).
+ */
 export async function saveReportLayoutAction(
   organizationId: string,
   reportId: string,
   layout: BoardWidget[] | null,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ReportResult<{ widgets?: ReportWidget[]; before?: ReportWidget[] }>> {
   try {
-    await reportsAction(async (ctx) => saveReportLayout(await reportViewer(ctx), reportId, layout))(
+    const saved = await reportsAction(async (ctx) =>
+      saveReportLayout(await reportViewer(ctx), reportId, layout),
+    )(organizationId);
+    return layout === null ? { ok: true, ...saved } : { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Reset's Undo: the widgets as they were before it. */
+export async function restoreReportWidgetsAction(
+  organizationId: string,
+  reportId: string,
+  widgets: ReportWidget[],
+): Promise<ReportResult<{ widgets: ReportWidget[] }>> {
+  try {
+    const back = await reportsAction(async (ctx) =>
+      restoreReportWidgets(await reportViewer(ctx), reportId, widgets),
+    )(organizationId);
+    return { ok: true, widgets: back };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Deletes the report for good, with its kept copies and its sharing. */
+export async function deleteReportAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) => deleteReport(await reportViewer(ctx), reportId))(
       organizationId,
     );
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export type SharingState = ReportSharing & { inviteUrl: string };
+
+/** The report's sharing outside the organization, for its editors' Share dialog. */
+export async function getReportSharingAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult<{ sharing: SharingState }>> {
+  try {
+    const sharing = await reportsAction(async (ctx) =>
+      getReportSharing(await reportViewer(ctx), reportId),
+    )(organizationId);
+    return { ok: true, sharing: { ...sharing, inviteUrl: inviteUrl(reportId) } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Turns the view-only link on (a new one each time; the old stops working) or off. */
+export async function setReportLinkAction(
+  organizationId: string,
+  reportId: string,
+  on: boolean,
+): Promise<ReportResult<{ link: string | null }>> {
+  try {
+    const token = await reportsAction(async (ctx) =>
+      setReportLink(await reportViewer(ctx), reportId, on),
+    )(organizationId);
+    refresh();
+    return { ok: true, link: token ? linkUrl(token) : null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const INVITES_PER_HOUR = 60;
+
+export async function addReportInvitesAction(
+  organizationId: string,
+  reportId: string,
+  typed: string,
+): Promise<ReportResult<{ invites: string[] }>> {
+  const user = await requireUser();
+  const hit = await checkRateLimit(
+    rateLimitKey("report-invite", organizationId, user.id),
+    INVITES_PER_HOUR,
+    60 * 60,
+  );
+  if (!hit.allowed) {
+    return { ok: false, error: `That's a lot of invites. Try again ${retryAfterText(hit)}.` };
+  }
+  try {
+    const invites = await reportsAction(async (ctx) =>
+      addReportInvites(await reportViewer(ctx), reportId, String(typed ?? "").slice(0, 5000)),
+    )(organizationId);
+    return { ok: true, invites };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function removeReportInviteAction(
+  organizationId: string,
+  reportId: string,
+  email: string,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) =>
+      removeReportInvite(await reportViewer(ctx), reportId, String(email ?? "")),
+    )(organizationId);
     return { ok: true };
   } catch (error) {
     return failure(error);
@@ -239,6 +403,69 @@ export async function takeSnapshotAction(
     })(organizationId);
     refresh();
     return { ok: true, id };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/**
+ * "Refresh" (a kept copy whose data changed since): a new copy over the same
+ * dates, as this person sees it now. Hands back its id, for the page to open.
+ */
+export async function refreshCopyAction(
+  organizationId: string,
+  reportId: string,
+  label: string,
+): Promise<ReportResult<{ id: string }>> {
+  return takeSnapshotAction(organizationId, reportId, rangeOfCopy(String(label ?? "")));
+}
+
+/**
+ * "Send again" (owners and admins: only they can read the send jobs): the
+ * last scheduled send's copy or emails that gave up are queued once more,
+ * with the same keys, so nobody who already got it gets it twice.
+ */
+export async function sendReportAgainAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult> {
+  try {
+    const queued = await reportsAction(async (ctx) => {
+      requirePermission(ctx, "databases.write");
+      const report = await getReport(ctx.db, organizationId, reportId);
+      if (!report.schedule) throw new ReportInputError("This report isn't on a schedule.");
+      const failed = failedSend(await reportSendJobs(ctx.db, organizationId, reportId), reportId);
+      if (!failed) return 0;
+      let n = 0;
+      for (const job of failed.retry) {
+        const id =
+          job.kind === "report-send"
+            ? await enqueueJob(ctx.db, {
+                orgId: organizationId,
+                kind: "report-send",
+                key: job.key,
+                payload: { reportId, sendKey: failed.day },
+              })
+            : await enqueueJob(ctx.db, {
+                orgId: organizationId,
+                kind: "report-email",
+                key: job.key,
+                payload: { reportId, userId: String(job.payload.userId ?? "") },
+              });
+        if (id) n += 1;
+      }
+      await writeOrgAuditLog(ctx.db, {
+        organizationId,
+        action: "report.send_retried",
+        targetType: "Report",
+        targetId: reportId,
+        diff: { day: failed.day, jobs: n },
+      });
+      return n;
+    })(organizationId);
+    if (queued === 0) return { ok: false, error: "The last send already went out." };
+    refresh();
+    return { ok: true };
   } catch (error) {
     return failure(error);
   }

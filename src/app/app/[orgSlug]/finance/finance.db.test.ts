@@ -255,7 +255,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     expect(await approveExpense(orgId, transactionId!)).toEqual({ transactionId });
   });
 
-  it("sponsorships: RECEIVED books an IN transaction, leaving RECEIVED voids it", async () => {
+  it("deals: RECEIVED books an IN transaction, leaving RECEIVED voids it", async () => {
     as(people.member);
     await expect(createSponsor(orgId, { name: "Acme" })).rejects.toBeInstanceOf(ForbiddenError);
 
@@ -291,7 +291,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     ).toMatch(/member of this organization/);
   });
 
-  it("sponsorships: credits never touch the ledger, even when received", async () => {
+  it("deals: credits never touch the ledger, even when received", async () => {
     as(people.treasurer);
     const { sponsorId } = await createSponsor(orgId, { name: "Cloud Co" });
     const { sponsorshipId, error } = await createSponsorship(orgId, {
@@ -524,6 +524,10 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
 
     await createCategory(orgId, periodId, { name: "Banners", allocatedCents: 7_500 });
     const closing = await withSystemOrgTx(orgId, async ({ db }) => {
+      const { carriedInCents } = await db.budgetPeriod.findUniqueOrThrow({
+        where: { id: periodId },
+        select: { carriedInCents: true },
+      });
       const rows = await db.transaction.findMany({
         where: {
           organizationId: orgId,
@@ -533,8 +537,12 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
         },
         select: { direction: true, amountCents: true },
       });
-      return rows.reduce((n, t) => n + (t.direction === "IN" ? t.amountCents : -t.amountCents), 0);
+      return rows.reduce(
+        (n, t) => n + (t.direction === "IN" ? t.amountCents : -t.amountCents),
+        carriedInCents,
+      );
     });
+    expect(closing).not.toBe(0);
     const next = await createBudgetPeriod(orgId, {
       label: "FY 2027-28",
       startsOn: "2027-07-01",
@@ -545,16 +553,16 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       banners: await db.budgetCategory.findFirst({
         where: { budgetPeriodId: next.periodId!, name: "Banners" },
       }),
-      starting: await db.transaction.findMany({
-        where: { budgetPeriodId: next.periodId!, kind: "ADJUSTMENT" },
+      period: await db.budgetPeriod.findUniqueOrThrow({
+        where: { id: next.periodId! },
+        select: { carriedInCents: true },
       }),
+      transactions: await db.transaction.count({ where: { budgetPeriodId: next.periodId! } }),
     }));
     expect(carried.banners?.allocatedCents).toBe(7_500);
-    if (closing === 0) expect(carried.starting).toHaveLength(0);
-    else {
-      expect(carried.starting).toHaveLength(1);
-      expect(carried.starting[0]!.amountCents).toBe(Math.abs(closing));
-      expect(carried.starting[0]!.direction).toBe(closing > 0 ? "IN" : "OUT");
-    }
+    // The closing balance opens the new period on the period itself, not as a
+    // transaction, so a period made by mistake can still be deleted.
+    expect(carried.period.carriedInCents).toBe(closing);
+    expect(carried.transactions).toBe(0);
   });
 });

@@ -11,6 +11,7 @@ import { formatPhone } from "@/lib/rsvp/format";
 import { cn } from "@/lib/utils";
 
 import { choiceColor } from "../styles";
+import { AiCell, RelationCell } from "./relation-cell";
 
 /**
  * One cell of a club-made database, editable in place. Every editor saves
@@ -116,6 +117,25 @@ export function CellEditor(props: CellProps) {
       return <MemberCell {...props} />;
     case "LONG_TEXT":
       return <LongTextCell {...props} />;
+    case "RELATION":
+      return (
+        <RelationCell
+          field={field}
+          value={props.value}
+          canEdit={props.canEdit}
+          onSave={props.onSave}
+          label={props.label}
+        />
+      );
+    case "AI":
+      // Its value is its output type's; nobody adds choices from an AI cell.
+      return (
+        <AiCell
+          field={field}
+          canEdit={props.canEdit}
+          render={(as) => <CellEditor {...props} field={as} onAddChoice={undefined} />}
+        />
+      );
     default:
       return <TextCell {...props} />;
   }

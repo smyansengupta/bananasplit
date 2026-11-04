@@ -4,6 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { LinkedSection } from "@/components/links/linked-section";
 import { PersonProfile } from "@/components/profile/person-profile";
 import { PinToggle } from "@/components/pins/pins-context";
+import { can } from "@/lib/auth/permissions";
 import { peopleHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getPersonSheet } from "@/server/profiles/directory";
@@ -38,6 +39,8 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
       <article className="bg-card edge rounded-card overflow-hidden">
         <PersonProfile
           person={person}
+          orgId={organization.id}
+          canManageTasks={can({ role }, "tasks.manageAll")}
           orgSlug={orgSlug}
           viewerId={user.id}
           timeZone={organization.timezone}

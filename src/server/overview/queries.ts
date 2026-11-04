@@ -303,7 +303,8 @@ const refKey = (r: LinkRef) => `${r.kind}:${r.id}`;
  * What each of `refs` is linked to (ItemLink, either way round), as chips,
  * keyed "kind:id". Every other end is looked up as the viewer
  * (resolveRefs), so a thing they can't see never becomes a chip; money
- * (transactions, budget lines) is left out. Newest link first.
+ * (transactions, budget lines) is left out. Newest link first, and a
+ * repeating meeting once (two occurrences linked read as one chip).
  */
 export async function loadLinkedChips(
   db: TxClient,
@@ -329,6 +330,13 @@ export async function loadLinkedChips(
     if (!hit) continue;
     const list = out.get(at) ?? [];
     if (list.some((c) => refKey(c.ref) === refKey(other))) continue;
+    // A repeating meeting shows once: the newest link (the one carried over to).
+    if (
+      other.kind === "event" &&
+      list.some((c) => c.ref.kind === "event" && c.label === hit.title)
+    ) {
+      continue;
+    }
     list.push({
       kind: hit.chip,
       label: hit.title,
@@ -494,8 +502,14 @@ export async function loadEventTurnout(
     isAdmin: boolean;
     tier: ReportTier;
     now: Date;
+    /** Events under way or just ended: their check-ins so far against RSVPs. */
+    live?: readonly string[];
   },
-): Promise<{ seats: Map<string, number>; rates: Map<string, CheckInRate> }> {
+): Promise<{
+  seats: Map<string, number>;
+  rates: Map<string, CheckInRate>;
+  live: Map<string, Turnout>;
+}> {
   return withSystemOrgTx(organizationId, async ({ db }) => {
     const shown = input.upcoming.filter((e) => e.rsvpEnabled && (input.isAdmin || !e.hideCount));
     const seats = new Map<string, number>();
@@ -509,8 +523,20 @@ export async function loadEventTurnout(
         seats.set(e.id, rows.find((r) => r.eventId === e.id)?._count._all ?? 0);
     }
     const rates = new Map<string, CheckInRate>();
+    const live = new Map<string, Turnout>();
     const visible = await queryDatabaseVisibility(db, organizationId, input.tier, ["ATTENDANCE"]);
-    if (!visible.ATTENDANCE) return { seats, rates };
+    if (!visible.ATTENDANCE) return { seats, rates, live };
+    if (input.live && input.live.length > 0) {
+      const now = await db.event.findMany({
+        where: {
+          organizationId,
+          id: { in: [...input.live] },
+          ...(input.isAdmin ? {} : { rsvpHideCount: false }),
+        },
+        select: { id: true, rsvpEnabled: true, attendanceCount: true },
+      });
+      for (const [id, t] of await turnoutOf(db, organizationId, now)) live.set(id, t);
+    }
     const past = await db.event.findMany({
       where: {
         organizationId,
@@ -539,7 +565,7 @@ export async function loadEventTurnout(
       if (s.events >= MIN_RATE_EVENTS)
         rates.set(kind, { rate: s.checkIns / s.rsvps, events: s.events });
     }
-    return { seats, rates };
+    return { seats, rates, live };
   });
 }
 

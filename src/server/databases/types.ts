@@ -18,11 +18,16 @@ export function tierOf(role: Role | null | undefined): Tier | null {
  * The databases a space lists. Every space has the built-in ones (made with
  * it: app.ensure_org_defaults), but they read a club's own sessions,
  * check-ins, sign-ups, votes and members, so a Personal space lists only
- * the databases its owner makes (CUSTOM). Spread into a DatabaseDefinition
- * query's where; it only sets NOT, so it can sit beside AND and OR filters.
+ * the databases its owner makes (CUSTOM) and, once it has the CRM, the
+ * CRM's People, Companies and pipelines (filled by its integrations: email,
+ * calls, meetings). Spread into a DatabaseDefinition query's where; it only
+ * sets NOT, so it can sit beside AND and OR filters.
  */
 export const LISTED_DEFINITIONS = {
-  NOT: { kind: { not: "CUSTOM" }, organization: { kind: "PERSONAL" } },
+  NOT: {
+    kind: { notIn: ["CUSTOM", "CRM_PEOPLE", "CRM_COMPANIES", "CRM_PIPELINE"] },
+    organization: { kind: "PERSONAL" },
+  },
 } satisfies Prisma.DatabaseDefinitionWhereInput;
 
 /** Everything a source needs to query and render one view. */

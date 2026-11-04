@@ -4,16 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
 import {
+  closePollAction,
+  deletePollAction,
   importDefinitionAction,
   updateDefinitionAction,
 } from "@/app/app/[orgSlug]/databases/actions";
+import { Trash2 } from "@/components/icons";
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldSelect } from "@/components/ui/field-select";
+import { toast } from "@/components/ui/toaster";
 
 import { fileInputClass } from "./styles";
 
@@ -164,7 +169,11 @@ function TestPollCheckbox({
   );
 }
 
-/** Edit a definition's title, window, linked session and test flag: one settings card. */
+/**
+ * Edit a definition's title, window, linked session and test flag: one
+ * settings card, with "Close now" while it's open and Delete (the poll and
+ * its votes, for good).
+ */
 export function DefinitionEditForm({
   organizationId,
   definition,
@@ -172,6 +181,7 @@ export function DefinitionEditForm({
   title,
   description,
   action,
+  isOpen = false,
 }: {
   organizationId: string;
   definition: {
@@ -188,11 +198,38 @@ export function DefinitionEditForm({
   description?: ReactNode;
   /** Top right of the card: the Test chip. */
   action?: ReactNode;
+  /** Taking votes right now: offers "Close now". */
+  isOpen?: boolean;
 }) {
   const router = useRouter();
+  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  function closeNow() {
+    setError(null);
+    setNotice(null);
+    start(async () => {
+      const r = await closePollAction(organizationId, definition.id);
+      if (r.error) return setError(r.error);
+      setNotice("Closed. Votes cast from now on aren't counted.");
+      router.refresh();
+    });
+  }
+
+  async function remove() {
+    const ok = await confirm({
+      title: `Delete ${definition.title}?`,
+      description: "Its votes are deleted too. This can't be undone.",
+      confirmLabel: "Delete poll",
+      run: async () => (await deletePollAction(organizationId, definition.id)).error,
+    });
+    if (!ok) return;
+    toast({ title: `${definition.title} deleted` });
+    router.refresh();
+  }
+
   return (
     <form
       onSubmit={(e) => {
@@ -222,9 +259,21 @@ export function DefinitionEditForm({
         description={description}
         action={action}
         footer={
-          <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Save"}
-          </Button>
+          <>
+            {confirmEl}
+            <Button type="button" variant="ghost" disabled={pending} onClick={() => void remove()}>
+              <Trash2 aria-hidden="true" />
+              Delete
+            </Button>
+            {isOpen && (
+              <Button type="button" variant="outline" disabled={pending} onClick={closeNow}>
+                Close now
+              </Button>
+            )}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save"}
+            </Button>
+          </>
         }
         status={<Status error={error} notice={notice} />}
       >

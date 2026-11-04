@@ -2,6 +2,7 @@ import { AttendanceMethod, RecordSource } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 import { findOrCreateContact, newId } from "@/server/databases/admin";
 import { termOf } from "@/server/databases/format";
+import { queueCrmRefreshFor } from "@/server/crm/refresh-queue";
 import { afterDataChange } from "@/server/databases/rollups";
 
 /**
@@ -137,5 +138,7 @@ export async function setRegistrationCheckIn(
     );
     attendance = false;
   }
+  // The CRM's timeline for whoever this is, now rather than at the nightly run.
+  if (input.checkedIn) await queueCrmRefreshFor(db, input.organizationId, { kind: "registration", id: reg.id });
   return { ok: true, name: reg.name, attendance };
 }

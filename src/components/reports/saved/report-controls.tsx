@@ -6,6 +6,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import {
   archiveReportAction,
   askClaudeAction,
+  deleteReportAction,
   restoreReportAction,
   saveScheduleAction,
   saveWidgetConfigAction,
@@ -18,12 +19,13 @@ import {
   CalendarClock,
   Camera,
   Ellipsis,
-  Globe,
-  Lock,
   Pencil,
   Settings,
+  Share2,
+  Trash2,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +49,7 @@ import type { ReportWidget, SourceSummary, WidgetConfig } from "@/lib/reports/ca
 import { DEFAULT_SCHEDULE, describeSchedule, type ReportSchedule } from "@/lib/reports/schedule";
 
 import { ScheduleFields } from "./report-options";
+import { ShareDialog } from "./share-fields";
 import { WidgetSettings } from "./widget-settings";
 
 function useRange(): { range?: string; from?: string; to?: string } {
@@ -150,12 +153,15 @@ export function AskClaudeButton({
         })
       }
     >
-      {pending ? "Writing..." : again ? "Rewrite" : "Ask Claude"}
+      {pending ? "Writing…" : again ? "Rewrite" : "Ask Claude"}
     </Button>
   );
 }
 
-/** The report's header controls: keep a snapshot, and (for its editors) rename, share and archive. */
+/**
+ * The report's header controls: keep a copy, and (for its editors) share it
+ * in the organization and outside it, schedule, rename, archive or delete.
+ */
 export function ReportHeaderControls({
   orgId,
   orgSlug,
@@ -165,6 +171,7 @@ export function ReportHeaderControls({
   canEdit,
   isOwner,
   schedule,
+  linkOn = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -174,8 +181,12 @@ export function ReportHeaderControls({
   canEdit: boolean;
   isOwner: boolean;
   schedule: ReportSchedule | null;
+  /** Anyone with its link can view it. */
+  linkOn?: boolean;
 }) {
   const router = useRouter();
+  const [confirmEl, confirm] = useConfirm();
+  const [sharing, setSharing] = useState(false);
   const range = useRange();
   const [pending, start] = useTransition();
   const [renaming, setRenaming] = useState(false);
@@ -198,7 +209,7 @@ export function ReportHeaderControls({
             <Ellipsis className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="min-w-52">
           <DropdownMenuItem
             disabled={pending}
             onSelect={() =>
@@ -213,6 +224,10 @@ export function ReportHeaderControls({
           </DropdownMenuItem>
           {canEdit && (
             <>
+              <DropdownMenuItem onSelect={() => setSharing(true)}>
+                <Share2 aria-hidden="true" />
+                {linkOn ? "Sharing" : "Share"}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
                   setDraft(schedule ?? DEFAULT_SCHEDULE);
@@ -226,28 +241,6 @@ export function ReportHeaderControls({
                 <Pencil aria-hidden="true" />
                 Rename
               </DropdownMenuItem>
-              {isOwner && (
-                <DropdownMenuItem
-                  onSelect={() =>
-                    run(
-                      () =>
-                        updateReportAction(orgId, reportId, {
-                          access: access === "PRIVATE" ? "ORGANIZATION" : "PRIVATE",
-                        }),
-                      access === "PRIVATE"
-                        ? "Everyone in the organization can open it"
-                        : "Only you can open it now",
-                    )
-                  }
-                >
-                  {access === "PRIVATE" ? (
-                    <Globe aria-hidden="true" />
-                  ) : (
-                    <Lock aria-hidden="true" />
-                  )}
-                  {access === "PRIVATE" ? "Share with everyone" : "Make it only yours"}
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
@@ -276,10 +269,40 @@ export function ReportHeaderControls({
                 <Archive aria-hidden="true" />
                 Archive
               </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() =>
+                  void confirm({
+                    title: `Delete ${title}?`,
+                    description:
+                      "It's gone for good, with its saved copies and its sharing. This can't be undone. Archive it instead to keep it.",
+                    run: async () => {
+                      const result = await deleteReportAction(orgId, reportId);
+                      if (!result.ok) return result.error;
+                      toast({ title: "Deleted" });
+                      router.push(`/app/${orgSlug}/databases/reports`);
+                    },
+                  })
+                }
+              >
+                <Trash2 aria-hidden="true" />
+                Delete
+              </DropdownMenuItem>
             </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      {confirmEl}
+      {canEdit && (
+        <ShareDialog
+          orgId={orgId}
+          reportId={reportId}
+          access={access}
+          isOwner={isOwner}
+          open={sharing}
+          onOpenChange={setSharing}
+        />
+      )}
       <Dialog open={scheduling} onOpenChange={setScheduling}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>

@@ -42,6 +42,18 @@ describe("questions", () => {
     }
   });
 
+  it("words every template for any organization, with no school terms", () => {
+    const school = /\b(club|school|semester|term|freshman|sophomore|junior|senior|grad|first year|second year|third year|fourth year|class year|what year)\b/i;
+    for (const t of FORM_TEMPLATES) {
+      const words = [t.name, t.blurb, t.title, ...t.questions().flatMap((q) => [q.title, q.help ?? "", ...(q.options ?? []).map((o) => o.label)])];
+      for (const w of words) expect(w, `${t.id}: ${w}`).not.toMatch(school);
+    }
+    const interest = FORM_TEMPLATES.find((t) => t.id === "interest")!.questions();
+    const heard = interest.find((q) => q.title === "How did you hear about us?");
+    expect(heard).toMatchObject({ type: "dropdown", allowOther: true });
+    expect(heard?.options?.length).toBeGreaterThanOrEqual(4);
+  });
+
   it("starts choices with two options, scales 1 to 10, ratings out of 5", () => {
     expect(blankQuestion("choice").options).toHaveLength(2);
     expect(blankQuestion("scale")).toMatchObject({ min: 1, max: 10 });

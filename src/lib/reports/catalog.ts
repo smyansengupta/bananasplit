@@ -5,6 +5,16 @@ import { BOARD_COLUMNS, MAX_ROWS, MAX_WIDGETS, fillRows, type WidgetMeta } from 
 export { fillRows };
 import type { Choice, FieldType } from "@/lib/databases/fields";
 
+import {
+  CRM_WIDGETS,
+  CRM_WIDGET_TYPES,
+  crmWidgetSetup,
+  crmWidgetSuggested,
+  isCrmWidget,
+  type CrmSourceInfo,
+  type CrmWidgetType,
+} from "./crm-widgets";
+
 /**
  * Saved reports' widgets (Databases > Reports): what each one shows, the
  * settings it takes, and when the New report walkthrough ticks it for a
@@ -49,6 +59,8 @@ export interface SourceSummary {
   rows: number;
   /** A form fills it (Form results). */
   form: { title: string; href: string } | null;
+  /** One of the CRM's databases (its outreach and pipeline widgets). */
+  crm?: CrmSourceInfo;
 }
 
 const SOURCE_KEY = /^(custom:[A-Za-z0-9_-]{1,40}|tasks|expenses|events|people)$/;
@@ -84,6 +96,7 @@ export const WIDGET_TYPES = [
   "when",
   "regulars",
   "stopped",
+  ...CRM_WIDGET_TYPES,
 ] as const;
 
 export type WidgetType = (typeof WIDGET_TYPES)[number];
@@ -509,7 +522,27 @@ export const WIDGETS: Record<WidgetType, WidgetDef> = {
     suggested: () => false,
     adminOnly: true,
   },
+  ...crmWidgetDefs(),
 };
+
+/** The CRM's widgets (./crm-widgets.ts) as catalog entries: CRM databases only. */
+function crmWidgetDefs(): Record<CrmWidgetType, WidgetDef> {
+  return Object.fromEntries(
+    CRM_WIDGET_TYPES.map((t) => [
+      t,
+      {
+        title: CRM_WIDGETS[t].title,
+        description: CRM_WIDGETS[t].description,
+        icon: CRM_WIDGETS[t].icon,
+        w: CRM_WIDGETS[t].w,
+        h: CRM_WIDGETS[t].h,
+        kinds: ["custom"],
+        setup: (s: SourceSummary) => crmWidgetSetup(t, s),
+        suggested: (s: SourceSummary) => crmWidgetSuggested(t, s),
+      } satisfies WidgetDef,
+    ]),
+  ) as unknown as Record<CrmWidgetType, WidgetDef>;
+}
 
 /** The widgets that can go on a report of `source`, in catalog order. */
 export function widgetsFor(source: SourceSummary, isAdmin: boolean): WidgetType[] {
@@ -539,6 +572,16 @@ export function newWidget(
   return { id, type, w: def.w, h: def.h, config: def.setup(source) ?? {} };
 }
 
+/**
+ * The suggested widgets for a source, set up and laid out in full rows: a
+ * new report's starting board, and what Reset puts back.
+ */
+export function suggestedLayout(source: SourceSummary, isAdmin: boolean): ReportWidget[] {
+  const out: ReportWidget[] = [];
+  for (const type of suggestedWidgets(source, isAdmin)) out.push(newWidget(type, source, out));
+  return fillRows(out);
+}
+
 /** The board's widget menu for a source (WidgetBoard's types). */
 export function boardTypes(source: SourceSummary, isAdmin: boolean): WidgetMeta[] {
   return widgetsFor(source, isAdmin).map((t) => {
@@ -548,7 +591,7 @@ export function boardTypes(source: SourceSummary, isAdmin: boolean): WidgetMeta[
       type: t,
       title: WIDGETS[t].title,
       description: WIDGETS[t].description,
-      group: builtIn ? "People and events" : "Widgets",
+      group: builtIn ? "People and events" : isCrmWidget(t) ? "CRM" : "Widgets",
       icon: WIDGETS[t].icon,
       w: WIDGETS[t].w,
       h: WIDGETS[t].h,

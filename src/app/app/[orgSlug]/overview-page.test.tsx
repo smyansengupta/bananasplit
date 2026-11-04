@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   listRecent: vi.fn(),
   loadSetupState: vi.fn(),
   loadSavedBoard: vi.fn(),
+  loadHomeMode: vi.fn(),
   latestSentPulse: vi.fn(),
   weeklyDoneTrend: vi.fn(),
   loadLinkedChips: vi.fn(),
@@ -43,10 +44,13 @@ vi.mock("@/server/overview/queries", async (actual) => ({
   loadPickUpChanges: vi.fn(async () => new Map()),
   loadPinStates: vi.fn(async () => ({})),
   loadFormResponsesSince: vi.fn(async () => new Map()),
-  loadEventTurnout: vi.fn(async () => ({ seats: new Map(), rates: new Map() })),
+  loadEventTurnout: vi.fn(async () => ({ seats: new Map(), rates: new Map(), live: new Map() })),
 }));
 // The Inbox's Needs you, as the sidebar badge counts it (its own tests).
 vi.mock("@/server/inbox/counts", () => ({ sidebarCounts: mocks.sidebarCounts }));
+vi.mock("@/server/integrations/website-sync", () => ({
+  websiteSyncConnected: async () => true,
+}));
 // The newer widgets' loaders: each has its own tests.
 vi.mock("@/server/overview/since-you-were-here", () => ({
   loadSinceYouWereHere: vi.fn(async () => ({
@@ -71,6 +75,7 @@ vi.mock("@/server/overview/who-owns-what", () => ({ loadWhoOwnsWhat: vi.fn(async
 // Actions the widgets' buttons call.
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({
   setTaskStatus: vi.fn(),
+  takeTask: vi.fn(),
   createTask: vi.fn(),
   updateTask: vi.fn(),
   selfAssignTask: vi.fn(),
@@ -118,6 +123,8 @@ const db = {
   task: {
     count: vi.fn(),
     findMany: vi.fn(async (): Promise<{ id: string; title: string; dueDate: Date }[]> => []),
+    // Up for grabs: the open task nobody owns.
+    findFirst: vi.fn(async () => null),
   },
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
@@ -162,14 +169,21 @@ vi.mock("@/server/tasks/queries", () => ({
 }));
 vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({
   getUpcomingEvents: mocks.getUpcomingEvents,
+  getRecentlyEnded: async () => [],
   getViewerRsvps: mocks.getViewerRsvps,
 }));
 vi.mock("@/server/pins", () => ({ listPins: mocks.listPins, listRecent: mocks.listRecent }));
-vi.mock("@/server/boards", () => ({ loadSavedBoard: mocks.loadSavedBoard }));
+vi.mock("@/server/boards", () => ({
+  loadSavedBoard: mocks.loadSavedBoard,
+  loadHomeMode: mocks.loadHomeMode,
+}));
 vi.mock("@/server/presence", () => ({
   onlineNow: vi.fn().mockResolvedValue({ count: 3, faces: [], ids: ["u_a", "u_b"] }),
 }));
-vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({
+  saveBoardAction: vi.fn(),
+  saveHomeModeAction: vi.fn(),
+}));
 vi.mock("@/app/app/[orgSlug]/_shell/pin-actions", () => ({
   pinPathAction: vi.fn(),
   reorderPinsAction: vi.fn(),
@@ -186,10 +200,31 @@ vi.mock("@/server/setup/progress", () => ({ loadSetupState: mocks.loadSetupState
 vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
 vi.mock("@/components/onboarding/join-code-card", () => ({ JoinCodeCard: () => null }));
 vi.mock("@/server/personal/home", () => ({
-  loadPersonalHome: vi.fn(async () => ({ firstName: "Viewer", clubs: [], pendingInvites: [] })),
+  loadPersonalHome: vi.fn(async () => ({
+    firstName: "Viewer",
+    timeZone: "America/Los_Angeles",
+    todayKey: "2026-11-03",
+    clubs: [],
+    moreClubs: 0,
+    pendingInvites: [],
+    dueSoon: [],
+    upcoming: [],
+    pollsWaiting: [],
+    focus: null,
+    profileGaps: [],
+    finishProfileHref: null,
+  })),
 }));
-vi.mock("@/components/personal/personal-home", () => ({
-  PersonalHome: ({ orgSlug }: { orgSlug: string }) => <p>Personal home of {orgSlug}</p>,
+
+// Personal Home's pieces that reach the server actions (and next-auth with them).
+vi.mock("@/app/onboarding/pending-invite-card", () => ({ PendingInviteCard: () => null }));
+vi.mock("@/components/overview/focus-time", () => ({ FocusTime: () => null }));
+vi.mock("@/components/personal/elsewhere-widgets", () => ({
+  OrgInbox: () => null,
+  OrgTasks: () => null,
+  Reimbursements: () => null,
+  UpForGrabs: () => null,
+  WaitingOnYourAnswer: () => null,
 }));
 
 const { default: OverviewPage } = await import("./page");
@@ -229,6 +264,8 @@ beforeEach(() => {
   mocks.listPins.mockResolvedValue([]);
   mocks.listRecent.mockResolvedValue([]);
   mocks.loadSavedBoard.mockResolvedValue(null);
+  // These tests read the board as the member arranged it; Ambient has its own below.
+  mocks.loadHomeMode.mockResolvedValue("custom");
   db.form.findMany.mockResolvedValue([]);
   db.formResponse.groupBy.mockResolvedValue([]);
   db.ballotDefinition.findMany.mockResolvedValue([]);
@@ -276,16 +313,22 @@ afterEach(() => {
 });
 
 describe("a Personal space's home", () => {
-  it("is the Personal dashboard, not an organization's board", async () => {
+  it("is the same Home as an organization's, with your organizations under Up next", async () => {
     mocks.getOrgContextBySlug.mockResolvedValue({
       user: viewer,
       organization: { ...org, slug: "me-abc", kind: "PERSONAL", plan: "FREE" },
       role: "OWNER",
     });
     const html = await render();
-    expect(html).toContain("Personal home of me-abc");
-    expect(mocks.getMyOpenTasks).not.toHaveBeenCalled();
-    expect(mocks.loadSavedBoard).not.toHaveBeenCalled();
+    // Your own board, Today strip and Up next, as in an organization.
+    expect(mocks.loadSavedBoard).toHaveBeenCalled();
+    expect(html).toContain("Good morning, Viewer");
+    // Your organizations always sit under Up next, with a way to join one.
+    expect(html).toContain("Your organizations");
+    expect(html).toContain("not in an organization yet");
+    // Nothing about a team: no organization name beside the date, no setup checklist.
+    expect(html).not.toContain("Claude Builders Club");
+    expect(html).not.toContain("Get your organization started");
   });
 });
 
@@ -629,7 +672,7 @@ describe("org overview", () => {
     // This week: deadlines beside the events, the late one on today.
     expect(html).toContain("Due: Order pizza");
     expect(html).toContain("Book the room, overdue");
-    expect(html).toContain("free evenings");
+    expect(html).toMatch(/free days?/);
   });
 
   it("no longer offers People, notes, uploads or the next sign-up on Home", async () => {
@@ -754,6 +797,45 @@ describe("the Moonstone Overview", () => {
       html.indexOf('aria-label="My tasks"'),
     );
     expect(html).toContain("The first pulse goes out Fri, Oct 9 at 5:00 PM.");
+  });
+
+  it("lays Home out in Ambient by default, resting what has nothing to show", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    const html = await render();
+    // The switch replaces Customize, with Ambient on.
+    expect(html).toContain('role="radiogroup" aria-label="Layout"');
+    expect(html).toMatch(/aria-checked="true"[^>]*>.*?Ambient/);
+    expect(html).not.toContain(">Customize<");
+    // Widgets sit in bands; My tasks leads the first.
+    expect(html).toContain('data-band="you"');
+    expect(html.indexOf('data-band="you"')).toBeLessThan(html.indexOf('data-band="week"'));
+    // Nothing coming up and no votes open: those rest, named in one line.
+    expect(html).not.toContain('aria-label="Meetings"');
+    expect(html).toMatch(/Meetings.*resting until there&#x27;s something new to show/);
+    // The greeting, the Today strip and Up next stay whatever the layout.
+    expect(html).toContain('id="up-next-heading"');
+  });
+
+  it("brings an owner's open decisions into You, right after My tasks, in Ambient", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    mocks.getOrgContextBySlug.mockResolvedValue({ user: viewer, organization: org, role: "OWNER" });
+    mocks.loadDecisions.mockResolvedValue({
+      rows: [],
+      total: 1,
+      todayKey: "2026-10-05",
+      timeZone: "America/Los_Angeles",
+    });
+    const html = await render();
+    const you = html.indexOf('data-band="you"');
+    const decisions = html.indexOf('aria-label="Decisions"');
+    expect(decisions).toBeGreaterThan(you);
+    expect(decisions).toBeLessThan(html.indexOf('data-band="now"'));
+  });
+
+  it("leaves a member's You band to their own work", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    const html = await render();
+    expect(html).not.toContain('aria-label="Decisions"');
   });
 
   it("shows the latest pulse's figure and tiles, and keeps a saved board's order", async () => {

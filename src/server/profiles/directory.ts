@@ -2,11 +2,12 @@ import { Prisma, type Role } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import { chartTeams, parseNamedTeams, type ChartTeams } from "@/lib/org-chart/teams";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
+import { lightestMember, tooMuchOnPlate } from "@/lib/ambient/people";
 import { effectiveTimezone } from "@/lib/profile/timezone";
 import { ago } from "@/lib/relative-time";
 import { parseQuery } from "@/lib/search/text";
 import { dueDateKey, localDateKey } from "@/lib/tasks/dates";
-import { withOrgTx } from "@/server/db/context";
+import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 import { getOpenTasks } from "@/server/org-chart/service";
 import { isOnline, lastSeenByUser } from "@/server/presence";
@@ -360,8 +361,17 @@ export interface PersonSheet {
   leads: SheetPositionRef[];
   tasks: SheetTask[];
   taskCount: number;
+  /** Open tasks they own (taskCount also counts the ones they're on). */
+  ownedOpen: number;
+  /**
+   * Hand one off, when they own too much (src/lib/ambient/people.ts): the
+   * first of their open tasks, and the member with the fewest of their own.
+   */
+  handOff: { tasks: SheetTask[]; to: { id: string; name: string | null } } | null;
   /** Today in the org's time zone, for due labels. */
   todayKey: string;
+  /** What the viewer already sent them: Say hi once, Check in once a week. */
+  sent: { hi: boolean; checkIn: boolean };
 }
 
 export interface SheetViewer {
@@ -391,7 +401,7 @@ export async function getPersonSheet(
 ): Promise<PersonSheet | null> {
   if (!ID.test(userId)) return null;
   const withEmail = canSeeEmail(viewer, userId);
-  return withOrgTx(organizationId, async ({ db }) => {
+  const sheet = await withOrgTx(organizationId, async ({ db }) => {
     const membership = await db.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId } },
       select: {
@@ -456,6 +466,7 @@ export async function getPersonSheet(
       .filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i)
       .slice(0, 5)
       .map((t) => ({ id: t.id, title: t.title, dueKey: t.dueDate ? dueDateKey(t.dueDate) : null }));
+    const handOff = tooMuchOnPlate(open.ownedCount) ? await handOffTo(db, organizationId, userId) : null;
 
     return {
       id: user.id,
@@ -486,7 +497,102 @@ export async function getPersonSheet(
       leads,
       tasks,
       taskCount: open.ownedCount + open.involvedCount,
+      ownedOpen: open.ownedCount,
+      handOff: handOff
+        ? {
+            tasks: open.owned.map((t) => ({
+              id: t.id,
+              title: t.title,
+              dueKey: t.dueDate ? dueDateKey(t.dueDate) : null,
+            })),
+            to: handOff,
+          }
+        : null,
       todayKey: localDateKey(now, orgTimezone),
     };
   });
+  if (!sheet) return null;
+  return { ...sheet, sent: await notesSent(organizationId, viewer.id, userId, now) };
+}
+
+/** Of `userIds`, the ones the viewer already said hi to (People's newcomers). */
+export async function saidHiTo(
+  organizationId: string,
+  viewerId: string,
+  userIds: readonly string[],
+): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  return withSystemOrgTx(organizationId, { userId: viewerId }, async ({ db }) => {
+    const rows = await db.notification.findMany({
+      where: {
+        organizationId,
+        userId: { in: [...userIds] },
+        actorId: viewerId,
+        dedupeKey: `hi:${viewerId}`,
+      },
+      select: { userId: true },
+    });
+    return new Set(rows.map((r) => r.userId));
+  }).catch(() => new Set<string>());
+}
+
+/** A week: Check in comes back after this long. */
+const CHECK_IN_AGAIN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the viewer already said hi to `userId` (ever) or checked in on
+ * them this week (sendMemberNoteAction). Those notices are only their
+ * recipient's to read, so the service path answers just these two yes/nos
+ * about the viewer's own notices.
+ */
+async function notesSent(
+  organizationId: string,
+  viewerId: string,
+  userId: string,
+  now: Date,
+): Promise<{ hi: boolean; checkIn: boolean }> {
+  if (viewerId === userId) return { hi: false, checkIn: false };
+  return withSystemOrgTx(organizationId, { userId: viewerId }, async ({ db }) => {
+    const where = { organizationId, userId, actorId: viewerId };
+    const [hi, checkIn] = await Promise.all([
+      db.notification.count({ where: { ...where, dedupeKey: `hi:${viewerId}` } }),
+      db.notification.count({
+        where: {
+          ...where,
+          dedupeKey: { startsWith: `checkin:${viewerId}:` },
+          createdAt: { gte: new Date(now.getTime() - CHECK_IN_AGAIN_MS) },
+        },
+      }),
+    ]);
+    return { hi: hi > 0, checkIn: checkIn > 0 };
+  }).catch(() => ({ hi: false, checkIn: false }));
+}
+
+/** Who could take one of `userId`'s tasks: the member owning the fewest open ones. */
+async function handOffTo(
+  db: Db,
+  organizationId: string,
+  userId: string,
+): Promise<{ id: string; name: string | null } | null> {
+  const members = await db.membership.findMany({
+    where: { organizationId },
+    select: { user: { select: { id: true, name: true } } },
+    take: DIRECTORY_LIMIT,
+  });
+  const counts = await db.task.groupBy({
+    by: ["ownerId"],
+    where: {
+      organizationId,
+      deletedAt: null,
+      status: { in: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED"] },
+      ownerId: { not: null },
+    },
+    _count: { _all: true },
+  });
+  const open = new Map(counts.map((c) => [c.ownerId, c._count._all]));
+  const pick = lightestMember(
+    members.map((m) => ({ id: m.user.id, name: m.user.name, open: open.get(m.user.id) ?? 0 })),
+    userId,
+  );
+  return pick ? { id: pick.id, name: pick.name } : null;
 }

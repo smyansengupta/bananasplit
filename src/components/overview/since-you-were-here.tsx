@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 
+import { AmbientButton } from "@/components/ambient/ambient-button";
+import { MessageCircle } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
@@ -13,6 +15,7 @@ import { runAction } from "@/lib/run-action";
 import type { SinceYouWereHereData } from "@/server/overview/since-you-were-here";
 
 import { Insight, LinkChips } from "./connections";
+import { Arrive, useUnseen } from "./fresh";
 
 /**
  * Since you were here: what changed since your previous visit to Home,
@@ -28,6 +31,10 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
   const router = useRouter();
   const [pending, start] = useTransition();
   const [mine, setMine] = useState(false);
+  const unseen = useUnseen(
+    `bs.since:${orgId}`,
+    data.rows.map((r) => r.id),
+  );
 
   if (data.sinceLabel === null) {
     return (
@@ -76,7 +83,11 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
                 </h3>
                 <ul className="divide-border divide-y">
                   {list.map((row) => (
-                    <li key={row.id} className="flex items-center gap-3 py-3">
+                    <Arrive
+                      key={row.id}
+                      on={unseen.has(row.id)}
+                      className="flex items-center gap-3 py-3"
+                    >
                       {row.face ? (
                         <UserAvatar user={row.face} size="sm" className="size-7" />
                       ) : (
@@ -104,13 +115,24 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
                       </span>
                       {row.isNew ? (
                         <Badge variant="info">New</Badge>
+                      ) : row.group === "people" && row.face && row.chips[0] ? (
+                        // Ambient: someone new joined. Say hi on their page.
+                        <AmbientButton
+                          action={{
+                            key: "say-hi",
+                            label: "Say hi",
+                            icon: MessageCircle,
+                            reason: "Joined since you were here",
+                            href: row.chips[0].href,
+                          }}
+                        />
                       ) : (
                         <LinkChips
                           items={row.chips.slice(0, 2)}
                           className="max-w-[45%] justify-end max-sm:hidden"
                         />
                       )}
-                    </li>
+                    </Arrive>
                   ))}
                 </ul>
               </section>

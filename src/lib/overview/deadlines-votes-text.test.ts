@@ -58,6 +58,22 @@ describe("Deadlines", () => {
     expect(out.insight).toBe("Confirm the speaker is due Fri and isn't started.");
   });
 
+  it("warms a deadline as it nears: grey, this week, then the last two days", () => {
+    const out = buildDeadlines(
+      [
+        item({ key: "far", dayKey: "2026-11-12" }),
+        item({ key: "week", dayKey: "2026-11-05" }),
+        item({ key: "close", dayKey: "2026-11-03" }),
+      ],
+      TODAY,
+    );
+    expect(out.rows.map((r) => [r.key, r.tone])).toEqual([
+      ["close", "close"],
+      ["week", "soon"],
+      ["far", "later"],
+    ]);
+  });
+
   it("doesn't warn about something not started weeks out", () => {
     const out = buildDeadlines([item({ dayKey: "2026-11-15", notStarted: true })], TODAY);
     expect(out.insight).toBeNull();

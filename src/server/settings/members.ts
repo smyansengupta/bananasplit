@@ -10,6 +10,7 @@ import {
 import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, type OrgContext, type TxClient } from "@/server/db/context";
+import { memberLeft } from "@/server/crm/outreach/handover";
 
 /**
  * Member lifecycle helpers shared by the Settings > Members actions
@@ -119,6 +120,8 @@ export async function untieDepartingMember(
     data: { ownerId: null, updatedAt: new Date() },
   });
   await untieOrgChart(db, organizationId, userId);
+  // The CRM: pause their sequences, flag their relationships for handover.
+  await memberLeft(db, organizationId, userId);
 }
 
 async function untieOrgChart(db: TxClient, organizationId: string, userId: string): Promise<void> {

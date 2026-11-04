@@ -123,6 +123,9 @@ model User {
   decisionsCreated       Decision[]           @relation("DecisionCreatedBy")
   reportsCreated         Report[]             @relation("ReportCreatedBy")
   reportSnapshotsTaken   ReportSnapshot[]     @relation("ReportSnapshotTakenBy")
+  crmPeopleOwned         CrmPerson[]          @relation("CrmPersonOwner")
+  crmCompaniesOwned      CrmCompany[]         @relation("CrmCompanyOwner")
+  crmDealsOwned          CrmDeal[]            @relation("CrmDealOwner")
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -195,6 +198,9 @@ model MemberPrefs {
   financeWidgets  Json?
   /// Overview widget layout, same shape (src/lib/overview/widgets.ts).
   overviewWidgets Json?
+  /// Home's layout mode: AMBIENT (null, the default) arranges and sizes the
+  /// widgets itself; CUSTOM keeps the member's own arrangement.
+  homeMode        String?
   /// When they last opened Home, and the visit before that: "Since you were
   /// here" counts what changed after homePrevVisitAt.
   homeVisitAt     DateTime?
@@ -436,7 +442,7 @@ model Organization {
   databases         DatabaseDefinition[]
   contacts          Contact[]
   signups           Signup[]
-  ballotDefinitions BallotDefinition[]   @relation("OrgBallotDefinitions")
+  ballotDefinitions BallotDefinition[]    @relation("OrgBallotDefinitions")
   ballots           Ballot[]
   weeklyUpdates     WeeklyUpdate[]
   theme             OrgTheme?
@@ -453,6 +459,29 @@ model Organization {
   decisions         Decision[]
   reports           Report[]
   reportSnapshots   ReportSnapshot[]
+  crmSettings       CrmSettings?
+  crmMemberSettings CrmMemberSettings[]
+  crmCompanies      CrmCompany[]
+  crmPeople         CrmPerson[]
+  crmPipelines      CrmPipeline[]
+  crmDeals          CrmDeal[]
+  crmActivities     CrmActivity[]
+  crmEmailThreads   CrmEmailThread[]
+  crmTemplates      CrmTemplate[]
+  crmSequences      CrmSequence[]
+  crmViews          CrmView[]
+  crmCampaigns      CrmCampaign[]
+  crmWorkflows      CrmWorkflow[]
+  crmFieldHistory   CrmFieldHistory[]
+  crmGoals          CrmGoal[]
+  crmForecasts      CrmForecastSnapshot[]
+  crmScoreRules     CrmScoreRule[]
+  crmQuotes         CrmQuote[]
+  crmBookingPages   CrmBookingPage[]
+  crmSuggestions    CrmSuggestion[]
+  crmApiKeys        CrmApiKey[]
+  crmWebhooks       CrmWebhook[]
+  aiUsage           AiUsage[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -506,6 +535,18 @@ enum NotificationType {
   FORM_RESPONSE
   // A saved report on its schedule (src/server/reports/jobs.ts)
   REPORT_SENT
+  // A task nobody owns, posted for anyone to take (src/server/tasks/service.ts)
+  TASK_UP_FOR_GRABS
+  // CRM (docs/features/crm.md)
+  CRM_ASSIGNED
+  CRM_FOLLOW_UP
+  CRM_REPLY
+  CRM_REVIEW
+  CRM_HANDOVER
+  // CRM Inbox items (src/server/crm/inbox-notify.ts): someone new, a booking, a deal or quote
+  CRM_NEW
+  CRM_BOOKED
+  CRM_DEAL
 }
 
 model Notification {
@@ -1712,6 +1753,9 @@ model Form {
   design                 Json       @default("{}")
   /// Email the person a copy of their answers when they gave an email.
   receipt                Boolean    @default(false)
+  /// Also send each response to the CRM: {object: "person" | "deal",
+  /// pipelineId?, stageId?, map: {questionId: crmField}} (src/server/crm/forms.ts).
+  crmDestination         Json?
   createdById            String
   deletedAt              DateTime?
   createdAt              DateTime   @default(now())
@@ -2199,6 +2243,9 @@ model OrgSettings {
   eventTypes                    Json?
   // What members (not only OWNER/ADMIN) may create; RLS reads these.
   memberCanCreateTags           Boolean          @default(true)
+  /// Members who can edit a database's rows may also delete it for good
+  /// (Admin panel › Privacy › Databases). Off: only owners and admins.
+  memberCanDeleteDatabases      Boolean          @default(false)
   /// Members may use the club from AI apps they connect (Admin panel ›
   /// Privacy › AI connectors; docs/features/ai-connectors.md). Off refuses
   /// every connector call for the club; nothing is revoked.
@@ -2225,6 +2272,13 @@ enum IntegrationProvider {
   GOOGLE_MEET
   ZOOM
   MICROSOFT_TEAMS
+  // CRM connectors on the org's own keys (docs/features/crm.md).
+  TAVILY
+  HUNTER
+  PROSPEO
+  TELNYX
+  TWILIO
+  DEEPGRAM
 }
 
 enum IntegrationStatus {
@@ -2492,6 +2546,10 @@ enum DatabaseKind {
   SESSIONS
   PEOPLE
   CUSTOM
+  /// The CRM's own (docs/features/crm.md): one people, one companies, one per pipeline.
+  CRM_PEOPLE
+  CRM_COMPANIES
+  CRM_PIPELINE
 }
 
 /// A field (column) of a club-made database (DatabaseDefinition kind CUSTOM;
@@ -2561,6 +2619,10 @@ enum DatabaseFieldType {
   EMAIL
   PHONE
   URL
+  /// Links to CRM people, companies, pipeline items or another database's rows: [{kind, id}].
+  RELATION
+  /// Filled per row by the org's AI from a prompt (CRM AI fields).
+  AI
 }
 
 /// One browsable database per row. The built-ins (sessions, attendance,
@@ -3076,7 +3138,7 @@ enum ReportAccess {
 /// A saved report: one source (a database, or Tasks, Expenses, Events or
 /// People) and a board of widgets on it, each with its own settings
 /// (src/lib/reports/catalog.ts). Built by the New report walkthrough.
-/// Removing one archives it (app_user has no DELETE).
+/// Archived, or deleted for good with its copies and invites by its editors.
 model Report {
   id             String       @id @default(cuid())
   organizationId String
@@ -3094,6 +3156,10 @@ model Report {
   joinWith       Json?
   /// When it emails itself: {every, day, hour, to} (src/lib/reports/schedule.ts).
   schedule       Json?
+  /// The view-only link (/r/{token}): sha256 of its token, hex. The token
+  /// itself exists only in the link shown when it is made; null is off.
+  linkTokenHash  String?      @unique
+  linkCreatedAt  DateTime?
   createdById    String?
   archivedAt     DateTime?
   createdAt      DateTime     @default(now())
@@ -3102,6 +3168,7 @@ model Report {
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User?            @relation("ReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   snapshots    ReportSnapshot[]
+  invites      ReportInvite[]
 
   @@unique([organizationId, id])
   @@index([organizationId, archivedAt, updatedAt])
@@ -3127,4 +3194,1211 @@ model ReportSnapshot {
 
   @@index([organizationId, reportId, takenAt])
   @@index([takenById])
+}
+
+/// Someone outside the organization a report is shared with: whoever signs
+/// in with this verified email opens it read-only (/r/invite/{reportId}).
+/// Only the report's editors read and change these.
+model ReportInvite {
+  id             String   @id @default(cuid())
+  organizationId String
+  reportId       String
+  /// lower(trim(email)).
+  email          String
+  createdAt      DateTime @default(now())
+
+  report Report @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([reportId, email])
+  @@index([organizationId, reportId])
+}
+
+// --- CRM add-on (docs/features/crm.md) ---
+// People, companies and pipelines an organization reaches out to. Every
+// core object is also a database (DatabaseKind CRM_*), so the Databases
+// section, Reports, Forms and the MCP database tools work on it unchanged.
+// Custom fields are DatabaseField rows on those definitions; their values
+// live in each row's `custom` JSON, keyed by field id. Ids of members who
+// acted (createdById, actorId...) carry no foreign key on purpose: history
+// keeps them after the member leaves the organization.
+
+enum CrmRecordStatus {
+  ACTIVE
+  INACTIVE
+  ALUMNI
+}
+
+enum CrmStageKind {
+  OPEN
+  WON
+  LOST
+}
+
+enum CrmForecastCategory {
+  PIPELINE
+  BEST_CASE
+  COMMIT
+  OMITTED
+}
+
+enum CrmActivityKind {
+  EMAIL
+  MEETING
+  CALL
+  TEXT
+  NOTE
+  TASK
+  FORM_RESPONSE
+  RSVP
+  CHECK_IN
+  PAYMENT
+  STAGE_CHANGE
+  FIELD_CHANGE
+  SEQUENCE_STEP
+  SYSTEM
+}
+
+enum CrmDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CrmEmailStatus {
+  DRAFT
+  SCHEDULED
+  QUEUED
+  SENT
+  FAILED
+  BOUNCED
+  RECEIVED
+}
+
+enum CrmMailbox {
+  ORG_SENDER
+  GMAIL
+  OUTLOOK
+  IMAP
+  BCC
+  REPLY
+}
+
+/// What a member's mailbox shares with the organization's CRM.
+enum CrmShareMode {
+  NONE
+  METADATA
+  FULL
+}
+
+enum CrmSequenceStatus {
+  DRAFT
+  ON
+  OFF
+}
+
+enum CrmStepKind {
+  EMAIL
+  TASK
+  CALL
+  TEXT
+  LINKEDIN
+}
+
+enum CrmEnrollmentStatus {
+  ACTIVE
+  PAUSED
+  REPLIED
+  BOOKED
+  FINISHED
+  STOPPED
+  BOUNCED
+  UNSUBSCRIBED
+}
+
+enum CrmCampaignStatus {
+  DRAFT
+  ACTIVE
+  DONE
+  ARCHIVED
+}
+
+enum CrmTargetStatus {
+  TODO
+  CONTACTED
+  REPLIED
+  BOOKED
+  CONVERTED
+  SKIPPED
+}
+
+enum CrmWorkflowStatus {
+  DRAFT
+  ON
+  OFF
+}
+
+enum CrmRunStatus {
+  RUNNING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum CrmSuggestionKind {
+  CREATE_PERSON
+  CREATE_COMPANY
+  UPDATE_FIELD
+  MOVE_STAGE
+  LOG_ACTIVITY
+  DRAFT_EMAIL
+  CREATE_TASK
+  MERGE
+}
+
+enum CrmSuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum CrmSuggestionSource {
+  AI
+  AUTOMATION
+  CONNECTOR
+  EMAIL
+  IMPORT
+  DEDUPE
+  SIGNAL
+}
+
+enum CrmQuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  PAID
+}
+
+enum CrmCallStatus {
+  QUEUED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  NO_ANSWER
+  BUSY
+  FAILED
+  LOGGED
+}
+
+/// One per organization, made when the CRM is added.
+model CrmSettings {
+  organizationId    String    @id
+  /// ALL: every member sees every record. OWN: members see what they own,
+  /// made, or are on (owners, admins and CRM managers see everything).
+  memberAccess      String    @default("ALL")
+  /// Members who run the CRM without being admins (pipelines, workflows, settings).
+  managerIds        String[]  @default([])
+  /// The relationship types people are tagged with: [{id, label, color}].
+  relationshipTypes Json      @default("[]")
+  /// What the organization said it mostly reaches out to, at setup.
+  setupKinds        String[]  @default([])
+  setupDoneAt       DateTime?
+  /// Hard monthly cap on AI spend on the org's own key, in cents. Null: no cap.
+  aiMonthlyCapCents Int?
+  /// Enrichment providers tried in order: ["tavily", "hunter", ...].
+  enrichmentOrder   String[]  @default([])
+  /// Most emails one member's mailbox sends a day from sequences and campaigns.
+  dailySendCap      Int       @default(150)
+  /// CRM settings > Sending: {startHour, endHour, weekends, unsubscribeLine}.
+  /// Sequence, campaign and automation mail waits for the window
+  /// (readSending in src/lib/crm/settings-prefs.ts).
+  sending           Json      @default("{}")
+  /// CRM settings > Automations, how much it may do alone:
+  /// {emails, merges, signatures, stages}, each "suggest" | "tell" | "auto".
+  autonomy          Json      @default("{}")
+  /// Calls and texts (Phase 5): {provider, recording: "ask"|"never",
+  /// notice, quietStart, quietEnd, callStart, callEnd, voicemailKey}.
+  /// Owners and admins set it (src/server/crm/phone/settings.ts).
+  phone             Json      @default("{}")
+  /// The events at least one active webhook listens for, kept by the
+  /// webhook settings, so a member's change knows to queue an event
+  /// without reading CrmWebhook (owners' and admins' only).
+  webhookEvents     String[]  @default([])
+  /// The trigger types of the switched-on workflows, kept by the workflow
+  /// settings, so a member's change knows to queue an event without reading
+  /// CrmWorkflow (owners, admins and CRM managers only).
+  workflowTriggers  String[]  @default([])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+/// A member's own CRM settings: their BCC logging address, what their
+/// mailbox shares, addresses never logged, and their signature.
+model CrmMemberSettings {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  /// The BCC/forward address is log+{bccToken}@{inbound domain}.
+  bccToken       String       @unique
+  shareMode      CrmShareMode @default(FULL)
+  /// Addresses or @domains never logged.
+  neverLog       String[]     @default([])
+  signature      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model CrmCompany {
+  id              String          @id @default(cuid())
+  organizationId  String
+  name            String
+  /// Lowercase, no www: what email domains match on.
+  domain          String?
+  website         String?
+  industry        String?
+  size            String?
+  phone           String?
+  address         String?
+  description     String?
+  status          CrmRecordStatus @default(ACTIVE)
+  ownerId         String?
+  /// An org-chart position key: the relationship follows whoever holds it.
+  ownerRoleKey    String?
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  /// Relationship strength 0-100 (src/server/crm/strength.ts).
+  strength        Int             @default(0)
+  score           Int             @default(0)
+  custom          Json            @default("{}")
+  /// Where enriched values came from: {field: {source, at}}.
+  enrichment      Json            @default("{}")
+  /// The Finance sponsor this company was made from.
+  sponsorId       String?         @unique
+  createdById     String?
+  updatedById     String?
+  deletedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?        @relation("CrmCompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  people       CrmPerson[]
+  deals        CrmDeal[]
+  jobs         CrmJob[]
+  quotes       CrmQuote[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, name])
+  @@index([organizationId, domain])
+  @@index([organizationId, ownerId])
+  @@index([custom(ops: JsonbPathOps)], map: "CrmCompany_custom_gin", type: Gin)
+}
+
+model CrmPerson {
+  id                  String          @id @default(cuid())
+  organizationId      String
+  firstName           String?
+  lastName            String?
+  /// What the person is called everywhere (first + last, or what was given).
+  name                String
+  /// Lowercased; also a row in CrmPersonEmail for matching.
+  primaryEmail        String?
+  phone               String?
+  title               String?
+  companyId           String?
+  linkedinUrl         String?
+  website             String?
+  location            String?
+  avatarUrl           String?
+  /// A CrmSettings.relationshipTypes id.
+  relationship        String?
+  status              CrmRecordStatus @default(ACTIVE)
+  ownerId             String?
+  ownerRoleKey        String?
+  /// form, import, event, email, manual, api...
+  source              String?
+  sourceDetail        String?
+  lastContactedAt     DateTime?
+  nextFollowUpAt      DateTime?
+  /// Keep in touch every N days; when it lapses they return to the queue.
+  keepInTouchDays     Int?
+  strength            Int             @default(0)
+  score               Int             @default(0)
+  unsubscribedAt      DateTime?
+  doNotContact        Boolean         @default(false)
+  /// Consent per channel: {email, text, call: {granted, at, how}}.
+  consent             Json            @default("{}")
+  custom              Json            @default("{}")
+  enrichment          Json            @default("{}")
+  /// The website/attendance contact and the member account, when matched.
+  contactId           String?
+  userId              String?
+  /// Hash of the token in the "update your details" link.
+  selfUpdateTokenHash String?         @unique
+  createdById         String?
+  updatedById         String?
+  deletedAt           DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?               @relation("CrmPersonOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  company      CrmCompany?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  emails       CrmPersonEmail[]
+  jobs         CrmJob[]
+  deals        CrmDealPerson[]
+  enrollments  CrmEnrollment[]
+  targets      CrmCampaignTarget[]
+  calls        CrmCall[]
+  texts        CrmTextMessage[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, name])
+  @@index([organizationId, companyId])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, nextFollowUpAt])
+  @@index([organizationId, contactId])
+  @@index([organizationId, userId])
+  @@index([custom(ops: JsonbPathOps)], map: "CrmPerson_custom_gin", type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "CrmPerson_name_trgm", type: Gin)
+}
+
+/// Every address of a person, lowercased. One person per address per org,
+/// so incoming mail, forms and imports match exactly one record.
+model CrmPersonEmail {
+  id             String   @id @default(cuid())
+  organizationId String
+  personId       String
+  email          String
+  isPrimary      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  person CrmPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId, personId])
+}
+
+/// Job history: past companies keep their history, the person keeps all of it.
+model CrmJob {
+  id             String    @id @default(cuid())
+  organizationId String
+  personId       String
+  companyId      String?
+  companyName    String?
+  title          String?
+  startedOn      DateTime?
+  endedOn        DateTime?
+  current        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  person  CrmPerson   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  company CrmCompany? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, personId])
+  @@index([organizationId, companyId])
+}
+
+model CrmPipeline {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// What one item is called: "applicant", "donation", "sponsorship".
+  itemNoun       String    @default("item")
+  itemNounPlural String    @default("items")
+  /// The template it came from (members, donors, sponsors, ...), if any.
+  template       String?
+  icon           String?
+  color          String?
+  hasAmount      Boolean   @default(false)
+  currency       String    @default("USD")
+  /// Labels for the closing kinds ("Joined" / "Didn't join").
+  wonLabel       String    @default("Won")
+  lostLabel      String    @default("Lost")
+  ownerId        String?
+  ownerRoleKey   String?
+  /// The DatabaseDefinition (kind CRM_PIPELINE) this pipeline is.
+  databaseId     String?   @unique
+  sortOrder      Int       @default(0)
+  archivedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages       CrmStage[]
+  deals        CrmDeal[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt, sortOrder])
+}
+
+model CrmStage {
+  id             String       @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  name           String
+  /// A stable key for a ready-made stage ("RECEIVED" in Sponsorships), so a
+  /// renamed stage still maps to Finance and the templates.
+  key            String?
+  kind           CrmStageKind @default(OPEN)
+  sortOrder      Int          @default(0)
+  /// Likelihood 0-100 for the weighted forecast.
+  probability    Int?
+  /// A card turns amber after this many days in the stage.
+  stuckAfterDays Int?
+  /// Field keys that must be filled to move an item into this stage.
+  requiredFields String[]     @default([])
+  color          String?
+  createdAt      DateTime     @default(now())
+
+  pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    CrmDeal[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, pipelineId, sortOrder])
+}
+
+/// One thing moving through a pipeline: an application, a pledge, a
+/// sponsorship, a booking. Called by its pipeline's itemNoun on screen.
+model CrmDeal {
+  id               String              @id @default(cuid())
+  organizationId   String
+  pipelineId       String
+  stageId          String
+  title            String
+  amountCents      Int?
+  currency         String              @default("USD")
+  expectedOn       DateTime?
+  closedAt         DateTime?
+  closeReason      String?
+  forecastCategory CrmForecastCategory @default(PIPELINE)
+  ownerId          String?
+  ownerRoleKey     String?
+  companyId        String?
+  primaryPersonId  String?
+  nextStep         String?
+  nextStepAt       DateTime?
+  stageEnteredAt   DateTime            @default(now())
+  /// Board order within a stage.
+  rank             Float               @default(0)
+  source           String?
+  score            Int                 @default(0)
+  custom           Json                @default("{}")
+  /// The Finance sponsorship this item was made from (Received books the transaction).
+  sponsorshipId    String?             @unique
+  createdById      String?
+  updatedById      String?
+  deletedAt        DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     CrmPipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage        CrmStage         @relation(fields: [stageId], references: [id])
+  owner        User?            @relation("CrmDealOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  company      CrmCompany?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  people       CrmDealPerson[]
+  quotes       CrmQuote[]
+  deliverables CrmDeliverable[]
+  guestLinks   CrmGuestLink[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, pipelineId, deletedAt, stageId, rank])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, companyId])
+  @@index([organizationId, expectedOn])
+  @@index([custom(ops: JsonbPathOps)], map: "CrmDeal_custom_gin", type: Gin)
+}
+
+model CrmDealPerson {
+  id             String   @id @default(cuid())
+  organizationId String
+  dealId         String
+  personId       String
+  /// decision maker, champion, applicant...
+  role           String?
+  createdAt      DateTime @default(now())
+
+  deal   CrmDeal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  person CrmPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([dealId, personId])
+  @@index([organizationId, personId])
+}
+
+/// One timeline row. What it's about is in CrmActivityTarget (any mix of
+/// people, companies and items). Rows mirrored from the workspace (events,
+/// tasks, form responses, payments) carry sourceKind/sourceId, unique per
+/// org, so mirroring twice never duplicates.
+model CrmActivity {
+  id             String          @id @default(cuid())
+  organizationId String
+  kind           CrmActivityKind
+  direction      CrmDirection?
+  subject        String?
+  body           String?
+  occurredAt     DateTime        @default(now())
+  actorId        String?
+  /// event, task, form_response, transaction, email, call, text, note...
+  sourceKind     String?
+  sourceId       String?
+  /// Kind-specific detail: {from, to, stage, field, old, new, durationSec...}.
+  meta           Json            @default("{}")
+  /// Only this member sees it (a mailbox shared as METADATA, a private note).
+  privateToId    String?
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  targets      CrmActivityTarget[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, sourceKind, sourceId])
+  @@index([organizationId, occurredAt])
+}
+
+model CrmActivityTarget {
+  id             String   @id @default(cuid())
+  organizationId String
+  activityId     String
+  /// person | company | deal
+  targetKind     String
+  targetId       String
+  occurredAt     DateTime
+
+  activity CrmActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, targetKind, targetId])
+  @@index([organizationId, targetKind, targetId, occurredAt])
+}
+
+model CrmEmailThread {
+  id             String   @id @default(cuid())
+  organizationId String
+  subject        String?
+  lastMessageAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages     CrmEmailMessage[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, lastMessageAt])
+}
+
+model CrmEmailMessage {
+  id                String         @id @default(cuid())
+  organizationId    String
+  threadId          String
+  activityId        String?
+  direction         CrmDirection
+  status            CrmEmailStatus
+  mailbox           CrmMailbox
+  /// The member whose mailbox sent or received it.
+  mailboxUserId     String?
+  /// The Message-ID header, for threading and dedupe.
+  messageIdHeader   String?
+  inReplyTo         String?
+  fromAddress       String
+  toAddresses       String[]       @default([])
+  ccAddresses       String[]       @default([])
+  subject           String?
+  bodyText          String?
+  bodyHtml          String?
+  providerMessageId String?
+  /// Opens and clicks come back through /api/crm/t/{trackingToken}.
+  trackingToken     String?        @unique
+  openCount         Int            @default(0)
+  firstOpenedAt     DateTime?
+  clickCount        Int            @default(0)
+  repliedAt         DateTime?
+  bouncedAt         DateTime?
+  error             String?
+  templateId        String?
+  enrollmentId      String?
+  campaignId        String?
+  /// Sent by a workflow step (an automation): counts toward the daily cap
+  /// and carries the unsubscribe footer.
+  workflowId        String?
+  /// Who it is to or from, when known (a draft has no timeline row yet).
+  personId          String?
+  scheduledFor      DateTime?
+  sentAt            DateTime?
+  createdById       String?
+  createdAt         DateTime       @default(now())
+
+  thread CrmEmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, messageIdHeader])
+  @@index([organizationId, threadId])
+  @@index([organizationId, status, scheduledFor])
+  @@index([organizationId, mailboxUserId, sentAt])
+  @@index([organizationId, personId, status])
+}
+
+model CrmTemplate {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// email | text
+  channel        String    @default("email")
+  /// welcome, follow-up, thank-you, invite...
+  category       String?
+  subject        String?
+  body           String
+  shared         Boolean   @default(true)
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt])
+}
+
+model CrmSequence {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  status         CrmSequenceStatus @default(DRAFT)
+  stopOnReply    Boolean           @default(true)
+  stopOnBooking  Boolean           @default(true)
+  /// {days: [1..5], startHour, endHour} in the org's timezone.
+  sendWindow     Json              @default("{}")
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  steps        CrmSequenceStep[]
+  enrollments  CrmEnrollment[]
+
+  @@unique([organizationId, id])
+}
+
+model CrmSequenceStep {
+  id             String      @id @default(cuid())
+  organizationId String
+  sequenceId     String
+  sortOrder      Int
+  kind           CrmStepKind @default(EMAIL)
+  /// Wait this long after the previous step.
+  delayDays      Int         @default(0)
+  delayHours     Int         @default(0)
+  templateId     String?
+  subject        String?
+  body           String?
+  /// For TASK, CALL and LINKEDIN steps.
+  taskTitle      String?
+
+  sequence CrmSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, sequenceId, sortOrder])
+}
+
+model CrmEnrollment {
+  id             String              @id @default(cuid())
+  organizationId String
+  sequenceId     String
+  personId       String
+  /// Whose mailbox the steps go out from.
+  senderId       String
+  enrolledById   String?
+  status         CrmEnrollmentStatus @default(ACTIVE)
+  /// Index of the next step to run.
+  nextStep       Int                 @default(0)
+  nextRunAt      DateTime?
+  stopReason     String?
+  startedAt      DateTime            @default(now())
+  finishedAt     DateTime?
+
+  sequence CrmSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  person   CrmPerson   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, nextRunAt])
+  @@index([organizationId, personId])
+  @@index([sequenceId, personId])
+}
+
+/// A saved view of people, companies or a pipeline's items. A view is a list.
+model CrmView {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// people | companies | deals
+  objectKind     String
+  pipelineId     String?
+  name           String
+  filters        Json     @default("[]")
+  sort           Json     @default("[]")
+  columns        Json     @default("[]")
+  /// table | board
+  layout         String   @default("table")
+  shared         Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, objectKind])
+}
+
+/// A list plus a goal: "reach all 200 alumni by Friday", split among members.
+model CrmCampaign {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  goal           String?
+  goalCount      Int?
+  dueOn          DateTime?
+  viewId         String?
+  templateId     String?
+  sequenceId     String?
+  /// email | text | call | invite
+  channel        String            @default("email")
+  /// An event the campaign invites people to.
+  eventId        String?
+  status         CrmCampaignStatus @default(DRAFT)
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  targets      CrmCampaignTarget[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model CrmCampaignTarget {
+  id             String          @id @default(cuid())
+  organizationId String
+  campaignId     String
+  personId       String
+  assigneeId     String?
+  status         CrmTargetStatus @default(TODO)
+  contactedAt    DateTime?
+  repliedAt      DateTime?
+  updatedAt      DateTime        @updatedAt
+
+  campaign CrmCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  person   CrmPerson   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, personId])
+  @@index([organizationId, assigneeId, status])
+}
+
+model CrmWorkflow {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  status         CrmWorkflowStatus @default(DRAFT)
+  /// {type: "person.created" | "stage.changed" | ..., params}
+  trigger        Json
+  /// [{field, op, value}]
+  conditions     Json              @default("[]")
+  /// [{type: "task.create" | "field.set" | ..., params}]
+  actions        Json              @default("[]")
+  /// The ready-made recipe it came from.
+  recipe         String?
+  /// What the member typed when they described it in words.
+  described      String?
+  runCount       Int               @default(0)
+  lastRunAt      DateTime?
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs         CrmWorkflowRun[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model CrmWorkflowRun {
+  id             String       @id @default(cuid())
+  organizationId String
+  workflowId     String
+  status         CrmRunStatus @default(RUNNING)
+  dryRun         Boolean      @default(false)
+  /// What set it off: {kind, id}.
+  triggerRef     Json         @default("{}")
+  /// One entry per action: {action, ok, detail}.
+  log            Json         @default("[]")
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+
+  workflow CrmWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, workflowId, startedAt])
+}
+
+/// Every field change on a person, company or item: who, when, old, new.
+/// Append-only; powers undo and "restore to an earlier point".
+model CrmFieldHistory {
+  id             String   @id @default(cuid())
+  organizationId String
+  targetKind     String
+  targetId       String
+  field          String
+  oldValue       Json?
+  newValue       Json?
+  changedById    String?
+  /// user | ai | automation | import | merge | connector | system
+  source         String   @default("user")
+  /// Groups the changes of one bulk edit, for undo.
+  batchId        String?
+  changedAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, targetKind, targetId, changedAt])
+  @@index([organizationId, batchId])
+}
+
+model CrmGoal {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// amount_won | items_won | people_reached | replies | meetings
+  metric         String
+  pipelineId     String?
+  ownerId        String?
+  periodStart    DateTime
+  periodEnd      DateTime
+  target         Int
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, periodEnd])
+}
+
+model CrmForecastSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  periodLabel    String
+  data           Json
+  takenAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, pipelineId, takenAt])
+}
+
+model CrmScoreRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// people | deals
+  objectKind     String
+  label          String
+  /// {field, op, value} or {activity: "replied", withinDays}
+  condition      Json
+  points         Int
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, objectKind])
+}
+
+model CrmQuote {
+  id                   String         @id @default(cuid())
+  organizationId       String
+  dealId               String?
+  companyId            String?
+  personId             String?
+  number               String
+  title                String
+  status               CrmQuoteStatus @default(DRAFT)
+  currency             String         @default("USD")
+  notes                String?
+  validUntil           DateTime?
+  totalCents           Int            @default(0)
+  /// quote | invoice (Phase 5). Numbered per kind: Q-0001, INV-0001.
+  kind                 String         @default("quote")
+  /// Tax on the subtotal in basis points (825 is 8.25%).
+  taxBps               Int            @default(0)
+  /// The public accept page is /q/{token}; only the hash is kept.
+  publicTokenHash      String?        @unique
+  acceptedName         String?
+  acceptedAt           DateTime?
+  /// sha256 of the accepting browser's IP with the org id, never the IP.
+  acceptedIpHash       String?
+  declinedAt           DateTime?
+  declineReason        String?
+  paidAt               DateTime?
+  /// The Finance income transaction booked when it was marked paid.
+  financeTransactionId String?
+  sentAt               DateTime?
+  createdById          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deal         CrmDeal?       @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  company      CrmCompany?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  lines        CrmQuoteLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, dealId])
+}
+
+model CrmQuoteLine {
+  id             String @id @default(cuid())
+  organizationId String
+  quoteId        String
+  description    String
+  quantity       Int    @default(1)
+  unitCents      Int
+  sortOrder      Int    @default(0)
+
+  quote CrmQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, quoteId])
+}
+
+/// A booking page: /book/{slug}. Bookings become Bananasplit meetings.
+model CrmBookingPage {
+  id             String   @id @default(cuid())
+  organizationId String
+  slug           String   @unique
+  title          String
+  description    String?
+  durationMin    Int      @default(30)
+  bufferMin      Int      @default(0)
+  /// Whose calendars it books; several means round-robin.
+  hostIds        String[] @default([])
+  /// Questions asked when booking: [{id, label, required}].
+  questions      Json     @default("[]")
+  /// Create an item in this pipeline's first stage on booking.
+  pipelineId     String?
+  minNoticeHours Int      @default(4)
+  maxDaysAhead   Int      @default(30)
+  active         Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+}
+
+/// The review queue: anything AI, an automation, a connected app or
+/// incoming mail proposes waits here as a before-and-after with its source.
+model CrmSuggestion {
+  id             String              @id @default(cuid())
+  organizationId String
+  kind           CrmSuggestionKind
+  status         CrmSuggestionStatus @default(PENDING)
+  source         CrmSuggestionSource
+  title          String
+  summary        String?
+  /// What accepting it does (kind-specific, validated in code).
+  payload        Json
+  targetKind     String?
+  targetId       String?
+  /// Where it came from: {kind: "meeting" | "email" | "form"..., id, label}.
+  citation       Json                @default("{}")
+  /// Who should review it; null: anyone who can edit the target.
+  assigneeId     String?
+  proposedById   String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, targetKind, targetId])
+}
+
+/// What we owe a sponsor or partner, on their agreement.
+model CrmDeliverable {
+  id             String    @id @default(cuid())
+  organizationId String
+  dealId         String
+  title          String
+  dueOn          DateTime?
+  doneAt         DateTime?
+  /// The task that tracks it, if any.
+  taskId         String?
+  /// What shows on the guest page as done: a note or a file id.
+  proof          String?
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+
+  deal CrmDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, dealId])
+}
+
+/// A private page for a sponsor or partner: /g/{token}, their agreement,
+/// deliverables and recap, nothing else.
+model CrmGuestLink {
+  id             String    @id @default(cuid())
+  organizationId String
+  dealId         String
+  tokenHash      String    @unique
+  createdById    String?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  lastViewedAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  deal CrmDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, dealId])
+}
+
+model CrmCall {
+  id               String        @id @default(cuid())
+  organizationId   String
+  personId         String?
+  userId           String?
+  direction        CrmDirection  @default(OUTBOUND)
+  status           CrmCallStatus @default(LOGGED)
+  /// telnyx | twilio | manual
+  provider         String        @default("manual")
+  providerCallId   String?
+  fromNumber       String?
+  toNumber         String?
+  startedAt        DateTime      @default(now())
+  durationSec      Int?
+  outcome          String?
+  notes            String?
+  /// Everyone on the call was told it's recorded.
+  recordingConsent Boolean       @default(false)
+  recordingKey     String?
+  transcript       String?
+  summary          String?
+  activityId       String?
+  createdAt        DateTime      @default(now())
+
+  person CrmPerson? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, providerCallId])
+  @@index([organizationId, personId, startedAt])
+}
+
+model CrmTextMessage {
+  id                String       @id @default(cuid())
+  organizationId    String
+  personId          String?
+  userId            String?
+  direction         CrmDirection
+  fromNumber        String
+  toNumber          String
+  body              String
+  provider          String
+  providerMessageId String?
+  status            String       @default("queued")
+  sentAt            DateTime     @default(now())
+  activityId        String?
+
+  person CrmPerson? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, providerMessageId])
+  @@index([organizationId, personId, sentAt])
+}
+
+/// Keys for the public CRM API. Only a hash is kept; the key is shown once.
+model CrmApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// The first characters, to tell keys apart.
+  prefix         String
+  keyHash        String    @unique
+  /// read | write
+  scopes         String[]  @default(["read"])
+  createdById    String?
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model CrmWebhook {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  /// person.created, deal.stage_changed, deal.closed...
+  events         String[] @default([])
+  /// Signs each delivery (X-Bananasplit-Signature); owners and admins only.
+  signingSecret  String
+  active         Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   CrmWebhookDelivery[]
+
+  @@unique([organizationId, id])
+}
+
+model CrmWebhookDelivery {
+  id             String    @id @default(cuid())
+  organizationId String
+  webhookId      String
+  event          String
+  payload        Json
+  /// pending | delivered | failed
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  responseCode   Int?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  deliveredAt    DateTime?
+
+  webhook CrmWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, webhookId, createdAt])
+}
+
+/// Every AI call, whoever paid: for the org's monthly cap, the usage shown
+/// beside it, and Bananasplit AI billing later.
+model AiUsage {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  /// crm.summary, crm.draft, crm.research, crm.ai_field, imports...
+  feature        String
+  /// claude | openai_compatible | bananasplit | tavily
+  provider       String
+  model          String?
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  /// Estimated cost in millionths of a dollar.
+  costMicros     Int      @default(0)
+  /// ORG_KEY | PLATFORM
+  paidBy         String   @default("ORG_KEY")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
 }

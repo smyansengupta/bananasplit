@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +14,7 @@ import type { CustomDatabase, CustomRecord } from "@/server/databases/custom";
 const a = vi.hoisted(() => ({
   updateCell: vi.fn(),
   loadRecords: vi.fn(),
+  deleteDatabase: vi.fn(),
 }));
 
 vi.mock("@/components/links/linked-loader", () => ({ LinkedLoader: () => null }));
@@ -22,6 +23,7 @@ vi.mock("@/app/app/[orgSlug]/databases/custom-actions", () => ({
   addFieldAction: vi.fn(),
   archiveDatabaseAction: vi.fn(),
   createRecordAction: vi.fn(),
+  deleteDatabaseAction: a.deleteDatabase,
   deleteFieldAction: vi.fn(),
   loadRecordsAction: a.loadRecords,
   moveFieldAction: vi.fn(),
@@ -80,6 +82,10 @@ function db(overrides: Partial<CustomDatabase> = {}): CustomDatabase {
     trashCount: 0,
     canEdit: true,
     canManage: true,
+    canDelete: true,
+    deleteBlocked: null,
+    reportCount: 0,
+    labels: {},
     ...overrides,
   };
 }
@@ -188,5 +194,34 @@ describe("the trash", () => {
     render(grid(trash, true));
     expect(screen.getByText("Jan 1, 2026, 7:00 AM")).toBeTruthy();
     expect(screen.getByText("1 row")).toBeTruthy();
+  });
+});
+
+describe("deleting the database", () => {
+  it("gives a member who may delete it a Delete button and a clear confirm", async () => {
+    a.deleteDatabase.mockResolvedValue({});
+    render(grid(db({ canManage: false, canDelete: true, reportCount: 2 })));
+    fireEvent.click(screen.getByRole("button", { name: "Delete database" }));
+    expect(await screen.findByText("Delete Roster?")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Its rows and fields are deleted for good. This can't be undone. 2 reports read it and will show it's gone.",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete database" }),
+    );
+    await waitFor(() => expect(a.deleteDatabase).toHaveBeenCalledWith("org_1", "db_1"));
+  });
+
+  it("shows no Delete to a member who may not delete it", () => {
+    render(grid(db({ canManage: false, canDelete: false })));
+    expect(screen.queryByRole("button", { name: "Delete database" })).toBeNull();
+  });
+
+  it("keeps an owner's or admin's Delete in Settings, not the header", () => {
+    render(grid(db()));
+    expect(screen.queryByRole("button", { name: "Delete database" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
   });
 });

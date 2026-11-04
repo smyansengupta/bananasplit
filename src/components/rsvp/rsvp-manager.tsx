@@ -69,6 +69,8 @@ export interface RsvpManagerProps {
   initialTab?: "guests" | "page";
   /** Just made (?new=1): open on the page's settings with its link copied. */
   justCreated?: boolean;
+  /** Its ambient buttons (a full event's Open a waitlist, Add seats), under the header. */
+  ambient?: React.ReactNode;
 }
 
 export function RsvpManager(props: RsvpManagerProps) {
@@ -181,6 +183,7 @@ export function RsvpManager(props: RsvpManagerProps) {
     <div className="mx-auto max-w-5xl space-y-7">
       <BackLink href={links.back.href} label={links.back.label} />
       {header}
+      {props.ambient}
 
       {!page.enabled && (
         <section className="bg-card text-card-foreground ring-foreground/6 edge rounded-card overflow-hidden ring-1">

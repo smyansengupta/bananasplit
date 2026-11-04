@@ -455,6 +455,246 @@ export const JOB_KINDS = {
     description: "Hard-delete an org after the 30-day grace (key org-purge:{orgId}).",
   }),
 
+  // ---- CRM add-on (docs/features/crm.md; handlers in src/server/crm/jobs.ts) ----
+  "crm-refresh": kind({
+    payload: z
+      .object({
+        /** Only this person (a new person's own timeline); absent: the whole organization. */
+        personId: id.optional(),
+        /** Where the last run stopped, for a continuation. */
+        step: z.enum(["mirror", "strength", "dedupe"]).optional(),
+        /** Whoever a workspace change is about (a form answer, an RSVP, a check-in): their timeline only. */
+        match: z
+          .object({ user: id.optional(), contact: id.optional(), registration: id.optional(), response: id.optional() })
+          .strict()
+          .optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/jobs").then((m) => m.crmRefreshJob),
+    description:
+      "CRM upkeep: mirror workspace activity onto timelines (idempotent by sourceKind/sourceId), recompute relationship strength, look for duplicates. Key crm-refresh:{orgId} (setup, nightly), crm-refresh:p:{personId} (a new person), crm-refresh:m:{kind}:{id} (a form answer, RSVP or check-in: the people it matches).",
+  }),
+  "crm-import": kind({
+    payload: z
+      .object({
+        /** The import's log row (CrmView, objectKind import). */
+        importId: id.optional(),
+        /** Or bring in the people Bananasplit knows: members, contacts, forms. */
+        bringIn: z.enum(["members", "contacts", "forms"]).optional(),
+        /** The member who started it (records are made as them). */
+        userId: id,
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    handler: () => import("@/server/crm/jobs").then((m) => m.crmImportJob),
+    description:
+      "A big CRM import (spreadsheet, vCard, HubSpot, Salesforce, Pipedrive) or bring-in, in turns; key crm-import:{importId} or crm-import:bring:{source}.",
+  }),
+
+  "crm-event": kind({
+    payload: z
+      .object({
+        type: z.enum([
+          "record.changed",
+          "email.replied",
+          "email.bounced",
+          "meeting.booked",
+          "form.submitted",
+          "sequence.finished",
+          "call.logged",
+          "activity.logged",
+        ]),
+        targetKind: z.enum(["person", "company", "deal"]),
+        targetId: id,
+        /** Field names that changed (record.changed), never values. */
+        fields: z.array(z.string().max(80)).max(200),
+        userId: id.nullable(),
+        sourceId: id.nullable(),
+        source: z.string().max(40).nullable(),
+        /** The workflow whose own step made the change (loop protection), and how deep. */
+        workflowId: id.optional(),
+        depth: z.number().int().min(0).max(20).optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/events").then((m) => m.crmEventJob),
+    description:
+      "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows, webhooks and Inbox lines; enqueued only when one of them could want it (src/server/crm/events.ts).",
+  }),
+  "crm-workflow-call": kind({
+    payload: z.object({ runId: id, index: z.number().int().min(0).max(50) }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 3,
+    handler: () => import("@/server/crm/workflow-calls").then((m) => m.crmWorkflowCallJob),
+    description:
+      "One workflow step that leaves Bananasplit (Slack, Discord, a webhook): https only, no private addresses, a 10s timeout, redirects refused; writes the outcome into the run's log. Key crm-workflow-call:{runId}:{index}.",
+  }),
+  "crm-daily": kind({
+    payload: z
+      .object({
+        /** Where the last run stopped, for a continuation. */
+        step: z.enum(["schedules", "scores", "model", "signals", "forecast"]).optional(),
+        /** Scores: the last record done (p:{personId} or d:{dealId}), for a continuation. */
+        cursor: z
+          .string()
+          .regex(/^[pd]:[A-Za-z0-9_-]{0,100}$/)
+          .optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/daily").then((m) => m.crmDailyJob),
+    description:
+      "The CRM's daily automation and numbers: date, idle and stuck workflow triggers, score rules, the learned model (nightly, once there are enough closed items), Inbox signals, and the weekly forecast snapshot. Key crm-daily:{orgId}:{date} (once=true), enqueued with crm-refresh by /api/cron/task-digest.",
+  }),
+
+  // ---- CRM AI (Phase 4; handlers in src/server/crm/ai-jobs.ts) ----
+  "crm-ai": kind({
+    payload: z
+      .object({
+        action: z.enum(["fill", "batch-poll", "research", "follow-up", "sweep", "new-record", "issue"]),
+        /** The member the work is for (records and suggestions are made as them). */
+        userId: id.optional(),
+        fieldId: id.optional(),
+        onlyEmpty: z.boolean().optional(),
+        /** A column fill: where the last turn stopped. */
+        after: id.optional(),
+        /** A column fill: only rows made since then. */
+        since: isoInstant.optional(),
+        /** The CrmView row (objectKind ai-batch) of a Message Batch. */
+        batchViewId: id.optional(),
+        personId: id.optional(),
+        companyId: id.optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 55_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/ai-jobs").then((m) => m.crmAiJob),
+    description:
+      "The CRM's AI work on the organization's own key: an AI field's column a few rows a turn (key crm-ai:fill:{fieldId}:...), a Message Batch poll (crm-ai:batch:{viewId}), the research agent on a new person or company (crm-ai:research:{id}), the follow-up agent for one member (crm-ai:follow-up:{userId}:{day}), a new record's automatic work (crm-ai:new:{id}), a person's biggest issue after a note or a reply (crm-ai:issue:{personId}, asks the model only when the content changed) and the daily sweep (crm-ai:sweep:{day}, once). Every model call checks the monthly cap and writes AiUsage.",
+  }),
+
+  // ---- CRM phone, quotes and API (Phase 5; src/server/crm/phone, src/server/crm/webhooks) ----
+  "crm-text-send": kind({
+    payload: z.object({ textId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 4,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmTextSendJob),
+    description:
+      "Sends one CRM text on the organization's own Telnyx or Twilio number (runAt holds it past quiet hours); key crm-text-send:{textId}.",
+  }),
+  "crm-call-audio": kind({
+    payload: z.object({ callId: id, recordingId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    maxAttempts: 5,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmCallAudioJob),
+    description:
+      "Fetches a consented call recording from the provider into crm-audio, then queues crm-transcribe; key crm-call-audio:{callId}.",
+  }),
+  "crm-transcribe": kind({
+    payload: z.object({ callId: id.optional(), activityId: id.optional() }).strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    maxAttempts: 3,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmTranscribeJob),
+    description:
+      "Writes out a recorded call or a voice note on the organization's Deepgram key and sums it up on its AI; key crm-transcribe:call:{callId} or crm-transcribe:note:{activityId}.",
+  }),
+  "crm-webhook": kind({
+    payload: z.object({ deliveryId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 8,
+    handler: () => import("@/server/crm/webhooks").then((m) => m.crmWebhookJob),
+    description:
+      "POSTs one signed CRM webhook delivery (CrmWebhookDelivery), retried with backoff; key crm-webhook:{deliveryId}.",
+  }),
+
+  // ---- CRM outreach (Phase 2; handlers in src/server/crm/outreach/) ----
+  "crm-send": kind({
+    payload: z.object({ messageId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 25_000,
+    leaseSeconds: 75,
+    tier: "fast",
+    afterEligible: true,
+    sendsEmail: true,
+    handler: () => import("@/server/crm/outreach/send").then((m) => m.crmSendJob),
+    description:
+      "One CRM email (1:1, sequence step or campaign share) through sendFromMailbox; key crm-send:{messageId}, runAt for sent-later mail and the daily cap.",
+  }),
+  "crm-bulk": kind({
+    payload: z.object({ campaignId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    sendsEmail: true,
+    handler: () => import("@/server/crm/outreach/send").then((m) => m.crmBulkJob),
+    description:
+      "A bulk email's messages, 25 a turn, through the organization's own sender only; continues itself. Key crm-bulk:{campaignId}.",
+  }),
+  "crm-sequence": kind({
+    payload: z.object({ enrollmentId: id, step: z.number().int().min(0).max(50) }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/outreach/sequences").then((m) => m.crmSequenceJob),
+    description:
+      "One sequence step for one enrollment at its time (send window, daily cap, stop on reply); key crm-sequence:{enrollmentId}:{step}.",
+  }),
+  "crm-outreach-daily": kind({
+    payload: z.object({}).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/outreach/daily").then((m) => m.crmOutreachDailyJob),
+    description:
+      "Daily: lapsed keep-in-touch cadences back to the queue, campaign conversions, expired mail suggestions. Key crm-outreach-daily:{orgId}:{date}.",
+  }),
+
   // ---- Platform maintenance (this module) ----
   "purge-unverified": kind({
     payload: z.object({}).strict(),

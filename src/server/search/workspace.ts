@@ -721,7 +721,7 @@ async function searchPeople(ctx: Ctx): Promise<SearchGroup> {
 
 /**
  * Roles on the published org chart: by title, who holds it, and what it is
- * responsible for ("who handles sponsors?"). A chart is small, so it is read
+ * responsible for ("who handles partners?"). A chart is small, so it is read
  * whole and matched here, where the responsibility lists can be searched.
  */
 async function searchRoles(ctx: Ctx): Promise<SearchGroup> {
@@ -854,7 +854,7 @@ function amountQuery(text: string): number | null {
 
 /**
  * Finance. Owners, admins and treasurers: the ledger (description, counterparty,
- * category, or the amount itself) and sponsors. Everyone else: only their
+ * category, or the amount itself) and Deals' partners (Sponsor rows). Everyone else: only their
  * own expenses, which open on My reimbursements.
  */
 async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
@@ -985,9 +985,9 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
     ...sponsors.map((s) =>
       hit("sponsor", s.id, {
         title: s.name,
-        href: `${ctx.base}/finance/sponsorships`,
+        href: `${ctx.base}/finance/deals`,
         detail: s.contactName ?? null,
-        meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "sponsorship" : "sponsorships"}`,
+        meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "deal" : "deals"}`,
         score: scoreFields(
           [
             { text: s.name, weight: 3 },

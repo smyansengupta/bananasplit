@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { addAddOnAction, removeAddOnAction } from "@/app/app/[orgSlug]/integrations/addon-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { Button } from "@/components/ui/button";
 import { toast, undoable } from "@/components/ui/toaster";
 import { ADD_ON_INFO, type AddOnId } from "@/lib/addons";
 
 /**
  * Add an add-on in one click, then go where it starts: Forms to its
- * ready-made forms, Finance to its one-screen setup.
+ * ready-made forms, Finance to its one-screen setup, the CRM to its
+ * one-step setup.
  */
 export function AddAddOnButton({
   orgId,
@@ -29,7 +31,9 @@ export function AddAddOnButton({
   const [pending, start] = useTransition();
   const name = ADD_ON_INFO[id].name;
   const next =
-    id === "forms" ? `/app/${orgSlug}/forms/new` : `/app/${orgSlug}/integrations/finance?setup=1`;
+    id === "forms"
+      ? `/app/${orgSlug}/forms/new`
+      : `/app/${orgSlug}/integrations/${id}?setup=1`;
   return (
     <Button
       type="button"
@@ -54,6 +58,29 @@ export function AddAddOnButton({
     >
       {pending ? "Adding…" : `Add ${name}`}
     </Button>
+  );
+}
+
+/**
+ * "Add Forms" as an ambient button: the organization already has forms, so
+ * adding it just puts them back in the sidebar (no ready-made forms to pick).
+ */
+export function AddFormsAmbient({ orgId, reason }: { orgId: string; reason: string }) {
+  return (
+    <AmbientActions
+      why
+      className="items-start"
+      actions={[
+        {
+          key: "add-forms",
+          label: "Add Forms",
+          reason,
+          tone: "spark",
+          run: () => addAddOnAction(orgId, "forms"),
+          done: "Forms is in the sidebar now.",
+        },
+      ]}
+    />
   );
 }
 
