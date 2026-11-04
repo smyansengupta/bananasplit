@@ -166,22 +166,26 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
       }}
       foot={
         p ? (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button disabled={busy} onClick={() => void send()}>
-              {canEmail ? "Send" : p.phone ? `Call ${first}` : "Done"}
-              <Key k="E" />
-            </Button>
-            <Button variant="outline" disabled={busy} onClick={() => void snooze()}>
-              Snooze a week
-              <Key k="S" />
-            </Button>
-            <Button variant="outline" disabled={busy} onClick={() => next("skip")}>
-              Skip
-              <Key k="J" />
-            </Button>
-            <span className="text-muted-foreground ms-auto text-[13px]">
+          // Who's next on the left; the buttons on the right, Send last as
+          // the one that commits (like a dialog's footer).
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+            <span className="text-muted-foreground min-w-0 truncate text-[13px]">
               Next: {i + 1 < n ? people[i + 1]!.name : "nobody, last one"}
             </span>
+            <div className="ms-auto flex flex-wrap items-center justify-end gap-2.5">
+              <Button variant="outline" disabled={busy} onClick={() => next("skip")}>
+                Skip
+                <Key k="J" />
+              </Button>
+              <Button variant="outline" disabled={busy} onClick={() => void snooze()}>
+                Snooze a week
+                <Key k="S" />
+              </Button>
+              <Button disabled={busy} onClick={() => void send()}>
+                {canEmail ? "Send" : p.phone ? `Call ${first}` : "Done"}
+                <Key k="E" />
+              </Button>
+            </div>
           </div>
         ) : undefined
       }
