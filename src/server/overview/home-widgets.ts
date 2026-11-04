@@ -2,6 +2,7 @@ import type { BallotVisibility, Role } from "@/generated/prisma/enums";
 import { can } from "@/lib/auth/permissions";
 import type { Deadlines } from "@/lib/overview/deadlines-text";
 import type { WaitingOnOthers } from "@/lib/overview/waiting-on-others-text";
+import { rolePositions } from "@/server/crm/owners";
 import { withOrgTx, type TxClient } from "@/server/db/context";
 import type { RecentItem } from "@/server/pins";
 
@@ -237,10 +238,20 @@ export async function loadOwnTxWidgets(
   const who = { orgId, orgSlug, userId, role, timeZone, now };
   const read = <T>(type: string, load: (db: TxClient) => Promise<T>) =>
     readWidget(orgId, type, placed, load);
+  // Waiting on you's CRM rows (replies, things to approve), when the CRM is
+  // added: whose follow-ups are whose goes by the org chart's roles.
+  const crmRoles =
+    placed.has("waiting-on-you") && viewer.addOns?.includes("crm")
+      ? await rolePositions(orgId).catch(() => null)
+      : null;
   return {
     since: await read("since-you-were-here", (db) => loadSinceYouWereHere(db, { ...who, since })),
     waitingOnYou: await read("waiting-on-you", (db) =>
-      loadWaitingOnYou(db, { ...who, orgTimeZone: viewer.orgTimeZone }),
+      loadWaitingOnYou(db, {
+        ...who,
+        orgTimeZone: viewer.orgTimeZone,
+        crm: crmRoles ? { roles: crmRoles } : null,
+      }),
     ),
     waitingOnOthers: await read("waiting-on-others", (db) => loadWaitingOnOthers(db, who)),
     votes: await read("votes", (db) =>

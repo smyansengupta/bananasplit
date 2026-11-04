@@ -39,7 +39,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { signalsFor } from "@/server/crm/signals";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmRecordHref, crmTodayHref } from "@/lib/crm/href";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { crmInboxItems, crmReviewRow } from "@/server/crm/outreach/inbox";
 import { rolePositions } from "@/server/crm/owners";
@@ -272,7 +272,7 @@ export default async function InboxPage({
       meta: [s.label, s.summary].filter(Boolean).join(": "),
       group: "review",
       category: "signal",
-      href: s.targetKind && s.targetId ? crmRecordHref(orgSlug, s.targetKind, s.targetId) : `${base}/crm`,
+      href: s.targetKind && s.targetId ? crmRecordHref(orgSlug, s.targetKind, s.targetId) : crmTodayHref(orgSlug),
       peek: null,
     })),
   );

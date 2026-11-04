@@ -35,6 +35,7 @@ import {
   peopleWhere,
   type ListQuery,
 } from "./queries";
+import { taskSteps } from "./task-steps";
 
 /**
  * The People tab's data (docs/features/crm.md, "Redesign" and "One list"):
@@ -468,6 +469,7 @@ export async function peoplePage(
     const data = await listCompanies(db, organizationId, query, viewerId, roles);
     total = data.total;
     const deals = await dealsByRow(db, rowDealWhere, true, data.rows.map((c) => c.id), pipelines, now);
+    const tasks = await taskSteps(db, organizationId, "company", data.rows.map((c) => c.id));
     rows = data.rows.map((c) => {
       const deal = rowDealView(deals.get(c.id));
       return {
@@ -482,7 +484,12 @@ export async function peoplePage(
         strength: c.strength,
         last: lastTalked(c.lastContactedAt, now),
         next: rowNext(
-          { nextFollowUpAt: c.nextFollowUpAt, lastContactedAt: c.lastContactedAt, deal: deal.next },
+          {
+            nextFollowUpAt: c.nextFollowUpAt,
+            lastContactedAt: c.lastContactedAt,
+            deal: deal.next,
+            task: tasks.get(c.id) ?? null,
+          },
           now,
         ),
         mergeWith: null,
@@ -505,6 +512,7 @@ export async function peoplePage(
     );
     const wrote = await unanswered(db, organizationId, ids, now);
     const deals = await dealsByRow(db, rowDealWhere, false, ids, pipelines, now);
+    const tasks = await taskSteps(db, organizationId, "person", ids);
     rows = data.rows.map((p) => {
       const dup = dupes.get(p.id) ?? null;
       const type = p.relationship ? tones.get(p.relationship) : null;
@@ -527,6 +535,7 @@ export async function peoplePage(
             duplicate: dup ? { name: dup.name, reason: dup.reason } : null,
             wroteAt: wrote.get(p.id) ?? null,
             deal: deal.next,
+            task: tasks.get(p.id) ?? null,
           },
           now,
         ),

@@ -16,6 +16,7 @@ export const SEARCH_SCOPES = [
   { id: "people", label: "People" },
   { id: "databases", label: "Databases" },
   { id: "finance", label: "Finance" },
+  { id: "crm", label: "CRM" },
 ] as const;
 
 export type SearchScope = (typeof SEARCH_SCOPES)[number]["id"];
@@ -41,7 +42,11 @@ export type SearchKind =
   | "position"
   | "database"
   | "transaction"
-  | "sponsor";
+  | "sponsor"
+  // The CRM's records; named as their link kinds (src/lib/links.ts), so a hit links as one.
+  | "crm-person"
+  | "crm-company"
+  | "crm-deal";
 
 /** Groups the server fills; the palette adds "recent", "actions" and "pages" itself. */
 export const SERVER_GROUPS = [
@@ -56,6 +61,7 @@ export const SERVER_GROUPS = [
   "roles",
   "databases",
   "finance",
+  "crm",
 ] as const;
 
 export type ServerGroupId = (typeof SERVER_GROUPS)[number];
@@ -76,6 +82,7 @@ export const GROUP_LABELS: Record<SearchGroupId, string> = {
   roles: "Org chart",
   databases: "Databases",
   finance: "Finance",
+  crm: "CRM",
 };
 
 /** Which filter chip each group belongs to. */
@@ -94,6 +101,7 @@ export const GROUP_SCOPE: Record<SearchGroupId, Exclude<SearchScope, "all">> = {
   roles: "people",
   databases: "databases",
   finance: "finance",
+  crm: "crm",
 };
 
 /**
@@ -113,6 +121,7 @@ export const GROUP_SECTION: Partial<Record<SearchGroupId, SectionId>> = {
   roles: "people",
   databases: "databases",
   finance: "finance",
+  crm: "crm",
 };
 
 export interface SearchHit {

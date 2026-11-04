@@ -2353,3 +2353,59 @@ under one CRM chip, linked to the card (`crmRecordHref`, `?open=`):
 - **Not yet.** A quote opened by the sender themselves counts as opened.
   Text sends that fail don't write a line. A bring-in (members, event
   guests) is quiet like an import but writes no summary line yet.
+
+## The CRM in the rest of the app
+
+Every link into the CRM from outside its pages goes through
+`src/lib/crm/href.ts` (`crmRecordHref`, `crmTodayHref`, `crmApprovalsHref`,
+`crmPeopleHref`, `crmNewHref`, `crmDealsHref`, `crmSettingsHomeHref`,
+`crmPipelineHref`), so a page that moves changes in one place.
+
+- **Retired pages.** `/crm/queue` (Review) goes to Today's To approve
+  (`?show=approve`); `/crm/items/new` opens the New deal card;
+  `/crm/pipelines/<id>` keeps its params on the way to Deals (`?new=1`
+  opens New deal). The rules are pure, in `src/lib/crm/redirects.ts`.
+- **Search.** The palette's search has a CRM group and a CRM filter:
+  people (name, title, company, any address), companies and deals, kinds
+  `crm-person`, `crm-company` and `crm-deal` (the link kinds, so the
+  Linked panel's picker links them too), each opening its card. Only
+  where the space added the CRM and its plan has it, Personal spaces
+  included; the database decides whose records a member sees (OWN
+  access). A Finance partner hit opens its CRM company when it has one.
+- **Palette pages.** CRM today, To approve, CRM people, CRM companies,
+  CRM deals and CRM settings; Finance's Deals reads "Finance deals".
+- **Pins and Recently visited.** `crm` is a section in
+  `src/lib/pins/pages.ts`: Today (with `?show=`), People (with `?view=`
+  and `?list=`), Deals, settings sections and the smaller pages. A
+  record's old page isn't kept (it redirects to its card).
+- **New menu.** New person, New company and New deal open the New card;
+  so do the People, Companies and Deals databases' New buttons.
+- **Tasks are next steps.** An open task linked to a person, company or
+  deal (ItemLink) is its next step: People's cell shows it in words
+  ("Send the deck, Nov 12", "today", "3 days late") instead of Add a next
+  step or Check in, and Today leaves the deal out of "no next step". A
+  sooner follow-up, a reply or a due follow-up still comes first.
+  Completing or trashing the task clears it. Pure rules in
+  `src/lib/crm/task-steps.ts`, the reads in `src/server/crm/task-steps.ts`
+  (as the viewer, so a private task they can't see doesn't count).
+- **Links back in** (`src/server/crm/outside-links.ts`, nothing when the
+  CRM isn't there for the viewer): Finance's deals screen links a deal to
+  its CRM deal and a partner to its company (else the person with its
+  contact's email), with Open in CRM in their menus; a meeting's
+  attendees who are CRM people (by account, else email) link to their
+  card, and the CRM people it was with who aren't members (a booking's
+  guest, anyone it's logged on or linked to) are listed under Invited
+  with Open in CRM; a member's page in People has Open in CRM when they
+  are a CRM person.
+- **Connected apps.** The CRM tools' links are the cards (`recordUrl`),
+  Deals for a pipeline, To approve for what's queued, and a saved list's
+  own `?list=`; their words say deals and To approve.
+- **Home.** Waiting on you adds two rows when there's something: replies
+  waiting (the member's own people who wrote back) and things to approve
+  (the Inbox's `crm:review`, so Snooze and Done there apply), each opening
+  Today on its group.
+- **Tests.** `src/lib/crm/redirects.test.ts`, `src/lib/crm/task-steps.test.ts`,
+  the CRM cases in `src/lib/pins/pages.test.ts` and
+  `src/components/command-palette/catalog.test.ts`, and
+  `src/server/crm/crm-links.db.test.ts` (search scoped by access, add-on
+  and plan; task steps; Finance and member links).

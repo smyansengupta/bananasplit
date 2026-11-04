@@ -1,6 +1,7 @@
 import type { PlanFeature } from "@/lib/billing/features";
 import { spaceIncludes, type SpaceInfo } from "@/lib/billing/space";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
+import { crmNewHref } from "@/lib/crm/href";
 import { SECTION_FEATURES, type ResolvedGroup } from "@/lib/nav/sidebar";
 import { NEW_TASK_PARAM } from "@/lib/shortcuts";
 
@@ -260,7 +261,7 @@ export type CreateActionId =
   | "expense"
   | "crm-person"
   | "crm-company"
-  | "crm-item"
+  | "crm-deal"
   | "find-a-time";
 
 export interface CreateAction {
@@ -346,24 +347,25 @@ export function createActions(
     });
   }
   if (links.has("crm")) {
-    // The CRM's three ways in (docs/features/crm.md): each list opens its form with ?new=1.
+    // The CRM's three ways in (docs/features/crm.md): each opens the New card (?open=new:...).
+    const slug = path("crm").split("/")[2]!;
     actions.push({
       id: "crm-person",
       label: "New person",
       icon: "UserPlus",
-      href: `${path("crm")}/people?new=1`,
+      href: crmNewHref(slug, "person"),
     });
     actions.push({
       id: "crm-company",
       label: "New company",
       icon: "Building2",
-      href: `${path("crm")}/companies?new=1`,
+      href: crmNewHref(slug, "company"),
     });
     actions.push({
-      id: "crm-item",
-      label: "New item",
+      id: "crm-deal",
+      label: "New deal",
       icon: "Columns3",
-      href: `${path("crm")}/items/new`,
+      href: crmNewHref(slug, "deal"),
     });
   }
   if (links.has("meetings")) {

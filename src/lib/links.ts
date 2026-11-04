@@ -21,7 +21,7 @@ export const LINK_KINDS = [
   "poll",
   "decision",
   "announcement",
-  // The CRM's people, companies and pipeline items (docs/features/crm.md):
+  // The CRM's people, companies and deals (docs/features/crm.md):
   // a task, note or meeting linked to one lands on its timeline.
   "crm-person",
   "crm-company",
@@ -73,7 +73,7 @@ export const KIND_WORD: Record<LinkKind, string> = {
   announcement: "Announcement",
   "crm-person": "Contact",
   "crm-company": "Company",
-  "crm-deal": "Pipeline item",
+  "crm-deal": "Deal",
 };
 
 /**

@@ -2,7 +2,9 @@ import "server-only";
 
 import { z } from "zod";
 
+import { appUrl } from "@/lib/app-url";
 import { NotFoundError } from "@/lib/auth/errors";
+import { crmPipelineHref, crmRecordHref } from "@/lib/crm/href";
 import type { TargetKind, TargetRef } from "@/lib/crm/suggestions";
 import { CrmError, requireCrm } from "@/server/crm/access";
 import { timeline } from "@/server/crm/activity";
@@ -29,7 +31,7 @@ import { zonedIso } from "./text";
 
 /**
  * The CRM's read tools (docs/features/crm.md module 10, "Your own Claude"):
- * search people, companies and pipeline items; read a record's timeline;
+ * search people, companies and deals; read a record's timeline;
  * who nobody has talked to in N days; what changed with a record since a
  * day; the pipelines and their stages. Each runs as the member under RLS
  * (a CRM on "members see their own" shows them only theirs), in a space
@@ -62,8 +64,7 @@ export function inCrm<T>(session: ConnectorSession, spaceId: string, fn: (ctx: O
 
 export const KIND_OF: Record<TargetKind, ItemKind> = { person: "crmperson", company: "crmcompany", deal: "crmitem" };
 const TARGET_OF: Partial<Record<ItemKind, TargetKind>> = { crmperson: "person", crmcompany: "company", crmitem: "deal" };
-const WORD: Record<TargetKind, "person" | "company" | "item"> = { person: "person", company: "company", deal: "item" };
-const PATH: Record<TargetKind, string> = { person: "people", company: "companies", deal: "items" };
+const WORD: Record<TargetKind, "person" | "company" | "deal"> = { person: "person", company: "company", deal: "deal" };
 
 /** A CRM record's opaque id, and back. */
 export function crmItemId(space: ToolSpace, target: TargetRef): string {
@@ -75,8 +76,9 @@ export function crmRef(value: string): { ref: ItemRef; target: TargetRef } {
   return { ref, target: { kind: TARGET_OF[ref.kind]!, id: ref.id } };
 }
 
+/** A record's card in the CRM (src/lib/crm/href.ts), as a full URL. */
 export function recordUrl(space: ToolSpace, target: TargetRef): string {
-  return space.url(`/crm/${PATH[target.kind]}/${target.id}`);
+  return appUrl(crmRecordHref(space.slug, target.kind, target.id));
 }
 
 function instant(d: Date | null | undefined, zone: string): string | null {
@@ -85,9 +87,9 @@ function instant(d: Date | null | undefined, zone: string): string | null {
 
 const recordOut = z.object({
   id: z.string().describe("The record's id, for the other CRM tools and fetch."),
-  kind: z.enum(["person", "company", "item"]),
+  kind: z.enum(["person", "company", "deal"]),
   name: z.string(),
-  detail: z.string().nullable().describe("A person's title and company, a company's industry, an item's pipeline and stage."),
+  detail: z.string().nullable().describe("A person's title and company, a company's industry, a deal's pipeline and stage."),
   lastContacted: z.string().nullable().describe("When anyone in the organization was last in touch (ISO 8601), or null for never."),
   url: urlField,
 });
@@ -111,20 +113,20 @@ const searchInput = z.object({
   space: spaceArg,
   query: z.string().max(100).describe("Words in a name, title, company, domain or email. Empty lists the most recently contacted."),
   kinds: z
-    .array(z.enum(["people", "companies", "items"]))
-    .max(3)
+    .array(z.enum(["people", "companies", "deals", "items"]))
+    .max(4)
     .optional()
-    .describe("What to search; all three unless given."),
+    .describe('What to search; all three unless given. "items" is the old name for "deals".'),
   limit: limitArg,
 });
 const searchOutput = z.object({ space: spaceRef, results: z.array(recordOut) });
 
-const KIND_IN: Record<"people" | "companies" | "items", TargetKind> = { people: "person", companies: "company", items: "deal" };
+const KIND_IN: Record<"people" | "companies" | "deals" | "items", TargetKind> = { people: "person", companies: "company", deals: "deal", items: "deal" };
 
 export async function crmSearchTool(session: ConnectorSession, raw: z.input<typeof searchInput>) {
   const args = searchInput.parse(raw);
   return inCrm(session, args.space, async (ctx, space) => {
-    const kinds = (args.kinds?.length ? args.kinds : (["people", "companies", "items"] as const)).map((k) => KIND_IN[k]);
+    const kinds = [...new Set((args.kinds?.length ? args.kinds : (["people", "companies", "deals"] as const)).map((k) => KIND_IN[k]))];
     const hits = await searchCrm(ctx.db, space.id, args.query, kinds, args.limit);
     return { space: { id: space.id, name: space.name }, results: hits.slice(0, args.limit).map((h) => hitOut(space, h)) };
   });
@@ -288,8 +290,8 @@ const pipelinesOutput = z.object({
     z.object({
       id: z.string(),
       name: z.string(),
-      itemNoun: z.string().describe('What one item is called ("deal", "applicant").'),
-      stages: z.array(z.object({ id: z.string().describe("For crm_move_stage."), name: z.string(), kind: z.enum(["open", "won", "lost"]), items: z.number().int() })),
+      itemNoun: z.string().describe('What one deal in it is called ("deal", "applicant").'),
+      stages: z.array(z.object({ id: z.string().describe("For crm_move_stage."), name: z.string(), kind: z.enum(["open", "won", "lost"]), items: z.number().int().describe("How many deals are in it.") })),
       url: urlField,
     }),
   ),
@@ -316,7 +318,7 @@ export async function crmPipelinesTool(session: ConnectorSession, raw: z.input<t
           kind: s.kind.toLowerCase() as "open" | "won" | "lost",
           items: counts.find((c) => c.stageId === s.id)?._count._all ?? 0,
         })),
-        url: space.url(`/crm/pipelines/${p.id}`),
+        url: appUrl(crmPipelineHref(space.slug, p.id)),
       })),
     };
   });
@@ -357,7 +359,7 @@ export const registerCrmTools: ToolRegistrar = (server, session) => {
     "crm_search",
     {
       title: "Search the CRM",
-      description: "Finds people, companies and pipeline items in one space's CRM by words in their name, title, company, domain or email.",
+      description: "Finds people, companies and deals in one space's CRM by words in their name, title, company, domain or email.",
       inputSchema: searchInput,
       outputSchema: searchOutput,
       annotations: READ_ONLY,
@@ -368,7 +370,7 @@ export const registerCrmTools: ToolRegistrar = (server, session) => {
     "crm_timeline",
     {
       title: "Read a CRM timeline",
-      description: "Reads one person's, company's or item's timeline, newest first: emails, meetings, calls, texts, notes, form answers, RSVPs, check-ins, payments and stage moves.",
+      description: "Reads one person's, company's or deal's timeline, newest first: emails, meetings, calls, texts, notes, form answers, RSVPs, check-ins, payments and stage moves.",
       inputSchema: timelineInput,
       outputSchema: timelineOutput,
       annotations: READ_ONLY,
@@ -401,7 +403,7 @@ export const registerCrmTools: ToolRegistrar = (server, session) => {
     "crm_pipelines",
     {
       title: "List CRM pipelines",
-      description: "Lists one space's CRM pipelines with their stages and how many items are in each.",
+      description: "Lists one space's CRM pipelines with their stages and how many deals are in each.",
       inputSchema: pipelinesInput,
       outputSchema: pipelinesOutput,
       annotations: READ_ONLY,

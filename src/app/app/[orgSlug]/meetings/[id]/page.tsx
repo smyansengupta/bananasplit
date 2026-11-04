@@ -12,6 +12,7 @@ import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-s
 import { parseDialIn } from "@/lib/meetings/dial-in";
 import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { crmForMeeting } from "@/server/crm/outside-links";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 
@@ -37,7 +38,8 @@ export default async function MeetingPage({
   const { orgSlug, id } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const canEdit = can({ role }, "events.write");
-  const loaded = await withOrgTx(org.id, async ({ db }) => {
+  const loaded = await withOrgTx(org.id, async (ctx) => {
+    const { db } = ctx;
     const event = await getEventById(db, org.id, id, user.id);
     // Sign-up numbers for owners and admins (RLS shows sign-ups only to them).
     const signups =
@@ -79,9 +81,18 @@ export default async function MeetingPage({
           orderBy: [{ status: "asc" }, { dueDate: { sort: "asc", nulls: "last" } }],
         })
       : [];
-    return { event, signups, tasks };
+    // Who of its people are in the CRM (a booking's guest, attendees who are CRM people).
+    const crm = event
+      ? await crmForMeeting(
+          ctx,
+          orgSlug,
+          event.id,
+          event.attendees.map((a) => a.userId),
+        )
+      : null;
+    return { event, signups, tasks, crm };
   });
-  const { event, signups, tasks } = loaded;
+  const { event, signups, tasks, crm } = loaded;
   const dueFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -170,6 +181,7 @@ export default async function MeetingPage({
         ) : null
       }
       askedRsvp={askedRsvp}
+      crm={crm}
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}

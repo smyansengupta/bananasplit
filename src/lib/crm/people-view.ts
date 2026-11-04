@@ -11,6 +11,7 @@ import type { TagColor } from "@/lib/tag-colors";
 
 import { parseDealsFilters, type DealsFilters } from "./deals-tab";
 import { COLD_AFTER_DAYS } from "./strength";
+import { taskStepText, type TaskStep } from "./task-steps";
 
 const DAY = 86_400_000;
 
@@ -178,6 +179,8 @@ export interface RowNextInput {
   wroteAt?: Date | null;
   /** Their open deal (the most advanced), if they have one. */
   deal?: RowDealInput | null;
+  /** An open task linked to them: it is their next step (src/lib/crm/task-steps.ts). */
+  task?: TaskStep | null;
 }
 
 function shortDate(d: Date): string {
@@ -202,7 +205,8 @@ export function duplicateReason(reason: string | null, other: string): string {
  * follow-up that's due, their deal's next step when it's late or missing,
  * someone going cold, or a next step when someone you've talked to has
  * none. Otherwise the next step in words (theirs, else their deal's), and
- * no button.
+ * no button. An open linked task is a next step (its due date is when): it
+ * shows in words, and nobody with one is "going cold" or missing a step.
  */
 export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
   if (input.duplicate) {
@@ -285,8 +289,15 @@ export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
       text: null,
     };
   }
+  if (input.task) {
+    const laterKey = later ? later.toISOString().slice(0, 10) : null;
+    // A later follow-up that comes before the task is the nearer step.
+    if (!laterKey || (input.task.dueKey !== null && input.task.dueKey <= laterKey)) {
+      return { action: null, text: taskStepText(input.task, now.toISOString().slice(0, 10)) };
+    }
+  }
   const quiet = input.lastContactedAt ? daysBetween(input.lastContactedAt, now) : null;
-  if (!later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
+  if (!input.task && !later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
     return {
       action: { kind: "checkin", label: "Check in", tone: "spark", reason: `${quiet} days quiet` },
       text: null,

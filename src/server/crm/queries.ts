@@ -4,6 +4,7 @@ import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "./owners";
 import { rolesHeldBy } from "./owners";
+import { taskSteps } from "./task-steps";
 
 /**
  * The CRM's lists, filtered, sorted and searched on the server (docs/
@@ -581,7 +582,10 @@ export async function todayList(
     },
   });
   const stuck = open.filter((d) => isStuck(d, limits.get(d.stageId) ?? null, now)).slice(0, 15);
-  const nostep = open.filter((d) => !d.nextStep?.trim()).slice(0, 15);
+  // An open task linked to a deal is its next step (src/lib/crm/task-steps.ts).
+  const stepless = open.filter((d) => !d.nextStep?.trim());
+  const tasked = await taskSteps(db, organizationId, "deal", stepless.map((d) => d.id));
+  const nostep = stepless.filter((d) => !tasked.has(d.id)).slice(0, 15);
   return {
     followup: [
       ...followups.map((p) => ({
