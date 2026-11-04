@@ -24,6 +24,7 @@ describe("the Deals tab's URL", () => {
     expect(parseDealsFilters({})).toEqual({
       view: "list",
       pipeline: null,
+      stage: null,
       owner: null,
       type: null,
       show: "open",
@@ -34,7 +35,7 @@ describe("the Deals tab's URL", () => {
   it("reads every filter and drops what it can't use", () => {
     expect(
       parseDealsFilters({ view: "board", pipeline: "p_1", owner: "me", type: "Renewal", show: "won", q: " grove " }),
-    ).toEqual({ view: "board", pipeline: "p_1", owner: "me", type: "renewal", show: "won", q: "grove" });
+    ).toEqual({ view: "board", pipeline: "p_1", stage: null, owner: "me", type: "renewal", show: "won", q: "grove" });
     expect(parseDealsFilters({ view: "table", pipeline: "a b", owner: "<x>", show: "maybe" })).toMatchObject({
       view: "list",
       pipeline: null,

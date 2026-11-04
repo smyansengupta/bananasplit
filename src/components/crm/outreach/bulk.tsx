@@ -2,16 +2,15 @@
 
 import { AlertTriangle, Send, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { planBulkAction, sendBulkAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
+import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
-import { crmPlanHref } from "@/lib/crm/href";
 import { exampleValues, renderMerge } from "@/lib/crm/outreach/merge";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
@@ -39,10 +38,10 @@ export function BulkComposer({
   templates: { id: string; name: string; subject: string | null; body: string }[];
   sender: { ok: boolean; from: string | null; problem: string | null };
   canSend: boolean;
-  /** A list to start on (People's "Email them" makes one and lands here with ?list=). */
+  /** A list to start on (People's "Email them" makes one and opens this with ?to=). */
   initialList?: string | null;
 }) {
-  const router = useRouter();
+  const { setOpen } = useCrmOpen();
   const startList = initialList && lists.some((l) => l.id === initialList) ? initialList : null;
   const [viewId, setViewId] = useState<string | null>(startList);
   const [plan, setPlan] = useState<{ recipients: number; left: { reason: string; count: number }[] } | null>(null);
@@ -85,7 +84,8 @@ export function BulkComposer({
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
     toast({ title: `Sending to ${r.recipients.toLocaleString("en-US")}`, tone: "success" });
-    router.push(crmPlanHref(orgSlug, "campaign", r.campaignId));
+    // Its card opens in place of this one, over the same page.
+    setOpen({ kind: "plan", type: "campaign", id: r.campaignId });
   };
 
   return (

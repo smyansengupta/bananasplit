@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone } from "@/components/icons";
+import { Phone, Repeat } from "@/components/icons";
 import { useState } from "react";
 
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
@@ -12,15 +12,17 @@ import { NotesList, type NoteItem } from "@/components/crm/card/notes";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
+import { SeriesDialog } from "@/components/crm/people/series-dialog";
 import { Timeline, type TimelineItem } from "@/components/crm/timeline";
 import { EmptyState } from "@/components/empty-state";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import type { EditField } from "@/lib/crm/record-form";
 import { cn } from "@/lib/utils";
 
 /**
  * A person, as a card over whatever CRM page you're on (?open=person:<id>):
  * who they are in the header, with Call when there's a number and "…" for
- * history, merge and the trash; Overview (the next step, their biggest
+ * Add to a follow-up series, history, merge and the trash; Overview (the next step, their biggest
  * issue, the brief, the latest thing and what it needs, money owed),
  * Timeline, Notes, Deals and Details (click a value to change it); one
  * composer at the foot (Email, Text, Note, Task).
@@ -75,6 +77,8 @@ export interface PersonCardData {
   conflict: string | null;
   templates: { id: string; name: string; subject: string | null; body: string }[];
   booking: string | null;
+  /** Follow-up series that are on (Add to a follow-up series). */
+  series: { id: string; name: string }[];
 }
 
 export function PersonCard({
@@ -88,6 +92,7 @@ export function PersonCard({
 }) {
   const { setOpen, close } = useCrmOpen();
   const [seed, setSeed] = useState<ComposerSeed | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
   const memberList = data ? Object.entries(data.members).map(([id, name]) => ({ id, name })) : [];
 
   if (!data) {
@@ -133,8 +138,23 @@ export function PersonCard({
             deleted={data.deleted}
             history={data.history}
             menu
+            menuItems={
+              <DropdownMenuItem onSelect={() => setEnrolling(true)}>
+                <Repeat className="size-4" aria-hidden="true" />
+                Add to a follow-up series
+              </DropdownMenuItem>
+            }
             onTrashed={close}
           />
+          {enrolling && (
+            <SeriesDialog
+              orgId={orgId}
+              personIds={[data.id]}
+              series={data.series}
+              settingsHref={`/app/${orgSlug}/crm/settings/automations`}
+              onClose={() => setEnrolling(false)}
+            />
+          )}
         </>
       }
       tabs={[

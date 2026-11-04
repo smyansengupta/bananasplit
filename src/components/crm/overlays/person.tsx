@@ -167,6 +167,12 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       money,
       booking: booking ? `${appOrigin()}/book/${booking.slug}` : null,
       templates: await composeTemplates(db, orgId),
+      series: await db.crmSequence.findMany({
+        where: { organizationId: orgId, archivedAt: null, status: "ON" },
+        orderBy: { name: "asc" },
+        take: 50,
+        select: { id: true, name: true },
+      }),
       timelineItems: await presentTimeline(db, orgId, loaded.timeline),
     };
   });
@@ -256,6 +262,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       : null,
     templates: data.templates,
     booking: data.booking,
+    series: data.series,
   };
   return <PersonCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

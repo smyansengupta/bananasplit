@@ -21,7 +21,7 @@ import { isTypingTarget } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 /**
- * The CRM's toolbar row, Tasks' toolbar in the CRM: the four-tab switch,
+ * The CRM's toolbar row, Tasks' toolbar in the CRM: the tab switch,
  * then the page's own round buttons (`children`), Filters (every picker
  * lives in there: lists, owner, pipeline), a spacer, and search as a pill
  * that takes what room is left (180px to 340px) and folds to its icon when
@@ -121,10 +121,13 @@ export function CrmFilterPick({
   param,
   icon: Icon,
   options,
+  also,
 }: {
   param: string;
   icon?: IconComponent;
   options: readonly { value: string; label: string }[];
+  /** Other params set (or cleared, with null) with the pick: a new pipeline clears the stage. */
+  also?: Record<string, string | null>;
 }) {
   const { params, set } = useParamSetter();
   const value = params.get(param) ?? "";
@@ -142,7 +145,7 @@ export function CrmFilterPick({
         {options.map((o) => (
           <DropdownMenuItem
             key={o.value || "any"}
-            onSelect={() => set({ [param]: o.value || null })}
+            onSelect={() => set({ ...also, [param]: o.value || null })}
           >
             <Check
               className={cn("size-4", o.value === value ? "opacity-100" : "opacity-0")}
