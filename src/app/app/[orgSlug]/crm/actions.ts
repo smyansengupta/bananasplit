@@ -8,6 +8,7 @@ import type { RelationshipType } from "@/lib/crm/templates";
 import { CrmValidationError } from "@/lib/crm/validate";
 import { CrmError, requireCrm } from "@/server/crm/access";
 import { logActivity, timeline, type TimelineEntry } from "@/server/crm/activity";
+import { queueIssueRefresh } from "@/server/crm/issue-queue";
 import { bringIn, bringInCounts, BATCH, type BringInSource } from "@/server/crm/bring-in";
 import { bulkTrash, bulkUpdate, restoreToPoint, undoBatch, type BulkPatch } from "@/server/crm/bulk";
 import { createCompany, restoreCompanies } from "@/server/crm/companies";
@@ -231,6 +232,10 @@ export const logActivityAction = crmAction(
       actorId: ctx.userId,
       createdById: ctx.userId,
     });
+    // A note or a call may change a person's biggest issue (asked again only when it did).
+    if (input.kind === "NOTE" || input.kind === "CALL" || input.kind === "MEETING" || input.direction === "INBOUND") {
+      await queueIssueRefresh(ctx.db, ctx.organizationId, input.targets.filter((t) => t.kind === "person").map((t) => t.id), ctx.userId);
+    }
     return { id };
   },
 );

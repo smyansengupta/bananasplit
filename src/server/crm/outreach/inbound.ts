@@ -19,6 +19,7 @@ import { notifyUser } from "@/server/notifications";
 
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
+import { queueIssueRefresh } from "../issue-queue";
 import { proposeChange } from "../review";
 import { inboundDomain } from "./mailbox";
 import { SOURCE_KIND } from "./send";
@@ -377,6 +378,8 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
         meta: { messageId: created.id, threadId, via: source.kind, shared: shareMode, ...(ours ? { inReplyTo: ours.id } : {}) },
       });
       await db.crmEmailMessage.update({ where: { id: created.id }, data: { activityId } });
+      // What they wrote may change their biggest issue.
+      if (direction === "INBOUND") await queueIssueRefresh(db, organizationId, peopleIds, mailboxUserId ?? null);
     }
 
     if (isReply) {

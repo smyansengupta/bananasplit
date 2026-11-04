@@ -572,7 +572,7 @@ export const JOB_KINDS = {
   "crm-ai": kind({
     payload: z
       .object({
-        action: z.enum(["fill", "batch-poll", "research", "follow-up", "sweep", "new-record"]),
+        action: z.enum(["fill", "batch-poll", "research", "follow-up", "sweep", "new-record", "issue"]),
         /** The member the work is for (records and suggestions are made as them). */
         userId: id.optional(),
         fieldId: id.optional(),
@@ -594,7 +594,7 @@ export const JOB_KINDS = {
     afterEligible: false,
     handler: () => import("@/server/crm/ai-jobs").then((m) => m.crmAiJob),
     description:
-      "The CRM's AI work on the organization's own key: an AI field's column a few rows a turn (key crm-ai:fill:{fieldId}:...), a Message Batch poll (crm-ai:batch:{viewId}), the research agent on a new person or company (crm-ai:research:{id}), the follow-up agent for one member (crm-ai:follow-up:{userId}:{day}), a new record's automatic work (crm-ai:new:{id}) and the daily sweep (crm-ai:sweep:{day}, once). Every model call checks the monthly cap and writes AiUsage.",
+      "The CRM's AI work on the organization's own key: an AI field's column a few rows a turn (key crm-ai:fill:{fieldId}:...), a Message Batch poll (crm-ai:batch:{viewId}), the research agent on a new person or company (crm-ai:research:{id}), the follow-up agent for one member (crm-ai:follow-up:{userId}:{day}), a new record's automatic work (crm-ai:new:{id}), a person's biggest issue after a note or a reply (crm-ai:issue:{personId}, asks the model only when the content changed) and the daily sweep (crm-ai:sweep:{day}, once). Every model call checks the monthly cap and writes AiUsage.",
   }),
 
   // ---- CRM phone, quotes and API (Phase 5; src/server/crm/phone, src/server/crm/webhooks) ----

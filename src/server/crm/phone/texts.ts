@@ -20,6 +20,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 
 import { CrmError, type CrmActor } from "../access";
 import { logActivity } from "../activity";
+import { queueIssueRefresh } from "../issue-queue";
 import { writeHistory } from "../history";
 import { createPerson } from "../people";
 import { phoneStatus } from "./connection";
@@ -256,6 +257,7 @@ export async function receiveText(
     meta: { textId: text.id, keyword },
   });
   await db.crmTextMessage.update({ where: { id: text.id }, data: { activityId } });
+  if (!keyword) await queueIssueRefresh(db, organizationId, [person.id], null);
   return { textId: text.id, keyword, matched: true };
 }
 
