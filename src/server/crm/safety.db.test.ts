@@ -336,6 +336,40 @@ describe("plans", () => {
     expect(await deliver(org, q.id)).toBe("sent");
   });
 
+  it("doesn't let a member's own plan send as someone else, or a stopped plan be changed under another's OK", async () => {
+    if (!reachable) return;
+    // A plain member makes a plan and starts it from another member's mailbox: a draft for that member.
+    const mine = await onePlan(member, "Member sends as someone else");
+    const kim = await as(owner, (ctx) => createPerson(ctx, { name: "Kim Park", primaryEmail: `kim-${tag}@park.example`, ownerId: other.id }));
+    await as(member, (ctx) => enroll(ctx, mine.id, [kim.id], { senderId: other.id, confirmConflicts: true }));
+    const e = await ownerDb.crmEnrollment.findFirstOrThrow({ where: { sequenceId: mine.id, personId: kim.id } });
+    expect(await ownerDb.crmEmailMessage.count({ where: { enrollmentId: e.id, status: { in: ["QUEUED", "SCHEDULED", "SENT"] } } })).toBe(0);
+    expect(await ownerDb.crmEmailMessage.count({ where: { enrollmentId: e.id, status: "DRAFT", mailboxUserId: other.id } })).toBe(1);
+
+    // Someone else's plan that has run: switching it off doesn't make it anyone's.
+    const theirs = await onePlan(owner, "Owner's plan, switched off");
+    const lee = await as(owner, (ctx) => createPerson(ctx, { name: "Lee Ray", primaryEmail: `lee-${tag}@ray.example` }));
+    await as(owner, (ctx) => enroll(ctx, theirs.id, [lee.id]));
+    await expect(as(member, (ctx) => setSequenceStatus(ctx, theirs.id, "OFF"))).rejects.toThrow(/Only whoever made it/);
+    await as(owner, (ctx) => setSequenceStatus(ctx, theirs.id, "OFF"));
+    await expect(as(member, (ctx) => saveSequence(ctx, theirs.id, { name: "Mine now" }))).rejects.toThrow(/Only whoever made it/);
+    await expect(as(member, (ctx) => setSequenceStatus(ctx, theirs.id, "ON"))).rejects.toThrow(/Only whoever made it/);
+
+    // Only whoever sends it (or a CRM manager) calls off a queued email.
+    const sam = await as(owner, (ctx) => createPerson(ctx, { name: "Sam Cole", primaryEmail: `sam-${tag}@cole.example` }));
+    const queued = await as(owner, (ctx) => composeEmail(ctx, { personId: sam.id, subject: "Numbers", body: "The figure is 123k.", holdSeconds: 60, confirmConflict: true }));
+    const msgId = (queued as { messageId: string }).messageId;
+    await expect(as(member, (ctx) => cancelEmail(ctx, msgId))).rejects.toThrow(/Only whoever sends it/);
+
+    // Their address changes while it waits: it doesn't follow the record, it waits for a new OK.
+    await ownerDb.crmPersonEmail.updateMany({ where: { organizationId: org, personId: sam.id }, data: { email: `attacker-${tag}@example.com` } });
+    await ownerDb.crmPerson.update({ where: { id: sam.id }, data: { primaryEmail: `attacker-${tag}@example.com` } });
+    await ownerDb.crmEmailMessage.update({ where: { id: msgId }, data: { scheduledFor: new Date(Date.now() - 1000) } });
+    expect(await deliver(org, msgId)).not.toBe("sent");
+    const after = await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: msgId } });
+    expect(after.status).not.toBe("SENT");
+  });
+
   it("keeps a running plan its maker's to edit", async () => {
     if (!reachable) return;
     const seq = await onePlan(owner, "Owner's running plan");

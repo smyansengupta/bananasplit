@@ -38,6 +38,22 @@ export function bareAddress(value: string | null | undefined): string | null {
   return m ? m[1]!.trim().toLowerCase().replace(/^mailto:/, "") : null;
 }
 
+/**
+ * The one sender a From line names, read the way the inbound Worker reads
+ * it (workers/crm-inbound, fromAddress): the address in angle brackets,
+ * else the bare address. Null when the line names more than one address
+ * anywhere, display name included ("mallory@x" <victim@y>): a sender check
+ * made on one address must never be taken for another.
+ */
+export function singleSender(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const all = new Set(
+    [...value.matchAll(/([^\s<>",;:]+@[^\s<>",;]+)/g)].map((m) => m[1]!.trim().toLowerCase().replace(/^mailto:/, "")),
+  );
+  if (all.size !== 1) return null;
+  return bareAddress(value);
+}
+
 /** "Ada Lovelace <ada@x.org>" -> "Ada Lovelace". */
 export function displayNameOf(value: string | null | undefined): string | null {
   if (!value) return null;

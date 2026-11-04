@@ -27,15 +27,31 @@ const RETRY = "This message couldn't be delivered right now. Please send it agai
 // AUTHSERV_ID, default mx.cloudflare.net). Only the topmost such header from
 // that name is read: a sender can paste a fake one further down, never above
 // the one the receiving server adds. The verdict is "pass" when DMARC passed,
-// or DKIM passed for the From domain, or SPF passed for an envelope sender in
-// the From domain; "fail" when the results say otherwise; "none" when there
-// are no results to read (the app then treats the sender as unverified).
+// or (for a domain with no DMARC policy) DKIM passed for the From domain or
+// SPF passed for an envelope sender in it; "fail" when the results say
+// otherwise or DMARC failed; "none" when there are no results to read (the
+// app then treats the sender as unverified). The From domain is that of the
+// line's one address (fromAddress); a line naming two addresses fails.
 
 const DEFAULT_AUTHSERV = "mx.cloudflare.net";
 
 function domainOf(address) {
   const m = /([^\s<>@",;]+)@([^\s<>@",;]+)/.exec(String(address ?? ""));
   return m ? m[2].toLowerCase().replace(/\.$/, "") : null;
+}
+
+/**
+ * The From line's one address, read as the app reads it (singleSender in
+ * src/lib/crm/outreach/inbound.ts): the address in angle brackets, else the
+ * bare one; null when the line names more than one address anywhere, the
+ * display name included, so a check on one can't vouch for another.
+ */
+export function fromAddress(value) {
+  const s = String(value ?? "");
+  const all = new Set([...s.matchAll(/([^\s<>",;:]+@[^\s<>",;]+)/g)].map((m) => m[1].trim().toLowerCase()));
+  if (all.size !== 1) return null;
+  const angle = /<([^<>\s]+@[^<>\s]+)>/.exec(s);
+  return (angle ? angle[1] : [...all][0]).toLowerCase().replace(/^mailto:/, "");
 }
 
 /** Whether `d` is the From domain, or one is a subdomain of the other (a safe part of relaxed alignment). */
@@ -62,7 +78,9 @@ function readResults(value) {
 
 export function senderAuth(headerList, fromHeader, envelopeFrom, authservId) {
   const trusted = String(authservId || DEFAULT_AUTHSERV).toLowerCase();
-  const fromDomain = domainOf(fromHeader) ?? domainOf(envelopeFrom);
+  // Only the From line's own single address: never the envelope's, and never
+  // a guess when the line names two.
+  const fromDomain = domainOf(fromAddress(fromHeader));
   let found = null;
   for (const h of headerList) {
     const key = String(h.key ?? "").toLowerCase();
@@ -81,7 +99,9 @@ export function senderAuth(headerList, fromHeader, envelopeFrom, authservId) {
   const spfPass = of("spf").some(
     (r) => r.result === "pass" && aligned(domainOf(r.props["smtp.mailfrom"]) ?? r.props["smtp.mailfrom"] ?? domainOf(envelopeFrom), fromDomain),
   );
-  const pass = dmarc === "pass" || dkimPass || spfPass;
+  // DMARC's own answer wins when there is one; aligned DKIM or SPF count
+  // only for a domain with no DMARC policy to ask.
+  const pass = fromDomain !== null && (dmarc === "pass" || ((dmarc === null || dmarc === "none") && (dkimPass || spfPass)));
   return {
     verdict: pass ? "pass" : "fail",
     spf: of("spf")[0]?.result ?? null,

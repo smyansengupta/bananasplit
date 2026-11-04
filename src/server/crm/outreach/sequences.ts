@@ -83,18 +83,23 @@ export async function createSequence(actor: CrmActor, name: string): Promise<{ i
 }
 
 /**
- * A running plan is its maker's: someone else changing it (its words, who
- * it's for, who sends it) would change what goes out in the maker's name,
- * so only they, owners, admins and CRM managers may. A plan that isn't
- * running is anyone's to work on.
+ * A plan that has ever run is its maker's: someone else changing it (its
+ * words, who it's for, who sends it, switching it off and on) would change
+ * what goes out under approvals other people gave, so only they, owners,
+ * admins and CRM managers may. A plan nobody has started yet is anyone's to
+ * work on. Switching it off doesn't make it anyone's again.
  */
 export async function assertMayEditPlan(
   actor: CrmActor,
-  seq: { status: string; createdById: string | null },
+  seq: { id: string; status: string; createdById: string | null },
 ): Promise<void> {
-  if (seq.status !== "ON" || !seq.createdById || seq.createdById === actor.userId) return;
+  if (!seq.createdById || seq.createdById === actor.userId) return;
+  const started =
+    seq.status === "ON" ||
+    (await actor.db.crmEnrollment.count({ where: { organizationId: actor.organizationId, sequenceId: seq.id }, take: 1 })) > 0;
+  if (!started) return;
   if ((await crmAccess(actor)).manager) return;
-  throw new CrmError("This plan is running. Only whoever made it, or a CRM manager, can change it now.");
+  throw new CrmError("This plan has run. Only whoever made it, or a CRM manager, can change it now.");
 }
 
 export async function saveSequence(actor: CrmActor, sequenceId: string, input: SequenceInput): Promise<void> {
@@ -160,9 +165,10 @@ export async function setSequenceStatus(actor: CrmActor, sequenceId: string, sta
   const { db, organizationId } = actor;
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId },
-    select: { id: true, steps: { select: { id: true } } },
+    select: { id: true, status: true, createdById: true, steps: { select: { id: true } } },
   });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
+  await assertMayEditPlan(actor, seq);
   if (status === "ON" && seq.steps.length === 0) throw new CrmError("Add a step first.");
   await db.crmSequence.update({ where: { id: seq.id }, data: { status } });
 }
@@ -171,7 +177,7 @@ export async function archiveSequence(actor: CrmActor, sequenceId: string): Prom
   const { db, organizationId } = actor;
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId },
-    select: { status: true, createdById: true },
+    select: { id: true, status: true, createdById: true },
   });
   if (seq) await assertMayEditPlan(actor, seq);
   const res = await db.crmSequence.updateMany({
@@ -379,9 +385,15 @@ export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Pro
   const { db, organizationId } = actor;
   const e = await db.crmEnrollment.findFirst({
     where: { id: enrollmentId, organizationId, status: { in: ["ACTIVE", "PAUSED"] } },
-    select: { id: true },
+    select: { id: true, senderId: true, enrolledById: true, sequence: { select: { createdById: true } } },
   });
   if (!e) throw new CrmError("It already stopped.");
+  // Someone's place in a plan is for its sender, whoever put them in, the
+  // plan's maker, or a CRM manager to end.
+  const mine = [e.senderId, e.enrolledById, e.sequence.createdById].includes(actor.userId);
+  if (!mine && !(await crmAccess(actor)).manager) {
+    throw new CrmError("Only its sender, whoever started it, or a CRM manager can take them out.");
+  }
   await db.crmEnrollment.update({
     where: { id: e.id },
     data: { status: "STOPPED", stopReason: "stopped by hand", finishedAt: new Date(), nextRunAt: null },
@@ -632,9 +644,13 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
       const mail = frozen
         ? { subject: frozen.subject ?? "", body: frozen.bodyText ?? "", templateId: frozen.templateId }
         : await stepEmail(db, organizationId, step, person.id, e.senderId, now, prior);
+      // Start approved the first email as it was written then (frozen). With
+      // nothing frozen (the plan changed since, say a to-do became an email)
+      // nobody approved these words: they wait as a draft.
       const approved =
         approvedByStart(e, stepIndex) &&
-        (!frozen || frozen.approvedById === e.enrolledById) &&
+        Boolean(frozen) &&
+        frozen!.approvedById === e.enrolledById &&
         (await startMayApprove(db, organizationId, {
           enrolledById: e.enrolledById,
           senderId: e.senderId,

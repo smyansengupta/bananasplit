@@ -8,7 +8,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { EmailConfigError } from "@/server/email/transport";
 
-import { CrmError, type CrmActor } from "../access";
+import { CrmError, crmAccess, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
 import { crmHeldBack, crmSendingPaused } from "../inbox-notify";
 import { proposeChange } from "../review";
@@ -659,9 +659,14 @@ export async function cancelEmail(actor: CrmActor, messageId: string): Promise<v
   const { db, organizationId } = actor;
   const m = await db.crmEmailMessage.findFirst({
     where: { id: messageId, organizationId, status: "QUEUED" },
-    select: { id: true, activityId: true },
+    select: { id: true, activityId: true, mailboxUserId: true, createdById: true, approvedById: true },
   });
   if (!m) throw new CrmError("It already went, or it's gone.");
+  // Calling off someone else's email is theirs to do (or a CRM manager's).
+  const mine = [m.mailboxUserId, m.createdById, m.approvedById].includes(actor.userId);
+  if (!mine && !(await crmAccess(actor)).manager) {
+    throw new CrmError("Only whoever sends it, or a CRM manager, can call it off.");
+  }
   const gone = await db.crmEmailMessage.updateMany({
     where: { id: m.id, organizationId, status: "QUEUED" },
     data: { status: "FAILED", error: "cancelled" },
@@ -701,8 +706,8 @@ async function settleDraft(db: TxClient, organizationId: string, messageId: stri
 
 /**
  * Whether pressing Start (or Enroll) is the OK for a plan's first email:
- * it goes from the mailbox of whoever pressed it, or they made the plan, or
- * they're an owner, admin or CRM manager. Otherwise (a member starting
+ * it goes from the mailbox of whoever pressed it, or they're an owner,
+ * admin or CRM manager (making the plan isn't enough: anyone can make one). Otherwise (a member starting
  * someone else's plan "from each person's owner") the owner approves their
  * own first email.
  */
@@ -712,7 +717,8 @@ export async function startMayApprove(
   e: { enrolledById: string | null; senderId: string; createdById: string | null },
 ): Promise<boolean> {
   if (!e.enrolledById) return false;
-  if (e.enrolledById === e.senderId || e.enrolledById === e.createdById) return true;
+  // Making the plan is no OK to send as someone else: any member can make one.
+  if (e.enrolledById === e.senderId) return true;
   const m = await db.membership.findFirst({
     where: { organizationId, userId: e.enrolledById },
     select: { role: true },
@@ -935,6 +941,16 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
     : null;
   const can = person ? contactable(person) : { ok: false, reason: "They're not in the CRM any more." };
   if (!person || !can.ok) return { skip: can.reason ?? "not contactable" };
+  // It goes only to the address it was approved for, and only while that is
+  // still one of theirs: an address changed (or merged in) since waits for
+  // a new OK rather than following the record.
+  const approvedTo = normalizeEmail(m.toAddresses[0] ?? null);
+  if (!approvedTo) return { hold: "it had no address when it was approved" };
+  const stillTheirs = await db.crmPersonEmail.findFirst({
+    where: { organizationId, personId: person.id, email: approvedTo },
+    select: { id: true },
+  });
+  if (!stillTheirs) return { hold: "their address changed after it was approved" };
   const campaign = m.campaignId
     ? await db.crmCampaign.findFirst({ where: { id: m.campaignId, organizationId }, select: { channel: true } })
     : null;
@@ -1008,7 +1024,7 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
       senderId: m.mailboxUserId,
       senderName: sender?.name ?? null,
       personId: person.id,
-      to: normalizeEmail(person.primaryEmail) ?? m.toAddresses[0]!,
+      to: approvedTo,
       subject: m.subject ?? "",
       written: m.bodyText ?? "",
       text,

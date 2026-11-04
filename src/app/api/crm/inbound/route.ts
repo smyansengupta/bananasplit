@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { addressList, bareAddress, cleanMessageId, ourAddresses, type InboundMessage } from "@/lib/crm/outreach/inbound";
+import { addressList, bareAddress, cleanMessageId, ourAddresses, singleSender, type InboundMessage } from "@/lib/crm/outreach/inbound";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withSystemOrgTx } from "@/server/db/context";
 import { ingestEmail, type IngestResult } from "@/server/crm/outreach/inbound";
@@ -41,6 +41,18 @@ const body = z.object({
     })
     .nullish(),
 });
+
+function verifiedSender(
+  from: string,
+  auth: { verdict: string; dmarc?: string | null; fromDomain?: string | null } | null | undefined,
+): boolean {
+  if (auth?.verdict !== "pass") return false;
+  // A DMARC verdict other than pass (or none) is a fail, whatever else passed.
+  if (auth.dmarc && !["pass", "none"].includes(auth.dmarc.toLowerCase())) return false;
+  const address = singleSender(from);
+  const domain = address?.split("@").pop()?.replace(/\.$/, "") ?? null;
+  return Boolean(domain && auth.fromDomain && domain === auth.fromDomain.toLowerCase());
+}
 
 /** Most messages one reply address, or one sender, may bring in an hour; past it they're dropped. */
 const PER_TOKEN_HOUR = 20;
@@ -90,7 +102,10 @@ export async function POST(request: Request) {
     html: parsed.html ?? null,
     date: dateHeader && !Number.isNaN(dateHeader.getTime()) ? dateHeader : null,
     headers: h,
-    senderVerified: parsed.auth?.verdict === "pass",
+    // The Worker's pass counts only for the one address this From line
+    // names, and only when it checked that same domain: a From line naming
+    // two addresses, or a verdict about another domain, is unverified.
+    senderVerified: verifiedSender(h["from"] ?? parsed.from, parsed.auth),
   };
   // One sender (verified or not) can't flood the CRM: dropped, not bounced.
   const sender = bareAddress(message.from) ?? parsed.from.toLowerCase().slice(0, 300);

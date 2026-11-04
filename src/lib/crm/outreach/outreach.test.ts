@@ -8,6 +8,7 @@ import {
   addressList,
   autoReplyOf,
   bareAddress,
+  singleSender,
   bounceOf,
   displayNameOf,
   neverLogged,
@@ -91,6 +92,15 @@ describe("reading incoming mail", () => {
     expect(bareAddress('"Ada L" <Ada@Example.ORG>')).toBe("ada@example.org");
     expect(displayNameOf('"Ada Lovelace" <ada@x.org>')).toBe("Ada Lovelace");
     expect(addressList('a@x.org, "B, Jr" <b@y.org>, a@x.org')).toEqual(["a@x.org", "b@y.org"]);
+  });
+
+  it("names one sender only when the From line holds one address", () => {
+    expect(singleSender('"Ada L" <Ada@Example.ORG>')).toBe("ada@example.org");
+    expect(singleSender("ada@example.org")).toBe("ada@example.org");
+    expect(singleSender('"ada@example.org" <ada@example.org>')).toBe("ada@example.org");
+    expect(singleSender('"mallory@attacker.example" <victim@example.org>')).toBeNull();
+    expect(singleSender("a@x.org, b@y.org")).toBeNull();
+    expect(singleSender("Nobody")).toBeNull();
   });
 
   it("finds our BCC and reply addresses on the inbound domain only", () => {
