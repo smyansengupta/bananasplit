@@ -33,6 +33,15 @@ export function isLinkKind(value: unknown): value is LinkKind {
   return typeof value === "string" && (LINK_KINDS as readonly string[]).includes(value);
 }
 
+/**
+ * A CRM person, company or deal opens straight to its centred card (its
+ * link is the CRM page with ?open=), never in the side peek: the card is
+ * the record, and a peek of it would only say "Open page".
+ */
+export function opensAsCard(kind: LinkKind): boolean {
+  return kind === "crm-person" || kind === "crm-company" || kind === "crm-deal";
+}
+
 export interface LinkRef {
   kind: LinkKind;
   id: string;

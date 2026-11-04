@@ -53,7 +53,7 @@ import {
   type InboxKind,
   type SnoozeChoice,
 } from "@/lib/inbox/items";
-import type { LinkKind } from "@/lib/links";
+import { opensAsCard, type LinkKind } from "@/lib/links";
 import { addDaysToKey, mondayOfKey } from "@/lib/tasks/dates";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
@@ -434,7 +434,8 @@ export function InboxView({
   const open = useCallback(
     (row: InboxRow) => {
       markRead(row);
-      if (row.peek) setPeek(row);
+      // A CRM record opens its card (its href), never the peek.
+      if (row.peek && !(opensAsCard(row.peek.kind) && row.href)) setPeek(row);
       else if (row.href) router.push(row.href);
     },
     [markRead, router],
