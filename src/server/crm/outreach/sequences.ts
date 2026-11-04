@@ -1,5 +1,5 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmCallsHref, crmRecordHref } from "@/lib/crm/href";
 import { renderMerge } from "@/lib/crm/outreach/merge";
 import { readExtras, withExtras } from "@/lib/crm/outreach/plans";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
@@ -768,8 +768,8 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         type: "CRM_FOLLOW_UP",
         title: what,
         body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
-        // A call waits on the dialer; anything else on their page.
-        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : crmRecordHref(org.slug, "person", person.id)) : null,
+        // A call waits in Today's Calls; anything else on their card.
+        linkUrl: org ? (step.kind === "CALL" ? crmCallsHref(org.slug) : crmRecordHref(org.slug, "person", person.id)) : null,
         dedupeKey: `crm-step:${e.id}:${stepIndex}`,
       });
     }

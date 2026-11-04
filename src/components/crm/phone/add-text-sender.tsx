@@ -13,7 +13,8 @@ import { crmRecordHref } from "@/lib/crm/href";
 /**
  * Someone texted the organization's number and isn't in the CRM: their name
  * (optional) and one click adds them, with every text from that number on
- * their timeline, and opens their page.
+ * their timeline, and opens their card. It sits in the text's card
+ * (?open=text:<id>), which their Inbox line opens.
  */
 export function AddTextSender({ orgId, orgSlug, textId }: { orgId: string; orgSlug: string; textId: string }) {
   const router = useRouter();
@@ -41,7 +42,7 @@ export function AddTextSender({ orgId, orgSlug, textId }: { orgId: string; orgSl
       <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Their name" aria-label="Their name" className="h-8 min-w-0 flex-1" maxLength={200} />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         <UserPlus className="size-4" aria-hidden="true" />
-        Add as person
+        Add them to the CRM
       </Button>
     </form>
   );

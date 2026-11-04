@@ -284,13 +284,30 @@ export function TodayList({
       {groups.map((g) => {
         const list = rows.filter((r) => r.group === g.id);
         if (list.length === 0) return null;
+        const waiting = list.filter((r) => !done[r.key]).length;
+        // Two or more calls due: the dialer works down them one after another.
+        const inARow = g.id === "calls" && waiting >= 2;
         return (
           <div key={g.id} className="flex flex-col gap-2.5">
             <h2 className="flex items-center gap-2.5 px-1 pt-1">
               <span className="heading text-base">{g.label}</span>
               <span className="bg-muted grid h-7 min-w-7 place-items-center rounded-full px-2 text-sm font-semibold tabular-nums">
-                {list.filter((r) => !done[r.key]).length}
+                {waiting}
               </span>
+              {inARow && (
+                <span className="ms-auto flex min-w-0 items-center gap-2 text-sm font-normal">
+                  <AmbientButton
+                    action={{
+                      key: "calls-in-a-row",
+                      label: "Call them in a row",
+                      tone: "solid",
+                      reason: `${waiting} calls due`,
+                      href: hrefFor("calls"),
+                    }}
+                  />
+                  <AmbientWhy className="min-w-0 truncate max-sm:hidden">{waiting} calls due</AmbientWhy>
+                </span>
+              )}
             </h2>
             {list.map((row) => {
               const gone = done[row.key];

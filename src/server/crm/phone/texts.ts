@@ -280,7 +280,8 @@ export async function textStatus(
 
 /**
  * A number that texted the organization and isn't in the CRM, added as a
- * person in one step (the Calls tab): their number, the name given (or the
+ * person in one step (the text's card, ?open=text:<id>, which its Inbox
+ * line opens): their number, the name given (or the
  * number), and every text from that number until now moved onto their
  * timeline. A STOP among them is kept: they stay not to be texted.
  */

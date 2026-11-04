@@ -13,6 +13,8 @@ describe("the ?open= contract", () => {
     expect(parseOpen("power")).toEqual({ kind: "power" });
     expect(parseOpen("log")).toEqual({ kind: "log" });
     expect(parseOpen("ask")).toEqual({ kind: "ask" });
+    expect(parseOpen("calls")).toEqual({ kind: "calls" });
+    expect(parseOpen("text:t_1")).toEqual({ kind: "text", id: "t_1" });
     expect(parseOpen("new:person")).toEqual({ kind: "new", what: "person" });
     expect(parseOpen("new:deal")).toEqual({ kind: "new", what: "deal" });
     expect(parseOpen("goal")).toEqual({ kind: "goal", id: null });
@@ -40,6 +42,8 @@ describe("the ?open= contract", () => {
     expect(parseOpen("person:<script>")).toBeNull();
     expect(parseOpen("new:meeting")).toBeNull();
     expect(parseOpen("power:1")).toBeNull();
+    expect(parseOpen("calls:1")).toBeNull();
+    expect(parseOpen("text:")).toBeNull();
     expect(parseOpen("club:1")).toBeNull();
   });
 
@@ -55,6 +59,8 @@ describe("the ?open= contract", () => {
       "power",
       "log",
       "ask",
+      "calls",
+      "text:t1",
       "new:company",
       "goal",
       "goal:g2",
