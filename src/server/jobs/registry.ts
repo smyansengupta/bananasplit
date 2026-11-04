@@ -523,6 +523,8 @@ export const JOB_KINDS = {
         /** The workflow whose own step made the change (loop protection), and how deep. */
         workflowId: id.optional(),
         depth: z.number().int().min(0).max(20).optional(),
+        /** A bulk edit's batch: the Inbox leaves its records to the edit's own line. */
+        batchId: id.optional(),
       })
       .strict(),
     scope: "org",

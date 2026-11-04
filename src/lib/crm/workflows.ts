@@ -452,6 +452,34 @@ export function triggerMatches(trigger: Trigger, event: MatchEvent, record: Matc
   }
 }
 
+/**
+ * Whether an event could start any workflow whose trigger type is in use
+ * (CrmSettings.workflowTriggers), read from the event alone, so events no
+ * switched-on workflow listens for queue no job.
+ */
+export function eventCouldTrigger(
+  types: readonly string[],
+  event: { type: string; fields?: readonly string[] },
+): boolean {
+  if (types.length === 0) return false;
+  const has = (t: TriggerType) => types.includes(t);
+  switch (event.type) {
+    case "record.changed": {
+      const f = event.fields ?? [];
+      if (f.includes("created")) return has("record.created");
+      return (has("stage.changed") && f.includes("stageId")) || (has("field.changed") && f.length > 0);
+    }
+    case "form.submitted":
+      return has("form.submitted");
+    case "email.replied":
+      return has("email.replied");
+    case "meeting.booked":
+      return has("meeting.booked");
+    default:
+      return false;
+  }
+}
+
 // ---- Loop protection ----------------------------------------------------------------
 
 /** Most runs of one workflow on one record in an hour. */
