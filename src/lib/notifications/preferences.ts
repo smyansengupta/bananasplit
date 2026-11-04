@@ -228,6 +228,10 @@ export const NOTIFICATION_TYPE_META: Record<
   EVENT_UPDATED: { label: "An event I'm going to changes", group: "events" },
   EVENT_CANCELLED: { label: "An event I'm going to is cancelled", group: "events" },
   EVENT_REMINDER: { label: "A reminder before a meeting I'm going to", group: "events" },
+  MEETING_BOOKED: {
+    label: "Someone books, moves or cancels a meeting on my booking link",
+    group: "events",
+  },
   INVITE_ACCEPTED: { label: "Someone accepts an invite I sent", group: "org" },
   NOTE_SHARED: { label: "Someone shares a note with me", group: "org" },
   FORM_RESPONSE: { label: "Someone answers a form I made", group: "org" },

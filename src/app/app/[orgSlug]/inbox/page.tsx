@@ -432,6 +432,7 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   EVENT_INVITE: "meeting",
   EVENT_UPDATED: "meeting",
   EVENT_CANCELLED: "meeting",
+  MEETING_BOOKED: "meeting",
   SECURITY_ALERT: "alert",
   INTEGRATION_ERROR: "alert",
   // The CRM's lines (src/server/crm/inbox-notify.ts) share one chip.

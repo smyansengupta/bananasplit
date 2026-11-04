@@ -56,7 +56,8 @@ export async function memberLeft(db: TxClient, organizationId: string, userId: s
     where: { organizationId, senderId: userId, status: "ACTIVE" },
     data: { status: "PAUSED", stopReason: "the sender left", nextRunAt: null },
   });
-  const pages = await db.crmBookingPage.findMany({ where: { organizationId, hostIds: { has: userId } }, select: { id: true, hostIds: true } });
+  // Organization links only: a personal link is turned off by bookingMemberLeft (src/server/booking/links.ts).
+  const pages = await db.crmBookingPage.findMany({ where: { organizationId, ownerUserId: null, hostIds: { has: userId } }, select: { id: true, hostIds: true } });
   for (const p of pages) {
     const hosts = p.hostIds.filter((h) => h !== userId);
     await db.crmBookingPage.update({ where: { id: p.id }, data: { hostIds: hosts, ...(hosts.length ? {} : { active: false }) } });
