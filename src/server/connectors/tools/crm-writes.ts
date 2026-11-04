@@ -4,8 +4,10 @@ import type { Prisma } from "@/generated/prisma/client";
 import { z } from "zod";
 
 import { NotFoundError } from "@/lib/auth/errors";
+import { appUrl } from "@/lib/app-url";
 import { normalizeEmail } from "@/lib/crm/dedupe";
 import { emailTells, withEmailStyle } from "@/lib/crm/email-style";
+import { crmApprovalsHref, crmPeopleHref } from "@/lib/crm/href";
 import { connectorAppliesDirectly, type Citation, type TargetRef } from "@/lib/crm/suggestions";
 import { CrmError, requireCrm } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
@@ -26,11 +28,11 @@ import { ADDS, writeInSpace, type Written } from "./write";
  *                                     risk, and on the timeline as from the
  *                                     connected app
  *   crm_create_person, crm_create_company, crm_update_record,
- *   crm_move_stage                    queued in the Review tab as a before
+ *   crm_move_stage                    queued under To approve on Today, as a before
  *                                     and after, for the member (or anyone)
  *                                     to accept: field changes and stage
  *                                     moves always wait for a person
- *   crm_draft_email                   a draft in the Review tab, never sent
+ *   crm_draft_email                   a draft under To approve, never sent
  *   crm_build_list                    a saved list (a personal view)
  *
  * Every one goes through writeInSpace: WRITE grants only, 120 writes an
@@ -39,7 +41,7 @@ import { ADDS, writeInSpace, type Written } from "./write";
 
 const queuedOutput = z.object({
   space: spaceRef,
-  status: z.enum(["queued", "applied"]).describe("queued: it waits in the CRM's Review tab for a person to accept; applied: it's done."),
+  status: z.enum(["queued", "applied"]).describe("queued: it waits under To approve on the CRM's Today for a person to accept; applied: it's done."),
   suggestionId: z.string().nullable(),
   record: z.object({ id: z.string(), name: z.string(), url: urlField }).nullable(),
   reviewUrl: urlField.describe("Where the member accepts or rejects it."),
@@ -95,7 +97,7 @@ function queued(space: ToolSpace, id: string, record: QueuedOutput["record"], me
     status: "queued",
     suggestionId: id,
     record,
-    reviewUrl: space.url("/crm/queue"),
+    reviewUrl: appUrl(crmApprovalsHref(space.slug)),
     message,
   };
 }
@@ -141,7 +143,7 @@ export async function crmCreatePersonTool(session: ConnectorSession, raw: z.inpu
       assigneeId: ctx.userId,
     });
     return {
-      output: queued(space, id, null, `${args.name} waits in the CRM's Review tab; they're added when the member accepts.`),
+      output: queued(space, id, null, `${args.name} waits under To approve on the CRM's Today; they're added when the member accepts.`),
       target: { type: "CrmSuggestion", id },
     };
   });
@@ -180,7 +182,7 @@ export async function crmCreateCompanyTool(session: ConnectorSession, raw: z.inp
       assigneeId: ctx.userId,
     });
     return {
-      output: queued(space, id, null, `${args.name} waits in the CRM's Review tab; it's added when the member accepts.`),
+      output: queued(space, id, null, `${args.name} waits under To approve on the CRM's Today; it's added when the member accepts.`),
       target: { type: "CrmSuggestion", id },
     };
   });
@@ -199,7 +201,7 @@ const updateInput = z.object({
   changes: z
     .record(z.string().max(40), z.union([z.string().max(2000), z.number(), z.null()]))
     .describe(
-      "Field keys and their new values (null clears one). People: title, phone, primaryEmail, companyName, linkedinUrl, website, location, nextFollowUpAt (yyyy-mm-dd), status (ACTIVE, INACTIVE, ALUMNI). Companies: name, domain, website, industry, size, phone, address, description, nextFollowUpAt, status. Items: title, amount (dollars), expectedOn, nextStep, nextStepAt, closeReason.",
+      "Field keys and their new values (null clears one). People: title, phone, primaryEmail, companyName, linkedinUrl, website, location, nextFollowUpAt (yyyy-mm-dd), status (ACTIVE, INACTIVE, ALUMNI). Companies: name, domain, website, industry, size, phone, address, description, nextFollowUpAt, status. Deals: title, amount (dollars), expectedOn, nextStep, nextStepAt, closeReason.",
     ),
   why: text(500).optional().describe("Why, in a line, for the member reviewing it."),
 });
@@ -227,14 +229,14 @@ export async function crmUpdateRecordTool(session: ConnectorSession, raw: z.inpu
       assigneeId: ctx.userId,
     });
     return {
-      output: queued(space, id, { id: crmItemId(space, target), name, url: recordUrl(space, target) }, "The change waits in the CRM's Review tab: field changes always need a person to accept them."),
+      output: queued(space, id, { id: crmItemId(space, target), name, url: recordUrl(space, target) }, "The change waits under To approve on the CRM's Today: field changes always need a person to accept them."),
       target: { type: "CrmSuggestion", id },
     };
   });
 }
 
 const moveInput = z.object({
-  id: itemArg("pipeline item"),
+  id: itemArg("CRM deal"),
   stage: text(200).min(1).describe("The stage's id from crm_pipelines, or its exact name."),
   reason: text(2000).optional().describe("Why, for a closing stage (won or lost)."),
 });
@@ -261,12 +263,12 @@ export async function crmMoveStageTool(session: ConnectorSession, raw: z.input<t
       summary: args.reason ?? null,
       payload: { stageId: stage.id, stageName: stage.name, fromStageName: deal.stage.name, closeReason: args.reason ?? null },
       target,
-      citation: connectorCitation(session, "asked to move this item"),
+      citation: connectorCitation(session, "asked to move this deal"),
       proposedById: ctx.userId,
       assigneeId: ctx.userId,
     });
     return {
-      output: queued(space, id, { id: crmItemId(space, target), name: deal.title, url: recordUrl(space, target) }, "The move waits in the CRM's Review tab: stage moves always need a person to accept them."),
+      output: queued(space, id, { id: crmItemId(space, target), name: deal.title, url: recordUrl(space, target) }, "The move waits under To approve on the CRM's Today: stage moves always need a person to accept them."),
       target: { type: "CrmSuggestion", id },
     };
   });
@@ -319,7 +321,7 @@ export async function logToTimeline(
         meta: { via: "connector", client: session.grant.clientName ?? null } as Prisma.InputJsonObject,
       });
       return {
-        output: { space: { id: space.id, name: space.name }, status: "applied" as const, suggestionId: null, record, reviewUrl: space.url("/crm/queue"), message: `Logged on ${name}'s timeline.` },
+        output: { space: { id: space.id, name: space.name }, status: "applied" as const, suggestionId: null, record, reviewUrl: appUrl(crmApprovalsHref(space.slug)), message: `Logged on ${name}'s timeline.` },
         target: { type: "CrmActivity", id: activityId },
       };
     }
@@ -334,7 +336,7 @@ export async function logToTimeline(
       proposedById: ctx.userId,
       assigneeId: ctx.userId,
     });
-    return { output: queued(space, id, record, "It waits in the CRM's Review tab."), target: { type: "CrmSuggestion", id } };
+    return { output: queued(space, id, record, "It waits under To approve on the CRM's Today."), target: { type: "CrmSuggestion", id } };
   });
 }
 
@@ -380,7 +382,7 @@ export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<
       ? ` It reads as machine-written in places (${tells.join(", ")}); the member should edit those before sending.`
       : "";
     return {
-      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, `The draft waits in the CRM's Review tab and in compose on their page. Nothing was sent.${check}`),
+      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, `The draft waits under To approve on the CRM's Today and in compose on their card. Nothing was sent.${check}`),
       target: { type: "CrmSuggestion", id: suggestionId },
     };
   });
@@ -427,7 +429,7 @@ export async function crmBuildListTool(session: ConnectorSession, raw: z.input<t
     return {
       output: {
         space: { id: space.id, name: space.name },
-        list: { id: view.id, name: args.name, url: space.url(`/crm/${args.kind}`) },
+        list: { id: view.id, name: args.name, url: appUrl(crmPeopleHref(space.slug, { companies: args.kind === "companies", list: view.id })) },
         message: `Saved "${args.name}" as one of the member's own lists on the CRM's ${args.kind === "people" ? "People" : "Companies"} page.`,
       },
       target: { type: "CrmView", id: view.id },
@@ -442,7 +444,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_create_person",
     {
       title: "Suggest a new CRM person",
-      description: "Suggests adding a person to one space's CRM. It waits in the CRM's Review tab until a person accepts it.",
+      description: "Suggests adding a person to one space's CRM. It waits under To approve on the CRM's Today until a person accepts it.",
       inputSchema: personInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -453,7 +455,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_create_company",
     {
       title: "Suggest a new CRM company",
-      description: "Suggests adding a company to one space's CRM. It waits in the CRM's Review tab until a person accepts it.",
+      description: "Suggests adding a company to one space's CRM. It waits under To approve on the CRM's Today until a person accepts it.",
       inputSchema: companyInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -464,7 +466,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_update_record",
     {
       title: "Suggest CRM field changes",
-      description: "Suggests changes to a CRM person's, company's or item's fields, shown to the member as a before and after in the Review tab. Nothing changes until a person accepts.",
+      description: "Suggests changes to a CRM person's, company's or deal's fields, shown to the member as a before and after under To approve on the CRM's Today. Nothing changes until a person accepts.",
       inputSchema: updateInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -475,7 +477,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_move_stage",
     {
       title: "Suggest a stage move",
-      description: "Suggests moving a pipeline item to another stage. It waits in the Review tab until a person accepts.",
+      description: "Suggests moving a deal to another stage. It waits under To approve on the CRM's Today until a person accepts.",
       inputSchema: moveInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -486,7 +488,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_log_activity",
     {
       title: "Log to a CRM timeline",
-      description: "Logs an email, call, meeting, text or note on a CRM person's, company's or item's timeline.",
+      description: "Logs an email, call, meeting, text or note on a CRM person's, company's or deal's timeline.",
       inputSchema: logInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -497,7 +499,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_add_note",
     {
       title: "Add a CRM note",
-      description: "Adds a note to a CRM person's, company's or item's timeline.",
+      description: "Adds a note to a CRM person's, company's or deal's timeline.",
       inputSchema: noteInput,
       outputSchema: queuedOutput,
       annotations: ADDS,
@@ -520,7 +522,7 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     {
       title: "Draft a CRM email",
       description: withEmailStyle(
-        "Drafts an email to a CRM person for the member to read, edit and send themselves. It is saved in the Review tab and never sent. Read their timeline (crm_timeline) first and write the subject and body as the member, under these rules.",
+        "Drafts an email to a CRM person for the member to read, edit and send themselves. It waits under To approve on the CRM's Today and is never sent. Read their timeline (crm_timeline) first and write the subject and body as the member, under these rules.",
       ),
       inputSchema: draftInput,
       outputSchema: queuedOutput,
