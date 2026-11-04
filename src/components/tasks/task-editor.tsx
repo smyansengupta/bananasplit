@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
+import { Maximize2, Plus, Trash2, UserMinus, UserPlus } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
@@ -17,6 +17,7 @@ import { useModKey } from "@/components/command-palette/use-mod-key";
 import { PinToggle } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { DialogHead } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
@@ -797,6 +798,58 @@ export function TaskEditor({
     </div>
   );
 
+  const headTitle = (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {isNew ? (
+        <span
+          aria-hidden="true"
+          className="bg-muted grid size-6 shrink-0 place-items-center rounded-full"
+        >
+          <Plus className="size-3.5" strokeWidth={2.2} />
+        </span>
+      ) : (
+        <TaskTypeChip type={type} iconOnly />
+      )}
+      <span className="truncate text-sm font-semibold">{heading}</span>
+      {task && isTaskPrivate(task) && <PrivateBadge />}
+    </div>
+  );
+
+  // In the popup these sit under the black Close as outlined circles, like a CRM card's.
+  const round = mode === "dialog" ? "outline" : "ghost";
+  const headActions = task ? (
+    <>
+      <PinToggle
+        path={`/tasks/${task.id}`}
+        label={task.title}
+        className={mode === "dialog" ? "border-input size-9 border" : undefined}
+      />
+      {mode === "dialog" && (
+        <Button asChild variant={round} size="icon-sm">
+          <Link
+            href={`/app/${org.slug}/tasks/${task.id}`}
+            aria-label="Open as a page"
+            title="Open as a page"
+          >
+            <Maximize2 className="size-4" aria-hidden="true" />
+          </Link>
+        </Button>
+      )}
+      {!readOnly && isAssignee && (
+        <Button
+          variant={round}
+          size="icon-sm"
+          disabled={isPending}
+          onClick={() => selfAssign("leave")}
+          aria-label="Leave this task"
+          title="Leave this task"
+        >
+          <UserMinus className="size-4" aria-hidden="true" />
+        </Button>
+      )}
+    </>
+  ) : null;
+
   return (
     <div
       className={cn(
@@ -821,53 +874,18 @@ export function TaskEditor({
       {confirmElement}
       {confirmEl}
 
-      <header className="flex shrink-0 items-center justify-between gap-2 py-3.5 ps-6 pe-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          {isNew ? (
-            <span
-              aria-hidden="true"
-              className="bg-muted grid size-6 shrink-0 place-items-center rounded-full"
-            >
-              <Plus className="size-3.5" strokeWidth={2.2} />
-            </span>
-          ) : (
-            <TaskTypeChip type={type} iconOnly />
-          )}
-          <span className="truncate text-sm font-semibold">{heading}</span>
-          {task && isTaskPrivate(task) && <PrivateBadge />}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {task && <PinToggle path={`/tasks/${task.id}`} label={task.title} />}
-          {task && mode === "dialog" && (
-            <Button asChild variant="ghost" size="icon-sm">
-              <Link
-                href={`/app/${org.slug}/tasks/${task.id}`}
-                aria-label="Open as a page"
-                title="Open as a page"
-              >
-                <Maximize2 className="size-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          )}
-          {task && !readOnly && isAssignee && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={isPending}
-              onClick={() => selfAssign("leave")}
-              aria-label="Leave this task"
-              title="Leave this task"
-            >
-              <UserMinus className="size-4" aria-hidden="true" />
-            </Button>
-          )}
-          {mode === "dialog" && onDone && (
-            <Button variant="ghost" size="icon-sm" onClick={onDone} aria-label="Close">
-              <X className="size-4" aria-hidden="true" />
-            </Button>
-          )}
-        </div>
-      </header>
+      {mode === "dialog" && onDone ? (
+        // The popup header every centred window shares: the black Close in
+        // the corner, Pin, Open as a page and Leave in a row under it.
+        <header className="shrink-0 ps-6 pe-4 pt-4 pb-3">
+          <DialogHead plainTitle title={headTitle} onClose={onDone} actions={headActions} />
+        </header>
+      ) : (
+        <header className="flex shrink-0 items-center justify-between gap-2 py-3.5 ps-6 pe-3.5">
+          {headTitle}
+          <div className="flex shrink-0 items-center gap-1.5">{headActions}</div>
+        </header>
+      )}
 
       <div
         className={cn(

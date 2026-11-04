@@ -23,8 +23,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  DialogHead,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,7 +164,10 @@ interface Props {
 export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...rest }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg"
+      >
         {open && (
           <EventForm
             key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}`}
@@ -578,12 +580,12 @@ function EventForm({
 
   return (
     <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
-      <DialogHeader>
-        <DialogTitle>{event ? "Edit event" : `New ${noun}`}</DialogTitle>
+      {/* The black Close 16px in from the corner, as on every popup. */}
+      <DialogHead className="-me-2 -mt-2" title={event ? "Edit event" : `New ${noun}`}>
         <DialogDescription className="sr-only">
           {event ? "Change this meeting's details." : "A new meeting's details."}
         </DialogDescription>
-      </DialogHeader>
+      </DialogHead>
 
       <div className="space-y-4">
         {!event && <ShapePicker value={shape} onChange={chooseShape} />}

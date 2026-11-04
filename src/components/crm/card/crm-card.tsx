@@ -1,10 +1,10 @@
 "use client";
 
-import { MoreHorizontal, X } from "@/components/icons";
+import { MoreHorizontal } from "@/components/icons";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHead } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,8 +18,9 @@ import { useCrmOpen } from "./use-crm-open";
 /**
  * The one card everything in the CRM opens as (a person, company, deal,
  * Power hour, Done on its own, Ask, New, a goal): Tasks' task dialog at
- * 680px. A fixed header (avatar, title, subtitle, the card's round
- * buttons, "…" and Close), the pill tab segment under it, a body that
+ * 680px. A fixed header (DialogHead: avatar, title and subtitle; the black
+ * Close in the corner with the card's round buttons and "…" under it), the
+ * pill tab segment under it (with `tabsAside` beside it), a body that
  * scrolls and an optional fixed foot. Closing removes `?open=` and keeps
  * the rest of the URL (useCrmOpen), so the list underneath never moved.
  *
@@ -42,6 +43,7 @@ export function CrmCard({
   menuLabel = "More",
   strip,
   tabs,
+  tabsAside,
   tab,
   defaultTab,
   onTab,
@@ -61,9 +63,11 @@ export function CrmCard({
   /** DropdownMenuItems for the round "…" (none, no "…"). */
   menu?: ReactNode;
   menuLabel?: string;
-  /** A row between the title and the tabs (a deal's stage pills). */
+  /** A row between the title and the tabs. */
   strip?: ReactNode;
   tabs?: readonly CrmCardTab[];
+  /** Beside the tabs, on their row (a deal's stages), wrapping under on a narrow card. */
+  tabsAside?: ReactNode;
   tab?: string;
   defaultTab?: string;
   onTab?: (value: string) => void;
@@ -96,45 +100,62 @@ export function CrmCard({
         }}
       >
         <DialogDescription className="sr-only">{description ?? plainTitle}</DialogDescription>
-        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b px-6 pt-5 pb-3.5">
-          <div className="flex items-center gap-3.5">
-            {avatar}
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="display-title truncate text-[26px] leading-tight">
-                {title}
-              </DialogTitle>
-              {subtitle && (
-                <div className="text-muted-foreground truncate pt-1 text-sm">{subtitle}</div>
+        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b ps-6 pe-4 pt-4 pb-3.5">
+          <DialogHead
+            leading={avatar}
+            title={title}
+            titleClassName="display-title truncate text-[26px] leading-tight"
+            subtitle={subtitle && <div className="truncate">{subtitle}</div>}
+            onClose={shut}
+            actions={
+              actions || menu ? (
+                <>
+                  {actions}
+                  {menu && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label={menuLabel}
+                          title={menuLabel}
+                        >
+                          <MoreHorizontal className="size-4" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        {menu}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </>
+              ) : undefined
+            }
+          />
+          {(strip || (tabs && tabs.length > 0) || tabsAside) && (
+            <div className="flex flex-col gap-4 pe-2">
+              {strip}
+              {((tabs && tabs.length > 0) || tabsAside) && (
+                // The sections, then anything beside them (a deal's stages),
+                // like Tasks' view switch with Mine / My team / Everyone next
+                // to it; on a narrow card the second group wraps under.
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  {tabs && tabs.length > 0 && (
+                    <Segmented
+                      label={`${plainTitle}: sections`}
+                      value={current}
+                      onSelect={pick}
+                      options={tabs.map((t) => ({
+                        value: t.value,
+                        label: t.label,
+                        count: t.count,
+                      }))}
+                    />
+                  )}
+                  {tabsAside}
+                </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              {actions}
-              {menu && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" aria-label={menuLabel} title={menuLabel}>
-                      <MoreHorizontal className="size-4" aria-hidden="true" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    {menu}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              <Button variant="outline" size="icon" onClick={shut} aria-label="Close" title="Close">
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-          {strip}
-          {tabs && tabs.length > 0 && (
-            <Segmented
-              label={`${plainTitle}: sections`}
-              value={current}
-              onSelect={pick}
-              className="self-start"
-              options={tabs.map((t) => ({ value: t.value, label: t.label, count: t.count }))}
-            />
           )}
         </header>
         <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", bodyClassName)}>

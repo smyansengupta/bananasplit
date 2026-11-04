@@ -9,8 +9,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  DialogHead,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +65,10 @@ export function NewTaskDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+      >
         {open && (
           <NewTaskForm
             key={`${defaults?.parentTaskId ?? "top"}-${defaults?.type ?? ""}-${defaults?.status ?? ""}`}
@@ -228,14 +230,17 @@ function NewTaskForm({
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
-        <DialogTitle>New {noun}</DialogTitle>
-        <DialogDescription>
-          {isEpic
-            ? "A big outcome that spans weeks. Its stories and tasks roll up into it."
-            : "A title is all it takes. Everything else has a sensible default."}
-        </DialogDescription>
-      </DialogHeader>
+      <DialogHead
+        className="shrink-0 ps-6 pe-4 pt-4 pb-2"
+        title={`New ${noun}`}
+        subtitle={
+          <DialogDescription>
+            {isEpic
+              ? "A big outcome that spans weeks. Its stories and tasks roll up into it."
+              : "A title is all it takes. Everything else has a sensible default."}
+          </DialogDescription>
+        }
+      />
 
       {/*
         One column, top to bottom, sized to fit on a laptop screen: the
