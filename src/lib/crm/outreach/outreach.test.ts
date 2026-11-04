@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { advance, campaignNumbers, readRouting, routeOwner, splitAmong } from "./assign";
 import { bookingSlots, bookingSlug, pickHost, readQuestions, slotsByDay } from "./booking";
-import { handoverBrief, recapLines } from "./brief";
+import { handoverBrief } from "./brief";
 import { applyMap, readDestination, suggestMap } from "./form-map";
 import {
   addressList,
@@ -277,19 +277,5 @@ describe("briefs and recaps", () => {
     expect(lines.join(" ")).toContain("no next step");
     expect(lines.join(" ")).toContain("We still owe them: Logo on shirts.");
     expect(lines.at(-1)).toBe("$2,500 received, $5,000 pledged.");
-  });
-
-  it("writes a recap from real numbers", () => {
-    expect(
-      recapLines({
-        orgName: "Robotics",
-        companyName: "Harbor",
-        events: [{ title: "Demo day", startsAt: new Date(), checkIns: 80, signUps: 120 }],
-        deliverables: [
-          { title: "Logo", doneAt: new Date(), dueOn: null },
-          { title: "Talk", doneAt: null, dueOn: null },
-        ],
-      }),
-    ).toEqual(["One event so far, with 80 people checked in and 120 signed up.", "1 of 2 promises kept so far."]);
   });
 });

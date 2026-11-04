@@ -91,31 +91,3 @@ export function handoverBrief(b: BriefInput): string[] {
   }
   return out;
 }
-
-export interface RecapInput {
-  orgName: string;
-  companyName: string | null;
-  events: { title: string; startsAt: Date; checkIns: number; signUps: number }[];
-  deliverables: { title: string; doneAt: Date | null; dueOn: Date | null }[];
-}
-
-/** The partner's recap: what they made possible, in real numbers. */
-export function recapLines(r: RecapInput): string[] {
-  const out: string[] = [];
-  const done = r.deliverables.filter((d) => d.doneAt).length;
-  const people = r.events.reduce((a, e) => a + e.checkIns, 0);
-  const signUps = r.events.reduce((a, e) => a + e.signUps, 0);
-  if (r.events.length) {
-    out.push(
-      `${r.events.length === 1 ? "One event" : `${r.events.length} events`} so far` +
-        (people ? `, with ${people.toLocaleString("en-US")} people checked in` : "") +
-        (signUps && signUps !== people ? ` and ${signUps.toLocaleString("en-US")} signed up` : "") +
-        ".",
-    );
-  }
-  if (r.deliverables.length) {
-    out.push(`${done} of ${r.deliverables.length} ${r.deliverables.length === 1 ? "promise" : "promises"} kept so far.`);
-  }
-  if (!out.length) out.push(`Thank you for working with ${r.orgName}. This page fills in as things happen.`);
-  return out;
-}

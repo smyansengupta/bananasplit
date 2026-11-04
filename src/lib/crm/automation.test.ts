@@ -377,7 +377,6 @@ describe("forecasts", () => {
       bestCase: { amount: 0, count: 0 },
       pipeline: { amount: 0, count: 0 },
       trend: null,
-      call: null,
       items: [
         { id: "a", c: "PIPELINE", a: 100, s: "" },
         { id: "b", c: "COMMIT", a: 50, s: "" },

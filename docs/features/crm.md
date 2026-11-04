@@ -459,8 +459,6 @@ name this case).
   person; record a voice note and it lands on their timeline. No native app
   store fees.
 - Restore any record to an earlier point from its field history.
-- Guest links: a partner or client opens a private page with their own
-  agreement, deliverables and recap, and nothing else in the CRM.
 - Scale target: 100,000 people and 20,000 pipeline items in one org stay fast
   (server-side filters, cursor pagination, indexes, the GIN index on custom
   fields), checked with a seeded load test.
@@ -486,13 +484,12 @@ threads across several CRMs.
 | Open tracking is wrong since Apple Mail Privacy Protection | Common | Replies, clicks and bookings are the headline numbers; opens are labeled approximate |
 | Outlook treated as second class (HubSpot), extensions that slow Gmail | Common | Gmail and Outlook equal; no browser extension required |
 | History leaves with the person; whoever inherits their contacts gets no context | Common | Relationships owned by a **role** as well as a person (below); handover briefs |
-| Partners and clients can't be let in safely, so updates live in email | Common | Guest links: a partner sees their own agreement, deliverables and recap, nothing else |
 | Zapier glue that breaks quietly; sales to delivery hand-off breaks | Widespread | One system: a closed item can start a project (tasks, owner, files) automatically |
 | Mobile apps are a cut-down shadow; nobody uses them | Widespread | Phone-first "today" view, card and badge scanning at events, voice notes |
 | Weeks of setup and consultants | Widespread | Pick what kind of organization you are; fields, pipelines, forms and reports are made for you |
 | Switching CRMs loses the timeline, not just the contacts | Common | Importers that keep notes and activity from HubSpot, Salesforce and Pipedrive exports; export includes the timeline |
 | No undo for bulk edits or wrong stage moves | Narrow | Undo on every bulk action; restore any record to an earlier point from its field history |
-| Nonprofits: donors, volunteers, events and grants need separate tools or workarounds | Common | Donations, recurring gifts, volunteer hours and grants on the person, through Finance and the ready-made pipelines |
+| Nonprofits: donors, volunteers, events and grants need separate tools or workarounds | Common | Ready-made donor and grant pipelines, with the money in Finance |
 | Volunteer-run organizations: partner history lives in personal inboxes and dies every leadership change; no product serves them | Common; no product found | Role ownership, handover, and records that fill from the workspace |
 | Slow pages (Salesforce admits Lightning is slow) | Common | Server-side filters, cursor pagination, a seeded load test of 100,000 people, keyboard shortcuts |
 
@@ -563,10 +560,8 @@ where those assumptions break.
    Finance on each person and company: pledged versus received, lifetime
    total, which budget it funds, and the renewal created automatically from
    the end date. Mainstream CRMs leave this to a separate tool.
-4. **What we owe them, tracked.** For partners and clients, the promises
-   (logo on the shirts, a talk slot, social posts) are tasks linked to the
-   agreement and its payment, and one click makes a recap for them from
-   real event and attendance numbers.
+4. **What we owe them, tracked.** Dropped: nothing records deliverables or
+   shares a partner page any more. Promises are tasks (10).
 5. **Handover when people change roles.** Organizations rotate leaders and
    volunteers often. When someone leaves or changes role: reassign their
    relationships in one step, write a handover brief per contact (history,
@@ -700,9 +695,8 @@ is cut; this is only the order.
    tracking, invites to events and forms, booking links, sequences with
    stop-on-reply, bulk email with unsubscribe and sender checks, Forms to
    CRM, embeds, owner routing, the BCC logging address, handover when
-   members change roles, "what we owe them" for partners and clients with
-   guest links, people updating their own details through RSVP and form
-   links, donations, recurring gifts and volunteer hours on the person.
+   members change roles, people updating their own details through RSVP
+   and form links.
 3. **Automation and numbers.** Workflow builder with describe-it-in-words
    and recipes, the outreach and pipeline widgets in Reports, velocity,
    forecasting with categories, goals and snapshots, rules-based scoring,
@@ -1158,8 +1152,7 @@ No new tables. `20261105120000_crm_automation`:
 
 `app.security_manifest` is unchanged. Stored without new columns: the
 learned model is a `CrmScoreRule` of objectKind `deals-model` (its JSON in
-`condition`); a manager's forecast call is a `CrmForecastSnapshot` with
-`periodLabel` `call:<period>`; signals are `CrmSuggestion` rows with source
+`condition`); signals are `CrmSuggestion` rows with source
 `SIGNAL` (kind `CREATE_TASK`, `payload.key` raises each one once);
 round-robin turns come from `CrmWorkflow.runCount`.
 
@@ -1263,7 +1256,7 @@ a trend once 20 items closed in the four quarters before; snapshot diffs;
 attainment against an even pace), `src/server/crm/forecast.ts`,
 `src/server/crm/goals.ts`. The Forecast tab (`crm/forecast`): per
 pipeline, money or a count, everyone's or mine; members mark Commit, Best
-case, Pipeline or Left out; managers save their own call; goals (a member
+case, Pipeline or Left out; goals (a member
 or the team, a quarter or a year); and how the forecast moved (weekly
 snapshots from `crm-daily`, a line, and what changed since the week
 before). Goals also show on the CRM's home and as a Reports widget.
@@ -1617,7 +1610,7 @@ expires old mail suggestions.
   and DKIM) must pass; up to 2,000 a send, merged per person at send time,
   sent 25 a turn by the heavy `crm-bulk` job.
 
-### Booking, forms, handover, partners, self-update, giving
+### Booking, forms, handover, self-update
 
 - Booking links moved to Meetings > Booking links (docs/features/booking.md):
   organization links are the CRM's, every member has a personal one, and the
@@ -1647,19 +1640,14 @@ expires old mail suggestions.
   items, campaign shares and sequences to a member or a position in one
   step; a brief per contact; everyone with no owner, a departed owner or an
   open position, given an owner in one step.
-- What we owe them (`partners.ts`): deliverables on an item, optionally a
-  Task (a finished task counts as delivered), and guest links (`/g/{token}`,
-  the hash stored, derived so it can be copied again, revocable) showing the
-  agreement, the promises and a recap from the events linked to the item or
-  its company (their check-ins and sign-ups).
+- What we owe them (deliverables and `/g/{token}` guest links) and Giving
+  (gifts and volunteer hours on the person) were removed: nothing made a
+  link or showed either. The `CrmDeliverable` and `CrmGuestLink` tables
+  stay.
 - Self-update (`self-update.ts`, `/c/{token}`): name, email, title,
   workplace and phone, written to field history; offered in RSVP
   confirmations (`registered`, `promoted`) and form receipts when the person
   is in the CRM. The link switches on the first time it is offered.
-- Giving (`giving.ts`): Finance income whose counterparty is the person or
-  their company (finance roles only, as in Finance), won items in donor,
-  grant and deal pipelines, recurring when the same payer gives at a
-  steady interval, and hours at events from their check-ins.
 
 ### Never step on each other
 
@@ -1673,7 +1661,7 @@ owns them, who talked to them last, and the warning.
 Outreach (Templates, Sequences, Booking pages, Bulk email, Your mail),
 Campaigns (lists and campaigns), Handover; sections on the person, company
 and item pages and on the CRM's Settings; the queue on the CRM's home and in
-the Inbox; public `/book`, `/g`, `/c` and `/u` (unsubscribe, one button;
+the Inbox; public `/book`, `/c` and `/u` (unsubscribe, one button;
 `/api/crm/u/{token}` takes the one-click POST). Every public route finds its
 organization first and is rate-limited.
 
@@ -1687,7 +1675,7 @@ organization first and is rate-limited.
 `src/lib/crm/outreach/outreach.test.ts` (pure),
 `src/server/crm/outreach/outreach.db.test.ts` (sending, conflicts, a reply,
 an out-of-office, a bounce, unsubscribing, a sequence step, a booking,
-cadences, a handover with its brief, guest and self-update links), and
+cadences, a handover with its brief, self-update links), and
 P-CRM-03 and P-CRM-04 in `prisma/rls/phases.mjs`.
 
 ### Known gaps
@@ -1717,7 +1705,6 @@ written the same thing, one stayed and the other now calls it.
 | Starter templates | One list, `src/lib/crm/outreach/starters.ts`, in outreach's merge fields (`{{first_name|there}}`, `{{my_first_name}}`); Outreach makes the everyday three, a recipe makes the one it names. |
 | Merge renderers | One syntax and one renderer: outreach's `renderMerge`. Emails use its person fields; workflow text (task titles, notices, Slack and Discord, Finance descriptions, project names) uses the same `{{field}}` / `{{field\|fallback}}` syntax over the record's fields (`WORKFLOW_MERGE_FIELDS`: name, title, company, stage, pipeline, amount, owner, days, link, workflow). See "Gaps closed". |
 | Sequence steps | To-do steps make real Tasks (as the sequence's maker, else the sender, owned by the sender, linked to the person, due that day), through the Tasks service in a system transaction (`actAs`, system-actor.ts, which the workflow engine uses too). Text steps send through Phase 5's `queueText` when the person agreed to texts; otherwise, and for calls and LinkedIn, an open step waits in the sender's queue saying why. Call steps are on the dialer and Calls to make (`openCallSteps`), first; logging the call (`logCall` with `stepId`) closes the step. |
-| The queue's buttons | Text opens Phase 5's thread in a window (`TextDialog`, `textThreadAction`); Call is Phase 5's softphone or the phone's dialer then Phase 5's call log (`CallPerson compact`). Phase 2's own call logger is gone; "Call and log" on the person page is gone (the Calls section has it). |
 | One review queue | Email-sourced new people are `CREATE_PERSON` suggestions with Phase 4's payload (`proposeChange`); Outreach, Your mail lists them filtered (`listQueue` with `source: "EMAIL"`) and accepts through `acceptSuggestion`. Signals (`source: SIGNAL`) stay out of Review (`REVIEW_WHERE`); they're the Inbox's To review rows. |
 | Inbox | The sidebar count adds the member's follow-up queue rows and one `crm:review` row for Review suggestions assigned to them (`crmReviewRow`), less what they snoozed or finished; the Inbox lists the same row and Home's Today strip reads the same count. |
 | Refresh timing | Form answers (`formToCrm`), RSVPs (`registerGuest`), a member's own RSVP (`setOwnRsvp`) and check-ins (`setRegistrationCheckIn`) call `queueCrmRefreshFor`: a `crm-refresh` keyed by the source (`m:response:{id}` and so on, so a burst merges into one pending job) that finds the people on the service path and mirrors only their timelines. |
@@ -1849,8 +1836,7 @@ everything people read says deals and partners:
   A Sponsor row is a **partner** on screen, a Sponsorship row a **deal**,
   and the `SPONSORSHIP` transaction kind reads "Deal". A CRM item in the
   Deals pipeline makes its Finance deal.
-- What we owe them stays: promises and deliverables, on any deal or
-  partnership. The "A new sponsor commits" recipe is "A partner commits to
+- The "A new sponsor commits" recipe is "A partner commits to
   a deal"; the "Sponsorship ask" starter email is "Partnership ask".
 
 What keeps its old name, on purpose: the `Sponsor` and `Sponsorship`
@@ -2626,7 +2612,7 @@ used (`summarizeAction`, `draftFollowUpAction`, `briefAction`,
 `conversationTextAction`, `mergeAction`, `addDealPersonAction`,
 `removeDealPersonAction`, the forecast call and category actions, the
 deliverable and guest-link actions, `createQuoteAction`). The server code
-behind them stays.
+behind them stayed then; the cleanup below removed what was left.
 
 **Words.** Deals, never items, in the CRM's own screens, errors, the
 automation builder and recipes, and the public API's descriptions (its
