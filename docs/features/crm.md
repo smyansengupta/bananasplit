@@ -2005,10 +2005,17 @@ named by one search param (`src/lib/crm/overlay.ts`):
   own AI reads it (`readContact`, nothing proposed or kept; the image route's
   `purpose=fill`); with no AI connected, a pasted signature is read without
   it (`parseSignature`). A line under the name says who's already here, with
-  Open (`likelyExisting`, scored like the duplicate scan). Relationship and
-  Owner as chips; a deal takes pipeline, stage, amount, close date and the
-  people it started with. Create opens the new card; Create and open
-  another keeps the card blank for the next. `/crm/scan` opens it.
+  Open (`likelyExisting`, scored like the duplicate scan). It's built like
+  New task and New event from the shared `ui/form-dialog.tsx` pieces: New
+  task's window, header and foot, New event's kind cards for Person,
+  Company and Deal (switching keeps what was typed), the name first and
+  focused, the rest as labelled fields in pairs with selects for
+  Relationship, Owner, Pipeline and Stage. Owner isn't asked in a Personal
+  space. A deal takes company, people, amount, close date, pipeline and
+  stage. Enter or Ctrl+Enter creates and opens the new card;
+  Ctrl+Shift+Enter (Create and open another) keeps it blank for the next.
+  One email to a list and Split a list (`plan:email`, `plan:split`) use the
+  same window; Ctrl+Enter sends, plain Enter doesn't. `/crm/scan` opens it.
 - **Deal card** is a plain first cut (facts, people, timeline, details)
   until its own design lands. `/crm/deals` lists the pipelines for now.
 

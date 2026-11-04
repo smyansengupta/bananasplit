@@ -15,7 +15,10 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
   const orgId = shell.org.id;
   const raw = typeof searchParams.with === "string" ? searchParams.with : "";
   const [head, rest] = raw.split(":", 2) as [string, string | undefined];
-  const ids = (rest ?? "").split(",").filter((v) => ID.test(v)).slice(0, 20);
+  const ids = (rest ?? "")
+    .split(",")
+    .filter((v) => ID.test(v))
+    .slice(0, 20);
   const start: NewCardWith = await withOrgTx(orgId, async ({ db }) => {
     if (!ids.length) return { company: null, people: [] };
     if (head === "company") {
@@ -49,7 +52,8 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
       what={open.what}
       start={start}
       viewerId={shell.user.id}
-      owners={others.slice(0, 6).map((m) => ({ id: m.id, label: m.name.split(" ")[0] ?? m.name }))}
+      owners={others.map((m) => ({ id: m.id, label: m.name }))}
+      personal={shell.access.personal}
       pipelines={shell.pipelines.map((p) => ({
         id: p.id,
         name: p.name,
