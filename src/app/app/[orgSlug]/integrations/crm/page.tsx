@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { readAddOns } from "@/lib/addons";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
+import { crmBase } from "@/lib/crm/href";
 import { IMPORT_SOURCE_LABELS, IMPORT_SOURCES } from "@/lib/crm/mapping";
 import { PIPELINE_TEMPLATES, setupKindInfo, setupKindsFor } from "@/lib/crm/templates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -89,13 +90,13 @@ export default async function CrmAddOnPage({
     const done = await withOrgTx(org.id, ({ db }) =>
       db.crmSettings.findUnique({ where: { organizationId: org.id }, select: { organizationId: true } }),
     );
-    redirect(done ? `${base}/crm` : `${base}/crm/setup`);
+    redirect(done ? crmBase(orgSlug) : `${crmBase(orgSlug)}/setup`);
   }
 
   const action = added ? (
     <div className="flex flex-wrap gap-2">
       <Button asChild>
-        <Link href={`${base}/crm`}>Open the CRM</Link>
+        <Link href={crmBase(orgSlug)}>Open the CRM</Link>
       </Button>
       {canManage && <RemoveAddOnButton orgId={org.id} id="crm" />}
     </div>
@@ -154,7 +155,7 @@ export default async function CrmAddOnPage({
           <Glance
             rows={[
               ["Adds to the sidebar", personal ? "CRM, under Integrations" : "CRM, under Integrations and apps"],
-              ["Adds to New", "New person, New company, New item"],
+              ["Adds to New", "New person, New company, New deal"],
               [
                 "Who works it",
                 personal ? "Just you. Nobody else sees it" : "Every member; owners, admins and CRM managers set it up",

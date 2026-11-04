@@ -51,6 +51,11 @@ export async function createCampaign(
   roles: ReadonlyMap<string, RoleOwner>,
 ): Promise<{ id: string; people: number }> {
   const { db, organizationId, userId } = actor;
+  // Splitting a list among members needs members: a Personal space has one.
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { kind: true } });
+  if (org?.kind === "PERSONAL") {
+    throw new CrmError("Splitting a list is for organizations. Here it's just you: email them instead.");
+  }
   const name = input.name.trim().slice(0, 120);
   if (!name) throw new CrmError("Give the campaign a name.", ["name"]);
   const dueOn = input.dueOn ? new Date(`${input.dueOn}T12:00:00Z`) : null;
@@ -161,33 +166,6 @@ export async function refreshFromList(actor: CrmActor, campaignId: string, roles
   const added = await addTargets(db, organizationId, campaignId, await listPeople(db, organizationId, c.viewId, userId, roles), ids.length ? ids : [userId]);
   if (added) await tellAssignees(db, organizationId, campaignId, c.name, userId);
   return added;
-}
-
-/** Gives these people to another member (or splits them among several). */
-export async function reassign(actor: CrmActor, campaignId: string, targetIds: readonly string[], memberIds: readonly string[]): Promise<void> {
-  const { db, organizationId, userId } = actor;
-  if (memberIds.length === 0) throw new CrmError("Pick who takes them.");
-  for (const m of memberIds) await requireMember(db, organizationId, m);
-  const targets = await db.crmCampaignTarget.findMany({
-    where: { organizationId, campaignId, id: { in: [...targetIds] } },
-    select: { id: true, personId: true },
-  });
-  if (targets.length === 0) throw new CrmError("Pick who to move.");
-  const split = splitAmong(targets.map((t) => ({ id: t.id })), memberIds);
-  for (const t of targets) {
-    await db.crmCampaignTarget.update({ where: { id: t.id }, data: { assigneeId: split.get(t.id) ?? memberIds[0]! } });
-  }
-  const c = await db.crmCampaign.findFirst({ where: { id: campaignId, organizationId }, select: { name: true } });
-  await tellAssignees(db, organizationId, campaignId, c?.name ?? "a campaign", userId);
-}
-
-/** Splits everyone not reached yet evenly among these members again. */
-export async function rebalance(actor: CrmActor, campaignId: string, memberIds: readonly string[]): Promise<void> {
-  const todo = await actor.db.crmCampaignTarget.findMany({
-    where: { organizationId: actor.organizationId, campaignId, status: "TODO" },
-    select: { id: true },
-  });
-  if (todo.length) await reassign(actor, campaignId, todo.map((t) => t.id), memberIds);
 }
 
 export async function setTargetStatus(actor: CrmActor, targetId: string, status: CrmTargetStatus): Promise<void> {
@@ -317,6 +295,56 @@ export async function campaignProgress(db: TxClient, organizationId: string, cam
     select: { personId: true, status: true, assigneeId: true, person: { select: { primaryEmail: true, userId: true } } },
   });
   const converted = c ? await convertedPeople(db, organizationId, c, targets) : new Set<string>();
+  return progressOf(targets, converted);
+}
+
+/**
+ * campaignProgress for many campaigns at once (the plans list): one read
+ * of their people and one of the deals won with them; an event's RSVPs or
+ * a form's answers are read only for the campaigns that have one.
+ */
+export async function campaignsProgress(
+  db: TxClient,
+  organizationId: string,
+  campaigns: readonly { id: string; createdAt: Date; eventId: string | null; channel: string }[],
+): Promise<Map<string, CampaignProgress>> {
+  const out = new Map<string, CampaignProgress>();
+  if (campaigns.length === 0) return out;
+  const targets = await db.crmCampaignTarget.findMany({
+    where: { organizationId, campaignId: { in: campaigns.map((c) => c.id) } },
+    select: {
+      campaignId: true,
+      personId: true,
+      status: true,
+      assigneeId: true,
+      person: { select: { primaryEmail: true, userId: true } },
+    },
+  });
+  const since = new Date(Math.min(...campaigns.map((c) => c.createdAt.getTime())));
+  const personIds = [...new Set(targets.map((t) => t.personId))];
+  const won = personIds.length
+    ? (
+        await db.crmDealPerson.findMany({
+          where: {
+            organizationId,
+            personId: { in: personIds },
+            deal: { deletedAt: null, closedAt: { gte: since }, stage: { kind: "WON" } },
+          },
+          select: { personId: true, deal: { select: { closedAt: true } } },
+        })
+      ).map((w) => ({ personId: w.personId, closedAt: w.deal.closedAt }))
+    : [];
+  for (const c of campaigns) {
+    const mine = targets.filter((t) => t.campaignId === c.id);
+    out.set(c.id, progressOf(mine, await convertedPeople(db, organizationId, c, mine, won)));
+  }
+  return out;
+}
+
+function progressOf(
+  targets: readonly { personId: string; status: CrmTargetStatus; assigneeId: string | null }[],
+  converted: ReadonlySet<string>,
+): CampaignProgress {
   const statuses = targets.map((t) => (converted.has(t.personId) && t.status !== "SKIPPED" ? ("CONVERTED" as const) : t.status));
   const byMember = new Map<string | null, { total: number; contacted: number; replied: number }>();
   targets.forEach((t, i) => {
@@ -335,6 +363,8 @@ async function convertedPeople(
   organizationId: string,
   c: { createdAt: Date; eventId: string | null; channel: string },
   targets: readonly { personId: string; person: { primaryEmail: string | null; userId: string | null } }[],
+  /** Deals already read for many campaigns (campaignsProgress); else they're read here. */
+  wonAlready?: readonly { personId: string; closedAt: Date | null }[],
 ): Promise<Set<string>> {
   const out = new Set<string>();
   const byEmail = new Map<string, string>();
@@ -357,15 +387,20 @@ async function convertedPeople(
     });
     for (const r of rs) if (r.email) out.add(byEmail.get(r.email.toLowerCase())!);
   }
-  const won = await db.crmDealPerson.findMany({
-    where: {
-      organizationId,
-      personId: { in: targets.map((t) => t.personId) },
-      deal: { deletedAt: null, closedAt: { gte: c.createdAt }, stage: { kind: "WON" } },
-    },
-    select: { personId: true },
-  });
-  for (const w of won) out.add(w.personId);
+  if (wonAlready) {
+    const theirs = new Set(targets.map((t) => t.personId));
+    for (const w of wonAlready) if (theirs.has(w.personId) && w.closedAt && w.closedAt >= c.createdAt) out.add(w.personId);
+  } else {
+    const won = await db.crmDealPerson.findMany({
+      where: {
+        organizationId,
+        personId: { in: targets.map((t) => t.personId) },
+        deal: { deletedAt: null, closedAt: { gte: c.createdAt }, stage: { kind: "WON" } },
+      },
+      select: { personId: true },
+    });
+    for (const w of won) out.add(w.personId);
+  }
   out.delete(undefined as unknown as string);
   return out;
 }

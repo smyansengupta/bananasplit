@@ -34,19 +34,25 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
+import { stageTone } from "@/lib/crm/deals-tab";
 import { hrefWithOpen, OPEN_PARAM, type CrmOpen } from "@/lib/crm/overlay";
 import type { RowNext } from "@/lib/crm/people-view";
 import { runAction } from "@/lib/run-action";
 import { tagVar } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
+import { SeriesDialog } from "./series-dialog";
+
 /**
- * People's table (People.dc.html): "{list} {count}" above it, a row per
- * person (or company) that opens its card (?open=), the relationship as a
- * tinted pill, strength as four bars, and the next step as one ambient
- * button with its reason beside it. Pick rows for the selection bar: Start
- * a deal, Add to list, Change owner, Email them, and "…" with Merge (two
- * picked), Export and Move to trash. Every bulk change has Undo.
+ * People's table (People.dc.html; docs/features/crm.md, "One list"):
+ * "{list} {count}" above it (with "$X in open deals" when a deal filter
+ * is on), a row per person (or company) that opens its card (?open=), the
+ * relationship as a tinted pill, strength as four bars, their open deal's
+ * stage and value (the most advanced, "+1" when there are more), and the
+ * next step as one ambient button with its reason beside it. Pick rows for
+ * the selection bar: Start a deal, Add to list, Change owner, Email them,
+ * and "…" with Add to a follow-up series, Merge (two picked), Export and
+ * Move to trash. Every bulk change has Undo.
  */
 
 export interface PeopleRow {
@@ -61,9 +67,46 @@ export interface PeopleRow {
   mergeWith: string | null;
   owner: string | null;
   deleted: boolean;
+  deal: {
+    id: string;
+    title: string;
+    stage: string;
+    stageKind: "OPEN" | "WON" | "LOST";
+    openIndex: number;
+    amount: string | null;
+    more: number;
+  } | null;
 }
 
 type Kind = "person" | "company";
+
+/** "{list} {count}", and "$X in open deals" when there's money to show. */
+export function PeopleHeading({
+  name,
+  total,
+  money,
+  children,
+}: {
+  name: string;
+  total: number;
+  money: { text: string; label: string } | null;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2.5 px-1">
+      <b className="heading text-lg">{name}</b>
+      <span className="bg-muted grid h-7 min-w-7 place-items-center rounded-full px-2 text-sm font-semibold tabular-nums">
+        {total.toLocaleString("en-US")}
+      </span>
+      {money && (
+        <span className="text-muted-foreground text-[15px] tabular-nums">
+          {money.text} {money.label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
 
 export function PeopleTable({
   orgId,
@@ -75,9 +118,14 @@ export function PeopleTable({
   pageSize,
   listId,
   listName,
+  money,
+  dealsOn,
   trash,
   pickedLists,
   members,
+  series,
+  personal = false,
+  canBulkEmail = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -88,10 +136,19 @@ export function PeopleTable({
   pageSize: number;
   listId: string;
   listName: string;
+  money: { text: string; label: string } | null;
+  /** A deal filter is on (only those with a matching deal are listed). */
+  dealsOn: boolean;
   trash: boolean;
   /** The organization's hand-picked lists (Add to list adds to these). */
   pickedLists: { id: string; label: string }[];
   members: { id: string; name: string }[];
+  /** Follow-up series that are on. */
+  series: { id: string; name: string }[];
+  /** A Personal space: one person owns everything, so no Owner column or Change owner. */
+  personal?: boolean;
+  /** May send one email to several (owners, admins, CRM managers); anyone may email one person. */
+  canBulkEmail?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -100,6 +157,7 @@ export function PeopleTable({
   const kind: Kind = companies ? "company" : "person";
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [naming, setNaming] = useState<null | "list" | "email">(null);
+  const [enrolling, setEnrolling] = useState<string[] | null>(null);
 
   // New rows (a page, a filter, a refresh): nothing stays picked.
   const [shown, setShown] = useState(rows);
@@ -177,25 +235,29 @@ export function PeopleTable({
     return r;
   };
 
+  /**
+   * One email to the picked people: one person opens their card (its
+   * composer); several are kept as a list and the one-email card opens over
+   * People with it (?open=plan:email&to=), where Send is the OK.
+   */
   const emailThem = async (name: string) => {
     if (ids.length === 1) {
       router.push(hrefFor({ kind: "person", id: ids[0]! }), { scroll: false });
       return;
     }
     const r = await addToList({ name });
-    if (r) router.push(`/app/${orgSlug}/crm/outreach/bulk?list=${encodeURIComponent(r.id)}`);
+    if (r) router.push(hrefWith({ to: r.id }, { kind: "plan", type: "email", id: null }), { scroll: false });
   };
 
   const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const filtered = Boolean(listId || trash || params.get("q") || params.get("owner") || params.get("rel"));
+  const filtered = Boolean(
+    listId || trash || dealsOn || params.get("q") || params.get("owner") || params.get("rel"),
+  );
+  const settingsHref = `/app/${orgSlug}/crm/settings/automations`;
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2.5 px-1">
-        <b className="heading text-lg">{listName}</b>
-        <span className="bg-muted grid h-7 min-w-7 place-items-center rounded-full px-2 text-sm font-semibold tabular-nums">
-          {total.toLocaleString("en-US")}
-        </span>
+      <PeopleHeading name={listName} total={total} money={money}>
         {(listId || trash) && (
           <Link
             href={hrefWith({ list: null, trash: null, page: null })}
@@ -205,7 +267,7 @@ export function PeopleTable({
             Show everyone
           </Link>
         )}
-      </div>
+      </PeopleHeading>
 
       {picked.length > 0 && (
         <div
@@ -270,6 +332,7 @@ export function PeopleTable({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              {!personal && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="rounded-full">
@@ -288,7 +351,8 @@ export function PeopleTable({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {!companies && (
+              )}
+              {!companies && (ids.length === 1 || canBulkEmail) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -304,13 +368,18 @@ export function PeopleTable({
                     size="icon"
                     variant="outline"
                     className="size-8 rounded-full"
-                    aria-label="More: merge, export, move to trash"
-                    title="Merge, export, move to trash"
+                    aria-label="More: follow-up series, merge, export, move to trash"
+                    title="Follow-up series, merge, export, move to trash"
                   >
                     <MoreHorizontal className="size-4" aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuContent align="start" className="w-60">
+                  {!companies && (
+                    <DropdownMenuItem onSelect={() => setEnrolling(ids)}>
+                      Add to a follow-up series
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     disabled={ids.length !== 2}
                     onSelect={() =>
@@ -355,7 +424,7 @@ export function PeopleTable({
             trash
               ? undefined
               : filtered
-                ? "Try another list, or clear the search."
+                ? "Try another list or filter, or clear the search."
                 : companies
                   ? "A company is added with its first person, or from New company."
                   : undefined
@@ -377,8 +446,10 @@ export function PeopleTable({
                 {!companies && <th className="px-3 py-3 font-semibold max-lg:hidden">Relationship</th>}
                 <th className="px-3 py-3 font-semibold max-md:hidden">Strength</th>
                 <th className="px-3 py-3 font-semibold max-md:hidden">Last talked</th>
-                <th className="px-3 py-3 font-semibold max-sm:hidden">Next step</th>
-                <th className="px-3 py-3 pe-5 font-semibold max-lg:hidden">Owner</th>
+                <th className="px-3 py-3 font-semibold max-xl:hidden">Stage</th>
+                <th className="px-3 py-3 text-right font-semibold max-xl:hidden">Deal value</th>
+                <th className={cn("px-3 py-3 font-semibold max-sm:hidden", personal && "pe-5")}>Next step</th>
+                {!personal && <th className="px-3 py-3 pe-5 font-semibold max-lg:hidden">Owner</th>}
               </tr>
             </thead>
             <tbody>
@@ -417,14 +488,30 @@ export function PeopleTable({
                           <CrmAvatar name={r.name} size={38} />
                         </span>
                         <span className="min-w-0">
-                          <b className="block max-w-72 truncate font-semibold hover:underline">{r.name}</b>
+                          <b className={cn("block truncate font-semibold hover:underline", NAME_WIDTH)}>
+                            {r.name}
+                          </b>
                           {r.sub && (
-                            <span className="text-muted-foreground block max-w-72 truncate text-[13px]">
+                            <span className={cn("text-muted-foreground block truncate text-[13px]", NAME_WIDTH)}>
                               {r.sub}
                             </span>
                           )}
                         </span>
                       </Link>
+                      {/* On a phone the Next step column is gone: its button sits under the name. */}
+                      <div className="mt-2 ps-[50px] sm:hidden">
+                        <div className={NAME_WIDTH}>
+                          <NextStep
+                            orgId={orgId}
+                            kind={kind}
+                            row={r}
+                            open={(o) => hrefFor(o)}
+                            quoteHref={(id) => hrefWith({ tab: "quote" }, { kind: "deal", id })}
+                            disabled={trash || r.deleted}
+                            wrap
+                          />
+                        </div>
+                      </div>
                     </td>
                     {!companies && (
                       <td className="px-3 py-3 max-lg:hidden">{r.rel && <RelationshipPill rel={r.rel} />}</td>
@@ -450,25 +537,56 @@ export function PeopleTable({
                     <td className="text-muted-foreground px-3 py-3 whitespace-nowrap max-md:hidden">
                       {r.last}
                     </td>
+                    <td className="px-3 py-3 max-xl:hidden">
+                      {r.deal && (
+                        <Link
+                          href={hrefFor({ kind: "deal", id: r.deal.id })}
+                          scroll={false}
+                          title={r.deal.title}
+                          className="inline-flex max-w-48 items-center gap-1.5 text-sm font-semibold whitespace-nowrap hover:underline"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="size-2 shrink-0 rounded-full"
+                            style={{ background: stageTone(r.deal.stageKind, r.deal.openIndex) }}
+                          />
+                          <span className="min-w-0 truncate">{r.deal.stage}</span>
+                          {r.deal.more > 0 && (
+                            <span
+                              className="text-muted-foreground shrink-0 text-xs font-medium"
+                              title={`${r.deal.more} more ${r.deal.more === 1 ? "deal" : "deals"}`}
+                            >
+                              +{r.deal.more}
+                            </span>
+                          )}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right text-sm font-semibold whitespace-nowrap tabular-nums max-xl:hidden">
+                      {r.deal?.amount ?? ""}
+                    </td>
                     <td className="px-3 py-3 max-sm:hidden">
                       <NextStep
                         orgId={orgId}
                         kind={kind}
                         row={r}
                         open={(o) => hrefFor(o)}
+                        quoteHref={(id) => hrefWith({ tab: "quote" }, { kind: "deal", id })}
                         disabled={trash || r.deleted}
                       />
                     </td>
-                    <td className="px-3 py-3 pe-5 max-lg:hidden">
-                      {r.owner ? (
-                        <span title={r.owner} className="inline-flex">
-                          <CrmAvatar name={r.owner} size={30} />
-                          <span className="sr-only">{r.owner}</span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Nobody</span>
-                      )}
-                    </td>
+                    {!personal && (
+                      <td className="px-3 py-3 pe-5 max-lg:hidden">
+                        {r.owner ? (
+                          <span title={r.owner} className="inline-flex">
+                            <CrmAvatar name={r.owner} size={30} />
+                            <span className="sr-only">{r.owner}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Nobody</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -529,9 +647,25 @@ export function PeopleTable({
           refresh();
         }}
       />
+      {enrolling && (
+        <SeriesDialog
+          orgId={orgId}
+          personIds={enrolling}
+          series={series}
+          settingsHref={settingsHref}
+          onClose={() => setEnrolling(null)}
+          onDone={() => {
+            clear();
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
+
+/** A name's width: 18rem, and on a phone what's left beside the checkbox and avatar (no sideways scroll). */
+const NAME_WIDTH = "max-w-72 max-sm:max-w-[calc(100vw-10rem)]";
 
 const OUTLINE =
   "bg-transparent text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-current/8";
@@ -559,13 +693,19 @@ function NextStep({
   kind,
   row,
   open,
+  quoteHref,
   disabled,
+  wrap = false,
 }: {
   orgId: string;
   kind: Kind;
   row: PeopleRow;
   open: (o: CrmOpen) => string;
+  /** The deal's card, opened on its quote. */
+  quoteHref: (dealId: string) => string;
   disabled: boolean;
+  /** On a phone: the reason wraps under the button instead of being cut. */
+  wrap?: boolean;
 }) {
   const [done, setDone] = useState<string | null>(null);
   const a = row.next.action;
@@ -600,7 +740,11 @@ function NextStep({
     const href =
       a.kind === "merge" && row.mergeWith
         ? open({ kind: "merge", ids: [row.id, row.mergeWith] })
-        : open({ kind, id: row.id });
+        : a.kind === "quote" && a.dealId
+          ? quoteHref(a.dealId)
+          : a.kind === "deal-step" && a.dealId
+            ? open({ kind: "deal", id: a.dealId })
+            : open({ kind, id: row.id });
     node = (
       <AmbientButton
         action={{
@@ -615,9 +759,9 @@ function NextStep({
     );
   }
   return (
-    <div className="flex min-w-0 flex-nowrap items-center gap-2">
+    <div className={cn("flex min-w-0 items-center gap-2", wrap ? "flex-wrap" : "flex-nowrap")}>
       {node}
-      <AmbientWhy className="min-w-0 truncate whitespace-nowrap">{a.reason}</AmbientWhy>
+      <AmbientWhy className={cn("min-w-0", !wrap && "truncate whitespace-nowrap")}>{a.reason}</AmbientWhy>
     </div>
   );
 }
@@ -667,7 +811,7 @@ function NameDialog({
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Spring donors"
+            placeholder="Gala donors"
             aria-label="List name"
             maxLength={80}
           />

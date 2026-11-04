@@ -22,6 +22,7 @@ import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-s
 import { parseDialIn } from "@/lib/meetings/dial-in";
 import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { crmForMeeting } from "@/server/crm/outside-links";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadMeetingAmbient } from "@/server/meetings/ambient";
 import { getOrgMembersForPicker } from "@/server/members";
@@ -48,7 +49,8 @@ export default async function MeetingPage({
   const { orgSlug, id } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const canEdit = can({ role }, "events.write");
-  const loaded = await withOrgTx(org.id, async ({ db }) => {
+  const loaded = await withOrgTx(org.id, async (ctx) => {
+    const { db } = ctx;
     const event = await getEventById(db, org.id, id, user.id);
     // Sign-up numbers for owners and admins (RLS shows sign-ups only to them).
     const signups =
@@ -90,6 +92,23 @@ export default async function MeetingPage({
           orderBy: [{ status: "asc" }, { dueDate: { sort: "asc", nulls: "last" } }],
         })
       : [];
+    // Who of its people are in the CRM (a booking's guest, attendees who are CRM people).
+    const crm = event
+      ? await crmForMeeting(
+          ctx,
+          orgSlug,
+          event.id,
+          event.attendees.map((a) => a.userId),
+        )
+      : null;
+    // Who booked it, for its host and admins only (the Booking's RLS hides it
+    // from everyone else, and the event itself carries none of it).
+    const booking = event
+      ? await db.booking.findFirst({
+          where: { organizationId: org.id, eventId: event.id },
+          select: { guestName: true, guestEmail: true, answers: true, verifiedAt: true },
+        })
+      : null;
     // What its ambient buttons act on (src/server/meetings/ambient.ts).
     const facts = event
       ? await loadMeetingAmbient(
@@ -103,9 +122,24 @@ export default async function MeetingPage({
           canEdit,
         )
       : null;
-    return { event, signups, tasks, facts };
+    return { event, signups, tasks, crm, booking, facts };
   });
-  const { event, signups, tasks, facts } = loaded;
+  const { event, signups, tasks, crm, facts } = loaded;
+  const booking = loaded.booking
+    ? {
+        name: loaded.booking.guestName,
+        email: loaded.booking.guestEmail,
+        confirmed: Boolean(loaded.booking.verifiedAt),
+        answers: (Array.isArray(loaded.booking.answers) ? loaded.booking.answers : []).flatMap(
+          (x) => {
+            const r = x as { q?: unknown; a?: unknown } | null;
+            return r && typeof r.q === "string" && typeof r.a === "string"
+              ? [{ q: r.q, a: r.a }]
+              : [];
+          },
+        ),
+      }
+    : null;
   const dueFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -287,6 +321,8 @@ export default async function MeetingPage({
         ) : null
       }
       askedRsvp={askedRsvp}
+      crm={crm}
+      booking={booking}
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}

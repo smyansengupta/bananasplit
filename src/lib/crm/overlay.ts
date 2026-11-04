@@ -7,9 +7,13 @@
  *
  *   ?open=person:<id>    ?open=company:<id>    ?open=deal:<id>
  *   ?open=power          ?open=log             ?open=ask
+ *   ?open=calls          (call Today's calls in a row: the dialer)
+ *   ?open=text:<id>      (a text from a number not in the CRM, with Add them to the CRM)
  *   ?open=new:person     ?open=new:company     ?open=new:deal
  *   ?open=goal           ?open=goal:<id>
  *   ?open=merge:<idA>,<idB>   (two people, or two companies)
+ *   ?open=merge:<id>          (pick the second one in the card)
+ *   ?open=quote:<id>          (a quote or invoice, with every detail)
  *   ?open=plan:sequence:<id>    ?open=plan:campaign:<id>   (an outreach plan)
  *   ?open=plan:email     ?open=plan:split   (a new one-email or split-a-list plan)
  *
@@ -22,8 +26,8 @@ export const OPEN_PARAM = "open";
 export type CrmNewKind = "person" | "company" | "deal";
 
 /**
- * An outreach plan (docs/features/crm.md, "Redesign", Outreach): a
- * sequence (timed steps) or a campaign (a list split among members, or one
+ * A plan (docs/features/crm.md, "One list"): a follow-up series (a
+ * sequence, timed steps) or a campaign (a list split among members, or one
  * email to everyone on it). `email` and `split` are new ones, not saved yet.
  */
 export type CrmPlanType = "sequence" | "campaign";
@@ -36,9 +40,12 @@ export type CrmOpen =
   | { kind: "power" }
   | { kind: "log" }
   | { kind: "ask" }
+  | { kind: "calls" }
+  | { kind: "text"; id: string }
   | { kind: "new"; what: CrmNewKind }
   | { kind: "goal"; id: string | null }
-  | { kind: "merge"; ids: [string, string] }
+  | { kind: "merge"; ids: [string, string] | [string] }
+  | { kind: "quote"; id: string }
   | { kind: "plan"; type: CrmPlanType; id: string }
   | { kind: "plan"; type: CrmNewPlan; id: null };
 
@@ -76,10 +83,13 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
     case "person":
     case "company":
     case "deal":
+    case "quote":
+    case "text":
       return rest && ID.test(rest) ? { kind: head, id: rest } : null;
     case "power":
     case "log":
     case "ask":
+    case "calls":
       return rest === null ? { kind: head } : null;
     case "new":
       return rest && (NEW_KINDS as readonly string[]).includes(rest)
@@ -90,6 +100,8 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
       return ID.test(rest) ? { kind: "goal", id: rest } : null;
     case "merge": {
       const ids = (rest ?? "").split(",");
+      // One id: the card asks for the second.
+      if (ids.length === 1) return ID.test(ids[0]!) ? { kind: "merge", ids: [ids[0]!] } : null;
       if (ids.length !== 2) return null;
       const [a, b] = ids as [string, string];
       return ID.test(a) && ID.test(b) && a !== b ? { kind: "merge", ids: [a, b] } : null;
@@ -107,13 +119,15 @@ export function formatOpen(open: CrmOpen): string {
     case "person":
     case "company":
     case "deal":
+    case "quote":
+    case "text":
       return `${open.kind}:${open.id}`;
     case "new":
       return `new:${open.what}`;
     case "goal":
       return open.id ? `goal:${open.id}` : "goal";
     case "merge":
-      return `merge:${open.ids[0]},${open.ids[1]}`;
+      return `merge:${open.ids.join(",")}`;
     case "plan":
       return open.id ? `plan:${open.type}:${open.id}` : `plan:${open.type}`;
     default:
@@ -160,7 +174,7 @@ export function hrefWithOpen(
  * list (crmRecordHref). Add a page here when it starts rendering overlays.
  */
 const OVERLAY_PAGES =
-  /^\/app\/[^/]+\/crm(?:\/(?:people|companies|deals|outreach|pipelines\/[^/]+))?\/?$/;
+  /^\/app\/[^/]+\/crm(?:\/(?:people|settings\/[^/]+))?\/?$/;
 
 export function rendersOverlays(pathname: string): boolean {
   return OVERLAY_PAGES.test(pathname);

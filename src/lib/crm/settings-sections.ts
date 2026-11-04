@@ -4,7 +4,8 @@
  * /crm/settings/{id}. Who sees which: You, Templates and Booking link are
  * every member's own; the rest are for whoever runs the CRM (owners, admins
  * and CRM managers), and a few for owners and admins only. A Personal space
- * has no Team and access. Pure: the page, the nav and the redirects read it.
+ * has no Team and access, and no Hand people over. Pure: the page, the nav
+ * and the redirects read it.
  */
 
 export type CrmSettingsSectionId =
@@ -17,6 +18,7 @@ export type CrmSettingsSectionId =
   | "booking"
   | "phone"
   | "team"
+  | "handover"
   | "ai"
   | "import"
   | "api";
@@ -80,7 +82,7 @@ export const CRM_SETTINGS_SECTIONS: readonly CrmSettingsSection[] = [
   {
     id: "booking",
     label: "Booking link",
-    description: "A page where people pick a time with you. It checks your calendar first.",
+    description: "Booking links live in Meetings now: yours and the organization's.",
     icon: "CalendarClock",
     who: "member",
   },
@@ -97,6 +99,14 @@ export const CRM_SETTINGS_SECTIONS: readonly CrmSettingsSection[] = [
     description: "Who sees what, who runs the CRM, and who new people go to.",
     icon: "Users",
     who: "admin",
+    team: true,
+  },
+  {
+    id: "handover",
+    label: "Hand people over",
+    description: "Members who left, people with no owner, and moving someone's people to someone else.",
+    icon: "ArrowLeftRight",
+    who: "manager",
     team: true,
   },
   {
@@ -127,7 +137,7 @@ export const CRM_SETTINGS_ALIASES: Readonly<Record<string, CrmSettingsSectionId>
   webhooks: "api",
   keys: "api",
   mail: "you",
-  handover: "team",
+  handover: "handover",
   access: "team",
   pipelines: "stages",
 };
@@ -161,5 +171,14 @@ export function defaultSection(viewer: SettingsViewer): CrmSettingsSectionId {
 }
 
 export function crmSettingsHref(orgSlug: string, section: CrmSettingsSectionId, rest = ""): string {
+  // Booking links moved to Meetings > Booking links (docs/features/booking.md);
+  // the entry stays in CRM settings as a link there ("/{id}" opens that link's editor).
+  if (section === "booking") return bookingLinksHref(orgSlug, rest.replace(/^\//, "") || null);
   return `/app/${orgSlug}/crm/settings/${section}${rest}`;
+}
+
+/** Meetings > Booking links, optionally opening one link's editor. */
+export function bookingLinksHref(orgSlug: string, editId: string | null = null): string {
+  const base = `/app/${orgSlug}/meetings/booking`;
+  return editId ? `${base}?edit=${encodeURIComponent(editId)}` : base;
 }

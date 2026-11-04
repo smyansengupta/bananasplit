@@ -37,15 +37,15 @@ export const WORKFLOW_OBJECTS = ["person", "company", "deal"] as const;
 export type WorkflowObject = (typeof WORKFLOW_OBJECTS)[number];
 
 export const TRIGGER_INFO: Record<TriggerType, { label: string; hint: string; objects: readonly WorkflowObject[] }> = {
-  "record.created": { label: "Something is added", hint: "A person, company or item is added", objects: WORKFLOW_OBJECTS },
+  "record.created": { label: "Something is added", hint: "A person, company or deal is added", objects: WORKFLOW_OBJECTS },
   "field.changed": { label: "A field changes", hint: "Any field, custom fields too", objects: WORKFLOW_OBJECTS },
-  "stage.changed": { label: "An item moves stage", hint: "Into a stage, or won or lost", objects: ["deal"] },
+  "stage.changed": { label: "A deal moves stage", hint: "Into a stage, or won or lost", objects: ["deal"] },
   "form.submitted": { label: "A form is filled in", hint: "Someone answers one of your forms", objects: ["person"] },
   "email.replied": { label: "Someone replies", hint: "A reply to your email comes in", objects: ["person"] },
   "meeting.booked": { label: "A meeting is booked", hint: "Through a booking link", objects: ["person"] },
   "date.reached": { label: "A date comes", hint: "Days before or after a date field", objects: WORKFLOW_OBJECTS },
   "no.activity": { label: "Nothing happens for a while", hint: "No contact for some days", objects: WORKFLOW_OBJECTS },
-  "deal.stuck": { label: "An item is stuck", hint: "In one stage too long", objects: ["deal"] },
+  "deal.stuck": { label: "A deal is stuck", hint: "In one stage too long", objects: ["deal"] },
 };
 
 const id = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
@@ -228,7 +228,7 @@ export const ACTION_INFO: Record<ActionType, { label: string; hint: string; netw
   "field.set": { label: "Update a field", hint: "Set a value, or a date some days on" },
   "stage.move": { label: "Move to a stage", hint: "Items only" },
   "owner.assign": { label: "Assign an owner", hint: "Round-robin, fewest open, or one member" },
-  "deal.create": { label: "Add to a pipeline", hint: "A new item for this person or company" },
+  "deal.create": { label: "Add to a pipeline", hint: "A new deal for this person or company" },
   "template.send": { label: "Draft a template", hint: "An email template, for the owner to send" },
   "sequence.enroll": { label: "Enroll in a sequence", hint: "Timed emails that stop on reply" },
   "event.invite": { label: "Invite to an event", hint: "A meeting or event in Bananasplit" },
@@ -452,6 +452,34 @@ export function triggerMatches(trigger: Trigger, event: MatchEvent, record: Matc
   }
 }
 
+/**
+ * Whether an event could start any workflow whose trigger type is in use
+ * (CrmSettings.workflowTriggers), read from the event alone, so events no
+ * switched-on workflow listens for queue no job.
+ */
+export function eventCouldTrigger(
+  types: readonly string[],
+  event: { type: string; fields?: readonly string[] },
+): boolean {
+  if (types.length === 0) return false;
+  const has = (t: TriggerType) => types.includes(t);
+  switch (event.type) {
+    case "record.changed": {
+      const f = event.fields ?? [];
+      if (f.includes("created")) return has("record.created");
+      return (has("stage.changed") && f.includes("stageId")) || (has("field.changed") && f.length > 0);
+    }
+    case "form.submitted":
+      return has("form.submitted");
+    case "email.replied":
+      return has("email.replied");
+    case "meeting.booked":
+      return has("meeting.booked");
+    default:
+      return false;
+  }
+}
+
 // ---- Loop protection ----------------------------------------------------------------
 
 /** Most runs of one workflow on one record in an hour. */
@@ -584,8 +612,8 @@ export function fewestPick(candidates: readonly string[], openCounts: ReadonlyMa
  * workflow runs on, which an email's person fields don't have.
  */
 export const WORKFLOW_MERGE_FIELDS = [
-  { key: "name", label: "Name", example: "Ada Lovelace", hint: "the person or company; for an item, its main person" },
-  { key: "title", label: "Title", example: "Spring partnership", hint: "an item's title; a person's job title" },
+  { key: "name", label: "Name", example: "Ada Lovelace", hint: "the person or company; for a deal, its main person" },
+  { key: "title", label: "Title", example: "Annual partnership", hint: "a deal's title; a person's job title" },
   { key: "company", label: "Company", example: "Harbor Light", hint: "" },
   { key: "stage", label: "Stage", example: "Committed", hint: "" },
   { key: "pipeline", label: "Pipeline", example: "Deals", hint: "" },
@@ -665,7 +693,7 @@ export function workflowExampleValues(): Record<string, string> {
   return Object.fromEntries(WORKFLOW_MERGE_FIELDS.map((f) => [f.key, f.example]));
 }
 
-/** One line describing a workflow, for lists: "When an item moves stage: create a task, notify someone". */
+/** One line describing a workflow, for lists: "When a deal moves stage: create a task, notify someone". */
 export function describeWorkflow(input: { trigger: Trigger | null; actions: readonly WorkflowAction[] }): string {
   const when = input.trigger ? TRIGGER_INFO[input.trigger.type].label : "Never";
   const then = input.actions.map((a) => ACTION_INFO[a.type].label.toLowerCase());

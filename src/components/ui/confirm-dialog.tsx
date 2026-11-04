@@ -9,8 +9,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  DialogHead,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -88,17 +87,24 @@ export function ConfirmDialog({
       }}
     >
       <DialogContent showCloseButton={false} className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-start gap-2.5">
-            {tone === "destructive" && (
-              <span className="bg-destructive/10 text-destructive -mt-0.5 grid size-7 shrink-0 place-items-center rounded-full">
+        {/* The black round Close, as on every other popup. */}
+        <DialogHead
+          className="-mt-2 -me-2"
+          title={options?.title}
+          titleClassName="pt-0.5"
+          leading={
+            tone === "destructive" ? (
+              <span className="bg-destructive/10 text-destructive grid size-7 shrink-0 place-items-center rounded-full">
                 <TriangleAlert className="size-4" aria-hidden="true" />
               </span>
-            )}
-            <span className="pt-0.5">{options?.title}</span>
-          </DialogTitle>
-          {options?.description && <DialogDescription>{options.description}</DialogDescription>}
-        </DialogHeader>
+            ) : undefined
+          }
+          subtitle={
+            options?.description ? (
+              <DialogDescription>{options.description}</DialogDescription>
+            ) : undefined
+          }
+        />
         {error && (
           <p role="alert" className="text-destructive text-sm">
             {error}

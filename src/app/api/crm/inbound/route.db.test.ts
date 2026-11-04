@@ -164,6 +164,7 @@ describe("/api/crm/inbound from the Cloudflare Email Worker", () => {
         },
         text: "Thanks, Thursday works for me.\n\nOn Tue someone wrote:\n> Hi Ada",
         html: null,
+        auth: { verdict: "pass", spf: "pass", dkim: "pass", dmarc: "pass", fromDomain: "harbor.org" },
       }),
     );
     expect(res.status).toBe(200);
@@ -171,6 +172,39 @@ describe("/api/crm/inbound from the Cloudflare Email Worker", () => {
     const e = await ownerDb.crmEnrollment.findUniqueOrThrow({ where: { id: enrollmentId } });
     expect(e.status).toBe("REPLIED");
     expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: sent.id } })).repliedAt).not.toBeNull();
+  });
+
+  it("doesn't take a forged reply for theirs: a From line naming two addresses, or a check on another domain", async () => {
+    if (!reachable) return;
+    const { enrollmentId, sent } = await sentSequenceEmail("Grace Hopper", `grace-${tag}@harbor.org`);
+    // The attacker signs for their own domain and puts it in the display name.
+    for (const [i, from, auth] of [
+      [1, `"mallory@attacker.example" <grace-${tag}@harbor.org>`, { verdict: "pass", spf: "fail", dkim: "pass", dmarc: "fail", fromDomain: "attacker.example" }],
+      [2, `Grace <grace-${tag}@harbor.org>`, { verdict: "pass", spf: "pass", dkim: "pass", dmarc: "pass", fromDomain: "attacker.example" }],
+      [3, `Grace <grace-${tag}@harbor.org>`, { verdict: "pass", spf: "pass", dkim: "pass", dmarc: "fail", fromDomain: "harbor.org" }],
+    ] as const) {
+      const res = await POST(
+        workerRequest({
+          from: `bounce@attacker.example`,
+          to: [`reply+${sent.trackingToken}@${DOMAIN}`],
+          headers: {
+            from,
+            to: `reply+${sent.trackingToken}@${DOMAIN}`,
+            subject: "Re: Welcome Grace",
+            "message-id": `<forged-${i}-${tag}@attacker.example>`,
+            "in-reply-to": `<${sent.messageIdHeader}>`,
+            date: new Date().toUTCString(),
+          },
+          text: "Please wire the dues to the new account.",
+          html: null,
+          auth,
+        }),
+      );
+      expect(res.status).toBe(200);
+    }
+    // Nothing stopped, nothing counted as their reply.
+    expect((await ownerDb.crmEnrollment.findUniqueOrThrow({ where: { id: enrollmentId } })).status).toBe("ACTIVE");
+    expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: sent.id } })).repliedAt).toBeNull();
   });
 
   it("reads a bounce: the sequence stops and the address is flagged", async () => {

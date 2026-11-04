@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { advance, campaignNumbers, readRouting, routeOwner, splitAmong } from "./assign";
 import { bookingSlots, bookingSlug, pickHost, readQuestions, slotsByDay } from "./booking";
-import { handoverBrief, recapLines } from "./brief";
+import { handoverBrief } from "./brief";
 import { applyMap, readDestination, suggestMap } from "./form-map";
 import {
   addressList,
   autoReplyOf,
   bareAddress,
+  singleSender,
   bounceOf,
   displayNameOf,
   neverLogged,
@@ -91,6 +92,15 @@ describe("reading incoming mail", () => {
     expect(bareAddress('"Ada L" <Ada@Example.ORG>')).toBe("ada@example.org");
     expect(displayNameOf('"Ada Lovelace" <ada@x.org>')).toBe("Ada Lovelace");
     expect(addressList('a@x.org, "B, Jr" <b@y.org>, a@x.org')).toEqual(["a@x.org", "b@y.org"]);
+  });
+
+  it("names one sender only when the From line holds one address", () => {
+    expect(singleSender('"Ada L" <Ada@Example.ORG>')).toBe("ada@example.org");
+    expect(singleSender("ada@example.org")).toBe("ada@example.org");
+    expect(singleSender('"ada@example.org" <ada@example.org>')).toBe("ada@example.org");
+    expect(singleSender('"mallory@attacker.example" <victim@example.org>')).toBeNull();
+    expect(singleSender("a@x.org, b@y.org")).toBeNull();
+    expect(singleSender("Nobody")).toBeNull();
   });
 
   it("finds our BCC and reply addresses on the inbound domain only", () => {
@@ -277,19 +287,5 @@ describe("briefs and recaps", () => {
     expect(lines.join(" ")).toContain("no next step");
     expect(lines.join(" ")).toContain("We still owe them: Logo on shirts.");
     expect(lines.at(-1)).toBe("$2,500 received, $5,000 pledged.");
-  });
-
-  it("writes a recap from real numbers", () => {
-    expect(
-      recapLines({
-        orgName: "Robotics",
-        companyName: "Harbor",
-        events: [{ title: "Demo day", startsAt: new Date(), checkIns: 80, signUps: 120 }],
-        deliverables: [
-          { title: "Logo", doneAt: new Date(), dueOn: null },
-          { title: "Talk", doneAt: null, dueOn: null },
-        ],
-      }),
-    ).toEqual(["One event so far, with 80 people checked in and 120 signed up.", "1 of 2 promises kept so far."]);
   });
 });

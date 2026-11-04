@@ -11,8 +11,11 @@ import { timeline } from "@/server/crm/activity";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { loadPerson } from "@/server/crm/records";
 import { conflictFor, contactable } from "@/server/crm/outreach/send";
+import { canStopEnrollment } from "@/server/crm/outreach/sequences";
 import { composeTemplates } from "@/server/crm/outreach/view";
 import { withOrgTx } from "@/server/db/context";
+
+import { crmCanEnrich, crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 import type { OverlayProps } from "./crm-overlays";
 
@@ -32,9 +35,112 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
   const orgId = shell.org.id;
   const viewerId = shell.user.id;
   const now = new Date();
-  const status = await phoneStatus(orgId).catch(() => null);
-  const data = await withOrgTx(orgId, async ({ db }) => {
-    const loaded = await loadPerson(db, orgId, orgSlug, open.id);
+  const personId = open.id;
+  // Three reads at once, each in its own transaction (one transaction runs
+  // one query at a time): the person and what hangs off their record; what
+  // the card offers around them (their unanswered mail, a waiting step, the
+  // composer's templates, the series, the booking link); and the members.
+  // Whatever the viewer can't see stays out of the first, and the card shows
+  // nothing then.
+  const statusP = phoneStatus(orgId).catch(() => null);
+  const membersP = crmMembers(orgId);
+  const aroundP = withOrgTx(orgId, async ({ db }) => {
+    // Their latest message to us that nobody has answered: the one thing to do.
+    // Incoming mail is tied to them through its timeline entry.
+    const touchIds = (
+      await db.crmActivityTarget.findMany({
+        where: { organizationId: orgId, targetKind: "person", targetId: personId },
+        orderBy: { occurredAt: "desc" },
+        take: 100,
+        select: { activityId: true },
+      })
+    ).map((t) => t.activityId);
+    const inbound = await db.crmEmailMessage.findFirst({
+      where: {
+        organizationId: orgId,
+        direction: "INBOUND",
+        OR: [{ personId }, { activityId: { in: touchIds } }],
+        status: "RECEIVED",
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        threadId: true,
+        subject: true,
+        bodyText: true,
+        createdAt: true,
+        mailboxUserId: true,
+      },
+    });
+    const answered = inbound
+      ? await db.crmEmailMessage.count({
+          where: {
+            organizationId: orgId,
+            threadId: inbound.threadId,
+            direction: "OUTBOUND",
+            createdAt: { gt: inbound.createdAt },
+          },
+        })
+      : 0;
+    // An open step a sequence left for the viewer: it's their next step.
+    const step = await db.crmActivity.findFirst({
+      where: {
+        organizationId: orgId,
+        kind: "SEQUENCE_STEP",
+        deletedAt: null,
+        meta: { path: ["open"], equals: true },
+        targets: { some: { targetKind: "person", targetId: personId } },
+      },
+      orderBy: { occurredAt: "asc" },
+      select: { id: true, subject: true, occurredAt: true },
+    });
+    // The "/" menu's booking links: your own first, then the organization's
+    // (Meetings > Booking links; docs/features/booking.md).
+    const bookingLinks = await db.crmBookingPage.findMany({
+      where: { organizationId: orgId, active: true, OR: [{ ownerUserId: viewerId }, { ownerUserId: null }] },
+      orderBy: { createdAt: "asc" },
+      select: { slug: true, title: true, ownerUserId: true },
+      take: 20,
+    });
+    return {
+      replyTo: inbound && !answered ? inbound : null,
+      step,
+      booking: [
+        ...bookingLinks.filter((b) => b.ownerUserId === viewerId),
+        ...bookingLinks.filter((b) => b.ownerUserId !== viewerId),
+      ].map((b) => ({
+        label: b.ownerUserId ? "my booking link" : b.title,
+        url: `${appOrigin()}/book/${b.slug}`,
+      })),
+      templates: await composeTemplates(db, orgId),
+      series: await db.crmSequence.findMany({
+        where: { organizationId: orgId, archivedAt: null, status: "ON" },
+        orderBy: { name: "asc" },
+        take: 50,
+        select: { id: true, name: true },
+      }),
+      // The series they're in now, and whether the viewer may take them out.
+      enrollments: (
+        await db.crmEnrollment.findMany({
+          where: { organizationId: orgId, personId, status: { in: ["ACTIVE", "PAUSED"] } },
+          orderBy: { startedAt: "asc" },
+          take: 10,
+          select: {
+            id: true,
+            senderId: true,
+            enrolledById: true,
+            sequence: { select: { name: true, createdById: true } },
+          },
+        })
+      ).map((e) => ({
+        id: e.id,
+        name: e.sequence.name,
+        canStop: shell.access.manager || canStopEnrollment(viewerId, e),
+      })),
+    };
+  });
+  const recordP = withOrgTx(orgId, async ({ db }) => {
+    const loaded = await loadPerson(db, orgId, orgSlug, personId);
     if (!loaded) return null;
     const { person } = loaded;
     const ids = await crmDatabaseIds(db, orgId);
@@ -62,117 +168,56 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
         })
       : [];
 
-    // Their latest message to us that nobody has answered: the one thing to do.
-    // Incoming mail is tied to them through its timeline entry.
-    const touchIds = (
-      await db.crmActivityTarget.findMany({
-        where: { organizationId: orgId, targetKind: "person", targetId: person.id },
-        orderBy: { occurredAt: "desc" },
-        take: 100,
-        select: { activityId: true },
-      })
-    ).map((t) => t.activityId);
-    const inbound = await db.crmEmailMessage.findFirst({
-      where: {
-        organizationId: orgId,
-        direction: "INBOUND",
-        OR: [{ personId: person.id }, { activityId: { in: touchIds } }],
-        status: "RECEIVED",
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        threadId: true,
-        subject: true,
-        bodyText: true,
-        createdAt: true,
-        mailboxUserId: true,
-      },
-    });
-    const answered = inbound
-      ? await db.crmEmailMessage.count({
-          where: {
-            organizationId: orgId,
-            threadId: inbound.threadId,
-            direction: "OUTBOUND",
-            createdAt: { gt: inbound.createdAt },
-          },
-        })
-      : 0;
-    const replyTo = inbound && !answered ? inbound : null;
     const conflict = await conflictFor(db, orgId, person.id, viewerId, now);
-    const conflictName = conflict
-      ? ((await db.user.findUnique({ where: { id: conflict.userId }, select: { name: true } }))
-          ?.name ?? "Another member")
-      : null;
-
-    // An open step a sequence left for the viewer: it's their next step.
-    const step = await db.crmActivity.findFirst({
-      where: {
-        organizationId: orgId,
-        kind: "SEQUENCE_STEP",
-        deletedAt: null,
-        meta: { path: ["open"], equals: true },
-        targets: { some: { targetKind: "person", targetId: person.id } },
-      },
-      orderBy: { occurredAt: "asc" },
-      select: { id: true, subject: true, occurredAt: true },
-    });
 
     // Money: what their company pledged through Finance and what came in.
     let money: PersonCardData["money"] = null;
-    if (person.company) {
-      const company = await db.crmCompany.findFirst({
-        where: { id: person.company.id, organizationId: orgId },
-        select: { sponsorId: true, name: true },
-      });
-      if (company?.sponsorId) {
-        const rows = await db.sponsorship
-          .findMany({
-            where: { organizationId: orgId, sponsorId: company.sponsorId },
-            select: { amountCents: true, status: true, type: true },
-          })
-          .catch(() => []);
-        const pledged = rows
-          .filter((s) => s.status !== "DECLINED" && s.status !== "WRITTEN_OFF")
-          .reduce((n, s) => n + s.amountCents, 0);
-        const paid = rows
-          .filter((s) => s.status === "RECEIVED" && s.type === "CASH")
-          .reduce((n, s) => n + s.amountCents, 0);
-        if (pledged > 0)
-          money = {
-            paid: formatMoney(paid),
-            pledged: formatMoney(pledged),
-            owed: formatMoney(Math.max(0, pledged - paid)),
-            due: pledged > paid,
-            company: company.name,
-          };
-      }
+    if (person.company?.sponsorId) {
+      const rows = await db.sponsorship
+        .findMany({
+          where: { organizationId: orgId, sponsorId: person.company.sponsorId },
+          select: { amountCents: true, status: true, type: true },
+        })
+        .catch(() => []);
+      const pledged = rows
+        .filter((s) => s.status !== "DECLINED" && s.status !== "WRITTEN_OFF")
+        .reduce((n, s) => n + s.amountCents, 0);
+      const paid = rows
+        .filter((s) => s.status === "RECEIVED" && s.type === "CASH")
+        .reduce((n, s) => n + s.amountCents, 0);
+      if (pledged > 0)
+        money = {
+          paid: formatMoney(paid),
+          pledged: formatMoney(pledged),
+          owed: formatMoney(Math.max(0, pledged - paid)),
+          due: pledged > paid,
+          company: person.company.name,
+        };
     }
 
-    const booking = await db.crmBookingPage.findFirst({
-      where: { organizationId: orgId, active: true, hostIds: { has: viewerId } },
-      orderBy: { createdAt: "asc" },
-      select: { slug: true },
-    });
     return {
       loaded,
       form,
       summary,
       notes,
       issue: issue ? { ...issue, from: issueSourceLabel(issue, issueKinds) } : null,
-      replyTo,
-      conflict: conflict ? { name: conflictName!, what: conflict.what, at: conflict.at } : null,
-      step,
+      conflict,
       money,
-      booking: booking ? `${appOrigin()}/book/${booking.slug}` : null,
-      templates: await composeTemplates(db, orgId),
       timelineItems: await presentTimeline(db, orgId, loaded.timeline),
     };
   });
-  if (!data) return <PersonCard orgId={orgId} orgSlug={orgSlug} data={null} />;
+  const [status, record, around, members, canEnrich] = await Promise.all([
+    statusP,
+    recordP,
+    aroundP,
+    membersP,
+    crmCanEnrich(orgId),
+  ]);
+  if (!record) return <PersonCard orgId={orgId} orgSlug={orgSlug} data={null} />;
+  const data = { ...record, ...around };
   const { person } = data.loaded;
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
+  const names = new Map(members.map((m) => [m.id, m.name]));
+  const conflictName = data.conflict ? (names.get(data.conflict.userId) ?? "Another member") : null;
   const relationship = shell.access.settings?.relationshipTypes.find(
     (t) => t.id === person.relationship,
   );
@@ -188,7 +233,8 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
     relationship: relationship?.label ?? null,
     phone: person.doNotContact ? null : person.phone,
     deleted: Boolean(person.deletedAt),
-    owner: ownerLabel(person, shell.roles, names),
+    // A Personal space has one owner: no "Owner:" line or Owner field.
+    owner: shell.access.personal ? null : ownerLabel(person, shell.roles, names),
     nextStep: data.step
       ? {
           kind: "step",
@@ -231,7 +277,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       amount: d.deal.amountCents !== null ? formatMoney(d.deal.amountCents, d.deal.currency) : null,
       pipeline: d.deal.pipeline.name,
     })),
-    form: data.form,
+    form: shell.access.personal ? data.form.filter((f) => f.key !== "owner") : data.form,
     timeline: data.timelineItems,
     notes: data.notes.map((n) => ({
       id: n.id,
@@ -252,10 +298,13 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       text: texting && person.phone && !person.doNotContact ? { to: person.phone } : null,
     },
     conflict: data.conflict
-      ? `${data.conflict.name} ${data.conflict.what}${data.conflict.at ? ` ${shortDate(data.conflict.at)}` : ""}`
+      ? `${conflictName} ${data.conflict.what}${data.conflict.at ? ` ${shortDate(data.conflict.at)}` : ""}`
       : null,
     templates: data.templates,
     booking: data.booking,
+    series: data.series,
+    enrollments: data.enrollments,
+    canEnrich,
   };
   return <PersonCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

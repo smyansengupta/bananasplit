@@ -1,5 +1,6 @@
 import { NewCard, type NewCardWith } from "@/components/crm/cards/new-card";
 import { withOrgTx } from "@/server/db/context";
+import { getOrgMembersForPicker } from "@/server/members";
 
 import type { OverlayProps } from "./crm-overlays";
 
@@ -15,7 +16,10 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
   const orgId = shell.org.id;
   const raw = typeof searchParams.with === "string" ? searchParams.with : "";
   const [head, rest] = raw.split(":", 2) as [string, string | undefined];
-  const ids = (rest ?? "").split(",").filter((v) => ID.test(v)).slice(0, 20);
+  const ids = (rest ?? "")
+    .split(",")
+    .filter((v) => ID.test(v))
+    .slice(0, 20);
   const start: NewCardWith = await withOrgTx(orgId, async ({ db }) => {
     if (!ids.length) return { company: null, people: [] };
     if (head === "company") {
@@ -42,14 +46,16 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
     }
     return { company: null, people: [] };
   });
-  const others = shell.members.filter((m) => m.id !== shell.user.id);
+  // Owner is New task's picker (faces, names, titles); a Personal space doesn't ask.
+  const members = shell.access.personal ? [] : await getOrgMembersForPicker(orgId);
   return (
     <NewCard
       orgId={orgId}
       what={open.what}
       start={start}
       viewerId={shell.user.id}
-      owners={others.slice(0, 6).map((m) => ({ id: m.id, label: m.name.split(" ")[0] ?? m.name }))}
+      members={members}
+      personal={shell.access.personal}
       pipelines={shell.pipelines.map((p) => ({
         id: p.id,
         name: p.name,

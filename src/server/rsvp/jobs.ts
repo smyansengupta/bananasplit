@@ -11,6 +11,7 @@ import { PermanentJobError, type JobHandler, type JobOutcome } from "@/server/jo
 import { notifyUsers } from "@/server/notifications";
 import { sendSms, SmsSendError, smsDelivery } from "@/server/sms";
 import { selfUpdateLinkFor } from "@/server/crm/outreach/self-update";
+import { queueGuestReminders } from "@/server/booking/manage";
 
 import { guestPlace, rsvpEmail, rsvpText } from "./email";
 import {
@@ -225,6 +226,9 @@ async function fanOutReminder(
       { startsAt: event.startsAt, offsetMinutes: offset },
     );
   }
+
+  // A meeting booked on a booking link: its guest's reminder (docs/features/booking.md).
+  reached += await queueGuestReminders(db, orgId, eventId, offset, event.startsAt);
 
   const invited = (
     await db.eventAttendee.findMany({

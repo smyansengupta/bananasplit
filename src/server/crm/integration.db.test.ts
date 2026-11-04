@@ -42,8 +42,9 @@ import { deliverDraft } from "./drafts";
 import type { CrmEventPayload } from "./events";
 import { forecastItems } from "./forecast";
 import { ingestEmail } from "./outreach/inbound";
-import { book, createBookingPage, loadBooking, updateBookingPage } from "./outreach/booking";
-import { composeEmail, deliver, discardDraft, draftsFor } from "./outreach/send";
+import { book, loadBooking } from "@/server/booking/book";
+import { createOrgLink as createBookingPage, updateLink as updateBookingPage } from "@/server/booking/links";
+import { composeEmail, crmSendJob, deliver, discardDraft, draftsFor } from "./outreach/send";
 import { createSequence, crmSequenceJob, enroll, saveSequence, setSequenceStatus } from "./outreach/sequences";
 import { createTemplate } from "./outreach/templates";
 import { createPerson } from "./people";
@@ -205,7 +206,11 @@ describe("the CRM's phases together", () => {
     const sent = await as(owner, (ctx) =>
       composeEmail(ctx, { personId: grace.id, subject: draft.subject!, body: draft.bodyText!, draftId: draft.id, confirmConflict: true }),
     );
-    expect("messageId" in sent).toBe(true);
+    if (!("messageId" in sent)) throw new Error("expected a send");
+    // Claimed while it waits to leave; gone, and its To approve row done, once it has.
+    expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("FAILED");
+    expect((await ownerDb.crmSuggestion.findUniqueOrThrow({ where: { id: suggestion.id } })).status).toBe("PENDING");
+    await crmSendJob(run({ messageId: sent.messageId }));
     expect(await ownerDb.crmEmailMessage.count({ where: { id: draft.id } })).toBe(0);
     expect((await ownerDb.crmSuggestion.findUniqueOrThrow({ where: { id: suggestion.id } })).status).toBe("ACCEPTED");
     await as(owner, (ctx) => setWorkflowStatus(ctx, review.id, "OFF"));
@@ -307,6 +312,7 @@ describe("the CRM's phases together", () => {
         text: "Looping in Bo.",
         date: new Date(),
         headers: {},
+        senderVerified: true,
       },
     );
     expect(r.status).toBe("logged");
@@ -393,9 +399,10 @@ describe("the CRM's phases together", () => {
       },
     });
     const page = await as(member, (ctx) => createBookingPage(ctx, "Intro call"));
-    await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30 }));
+    // On the host's own availability grid (hours: null), where their one-off dates live.
+    await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30, hours: null }));
     const loaded = await loadBooking(page.slug, now);
-    const slots = loaded!.slots;
+    const slots = loaded!.slots[30]!.map((s) => ({ start: new Date(s) }));
     const day = (d: Date) => localDateKey(d, tz);
     const hour = (d: Date) => Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(d));
     expect(slots.length).toBeGreaterThan(0);

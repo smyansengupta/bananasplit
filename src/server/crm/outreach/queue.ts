@@ -46,6 +46,8 @@ export interface QueueItem {
   unsubscribed: boolean;
   ownerId: string | null;
   lastContactedAt: Date | null;
+  /** Their relationship type id (people only). */
+  relationship: string | null;
   reasons: QueueReason[];
   urgent: boolean;
 }
@@ -74,6 +76,8 @@ function days(n: number): number {
 
 export interface QueueOptions {
   mine: boolean;
+  /** With `mine`: the viewer's team too (the people under them on the org chart). */
+  team?: readonly string[];
   /** Only these reasons (the Inbox takes all). */
   limit?: number;
   now?: Date;
@@ -88,9 +92,12 @@ export async function followUpQueue(
 ): Promise<QueueItem[]> {
   const now = options.now ?? new Date();
   const limit = options.limit ?? 60;
-  const held = rolesHeldBy(viewerId, roles);
+  // Whose: the viewer, or the viewer and their team (My team).
+  const who = [viewerId, ...(options.team ?? [])];
+  const whoIs = who.length === 1 ? viewerId : { in: who };
+  const held = who.flatMap((id) => rolesHeldBy(id, roles));
   const ownedBy: Prisma.CrmPersonWhereInput = options.mine
-    ? { OR: [{ ownerId: viewerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
+    ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
     : {};
   const reasons = new Map<string, QueueReason[]>();
   const add = (id: string, r: QueueReason) => {
@@ -106,22 +113,39 @@ export async function followUpQueue(
       direction: "INBOUND",
       status: "RECEIVED",
       createdAt: { gte: new Date(now.getTime() - days(21)) },
-      ...(options.mine ? { mailboxUserId: viewerId } : {}),
+      ...(options.mine ? { mailboxUserId: whoIs } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 100,
     select: { id: true, threadId: true, activityId: true, createdAt: true, subject: true },
   });
-  for (const m of inbound) {
-    const answered = await db.crmEmailMessage.count({
-      where: { organizationId, threadId: m.threadId, direction: "OUTBOUND", createdAt: { gt: m.createdAt } },
+  // Two reads for all of them: the latest mail out on each thread, and who each message was from.
+  const threadIds = [...new Set(inbound.map((m) => m.threadId))];
+  const lastOut = new Map(
+    (threadIds.length
+      ? await db.crmEmailMessage.groupBy({
+          by: ["threadId"],
+          where: { organizationId, threadId: { in: threadIds }, direction: "OUTBOUND" },
+          _max: { createdAt: true },
+        })
+      : []
+    ).map((o) => [o.threadId, o._max.createdAt]),
+  );
+  const waiting = inbound.filter((m) => {
+    const out = lastOut.get(m.threadId);
+    return m.activityId && !(out && out > m.createdAt);
+  });
+  const from = new Map<string, string>();
+  if (waiting.length) {
+    const links = await db.crmActivityTarget.findMany({
+      where: { organizationId, activityId: { in: waiting.map((m) => m.activityId!) }, targetKind: "person" },
+      select: { activityId: true, targetId: true },
     });
-    if (answered || !m.activityId) continue;
-    const t = await db.crmActivityTarget.findFirst({
-      where: { organizationId, activityId: m.activityId, targetKind: "person" },
-      select: { targetId: true },
-    });
-    if (t) add(t.targetId, { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id });
+    for (const l of links) if (!from.has(l.activityId)) from.set(l.activityId, l.targetId);
+  }
+  for (const m of waiting) {
+    const personId = from.get(m.activityId!);
+    if (personId) add(personId, { kind: "reply", label: m.subject ? `Replied: ${m.subject}` : "Replied", at: m.createdAt, ref: m.id });
   }
 
   // Sequence steps waiting on someone.
@@ -132,7 +156,7 @@ export async function followUpQueue(
       deletedAt: null,
       meta: { path: ["open"], equals: true },
       occurredAt: { lte: now },
-      ...(options.mine ? { actorId: viewerId } : {}),
+      ...(options.mine ? { actorId: whoIs } : {}),
     },
     orderBy: { occurredAt: "asc" },
     take: 100,
@@ -163,7 +187,7 @@ export async function followUpQueue(
       lastContactedAt: null,
       createdAt: { gte: new Date(now.getTime() - days(7)) },
       source: { in: ["form", "forms", "booking"] },
-      ...(options.mine ? { OR: [{ ownerId: viewerId }, { ownerId: null, ownerRoleKey: null }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
+      ...(options.mine ? { OR: [{ ownerId: whoIs }, { ownerId: null, ownerRoleKey: null }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -177,7 +201,7 @@ export async function followUpQueue(
       organizationId,
       status: "TODO",
       campaign: { status: "ACTIVE" },
-      ...(options.mine ? { assigneeId: viewerId } : { assigneeId: { not: null } }),
+      ...(options.mine ? { assigneeId: whoIs } : { assigneeId: { not: null } }),
     },
     orderBy: { campaign: { dueOn: { sort: "asc", nulls: "last" } } },
     take: 150,
@@ -242,6 +266,7 @@ export async function followUpQueue(
           unsubscribedAt: true,
           ownerId: true,
           lastContactedAt: true,
+          relationship: true,
           company: { select: { name: true } },
         },
       })
@@ -260,6 +285,7 @@ export async function followUpQueue(
       unsubscribed: Boolean(p.unsubscribedAt),
       ownerId: p.ownerId,
       lastContactedAt: p.lastContactedAt,
+      relationship: p.relationship,
       reasons: rs,
       urgent: rs.some((r) => r.kind === "reply" || r.kind === "step" || (r.kind === "followup" && r.label.includes("overdue"))),
     };
@@ -272,7 +298,7 @@ export async function followUpQueue(
       deletedAt: null,
       status: { not: "INACTIVE" },
       nextFollowUpAt: { lte: endOfDay(now) },
-      ...(options.mine ? { OR: [{ ownerId: viewerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
+      ...(options.mine ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
     },
     orderBy: { nextFollowUpAt: "asc" },
     take: 20,
@@ -292,6 +318,7 @@ export async function followUpQueue(
       unsubscribed: false,
       ownerId: c.ownerId,
       lastContactedAt: c.lastContactedAt,
+      relationship: null,
       reasons: [{ kind: "followup", label: "Follow up today", at: c.nextFollowUpAt }],
       urgent: false,
     });

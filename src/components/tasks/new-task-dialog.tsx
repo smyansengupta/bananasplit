@@ -4,13 +4,7 @@ import { useRef, useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHead,
-} from "@/components/ui/dialog";
+import { FormDialog, FormDialogFoot, FormDialogHead } from "@/components/ui/form-dialog";
 import { announceCreated } from "@/components/links/pending-link";
 import { toast } from "@/components/ui/toaster";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
@@ -40,20 +34,15 @@ export function NewTaskDialog({
   defaults?: TaskEditorDefaults;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
-      >
-        {open && (
-          <NewTaskForm
-            key={`${defaults?.parentTaskId ?? "top"}-${defaults?.type ?? ""}-${defaults?.status ?? ""}`}
-            defaults={defaults}
-            onOpenChange={onOpenChange}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <FormDialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <NewTaskForm
+          key={`${defaults?.parentTaskId ?? "top"}-${defaults?.type ?? ""}-${defaults?.status ?? ""}`}
+          defaults={defaults}
+          onOpenChange={onOpenChange}
+        />
+      )}
+    </FormDialog>
   );
 }
 
@@ -206,15 +195,12 @@ function NewTaskForm({
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <DialogHead
-        className="shrink-0 ps-6 pe-4 pt-4 pb-2"
+      <FormDialogHead
         title={`New ${noun}`}
-        subtitle={
-          <DialogDescription>
-            {isEpic
-              ? "A big outcome that spans weeks. Its stories and tasks roll up into it."
-              : "A title is all it takes. Everything else has a sensible default."}
-          </DialogDescription>
+        description={
+          isEpic
+            ? "A big outcome that spans weeks. Its stories and tasks roll up into it."
+            : "A title is all it takes. Everything else has a sensible default."
         }
       />
 
@@ -250,14 +236,14 @@ function NewTaskForm({
       </div>
 
       {confirmElement}
-      <DialogFooter className="m-0 shrink-0 border-t px-6 py-4">
+      <FormDialogFoot>
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
         <Button type="submit" disabled={isPending || !title.trim()}>
           {isPending ? "Creating…" : `Create ${noun}`}
         </Button>
-      </DialogFooter>
+      </FormDialogFoot>
     </form>
   );
 }

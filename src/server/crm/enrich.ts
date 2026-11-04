@@ -4,7 +4,7 @@ import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx } from "@/server/db/context";
 
 import { CrmError } from "./access";
-import { claudeWebResearch, crmCredentials, dataRule, fenced, runCrmAi, assertUnderCap, recordAiUsage, withTier } from "./ai";
+import { claudeWebResearch, crmCredentials, dataRule, estimateCallMicros, fenced, holdForCall, runCrmAi, recordAiUsage, reserveUnderCap, withTier, WEB_RESEARCH_SEARCH_MICROS } from "./ai";
 import type { AiWho } from "./ai-tx";
 import { updateCompany } from "./companies";
 import { costOf, meterUse } from "./spend";
@@ -87,6 +87,11 @@ export interface EnrichOutcome {
   filled: string[];
   suggested: number;
   batchId: string | null;
+  /** suggestOnly: the one suggestion holding everything found, and what it would change. */
+  suggestionId?: string | null;
+  changes?: { field: string; label: string; before: string | null; after: string }[];
+  /** Who found it, in words ("Hunter"). */
+  providerLabel?: string | null;
 }
 
 /** The order to try, from the setting (unknown steps dropped), defaulting to DEFAULT_ORDER. */
@@ -197,59 +202,80 @@ async function tryStep(
   if (step === "claude") {
     const creds = await crmCredentials(who.organizationId);
     if (!creds || creds.protocol !== "anthropic") return "skip";
-    await assertUnderCap(who.organizationId);
     const tiered = withTier(creds, "fast") as typeof creds;
-    const r = await claudeWebResearch(tiered, {
-      system: enrichSystemPrompt(kind),
-      text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\nSearch the web for this ${kind} and answer with the facts you find. Number the pages you used in the order you cite them; "source" is that number.`,
-      schema: EnrichOutput,
-      name: "crm_enrich",
-      maxOutputTokens: 1_000,
-      standin: () => ({ facts: [], notes: [] }),
-    });
-    await withSystemOrgTx(who.organizationId, ({ db }) =>
-      recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: r, extraMicros: r.webSearchMicros }),
-    );
+    // Held against the cap until it's metered: the model plus a few searches.
+    const hold = await holdForCall(who.organizationId, tiered, estimateCallMicros(tiered.model, 4_000, 1_000) + 3 * WEB_RESEARCH_SEARCH_MICROS);
+    let r;
+    try {
+      r = await claudeWebResearch(tiered, {
+        system: enrichSystemPrompt(kind),
+        text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\nSearch the web for this ${kind} and answer with the facts you find. Number the pages you used in the order you cite them; "source" is that number.`,
+        schema: EnrichOutput,
+        name: "crm_enrich",
+        maxOutputTokens: 1_000,
+        standin: () => ({ facts: [], notes: [] }),
+      });
+      const done = r;
+      await withSystemOrgTx(who.organizationId, ({ db }) =>
+        recordAiUsage(db, { organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "claude", result: done, extraMicros: done.webSearchMicros }),
+      );
+    } finally {
+      await hold?.release();
+    }
     const results = r.sources.map((x) => ({ title: x.label, url: x.url, content: "" }));
     return factsFrom(r.data, results);
   }
   const key = await dataKey(who.organizationId, step);
   if (!key) return "skip";
   const what = step === "hunter" ? "hunter.lookup" : step === "prospeo" ? "prospeo.lookup" : "tavily.search";
-  await assertUnderCap(who.organizationId, costOf(what));
-  let found: FoundValues | null = null;
-  const urls: Record<string, string> = {};
-  if (step === "hunter") {
-    if (kind === "person") found = s.email ? await hunterPerson(key, s.email) : null;
-    else found = s.domain ? await hunterCompany(key, s.domain) : null;
-    if (found === null && !(kind === "person" ? s.email : s.domain)) return "skip";
-  } else if (step === "prospeo") {
-    if (kind === "company" || (!s.email && !s.linkedinUrl)) return "skip";
-    found = await prospeoPerson(key, { email: s.email, linkedinUrl: s.linkedinUrl });
-  } else {
-    const results = await tavilySearch(key, kind === "person" ? `"${s.name}" ${s.companyName ?? ""} ${s.title ?? ""}` : `${s.name} ${s.domain ?? ""} company`, { maxResults: 5 });
-    await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", what: "tavily.search" });
-    if (results.length === 0) return null;
-    const r = await runCrmAi({
-      organizationId: who.organizationId,
-      userId: who.userId,
-      feature: "crm.enrich",
-      request: {
-        system: enrichSystemPrompt(kind),
-        text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\n<results>\n${fenced(resultsText(results), "results")}\n</results>\n\nList the facts the results state about this ${kind}.`,
-        schema: EnrichOutput,
-        name: "crm_enrich",
-        standin: () => ({ facts: results[0] ? [{ field: kind === "person" ? ("title" as const) : ("description" as const), value: results[0].title.slice(0, 80), source: "1" }] : [], notes: [] }),
-      },
-    });
-    return factsFrom(r.data, results);
+  // Its cost is held against the cap while it runs (calls at once can't all pass a full cap).
+  const hold = await reserveUnderCap(who.organizationId, costOf(what));
+  try {
+    let found: FoundValues | null = null;
+    const urls: Record<string, string> = {};
+    if (step === "hunter") {
+      if (kind === "person") found = s.email ? await hunterPerson(key, s.email) : null;
+      else found = s.domain ? await hunterCompany(key, s.domain) : null;
+      if (found === null && !(kind === "person" ? s.email : s.domain)) return "skip";
+    } else if (step === "prospeo") {
+      if (kind === "company" || (!s.email && !s.linkedinUrl)) return "skip";
+      found = await prospeoPerson(key, { email: s.email, linkedinUrl: s.linkedinUrl });
+    } else {
+      const results = await tavilySearch(key, kind === "person" ? `"${s.name}" ${s.companyName ?? ""} ${s.title ?? ""}` : `${s.name} ${s.domain ?? ""} company`, { maxResults: 5 });
+      await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", what: "tavily.search" });
+      if (results.length === 0) return null;
+      const r = await runCrmAi({
+        organizationId: who.organizationId,
+        userId: who.userId,
+        feature: "crm.enrich",
+        request: {
+          system: enrichSystemPrompt(kind),
+          text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\n<results>\n${fenced(resultsText(results), "results")}\n</results>\n\nList the facts the results state about this ${kind}.`,
+          schema: EnrichOutput,
+          name: "crm_enrich",
+          standin: () => ({ facts: results[0] ? [{ field: kind === "person" ? ("title" as const) : ("description" as const), value: results[0].title.slice(0, 80), source: "1" }] : [], notes: [] }),
+        },
+      });
+      return factsFrom(r.data, results);
+    }
+    await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, what });
+    return found ? { values: found, urls } : null;
+  } finally {
+    await hold.release();
   }
-  await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, what });
-  return found ? { values: found, urls } : null;
 }
 
-/** Runs the waterfall on one person or company. */
-export async function enrichRecord(who: AiWho, target: TargetRef): Promise<EnrichOutcome> {
+/**
+ * Runs the waterfall on one person or company. `suggestOnly` (a member's
+ * "Find their details" on a card): nothing is written; everything found,
+ * empty fields and different values alike, becomes one suggestion that
+ * changes the record only when someone accepts it.
+ */
+export async function enrichRecord(
+  who: AiWho,
+  target: TargetRef,
+  options: { suggestOnly?: boolean } = {},
+): Promise<EnrichOutcome> {
   const { subject, order } = await loadSubject(who, target);
   const connected = await connectedDataProviders(who.organizationId);
   const steps = waterfallOrder(order).filter((s) => s === "claude" || connected.includes(s));
@@ -297,6 +323,35 @@ export async function enrichRecord(who: AiWho, target: TargetRef): Promise<Enric
   const label = provider === "claude" ? "Claude web search" : (dataProvider(provider)?.label ?? provider);
   const firstUrl = Object.values(found.urls)[0] ?? null;
   const citation: Citation = { kind: viaModel ? "web" : "connector", label, url: firstUrl };
+  outcome.providerLabel = label;
+  if (options.suggestOnly) {
+    const changes = [
+      ...fields
+        .filter((f) => f.key in fill)
+        .map((f) => ({ field: f.key, label: f.label, before: null, after: String(fill[f.key]) })),
+      ...conflicts,
+    ];
+    outcome.changes = changes;
+    outcome.suggestionId = null;
+    if (changes.length === 0) return outcome;
+    await who.tx(async (actor) => {
+      const r = await proposeChange(actor.db, {
+        organizationId: who.organizationId,
+        kind: "UPDATE_FIELD",
+        source: viaModel ? "AI" : "CONNECTOR",
+        title: `${label} found details for ${subject.name}`,
+        summary: "Nothing changes until you accept.",
+        payload: { changes },
+        target,
+        citation,
+        proposedById: who.userId,
+        assigneeId: who.userId,
+      });
+      outcome.suggestionId = r.id;
+      outcome.suggested = 1;
+    });
+    return outcome;
+  }
   await who.tx(async (actor) => {
     if (Object.keys(fill).length > 0) {
       const batchId = newBatchId();

@@ -70,7 +70,7 @@ export type RelationKind = (typeof RELATION_KINDS)[number];
 export const RELATION_KIND_LABELS: Record<RelationKind, string> = {
   person: "People",
   company: "Companies",
-  deal: "Pipeline items",
+  deal: "Deals",
   record: "Rows of a database",
 };
 

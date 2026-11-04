@@ -90,6 +90,9 @@ export const KIND_ICONS: Record<SearchKind, IconComponent> = {
   database: Database,
   transaction: Banknote,
   sponsor: Handshake,
+  "crm-person": UserRound,
+  "crm-company": Building2,
+  "crm-deal": Columns3,
 };
 
 /** Icons the page catalog names (catalog.ts, the sidebar sections, settings-nav). */

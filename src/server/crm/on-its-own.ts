@@ -45,7 +45,10 @@ export interface OnItsOwnEntry {
   send: OnItsOwnSend | null;
 }
 
-const NOT_HELD = new Set(["cancelled", "discarded", "untracked"]);
+const NOT_HELD = new Set(["cancelled", "discarded", "untracked", "sent", "failed", "sending"]);
+/** A draft taken for sending, or withdrawn by a reply: not something held back. */
+const notHeld = (error: string | null) =>
+  NOT_HELD.has(error ?? "") || Boolean(error?.startsWith("sending:") || error?.startsWith("withdrawn:"));
 const RUN_STEPS = new Set([
   "task.create",
   "deal.create",
@@ -319,7 +322,7 @@ export async function onItsOwn(
         undo: null,
         send: null,
       });
-    } else if (!NOT_HELD.has(m.error ?? "")) {
+    } else if (!notHeld(m.error)) {
       out.push({
         id: `mail:${m.id}`,
         kind: "held",
@@ -333,6 +336,9 @@ export async function onItsOwn(
   }
 
   for (const d of drafts) {
+    // A draft carries the message itself: only for someone who can see who
+    // it's to (the people map is read as the viewer, under RLS).
+    if (!d.targetId || !people.has(d.targetId)) continue;
     const p = (d.payload ?? {}) as { subject?: string; body?: string; draftId?: string };
     const c = (d.citation ?? {}) as { label?: string };
     const who = (d.targetId && people.get(d.targetId)) || "someone";
@@ -350,6 +356,18 @@ export async function onItsOwn(
     });
   }
 
+  // Whether anything changed each record since (then there is no Undo): one read for all.
+  const shown = changeGroups.filter((g) => people.has(g.id) || companies.has(g.id) || deals.has(g.id));
+  const latestChange = new Map(
+    (shown.length
+      ? await db.crmFieldHistory.groupBy({
+          by: ["targetKind", "targetId"],
+          where: { organizationId, OR: shown.map((g) => ({ targetKind: g.kind, targetId: g.id })) },
+          _max: { changedAt: true },
+        })
+      : []
+    ).map((r) => [`${r.targetKind}:${r.targetId}`, r._max.changedAt]),
+  );
   for (const g of changeGroups) {
     const name =
       g.kind === "person"
@@ -387,10 +405,8 @@ export async function onItsOwn(
         : `Took the owner off ${name}.`;
     else
       text = `Updated ${name}: ${list([...new Set(g.fields.map((f) => fieldWords(kind, f.field)))])}.`;
-    const later = await db.crmFieldHistory.findFirst({
-      where: { organizationId, targetKind: g.kind, targetId: g.id, changedAt: { gt: g.last } },
-      select: { id: true },
-    });
+    const newest = latestChange.get(`${g.kind}:${g.id}`);
+    const later = Boolean(newest && newest > g.last);
     out.push({
       id: `change:${g.kind}:${g.id}:${g.first.getTime()}`,
       kind: "changed",

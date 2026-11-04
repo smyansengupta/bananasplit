@@ -1,4 +1,4 @@
-import type { Role } from "@/generated/prisma/client";
+import type { Organization, Role } from "@/generated/prisma/client";
 import { readAddOns } from "@/lib/addons";
 import { can } from "@/lib/auth/permissions";
 import { featureRefusal, spaceIncludes } from "@/lib/billing/space";
@@ -21,8 +21,11 @@ import type { TxClient } from "@/server/db/context";
  *   and works the lists. With memberAccess OWN they see only what they own
  *   or made (the database decides that).
  * - Owners, admins and CRM managers (CrmSettings.managerIds) shape it:
- *   pipelines and stages, fields, relationship types, access, and merging
- *   and deleting for good. Everything else people do goes to the trash.
+ *   pipelines and stages, fields, relationship types, access, and deleting
+ *   for good. Everything else people do goes to the trash.
+ * - Any member may merge two records they can both see (with memberAccess
+ *   OWN, only their own: the database finds no other); whoever merged them,
+ *   or an owner or admin, can undo it for 7 days (merge.ts, undoMerge).
  */
 
 /** Anything that acts in the CRM: an OrgContext is one. */
@@ -113,9 +116,23 @@ export async function crmAccess(actor: CrmActor): Promise<CrmAccess> {
     select: { addOns: true },
   });
   const settings = await readCrmSettings(db, organizationId);
+  return crmAccessOf(actor, org, orgSettings?.addOns, settings);
+}
+
+/**
+ * crmAccess from what the caller already read: the space's kind and plan,
+ * its add-ons and the CRM's settings. Every CRM page has the first two
+ * from getOrgContextBySlug, so the shell reads only CrmSettings.
+ */
+export function crmAccessOf(
+  actor: { role: Role; userId: string },
+  org: Pick<Organization, "kind" | "plan" | "trialEndsAt" | "planAfterTrial"> | null,
+  addOns: readonly string[] | null | undefined,
+  settings: CrmSettingsView | null,
+): CrmAccess {
   const admin = can(actor, "settings.general.write");
   return {
-    added: readAddOns(orgSettings?.addOns).includes("crm"),
+    added: readAddOns(addOns).includes("crm"),
     personal: org?.kind === "PERSONAL",
     onPlan: Boolean(org && spaceIncludes(org, "crm")),
     admin,

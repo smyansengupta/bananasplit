@@ -4,6 +4,7 @@ import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "./owners";
 import { rolesHeldBy } from "./owners";
+import { taskSteps } from "./task-steps";
 
 /**
  * The CRM's lists, filtered, sorted and searched on the server (docs/
@@ -26,6 +27,8 @@ export interface ListQuery {
   companyId?: string;
   /** Only these records (a hand-picked list, the ones that look like duplicates). */
   ids?: readonly string[];
+  /** Only those with a deal like this (People's Pipeline, Stage, Deal type and Open/Won/Lost filters). */
+  deals?: Prisma.CrmDealWhereInput;
   trash?: boolean;
   sort?: string;
   dir?: "asc" | "desc";
@@ -53,12 +56,18 @@ export function parseListQuery(sp: Record<string, string | string[] | undefined>
   };
 }
 
-function ownerWhere(owner: string | undefined, viewerId: string, roles: ReadonlyMap<string, RoleOwner>) {
+/**
+ * Owned by: "none", "me", a member's id, or several ids joined with commas
+ * (My team: the viewer and the people under them), each with the roles
+ * they hold.
+ */
+export function ownerWhere(owner: string | undefined, viewerId: string, roles: ReadonlyMap<string, RoleOwner>) {
   if (!owner) return {};
   if (owner === "none") return { ownerId: null, ownerRoleKey: null };
-  const id = owner === "me" ? viewerId : owner;
-  const held = rolesHeldBy(id, roles);
-  return { OR: [{ ownerId: id }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] };
+  const ids = [...new Set(owner.split(",").map((x) => (x === "me" ? viewerId : x.trim())).filter(Boolean))];
+  const held = ids.flatMap((id) => rolesHeldBy(id, roles));
+  const ownerId = ids.length === 1 ? ids[0]! : { in: ids };
+  return { OR: [{ ownerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] };
 }
 
 export interface PersonRow {
@@ -125,6 +134,7 @@ export function peopleWhere(
     });
   }
   if (query.due === "new") and.push({ createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) } });
+  if (query.deals) and.push({ deals: { some: { deal: { AND: [{ deletedAt: null }, query.deals] } } } });
   if (query.q) {
     const q = query.q;
     and.push({
@@ -134,6 +144,7 @@ export function peopleWhere(
         { emails: { some: { email: { contains: q.toLowerCase() } } } },
         { phone: { contains: q } },
         { company: { name: { contains: q, mode: "insensitive" } } },
+        { deals: { some: { deal: { deletedAt: null, title: { contains: q, mode: "insensitive" } } } } },
       ],
     });
   }
@@ -265,12 +276,14 @@ export function companiesWhere(
     and.push({ lastContactedAt: { lt: new Date(now.getTime() - COLD_AFTER_DAYS * 86_400_000), not: null } });
   }
   if (query.due === "new") and.push({ createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) } });
+  if (query.deals) and.push({ deals: { some: { AND: [{ deletedAt: null }, query.deals] } } });
   if (query.q) {
     and.push({
       OR: [
         { name: { contains: query.q, mode: "insensitive" } },
         { domain: { contains: query.q.toLowerCase() } },
         { industry: { contains: query.q, mode: "insensitive" } },
+        { deals: { some: { deletedAt: null, title: { contains: query.q, mode: "insensitive" } } } },
       ],
     });
   }
@@ -504,10 +517,12 @@ export async function todayList(
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
-  options: { mine: boolean },
+  options: { mine: boolean; team?: readonly string[] },
   now: Date = new Date(),
 ): Promise<Record<TodayItem["kind"], TodayItem[]>> {
-  const mine = options.mine ? (ownerWhere("me", viewerId, roles) as Prisma.CrmPersonWhereInput) : {};
+  const mine = options.mine
+    ? (ownerWhere(["me", ...(options.team ?? [])].join(","), viewerId, roles) as Prisma.CrmPersonWhereInput)
+    : {};
   const followups = await db.crmPerson.findMany({
     where: { organizationId, deletedAt: null, status: "ACTIVE", nextFollowUpAt: { lte: endOfToday(now) }, ...mine },
     orderBy: { nextFollowUpAt: "asc" },
@@ -575,7 +590,10 @@ export async function todayList(
     },
   });
   const stuck = open.filter((d) => isStuck(d, limits.get(d.stageId) ?? null, now)).slice(0, 15);
-  const nostep = open.filter((d) => !d.nextStep?.trim()).slice(0, 15);
+  // An open task linked to a deal is its next step (src/lib/crm/task-steps.ts).
+  const stepless = open.filter((d) => !d.nextStep?.trim());
+  const tasked = await taskSteps(db, organizationId, "deal", stepless.map((d) => d.id));
+  const nostep = stepless.filter((d) => !tasked.has(d.id)).slice(0, 15);
   return {
     followup: [
       ...followups.map((p) => ({

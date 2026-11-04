@@ -21,7 +21,7 @@ export const LINK_KINDS = [
   "poll",
   "decision",
   "announcement",
-  // The CRM's people, companies and pipeline items (docs/features/crm.md):
+  // The CRM's people, companies and deals (docs/features/crm.md):
   // a task, note or meeting linked to one lands on its timeline.
   "crm-person",
   "crm-company",
@@ -31,6 +31,15 @@ export type LinkKind = (typeof LINK_KINDS)[number];
 
 export function isLinkKind(value: unknown): value is LinkKind {
   return typeof value === "string" && (LINK_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * A CRM person, company or deal opens straight to its centred card (its
+ * link is the CRM page with ?open=), never in the side peek: the card is
+ * the record, and a peek of it would only say "Open page".
+ */
+export function opensAsCard(kind: LinkKind): boolean {
+  return kind === "crm-person" || kind === "crm-company" || kind === "crm-deal";
 }
 
 export interface LinkRef {
@@ -73,7 +82,7 @@ export const KIND_WORD: Record<LinkKind, string> = {
   announcement: "Announcement",
   "crm-person": "Contact",
   "crm-company": "Company",
-  "crm-deal": "Pipeline item",
+  "crm-deal": "Deal",
 };
 
 /**

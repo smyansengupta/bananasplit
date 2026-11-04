@@ -202,8 +202,8 @@ describe("nothing sends unapproved", () => {
     if (!("messageId" in sent)) throw new Error("expected a send");
     const second = await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: sent.messageId } });
     expect(second).toMatchObject({ enrollmentId: e.id, threadId: first.threadId, createdById: member.id, status: "QUEUED" });
-    expect((await ownerDb.crmSuggestion.findUniqueOrThrow({ where: { id: ask.id } })).status).toBe("ACCEPTED");
     await crmSendJob(run({ messageId: second.id }));
+    expect((await ownerDb.crmSuggestion.findUniqueOrThrow({ where: { id: ask.id } })).status).toBe("ACCEPTED");
     await crmSequenceJob(run({ enrollmentId: e.id, step: 2 }));
     expect(await goingOut(grace.id)).toBe(2);
     const third = await ownerDb.crmEmailMessage.findFirstOrThrow({ where: { enrollmentId: e.id, status: "DRAFT" } });
@@ -224,6 +224,7 @@ describe("nothing sends unapproved", () => {
         text: "Thanks, let's talk.",
         date: new Date(),
         headers: {},
+        senderVerified: true,
       },
     );
     expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: third.id } })).status).toBe("FAILED");

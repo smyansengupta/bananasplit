@@ -98,7 +98,7 @@ async function partiesOf(db: TxClient, organizationId: string, input: QuoteDraft
       where: { id: dealId, organizationId, deletedAt: null },
       select: { id: true, title: true, companyId: true, primaryPersonId: true, currency: true, amountCents: true },
     });
-    if (!deal) throw new CrmError("That item isn't in the CRM any more.");
+    if (!deal) throw new CrmError("That deal isn't in the CRM any more.");
     dealId = deal.id;
     companyId = companyId ?? deal.companyId;
     personId = personId ?? deal.primaryPersonId;

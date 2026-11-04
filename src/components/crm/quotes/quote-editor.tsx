@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   duplicateQuoteAction,
@@ -13,32 +13,26 @@ import {
   sendQuoteAction,
 } from "@/app/app/[orgSlug]/crm/quote-actions";
 import { Copy, Download, Plus, Send, Trophy, X } from "@/components/icons";
+import { useEscapeFirst } from "@/components/crm/card/card-panel";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { CrmPicker } from "@/components/crm/crm-picker";
 import { ComposeButton } from "@/components/crm/outreach/compose";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { formatMoney } from "@/lib/crm/fields";
-import { crmRecordHref } from "@/lib/crm/href";
 import { KIND_WORD, parseCents, parseTaxBps, quoteTotals, STATUS_WORD, type QuoteKind, type QuoteStatus } from "@/lib/crm/quotes";
 
 /**
  * A quote or invoice: who it's for, its lines and totals, and what can
  * happen next (send the link, download the PDF, copy it, make an invoice,
- * move it to another item, mark it paid, move the item to won). Accepted
- * and paid ones are read-only: copy one to change it.
+ * move it to another deal, mark it paid, move the deal to won). Accepted
+ * and paid ones are read-only: copy one to change it. It's the quote card's
+ * body (?open=quote:<id>); a copy opens in its place (`onOpenQuote`).
  */
 
 export interface QuoteView {
@@ -81,14 +75,18 @@ export function QuoteEditor({
   orgSlug,
   quote,
   canBook,
+  onOpenQuote,
 }: {
   orgId: string;
   orgSlug: string;
   quote: QuoteView;
   /** A finance role, with Finance added: may book the income. */
   canBook: boolean;
+  /** Open another quote (a copy, a new invoice) in this one's place. */
+  onOpenQuote: (id: string) => void;
 }) {
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   const locked = quote.status === "ACCEPTED" || quote.status === "PAID";
   const word = KIND_WORD[quote.kind];
   const [title, setTitle] = useState(quote.title);
@@ -180,15 +178,15 @@ export function QuoteEditor({
           <span className="text-muted-foreground text-sm">
             For{" "}
             {quote.deal ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "deal", quote.deal.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("deal", quote.deal.id)}>
                 {quote.deal.title}
               </Link>
             ) : quote.company ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "company", quote.company.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("company", quote.company.id)}>
                 {quote.company.name}
               </Link>
             ) : quote.person ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "person", quote.person.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("person", quote.person.id)}>
                 {quote.person.name}
               </Link>
             ) : null}
@@ -208,7 +206,7 @@ export function QuoteEditor({
             onClick={() =>
               void run(
                 () => duplicateQuoteAction(orgId, quote.id, {}),
-                (r) => router.push(`/app/${orgSlug}/crm/quotes/${(r as unknown as { id: string }).id}`),
+                (r) => onOpenQuote((r as unknown as { id: string }).id),
               )
             }
           >
@@ -223,7 +221,7 @@ export function QuoteEditor({
               onClick={() =>
                 void run(
                   () => duplicateQuoteAction(orgId, quote.id, { kind: "invoice" }),
-                  (r) => router.push(`/app/${orgSlug}/crm/quotes/${(r as unknown as { id: string }).id}`),
+                  (r) => onOpenQuote((r as unknown as { id: string }).id),
                 )
               }
             >
@@ -231,7 +229,7 @@ export function QuoteEditor({
             </Button>
           )}
           <Button variant="outline" size="sm" disabled={pending} onClick={() => setMoveOpen(true)}>
-            Move to another item
+            Move to another deal
           </Button>
         </div>
       </div>
@@ -367,7 +365,7 @@ export function QuoteEditor({
         {quote.status === "ACCEPTED" && quote.deal && !quote.deal.won && (
           <Button variant="outline" disabled={pending} onClick={() => void run(() => moveToWonAction(orgId, quote.id), () => toast({ title: "Moved to won." }))}>
             <Trophy className="size-4" aria-hidden="true" />
-            Move the item to won
+            Move the deal to won
           </Button>
         )}
         {(quote.status === "SENT" || quote.status === "ACCEPTED" || quote.status === "EXPIRED") && (
@@ -397,18 +395,25 @@ export function QuoteEditor({
         )}
       </div>
 
-      <Dialog open={Boolean(link)} onOpenChange={(o) => !o && setLink(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{word.title} {quote.number} is ready</DialogTitle>
-            <DialogDescription>
-              Send this link. They can read it, download the PDF and {quote.kind === "quote" ? "accept it by typing their name" : "see what's due"}.
-              It&apos;s shown once; sending again makes a new one.
-            </DialogDescription>
-          </DialogHeader>
-          <code className="bg-muted block rounded-md p-2 text-[12.5px] break-all">{link}</code>
-          <DialogFooter>
-            {quote.person?.email && link && (
+      {/* What comes next is asked right here in the card, never in a second dialog over it. */}
+      {link && (
+        <InlineStep
+          title={`${word.title} ${quote.number} is ready`}
+          description={
+            <>
+              Send this link. They can read it, download the PDF and{" "}
+              {quote.kind === "quote" ? "accept it by typing their name" : "see what's due"}. It&apos;s
+              shown once; sending again makes a new one.
+            </>
+          }
+          onClose={() => setLink(null)}
+        >
+          <code className="bg-background block rounded-md p-2 text-[12.5px] break-all">{link}</code>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setLink(null)}>
+              Done
+            </Button>
+            {quote.person?.email && (
               // Through the CRM's own compose: previewed, tracked and on their timeline.
               <ComposeButton
                 orgId={orgId}
@@ -423,29 +428,29 @@ export function QuoteEditor({
             )}
             <Button
               onClick={() => {
-                if (link) void navigator.clipboard?.writeText(link).then(() => toast({ title: "Copied." }));
+                void navigator.clipboard?.writeText(link).then(() => toast({ title: "Copied." }));
               }}
             >
               <Copy className="size-4" aria-hidden="true" />
               Copy link
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </InlineStep>
+      )}
 
-      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Move {quote.number} to another item</DialogTitle>
-            <DialogDescription>It moves with its lines and its link. The item&apos;s company and person come with it.</DialogDescription>
-          </DialogHeader>
+      {moveOpen && (
+        <InlineStep
+          title={`Move ${quote.number} to another deal`}
+          description="It moves with its lines and its link. The deal's company and person come with it."
+          onClose={() => setMoveOpen(false)}
+        >
           <CrmPicker
             orgId={orgId}
             kind="deal"
             value={null}
             autoOpen
             allowClear={false}
-            placeholder="Search items"
+            placeholder="Search deals"
             onPick={(hit) => {
               if (!hit) return;
               void run(
@@ -457,15 +462,20 @@ export function QuoteEditor({
               );
             }}
           />
-        </DialogContent>
-      </Dialog>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setMoveOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </InlineStep>
+      )}
 
-      <Dialog open={paidOpen} onOpenChange={setPaidOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mark {quote.number} paid?</DialogTitle>
-            <DialogDescription>{formatMoney(quote.lines.length ? totals.totalCents : 0, quote.currency)} received.</DialogDescription>
-          </DialogHeader>
+      {paidOpen && (
+        <InlineStep
+          title={`Mark ${quote.number} paid?`}
+          description={`${formatMoney(quote.lines.length ? totals.totalCents : 0, quote.currency)} received.`}
+          onClose={() => setPaidOpen(false)}
+        >
           {canBook && (
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>
@@ -475,7 +485,7 @@ export function QuoteEditor({
               <Switch checked={book} onCheckedChange={setBook} />
             </label>
           )}
-          <DialogFooter>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setPaidOpen(false)}>
               Not yet
             </Button>
@@ -493,9 +503,48 @@ export function QuoteEditor({
             >
               Mark paid
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </InlineStep>
+      )}
     </div>
+  );
+}
+
+/**
+ * A next step asked inside the quote (its link, moving it, marking it
+ * paid): a tinted box under the buttons, scrolled into view, focus in it,
+ * Escape closes it and leaves the card open.
+ */
+function InlineStep({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEscapeFirst(onClose);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    ref.current?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <section
+      ref={ref}
+      tabIndex={-1}
+      data-card-panel
+      aria-label={title}
+      className="bg-muted space-y-3 rounded-2xl p-4 outline-none"
+    >
+      <div className="space-y-0.5">
+        <b className="block text-[15px]">{title}</b>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </div>
+      {children}
+    </section>
   );
 }

@@ -52,9 +52,20 @@ export interface WaitingFacts {
     event: Named | null;
   }[];
   invites: { id: string; title: string; when: string; host: PersonFace | null }[];
+  /**
+   * The CRM, when it's there for the viewer: people who wrote back to them
+   * and nobody has answered, and what waits for their OK (drafts, changes,
+   * new people), each with its place on the CRM's Today.
+   */
+  crm?: {
+    replies: number;
+    repliesHref: string;
+    approve: number;
+    approveHref: string;
+  } | null;
 }
 
-export type WaitingKind = "request" | "review" | "mention" | "invite";
+export type WaitingKind = "request" | "review" | "mention" | "invite" | "crm";
 
 export interface WaitingRow {
   /** The Inbox's key for it, so Snooze and Done there apply here too. */
@@ -181,6 +192,35 @@ export function buildWaitingOnYou(f: WaitingFacts): WaitingOnYou {
       replyTaskId: null,
     });
     chip(event(i));
+  }
+
+  // The CRM's two counts, each a row that opens Today on its group.
+  if (f.crm?.replies) {
+    rows.push({
+      key: "crm:replies",
+      kind: "crm",
+      id: "replies",
+      face: null,
+      count: f.crm.replies,
+      title: f.crm.replies === 1 ? "1 reply waiting in the CRM" : `${f.crm.replies} replies waiting in the CRM`,
+      sub: "They wrote back and nobody has answered yet.",
+      href: f.crm.repliesHref,
+      replyTaskId: null,
+    });
+  }
+  if (f.crm?.approve) {
+    rows.push({
+      // The Inbox's key for the same row, so Snooze and Done there apply here.
+      key: "crm:review",
+      kind: "crm",
+      id: "review",
+      face: null,
+      count: f.crm.approve,
+      title: f.crm.approve === 1 ? "1 thing to approve in the CRM" : `${f.crm.approve} things to approve in the CRM`,
+      sub: "Drafts, changes and new people waiting for your OK.",
+      href: f.crm.approveHref,
+      replyTaskId: null,
+    });
   }
 
   return { rows, chips, insight: f.seesMoney ? budgetInsight(f) : null };

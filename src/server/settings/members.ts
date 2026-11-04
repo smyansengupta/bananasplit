@@ -11,6 +11,7 @@ import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, type OrgContext, type TxClient } from "@/server/db/context";
 import { memberLeft } from "@/server/crm/outreach/handover";
+import { bookingMemberLeft } from "@/server/booking/links";
 
 /**
  * Member lifecycle helpers shared by the Settings > Members actions
@@ -122,6 +123,8 @@ export async function untieDepartingMember(
   await untieOrgChart(db, organizationId, userId);
   // The CRM: pause their sequences, flag their relationships for handover.
   await memberLeft(db, organizationId, userId);
+  // Booking links: theirs stops, they come off shared ones, their bookings move or are flagged.
+  await bookingMemberLeft(db, organizationId, userId);
 }
 
 async function untieOrgChart(db: TxClient, organizationId: string, userId: string): Promise<void> {

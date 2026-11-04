@@ -4,6 +4,8 @@ import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 
+import { eventCouldTrigger } from "@/lib/crm/workflows";
+
 import { webhookEventsFor } from "./webhooks/events";
 
 /**
@@ -71,8 +73,10 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
     select: { workflowTriggers: true, webhookEvents: true },
   });
   if (!s) return;
+  // Only the triggers switched-on workflows actually use: a field edit
+  // queues nothing when every automation starts on "someone new".
   if (
-    s.workflowTriggers.length === 0 &&
+    !eventCouldTrigger(s.workflowTriggers, event) &&
     !webhookWants(s.webhookEvents, event) &&
     !(await inboxWants(db, organizationId, event))
   ) {
@@ -92,6 +96,8 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
       userId: event.userId ?? null,
       sourceId: event.sourceId ?? null,
       source: event.source ?? null,
+      // A bulk edit's batch: the Inbox listener leaves its records to the edit's own line.
+      ...(event.batchId ? { batchId: event.batchId } : {}),
       ...(scope ? { workflowId: scope.workflowId, depth: scope.depth } : {}),
     },
   });
@@ -145,6 +151,8 @@ export type CrmEventPayload = {
   workflowId?: string;
   /** How many automations deep the change is. */
   depth?: number;
+  /** A bulk edit's batch (its own Inbox line covers it). */
+  batchId?: string;
 };
 
 /** Listeners other modules register. Each gets the event in the job's organization, and the job's key. */

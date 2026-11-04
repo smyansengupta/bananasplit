@@ -45,6 +45,7 @@ export function TodayLog({
               <span className="line-clamp-2 min-w-0 flex-1">
                 {e.held && (
                   <span
+                    role="img"
                     aria-label="Held back"
                     className="me-1.5 inline-block size-1.5 rounded-full bg-(--attention) align-middle"
                   />

@@ -1,3 +1,4 @@
+import { rangesOn, type DateOverride, type WeeklyHours } from "@/lib/booking/hours";
 import { addDaysToKey, isValidTimeZone, localDateKey, weekdayOfKey, zonedInstant } from "@/lib/tasks/dates";
 
 /**
@@ -27,6 +28,15 @@ export interface BookingHost {
    * start to end that day, in the organization's timezone.
    */
   dates?: readonly BusyDate[];
+  /**
+   * The link's own hours ("the times you're free", docs/features/booking.md),
+   * in SlotInput.tz. When set they replace `busy`, `ownHours` and `dates`:
+   * a slot must sit inside one of that day's ranges.
+   */
+  hours?: WeeklyHours | null;
+  overrides?: readonly DateOverride[];
+  /** Meetings already booked on this link, per day key (for SlotInput.maxPerDay). */
+  bookedPerDay?: ReadonlyMap<string, number>;
 }
 
 export interface BusyDate {
@@ -77,6 +87,8 @@ export interface SlotInput {
   days?: readonly number[];
   /** Minutes between possible starts (default 30). */
   step?: number;
+  /** The most meetings a host takes on one day through this link. */
+  maxPerDay?: number | null;
 }
 
 export interface Slot {
@@ -93,6 +105,33 @@ function gridDay(key: string): number {
   return (weekdayOfKey(key) + 6) % 7;
 }
 
+/** The local date key and minutes since local midnight of `instant` in `tz`. */
+export function wallClock(instant: Date, tz: string): { key: string; min: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return { key: `${get("year")}-${get("month")}-${get("day")}`, min: Number(get("hour")) * 60 + Number(get("minute")) };
+}
+
+/** Inside one of the link's ranges that day, by the wall clock (so a DST change can't stretch or shift it). */
+function insideHours(host: BookingHost, key: string, start: Date, end: Date, tz: string): boolean {
+  const a = wallClock(start, tz);
+  const b = wallClock(end, tz);
+  if (a.key !== key) return false;
+  // Ending at midnight is the end of this day, not the start of the next.
+  const endMin = b.key === key ? b.min : b.key === addDaysToKey(key, 1) && b.min === 0 ? 1440 : -1;
+  if (endMin <= a.min) return false;
+  const ranges = rangesOn(host.hours!, host.overrides ?? [], key, gridDay(key) + 1);
+  return ranges.some(([s, e]) => s <= a.min && endMin <= e);
+}
+
 function hostFree(
   host: BookingHost,
   key: string,
@@ -102,6 +141,10 @@ function hostFree(
   tz: string,
   hours: { startHour: number; endHour: number; days: readonly number[] },
 ): boolean {
+  const s = start.getTime() - bufferMs;
+  const e = end.getTime() + bufferMs;
+  const clash = host.events.some((ev) => ev.start.getTime() < e && ev.end.getTime() > s);
+  if (host.hours) return !clash && insideHours(host, key, start, end, tz);
   const day = gridDay(key);
   const busy = new Set(host.busy);
   // Every hour the slot touches must be clear in their typical week.
@@ -118,9 +161,7 @@ function hostFree(
     if (d.start === null || d.end === null) return false;
     if (firstHour < d.end && lastHour >= d.start) return false;
   }
-  const s = start.getTime() - bufferMs;
-  const e = end.getTime() + bufferMs;
-  return !host.events.some((ev) => ev.start.getTime() < e && ev.end.getTime() > s);
+  return !clash;
 }
 
 /** Every bookable slot from now to maxDaysAhead, earliest first. */
@@ -133,10 +174,13 @@ export function bookingSlots(input: SlotInput): Slot[] {
   };
   // The widest hours any host can be booked in; each host is then held to their own.
   const anyOwn = input.hosts.some((h) => h.ownHours);
-  const startHour = anyOwn ? Math.min(fixed.startHour, OWN_HOURS.startHour) : fixed.startHour;
-  const endHour = anyOwn ? Math.max(fixed.endHour, OWN_HOURS.endHour) : fixed.endHour;
-  const days = anyOwn ? [...new Set([...fixed.days, ...OWN_HOURS.days])] : fixed.days;
-  const step = Math.max(15, input.step ?? 30);
+  // A link with its own hours can be free at any hour of any day.
+  const anyHours = input.hosts.some((h) => h.hours);
+  const startHour = anyHours ? 0 : anyOwn ? Math.min(fixed.startHour, OWN_HOURS.startHour) : fixed.startHour;
+  const endHour = anyHours ? 24 : anyOwn ? Math.max(fixed.endHour, OWN_HOURS.endHour) : fixed.endHour;
+  const days = anyHours ? [1, 2, 3, 4, 5, 6, 7] : anyOwn ? [...new Set([...fixed.days, ...OWN_HOURS.days])] : fixed.days;
+  const step = Math.max(15, input.step ?? (input.durationMin % 30 === 0 ? 30 : 15));
+  const cap = input.maxPerDay && input.maxPerDay > 0 ? input.maxPerDay : null;
   const duration = Math.min(Math.max(input.durationMin, 10), 8 * 60) * 60_000;
   const buffer = Math.max(0, input.bufferMin) * 60_000;
   const earliest = input.now.getTime() + Math.max(0, input.minNoticeHours) * 3_600_000;
@@ -152,22 +196,36 @@ export function bookingSlots(input: SlotInput): Slot[] {
       if (t < earliest) continue;
       const start = new Date(t);
       const end = new Date(t + duration);
-      const hostIds = input.hosts.filter((h) => hostFree(h, key, start, end, buffer, tz, fixed)).map((h) => h.userId);
+      const hostIds = input.hosts
+        .filter((h) => !cap || (h.bookedPerDay?.get(key) ?? 0) < cap)
+        .filter((h) => hostFree(h, key, start, end, buffer, tz, fixed))
+        .map((h) => h.userId);
       if (hostIds.length) out.push({ start, end, hostIds });
     }
   }
   return out;
 }
 
-/** Round-robin: of the hosts free, whoever has had the fewest bookings lately (ties: page order). */
-export function pickHost(free: readonly string[], recent: ReadonlyMap<string, number>): string | null {
+/**
+ * Round-robin: of the hosts free, whoever has had the fewest bookings
+ * lately; a tie goes to whoever was booked longest ago (never booked
+ * first), then page order.
+ */
+export function pickHost(
+  free: readonly string[],
+  recent: ReadonlyMap<string, number>,
+  lastBooked?: ReadonlyMap<string, number>,
+): string | null {
   let best: string | null = null;
   let bestCount = Infinity;
+  let bestLast = Infinity;
   for (const id of free) {
     const n = recent.get(id) ?? 0;
-    if (n < bestCount) {
+    const last = lastBooked?.get(id) ?? -Infinity;
+    if (n < bestCount || (n === bestCount && last < bestLast)) {
       best = id;
       bestCount = n;
+      bestLast = last;
     }
   }
   return best;

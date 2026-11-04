@@ -1,10 +1,9 @@
 "use server";
 
-import type { CrmForecastCategory, CrmWorkflowStatus } from "@/generated/prisma/client";
+import type { CrmWorkflowStatus } from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requireUser } from "@/lib/auth/session";
 import { mapDescribed, type DescribeContext } from "@/lib/crm/describe";
-import { parsePeriodKey } from "@/lib/crm/forecast";
 import { STARTER_RULES } from "@/lib/crm/scoring";
 import type { WorkflowObject } from "@/lib/crm/workflows";
 import { ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
@@ -12,14 +11,12 @@ import { CrmValidationError } from "@/lib/crm/validate";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError, requireCrm, requireManager } from "@/server/crm/access";
-import { assertUnderCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
-import { updateDeal } from "@/server/crm/deals";
+import { crmCredentials, crmGenerate, estimateCallMicros, holdForCall, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
 import { describeContext, describeRequest } from "@/server/crm/describe";
-import { saveForecastCall } from "@/server/crm/forecast";
 import { deleteGoal, saveGoal } from "@/server/crm/goals";
 import { deleteScoreRule, saveScoreRule } from "@/server/crm/scoring";
 import { dryRunWorkflow, type DryRunResult } from "@/server/crm/workflow-engine";
-import { deleteWorkflow, enableRecipe, parseWorkflowInput, saveWorkflow, setWorkflowStatus } from "@/server/crm/workflows";
+import { deleteWorkflow, enableRecipe, saveWorkflow, setWorkflowStatus } from "@/server/crm/workflows";
 import { AppError } from "@/server/db/errors";
 import { SpaceRefusedError, withOrgAction, withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
@@ -89,12 +86,6 @@ export const dryRunAction = crmAction(
   },
 );
 
-/** Checks a draft without saving it (the builder's live check). */
-export const checkWorkflowAction = crmAction(async (_ctx, workflow: unknown) => {
-  parseWorkflowInput(workflow);
-  return {};
-});
-
 // ---- Describe it in words ----------------------------------------------------------
 
 const DESCRIBE_PER_HOUR = 30;
@@ -136,10 +127,18 @@ export async function describeWorkflowAction(
     };
   }
   let result;
+  const request = describeRequest(sentence, context);
+  let hold = null;
   try {
-    await assertUnderCap(organizationId);
-    result = await crmGenerate(creds, describeRequest(sentence, context));
+    // Held against the cap while it runs, like every other paid call.
+    hold = await holdForCall(
+      organizationId,
+      creds,
+      estimateCallMicros(creds.model, (request.system?.length ?? 0) + (request.text?.length ?? 0), request.maxOutputTokens ?? 2_000),
+    );
+    result = await crmGenerate(creds, request);
   } catch (error) {
+    await hold?.release();
     return { ok: false, error: words(error) };
   }
   try {
@@ -155,6 +154,8 @@ export async function describeWorkflowAction(
     );
   } catch {
     // The meter is best effort here; the draft is still shown.
+  } finally {
+    await hold?.release();
   }
   const mapped = mapDescribed(result.data, context);
   return { ok: true, draft: mapped.draft, notes: mapped.notes, model: result.label };
@@ -214,18 +215,4 @@ export const deleteGoalAction = crmAction(async (ctx, id: string) => {
   return {};
 });
 
-export const saveForecastCallAction = crmAction(
-  async (ctx, input: { pipelineId: string; periodKey: string; amount: number; count: number; note?: string | null }) => {
-    const period = parsePeriodKey(input.periodKey);
-    if (!period) throw new CrmError("Pick a quarter or a year.");
-    await saveForecastCall(ctx, input, period);
-    return {};
-  },
-);
-
 /** A member marks an item Commit, Best case, Pipeline or Left out. */
-export const setForecastCategoryAction = crmAction(async (ctx, dealId: string, category: CrmForecastCategory) => {
-  if (!["PIPELINE", "BEST_CASE", "COMMIT", "OMITTED"].includes(category)) throw new CrmError("Pick a forecast category.");
-  await updateDeal(ctx, dealId, { forecastCategory: category });
-  return {};
-});

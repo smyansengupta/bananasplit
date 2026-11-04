@@ -1,5 +1,5 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmCallsHref, crmRecordHref } from "@/lib/crm/href";
 import { renderMerge } from "@/lib/crm/outreach/merge";
 import { readExtras, withExtras } from "@/lib/crm/outreach/plans";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
@@ -10,13 +10,13 @@ import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { notifyUser } from "@/server/notifications";
 import { createTask, loadTaskEnv } from "@/server/tasks/service";
 
-import { CrmError, requireMember, type CrmActor } from "../access";
+import { CrmError, crmAccess, requireMember, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { emitCrmEvent } from "../events";
 import { queueText } from "../phone/texts";
 import { proposeChange } from "../review";
 import { actAs } from "../system-actor";
-import { conflictFor, contactable, mergeValuesFor, queueEmail, saveDraft, sentToday } from "./send";
+import { conflictsFor, contactable, type Conflict, mergeValuesFor, queueEmail, saveDraft, sentToday, startMayApprove } from "./send";
 
 /**
  * Sequences (docs/features/crm.md, module 5): timed steps (an email, a
@@ -82,10 +82,34 @@ export async function createSequence(actor: CrmActor, name: string): Promise<{ i
   });
 }
 
+/**
+ * A plan that has ever run is its maker's: someone else changing it (its
+ * words, who it's for, who sends it, switching it off and on) would change
+ * what goes out under approvals other people gave, so only they, owners,
+ * admins and CRM managers may. A plan nobody has started yet is anyone's to
+ * work on. Switching it off doesn't make it anyone's again.
+ */
+export async function assertMayEditPlan(
+  actor: CrmActor,
+  seq: { id: string; status: string; createdById: string | null },
+): Promise<void> {
+  if (!seq.createdById || seq.createdById === actor.userId) return;
+  const started =
+    seq.status === "ON" ||
+    (await actor.db.crmEnrollment.count({ where: { organizationId: actor.organizationId, sequenceId: seq.id }, take: 1 })) > 0;
+  if (!started) return;
+  if ((await crmAccess(actor)).manager) return;
+  throw new CrmError("This plan has run. Only whoever made it, or a CRM manager, can change it now.");
+}
+
 export async function saveSequence(actor: CrmActor, sequenceId: string, input: SequenceInput): Promise<void> {
   const { db, organizationId } = actor;
-  const seq = await db.crmSequence.findFirst({ where: { id: sequenceId, organizationId }, select: { id: true, sendWindow: true } });
+  const seq = await db.crmSequence.findFirst({
+    where: { id: sequenceId, organizationId },
+    select: { id: true, sendWindow: true, status: true, createdById: true },
+  });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
+  await assertMayEditPlan(actor, seq);
   const data: Prisma.CrmSequenceUpdateInput = {};
   if (input.name !== undefined) {
     const n = input.name.trim().slice(0, 120);
@@ -141,15 +165,21 @@ export async function setSequenceStatus(actor: CrmActor, sequenceId: string, sta
   const { db, organizationId } = actor;
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId },
-    select: { id: true, steps: { select: { id: true } } },
+    select: { id: true, status: true, createdById: true, steps: { select: { id: true } } },
   });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
+  await assertMayEditPlan(actor, seq);
   if (status === "ON" && seq.steps.length === 0) throw new CrmError("Add a step first.");
   await db.crmSequence.update({ where: { id: seq.id }, data: { status } });
 }
 
 export async function archiveSequence(actor: CrmActor, sequenceId: string): Promise<void> {
   const { db, organizationId } = actor;
+  const seq = await db.crmSequence.findFirst({
+    where: { id: sequenceId, organizationId },
+    select: { id: true, status: true, createdById: true },
+  });
+  if (seq) await assertMayEditPlan(actor, seq);
   const res = await db.crmSequence.updateMany({
     where: { id: sequenceId, organizationId },
     data: { archivedAt: new Date(), status: "OFF" },
@@ -224,7 +254,17 @@ export async function enroll(
   if (senderId !== userId) await requireMember(db, organizationId, senderId);
   const seq = await db.crmSequence.findFirst({
     where: { id: sequenceId, organizationId, archivedAt: null },
-    select: { id: true, status: true, sendWindow: true, steps: { orderBy: { sortOrder: "asc" }, select: { delayDays: true, delayHours: true } } },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      sendWindow: true,
+      createdById: true,
+      steps: {
+        orderBy: { sortOrder: "asc" },
+        select: { kind: true, delayDays: true, delayHours: true, subject: true, body: true, templateId: true },
+      },
+    },
   });
   if (!seq) throw new CrmError("That sequence isn't here any more.");
   if (seq.status !== "ON") throw new CrmError("Turn the sequence on first.");
@@ -232,32 +272,61 @@ export async function enroll(
   if (!first) throw new CrmError("Add a step first.");
   const tz = await orgTimezone(db, organizationId);
   const window = readWindow(seq.sendWindow);
+  // Pressing Start (or Enroll) is the OK for the first email when it goes as
+  // the one pressing it, or they made the plan, or they shape the CRM;
+  // otherwise it waits for the sender's own OK (startMayApprove).
+  const firstApproved =
+    !options.byAutomation &&
+    (await startMayApprove(db, organizationId, { enrolledById: userId, senderId, createdById: seq.createdById }));
   const people = await db.crmPerson.findMany({
     where: { organizationId, id: { in: ids } },
     select: { id: true, name: true, primaryEmail: true, doNotContact: true, unsubscribedAt: true, consent: true, deletedAt: true },
   });
   const result: EnrollResult = { enrolled: 0, skipped: [] };
+  // The checks for everyone at once: who's in it already, and who another
+  // member is talking to (with their names).
+  const reachable = people.filter((p) => contactable(p).ok).map((p) => p.id);
+  const already = new Set(
+    reachable.length
+      ? (
+          await db.crmEnrollment.findMany({
+            where: { organizationId, sequenceId: seq.id, personId: { in: reachable }, status: { in: ["ACTIVE", "PAUSED"] } },
+            select: { personId: true },
+          })
+        ).map((e) => e.personId)
+      : [],
+  );
+  const conflicts = options.confirmConflicts
+    ? new Map<string, Conflict>()
+    : await conflictsFor(db, organizationId, reachable.filter((id) => !already.has(id)), senderId, now);
+  const conflictNames = new Map(
+    conflicts.size
+      ? (
+          await db.user.findMany({
+            where: { id: { in: [...new Set([...conflicts.values()].map((c) => c.userId))] } },
+            select: { id: true, name: true },
+          })
+        ).map((u) => [u.id, u.name])
+      : [],
+  );
   for (const p of people) {
     const can = contactable(p);
     if (!can.ok) {
       result.skipped.push({ personId: p.id, name: p.name, reason: can.reason! });
       continue;
     }
-    const already = await db.crmEnrollment.findFirst({
-      where: { organizationId, sequenceId: seq.id, personId: p.id, status: { in: ["ACTIVE", "PAUSED"] } },
-      select: { id: true },
-    });
-    if (already) {
+    if (already.has(p.id)) {
       result.skipped.push({ personId: p.id, name: p.name, reason: "Already in it." });
       continue;
     }
-    if (!options.confirmConflicts) {
-      const conflict = await conflictFor(db, organizationId, p.id, senderId, now);
-      if (conflict) {
-        const who = await db.user.findUnique({ where: { id: conflict.userId }, select: { name: true } });
-        result.skipped.push({ personId: p.id, name: p.name, reason: `${who?.name ?? "Another member"} ${conflict.what}.` });
-        continue;
-      }
+    const conflict = conflicts.get(p.id);
+    if (conflict) {
+      result.skipped.push({
+        personId: p.id,
+        name: p.name,
+        reason: `${conflictNames.get(conflict.userId) ?? "Another member"} ${conflict.what}.`,
+      });
+      continue;
     }
     const runAt = nextInWindow(new Date(now.getTime() + delayMs(first)), window, tz);
     const e = await db.crmEnrollment.create({
@@ -272,6 +341,31 @@ export async function enroll(
       },
       select: { id: true },
     });
+    if (first.kind === "EMAIL" && !options.byAutomation) {
+      // The first email is written now, as it was previewed: later edits to
+      // the plan or its template don't change what Start approved.
+      const mail = await stepEmail(db, organizationId, first, p.id, senderId, now, null);
+      if (!firstApproved) {
+        // Not theirs to approve: a draft for the sender, and the plan carries
+        // on behind it (the next step waits until it's sent or let go).
+        await draftStep(db, organizationId, { id: e.id, senderId, sequence: { id: seq.id, name: seq.name } }, 0, p, mail);
+        const next = seq.steps[1];
+        const at = next
+          ? nextInWindow(new Date(now.getTime() + delayMs(next)), window, tz)
+          : new Date(now.getTime() + 6 * 3_600_000);
+        await db.crmEnrollment.update({ where: { id: e.id }, data: { nextStep: 1, nextRunAt: at } });
+        await enqueueJob(db, {
+          orgId: organizationId,
+          kind: "crm-sequence",
+          key: `${e.id}:1`,
+          payload: { enrollmentId: e.id, step: 1 },
+          runAt: at,
+        });
+        result.enrolled++;
+        continue;
+      }
+      await freezeFirstEmail(db, organizationId, { enrollmentId: e.id, senderId, approvedById: userId }, p, mail);
+    }
     await enqueueJob(db, {
       orgId: organizationId,
       kind: "crm-sequence",
@@ -287,20 +381,95 @@ export async function enroll(
   return result;
 }
 
-export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Promise<void> {
+/**
+ * Take one person out of a series. Only whoever it sends as, whoever put
+ * them in, the series' maker or a CRM manager (`manager`) may: a member
+ * can't stop someone else's outreach.
+ */
+/** Whether this member may take someone out of a series (not counting CRM managers). */
+export function canStopEnrollment(
+  userId: string,
+  e: { senderId: string; enrolledById: string | null; sequence: { createdById: string | null } },
+): boolean {
+  return e.senderId === userId || e.enrolledById === userId || e.sequence.createdById === userId;
+}
+
+export async function stopEnrollment(actor: CrmActor, enrollmentId: string, manager = false): Promise<void> {
   const { db, organizationId } = actor;
   const e = await db.crmEnrollment.findFirst({
     where: { id: enrollmentId, organizationId, status: { in: ["ACTIVE", "PAUSED"] } },
-    select: { id: true },
+    select: { id: true, senderId: true, enrolledById: true, sequence: { select: { createdById: true } } },
   });
   if (!e) throw new CrmError("It already stopped.");
+  if (!canStopEnrollment(actor.userId, e) && !manager && !(await crmAccess(actor)).manager) {
+    throw new CrmError("Only whoever it sends as, whoever added them, the series' maker or a CRM manager can stop it.");
+  }
   await db.crmEnrollment.update({
     where: { id: e.id },
     data: { status: "STOPPED", stopReason: "stopped by hand", finishedAt: new Date(), nextRunAt: null },
   });
   await db.crmEmailMessage.updateMany({
-    where: { organizationId, enrollmentId: e.id, status: "QUEUED" },
+    where: { organizationId, enrollmentId: e.id, status: { in: ["QUEUED", "SCHEDULED"] } },
     data: { status: "FAILED", error: "stopped by hand" },
+  });
+}
+
+/** A step's email for one person, merged now: its subject (or "Re:" the first one's), body and template. */
+async function stepEmail(
+  db: TxClient,
+  organizationId: string,
+  step: { subject: string | null; body: string | null; templateId: string | null },
+  personId: string,
+  senderId: string,
+  now: Date,
+  prior: { subject: string | null } | null,
+): Promise<{ subject: string; body: string; templateId: string | null }> {
+  const template = step.templateId
+    ? await db.crmTemplate.findFirst({ where: { id: step.templateId, organizationId }, select: { subject: true, body: true } })
+    : null;
+  const values = await mergeValuesFor(db, organizationId, personId, senderId, now);
+  const rawSubject = (step.subject?.trim() || template?.subject?.trim() || "").trim();
+  const subject = rawSubject
+    ? renderMerge(rawSubject, values).text
+    : prior?.subject
+      ? `Re: ${prior.subject.replace(/^re:\s*/i, "")}`
+      : renderMerge(`Hello from {{organization}}`, values).text;
+  const body = renderMerge(step.body?.trim() ? step.body : (template?.body ?? ""), values).text;
+  return { subject, body, templateId: step.templateId };
+}
+
+/**
+ * A plan's first email, written and approved when Start was pressed, kept
+ * (status SCHEDULED, its own thread, no timeline row) until its step runs:
+ * then it's queued exactly as written, under the caps and the send window.
+ */
+async function freezeFirstEmail(
+  db: TxClient,
+  organizationId: string,
+  e: { enrollmentId: string; senderId: string; approvedById: string },
+  person: { id: string; primaryEmail: string | null },
+  mail: { subject: string; body: string; templateId: string | null },
+): Promise<void> {
+  const subject = mail.subject.trim().slice(0, 300);
+  const thread = await db.crmEmailThread.create({ data: { organizationId, subject }, select: { id: true } });
+  await db.crmEmailMessage.create({
+    data: {
+      organizationId,
+      threadId: thread.id,
+      direction: "OUTBOUND",
+      status: "SCHEDULED",
+      mailbox: "ORG_SENDER",
+      mailboxUserId: e.senderId,
+      fromAddress: "scheduled",
+      toAddresses: person.primaryEmail ? [person.primaryEmail] : [],
+      subject,
+      bodyText: mail.body.trim().slice(0, 50_000),
+      personId: person.id,
+      enrollmentId: e.enrollmentId,
+      templateId: mail.templateId,
+      approval: "start",
+      approvedById: e.approvedById,
+    },
   });
 }
 
@@ -465,40 +634,58 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
     if (planCap !== null && (await planSentToday(db, organizationId, e.sequence.id, now)) >= planCap) {
       return reschedule(nextInWindow(new Date(now.getTime() + 86_400_000 - (now.getTime() % 86_400_000)), window, tz));
     }
-    const template = step.templateId
-      ? await db.crmTemplate.findFirst({ where: { id: step.templateId, organizationId }, select: { subject: true, body: true } })
-      : null;
-    const values = await mergeValuesFor(db, organizationId, person.id, e.senderId, now);
     // Follow-ups answer the first email of this enrollment, in its thread.
     const prior = await db.crmEmailMessage.findFirst({
       where: { organizationId, enrollmentId: e.id, status: { in: ["SENT", "QUEUED"] } },
       orderBy: { createdAt: "asc" },
       select: { threadId: true, messageIdHeader: true, subject: true },
     });
-    const rawSubject = (step.subject?.trim() || template?.subject?.trim() || "").trim();
-    const subject = rawSubject
-      ? renderMerge(rawSubject, values).text
-      : prior?.subject
-        ? `Re: ${prior.subject.replace(/^re:\s*/i, "")}`
-        : renderMerge(`Hello from {{organization}}`, values).text;
-    const body = renderMerge(step.body?.trim() ? step.body : (template?.body ?? ""), values).text;
-    if (approvedByStart(e, stepIndex)) {
-      await queueEmail(db, {
-        organizationId,
-        senderId: e.senderId,
-        createdById: null,
-        personId: person.id,
-        subject,
-        body,
-        templateId: step.templateId,
-        enrollmentId: e.id,
-        threadId: prior?.threadId ?? null,
-        inReplyTo: prior?.messageIdHeader ?? null,
-      });
-    } else {
-      // Nothing goes out without a person: the step's email waits as a draft
-      // in the sender's To approve (Today, Power hour, their Inbox).
-      await draftStep(db, organizationId, e, stepIndex, person, { subject, body, templateId: step.templateId });
+    // The first email as Start wrote it, when it did; one already drafted,
+    // sent or let go needs nothing more written.
+    const frozen =
+      stepIndex === 0
+        ? await db.crmEmailMessage.findFirst({
+            where: { organizationId, enrollmentId: e.id },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, status: true, subject: true, bodyText: true, templateId: true, threadId: true, approvedById: true },
+          })
+        : null;
+    if (!frozen || frozen.status === "SCHEDULED") {
+      const mail = frozen
+        ? { subject: frozen.subject ?? "", body: frozen.bodyText ?? "", templateId: frozen.templateId }
+        : await stepEmail(db, organizationId, step, person.id, e.senderId, now, prior);
+      // Start approved the first email as it was written then (frozen). With
+      // nothing frozen (the plan changed since, say a to-do became an email)
+      // nobody approved these words: they wait as a draft.
+      const approved =
+        approvedByStart(e, stepIndex) &&
+        Boolean(frozen) &&
+        frozen!.approvedById === e.enrolledById &&
+        (await startMayApprove(db, organizationId, {
+          enrolledById: e.enrolledById,
+          senderId: e.senderId,
+          createdById: e.sequence.createdById,
+        }));
+      if (approved) {
+        await queueEmail(db, {
+          organizationId,
+          senderId: e.senderId,
+          createdById: null,
+          personId: person.id,
+          subject: mail.subject,
+          body: mail.body,
+          templateId: mail.templateId,
+          enrollmentId: e.id,
+          threadId: prior?.threadId ?? null,
+          inReplyTo: prior?.messageIdHeader ?? null,
+          approval: { kind: "start", by: e.enrolledById },
+        });
+      } else {
+        // Nothing goes out without a person: the step's email waits as a draft
+        // in the sender's To approve (Today, Power hour, their Inbox).
+        await draftStep(db, organizationId, e, stepIndex, person, mail);
+      }
+      if (frozen) await db.crmEmailThread.deleteMany({ where: { id: frozen.threadId, organizationId } });
     }
   } else {
     // A to-do becomes a real Task (made the way a workflow makes one: as the
@@ -542,14 +729,29 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
           note = made.error ?? "the task couldn't be made";
         }
       }
-    } else if (step.kind === "TEXT" && step.body?.trim() && !approvedByStart(e, stepIndex)) {
-      // A later text waits for the sender, its words ready in their queue.
+    } else if (
+      step.kind === "TEXT" &&
+      step.body?.trim() &&
+      !(
+        approvedByStart(e, stepIndex) &&
+        (await startMayApprove(db, organizationId, {
+          enrolledById: e.enrolledById,
+          senderId: e.senderId,
+          createdById: e.sequence.createdById,
+        }))
+      )
+    ) {
+      // A later text, or one Start couldn't approve, waits for the sender, its words ready in their queue.
       note = TEXT_WAITS;
     } else if (step.kind === "TEXT" && step.body?.trim()) {
       const sender = await actAs(sys, organizationId, e.senderId);
       if (sender) {
         try {
-          await queueText(sender.actor, { personId: person.id, body: renderMerge(step.body.trim(), values).text });
+          await queueText(sender.actor, {
+            personId: person.id,
+            body: renderMerge(step.body.trim(), values).text,
+            approvedById: e.enrolledById,
+          });
           done = true;
         } catch (error) {
           if (!(error instanceof CrmError)) throw error;
@@ -592,8 +794,8 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         type: "CRM_FOLLOW_UP",
         title: what,
         body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
-        // A call waits on the dialer; anything else on their page.
-        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : crmRecordHref(org.slug, "person", person.id)) : null,
+        // A call waits in Today's Calls; anything else on their card.
+        linkUrl: org ? (step.kind === "CALL" ? crmCallsHref(org.slug) : crmRecordHref(org.slug, "person", person.id)) : null,
         dedupeKey: `crm-step:${e.id}:${stepIndex}`,
       });
     }

@@ -1,10 +1,10 @@
 import type { ChoiceColor, FieldDef } from "@/lib/databases/fields";
 
 /**
- * The Deals tab (docs/features/crm.md, "Redesign"): one list grouped by
- * stage, a board when you want it, Filters (pipeline, owner, type, what to
- * show) and search. Pure, so the page, the list and the tests read the URL
- * and decide a row's ambient buttons the same way.
+ * Deals on People (docs/features/crm.md, "One list"): the Board view, the
+ * Stage and Deal value columns, and the deal filters (pipeline, stage,
+ * owner, type, what to show) with search. Pure, so the page, the board and
+ * the tests read the URL and decide a deal's ambient buttons the same way.
  *
  * A deal's type (New, Renewal, Partnership, Grant) is a single-select custom
  * field named "Type" on its pipeline's database, so it shows in Databases,
@@ -19,6 +19,8 @@ export interface DealsFilters {
   view: DealsView;
   /** A pipeline id, or null for every pipeline. */
   pipeline: string | null;
+  /** A stage id, or null for every stage. */
+  stage: string | null;
   /** "me", "none" or a member id; null for anyone. */
   owner: string | null;
   /** A Type choice's label, lowercased ("renewal"); null for any. */
@@ -42,10 +44,18 @@ export function parseDealsFilters(sp: Search): DealsFilters {
   const owner = one(sp, "owner");
   const pipeline = one(sp, "pipeline");
   const type = one(sp, "type");
+  const stage = one(sp, "stage");
   return {
     view: one(sp, "view") === "board" ? "board" : "list",
     pipeline: pipeline && ID.test(pipeline) ? pipeline : null,
-    owner: owner && (owner === "me" || owner === "none" || ID.test(owner)) ? owner : null,
+    stage: stage && ID.test(stage) ? stage : null,
+    // "me", "none", a member's id, or several ("me" and ids) joined with commas (My team).
+    owner:
+      owner &&
+      (owner === "none" ||
+        (owner.split(",").length <= 200 && owner.split(",").every((x) => x === "me" || ID.test(x))))
+        ? owner
+        : null,
     type: type ? type.toLowerCase().slice(0, 80) : null,
     show: show === "won" || show === "lost" || show === "all" ? show : "open",
     q: one(sp, "q")?.slice(0, 100) ?? null,

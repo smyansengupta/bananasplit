@@ -1,7 +1,3 @@
-import Link from "next/link";
-
-import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
-import { Button } from "@/components/ui/button";
 import { readOrgRouting } from "@/server/crm/outreach/intake";
 import { withOrgTx } from "@/server/db/context";
 
@@ -10,8 +6,9 @@ import type { SectionProps } from "./types";
 
 /**
  * Team and access (owners and admins; never in a Personal space, where
- * the page doesn't offer it): who sees what, the CRM managers, who new
- * people go to, and handing someone's people over.
+ * the page doesn't offer it): who sees what, the CRM managers and who new
+ * people go to. Handing someone's people over is its own section (Hand
+ * people over), which CRM managers open too.
  */
 export async function TeamSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
@@ -26,10 +23,7 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
       where: { organizationId: orgId, deletedAt: null, ownerId: { not: null } },
       _count: { _all: true },
     });
-    const unowned = await db.crmPerson.count({
-      where: { organizationId: orgId, deletedAt: null, ownerId: null, ownerRoleKey: null },
-    });
-    return { roles, owns, unowned, routing: await readOrgRouting(db, orgId) };
+    return { roles, owns, routing: await readOrgRouting(db, orgId) };
   });
   const adminIds = new Set(
     data.roles.filter((r) => r.role === "OWNER" || r.role === "ADMIN").map((r) => r.userId),
@@ -55,22 +49,6 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
         members={shell.members}
         relationshipTypes={shell.access.settings?.relationshipTypes ?? []}
       />
-      <SettingsCard
-        title="Handover"
-        description="When someone steps back or leaves, give everyone they look after to someone else in one step."
-        footer={
-          <Button variant="outline" asChild>
-            <Link href={`/app/${orgSlug}/crm/handover`}>Hand people over</Link>
-          </Button>
-        }
-      >
-        {data.unowned > 0 && (
-          <p className="text-sm">
-            {data.unowned.toLocaleString("en-US")}{" "}
-            {data.unowned === 1 ? "person has" : "people have"} nobody looking after them.
-          </p>
-        )}
-      </SettingsCard>
     </>
   );
 }

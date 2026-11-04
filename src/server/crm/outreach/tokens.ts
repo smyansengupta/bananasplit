@@ -7,11 +7,10 @@ import { appUrl } from "@/lib/app-url";
 /**
  * The CRM's public tokens. Server-only.
  *
- * - Stored as a hash, looked up through app.crm_public_target: guest links
- *   (/g/{token}) and self-update links (/c/{token}). Both tokens are
- *   derived (an HMAC of the row under AUTH_SECRET), so a member can copy a
- *   guest link again and every RSVP or form receipt can carry the same
- *   self-update link without writing anything; revoking clears the hash.
+ * - Stored as a hash, looked up through app.crm_public_target: self-update
+ *   links (/c/{token}). The token is derived (an HMAC of the person under
+ *   AUTH_SECRET), so every RSVP or form receipt can carry the same
+ *   self-update link without writing anything; clearing the hash revokes it.
  * - Signed, nothing stored: unsubscribe links (/u/{token}, the org and the
  *   person in the clear plus a MAC) and click redirects (the URL's MAC
  *   under the message's tracking token, so the redirect is never open).
@@ -53,19 +52,11 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 // ---- Derived, stored as a hash ---------------------------------------------------
 
-export function guestToken(linkId: string): string {
-  return mac("crm-guest", linkId).slice(0, 40);
-}
-
 export function selfUpdateToken(organizationId: string, personId: string): string {
   return mac("crm-self", organizationId, personId).slice(0, 40);
 }
 
 export const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
-
-export function guestUrl(linkId: string): string {
-  return appUrl(`/g/${guestToken(linkId)}`);
-}
 
 export function selfUpdateUrl(organizationId: string, personId: string): string {
   return appUrl(`/c/${selfUpdateToken(organizationId, personId)}`);

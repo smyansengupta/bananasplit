@@ -7,6 +7,7 @@ import { ApiSection } from "./api";
 import { AutomationsSection } from "./automations";
 import { BookingSection } from "./booking";
 import { FieldsSection } from "./fields";
+import { HandoverSection } from "./handover";
 import { ImportSection } from "./import";
 import { PhoneSection } from "./phone";
 import { SendingSection } from "./sending";
@@ -30,6 +31,7 @@ export const CRM_SETTINGS_SECTION_VIEWS: Record<
   booking: BookingSection,
   phone: PhoneSection,
   team: TeamSection,
+  handover: HandoverSection,
   ai: AiSection,
   import: ImportSection,
   api: ApiSection,

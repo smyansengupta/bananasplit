@@ -55,6 +55,8 @@ export interface PowerHourStrip {
   drafts: number;
   /** Snoozed until this, in words ("Power hour is back at 2 PM"), or null. */
   snoozed: string | null;
+  /** What Snooze would do, in words ("Snooze hides it until 2 PM"). */
+  snoozeWhy: string;
 }
 
 export function TodayList({
@@ -62,11 +64,14 @@ export function TodayList({
   groups,
   rows,
   power,
+  hidden,
 }: {
   orgId: string;
   groups: readonly { id: TodayGroup; label: string }[];
   rows: TodayRow[];
   power: PowerHourStrip;
+  /** Rows a filter or search hides, and where clearing them goes. */
+  hidden?: { count: number; clearHref: string };
 }) {
   const router = useRouter();
   const { hrefFor } = useCrmOpen();
@@ -77,13 +82,24 @@ export function TodayList({
     new Map<string, { timer: ReturnType<typeof setTimeout>; fire: () => Promise<void> }>(),
   );
   // Anything still held goes out when you leave Today.
+  // A held send goes when the list goes, or the tab is hidden or left.
   useEffect(() => {
     const pending = held.current;
-    return () => {
-      for (const h of pending.values()) {
+    const fireAll = () => {
+      for (const h of [...pending.values()]) {
         clearTimeout(h.timer);
         void h.fire();
       }
+    };
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") fireAll();
+    };
+    window.addEventListener("pagehide", fireAll);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", fireAll);
+      document.removeEventListener("visibilitychange", onHidden);
+      fireAll();
     };
   }, []);
   const left = rows.filter((r) => !done[r.key]).length;
@@ -130,7 +146,7 @@ export function TodayList({
               const r = await runAction(() =>
                 composeEmailAction(orgId, {
                   personId: a.personId,
-                  subject: a.subject || "Following up",
+                  subject: a.subject || (a.replyTo ? "Re: your message" : "Following up"),
                   body: a.body,
                   draftId: a.draftId,
                   replyToMessageId: a.replyTo,
@@ -146,7 +162,12 @@ export function TodayList({
             held.current.set(row.key, { timer: setTimeout(() => void fire(), HOLD_MS), fire });
             mark(row.key, `Email to ${first} goes out in 10 seconds.`, async () => {
               const h = held.current.get(row.key);
-              if (h) clearTimeout(h.timer);
+              // Sent early (the tab was hidden or left): it's gone, say so.
+              if (!h) {
+                toast({ title: `The email to ${first} already went.` });
+                return;
+              }
+              clearTimeout(h.timer);
               held.current.delete(row.key);
             });
             return {};
@@ -259,22 +280,54 @@ export function TodayList({
         startHref={hrefFor("power")}
         onChange={() => router.refresh()}
       />
-      {rows.length === 0 && (
-        <EmptyState
-          title="Nobody needs you today"
-          description="Replies, follow-ups and anything to approve show up here."
-        />
-      )}
+      {rows.length === 0 &&
+        (hidden && hidden.count > 0 ? (
+          <EmptyState
+            title="Your filters hide everyone"
+            description={`${hidden.count} ${hidden.count === 1 ? "person needs" : "people need"} you today, but not with this filter or search.`}
+            action={
+              <Link
+                href={hidden.clearHref}
+                scroll={false}
+                className={cn(AMBIENT_BUTTON, OUTLINE, "h-9 px-4 text-sm")}
+              >
+                Clear filters
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="Nobody needs you today"
+            description="Replies, follow-ups and anything to approve show up here."
+          />
+        ))}
       {groups.map((g) => {
         const list = rows.filter((r) => r.group === g.id);
         if (list.length === 0) return null;
+        const waiting = list.filter((r) => !done[r.key]).length;
+        // Two or more calls due: the dialer works down them one after another.
+        const inARow = g.id === "calls" && waiting >= 2;
         return (
           <div key={g.id} className="flex flex-col gap-2.5">
             <h2 className="flex items-center gap-2.5 px-1 pt-1">
               <span className="heading text-base">{g.label}</span>
               <span className="bg-muted grid h-7 min-w-7 place-items-center rounded-full px-2 text-sm font-semibold tabular-nums">
-                {list.filter((r) => !done[r.key]).length}
+                {waiting}
               </span>
+              {inARow && (
+                <span className="ms-auto flex min-w-0 items-center gap-2 text-sm font-normal">
+                  <AmbientButton
+                    action={{
+                      key: "calls-in-a-row",
+                      label: "Call them in a row",
+                      tone: "solid",
+                      reason: `${waiting} calls due`,
+                      href: hrefFor("calls"),
+                    }}
+                  />
+                  <AmbientWhy className="min-w-0 truncate max-sm:hidden">{waiting} calls due</AmbientWhy>
+                </span>
+              )}
             </h2>
             {list.map((row) => {
               const gone = done[row.key];
@@ -395,7 +448,9 @@ function PowerStrip({
   if (power.snoozed) {
     return (
       <div className="flex flex-wrap items-center gap-3 px-1">
-        <b className="text-[22px] leading-tight">{left} need you today</b>
+        <b className="text-[22px] leading-tight">
+          {left} {left === 1 ? "needs" : "need"} you today
+        </b>
         <span className="text-muted-foreground text-sm">{power.snoozed}</span>
         <button
           type="button"
@@ -418,7 +473,7 @@ function PowerStrip({
     power.drafts === power.people
       ? ", every draft ready"
       : power.drafts > 0
-        ? `, ${power.drafts} drafts ready`
+        ? `, ${power.drafts} ${power.drafts === 1 ? "draft" : "drafts"} ready`
         : "";
   return (
     <div className="bg-muted flex flex-wrap items-center gap-3 rounded-[22px] px-5 py-3.5">
@@ -429,11 +484,11 @@ function PowerStrip({
           {drafts}
         </span>
       </span>
+      <AmbientWhy className="min-w-0">{power.snoozeWhy}</AmbientWhy>
       <button
         type="button"
         disabled={busy}
         className={cn(AMBIENT_BUTTON, OUTLINE)}
-        title="Hide it until 2 PM, or tomorrow morning"
         onClick={async () => {
           setBusy(true);
           const r = await runAction(() => snoozePowerHourAction(orgId));

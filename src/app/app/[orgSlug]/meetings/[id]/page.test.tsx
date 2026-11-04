@@ -43,6 +43,10 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+// Who of its people are in the CRM: none here (src/server/crm/outside-links.ts has its own tests).
+vi.mock("@/server/crm/outside-links", () => ({
+  crmForMeeting: async () => ({ attendees: {}, guests: [] }),
+}));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.context,
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
@@ -51,6 +55,8 @@ vi.mock("@/server/db/context", () => ({
         eventRegistration: { groupBy: mocks.groupBy },
         itemLink: { findMany: async () => [] },
         task: { findMany: async () => [] },
+        // A booked meeting's guest is read from its Booking (none here).
+        booking: { findFirst: async () => null },
       },
     }),
 }));

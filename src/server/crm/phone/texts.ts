@@ -83,10 +83,14 @@ export function sendAt(now: Date, timeZone: string, quiet: { quietStart: string;
   return new Date(now.getTime() + wait * 60_000);
 }
 
-/** Writes a text and queues it; returns its id and when it goes. */
+/**
+ * Writes a text and queues it; returns its id and when it goes. The member
+ * acting pressed Send, unless `approvedById` says who did (a plan's first
+ * text: whoever pressed Start). The send job checks it again.
+ */
 export async function queueText(
   actor: CrmActor,
-  input: { personId: string; body: string },
+  input: { personId: string; body: string; approvedById?: string | null },
 ): Promise<{ textId: string; sendAt: Date; waiting: boolean }> {
   const { db, organizationId, userId } = actor;
   const body = input.body.trim();
@@ -130,6 +134,7 @@ export async function queueText(
       provider: status.active,
       status: at > now ? "scheduled" : "queued",
       sentAt: at,
+      approvedById: input.approvedById === undefined ? userId : input.approvedById,
     },
     select: { id: true },
   });
@@ -275,7 +280,8 @@ export async function textStatus(
 
 /**
  * A number that texted the organization and isn't in the CRM, added as a
- * person in one step (the Calls tab): their number, the name given (or the
+ * person in one step (the text's card, ?open=text:<id>, which its Inbox
+ * line opens): their number, the name given (or the
  * number), and every text from that number until now moved onto their
  * timeline. A STOP among them is kept: they stay not to be texted.
  */

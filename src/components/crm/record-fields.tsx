@@ -12,8 +12,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldSelect } from "@/components/ui/field-select";
@@ -22,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { readRelation, type RelationRef } from "@/lib/databases/fields";
+import { useEscapeFirst } from "@/components/crm/card/card-panel";
 import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import type { EditField } from "@/lib/crm/record-form";
 import { cn } from "@/lib/utils";
@@ -147,7 +146,8 @@ export function RecordFields({
         </button>
       )}
       {needs && (
-        <NeedsDialog
+        <NeedsForm
+          className="bg-muted rounded-2xl p-4"
           title="Before it moves"
           needs={needs}
           fields={fields}
@@ -220,7 +220,7 @@ function FieldRow({
 }
 
 /** One field's editor; saves on blur, on Enter, or when something is picked. */
-export function FieldEditor({
+function FieldEditor({
   f,
   orgId,
   orgSlug,
@@ -570,19 +570,7 @@ function RelationEditor({
   );
 }
 
-/**
- * What a stage asks for before an item moves into it: just those fields, in
- * one step (a reason on Lost, an amount on Pledged).
- */
-export function NeedsDialog({
-  title,
-  needs,
-  fields,
-  orgId,
-  onSubmit,
-  onCancel,
-  reasonPrompt,
-}: {
+interface NeedsProps {
   title: string;
   needs: { keys: string[]; labels: string[] };
   /** Editors for the keys, when known (the record form); others get a text box. */
@@ -592,9 +580,26 @@ export function NeedsDialog({
   onCancel: () => void;
   /** Ask for a reason even when it isn't required (the closing stages). */
   reasonPrompt?: string;
-}) {
+}
+
+/**
+ * What a stage needs before a deal moves there, asked right where you are:
+ * inside the card (never a second dialog over it), with the move's name,
+ * the fields it needs (and a reason for a closing stage), Cancel and Move it.
+ */
+export function NeedsForm({
+  title,
+  needs,
+  fields,
+  orgId,
+  onSubmit,
+  onCancel,
+  reasonPrompt,
+  className,
+}: NeedsProps & { className?: string }) {
   const [fill, setFill] = useState<Record<string, unknown>>({});
   const [pending, setPending] = useState(false);
+  useEscapeFirst(onCancel);
   const keys =
     reasonPrompt && !needs.keys.includes("closeReason")
       ? ["closeReason", ...needs.keys]
@@ -602,55 +607,69 @@ export function NeedsDialog({
   const labelOf = (k: string, i: number) =>
     k === "closeReason" ? "Reason" : (needs.labels[needs.keys.indexOf(k)] ?? needs.labels[i] ?? k);
   return (
-    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+    <form
+      aria-label={title}
+      // Escape cancels the move, not the card around it.
+      data-card-panel
+      className={cn("space-y-3", className)}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setPending(true);
+        await onSubmit(fill);
+        setPending(false);
+      }}
+    >
+      <div className="space-y-0.5">
+        <b className="block text-[15px]">{title}</b>
+        <p className="text-muted-foreground text-sm">
+          {reasonPrompt ??
+            (needs.labels.length === 1 ? `Add ${needs.labels[0]} first.` : `Add these first.`)}
+        </p>
+      </div>
+      {keys.map((k, i) => {
+        const known =
+          fields.find((f) => f.key === k || f.key === `custom.${k}`) ??
+          ({
+            key: k,
+            label: labelOf(k, i),
+            kind: k === "closeReason" ? "LONG_TEXT" : "TEXT",
+            value: null,
+          } as EditField);
+        const key = known.key;
+        return (
+          <label key={key} className="grid gap-1.5 text-sm">
+            <span className="text-muted-foreground">{known.label}</span>
+            <FieldEditor
+              f={{ ...known, value: fill[key] ?? known.value }}
+              orgId={orgId}
+              orgSlug=""
+              onLocal={(v) => setFill((cur) => ({ ...cur, [key]: v }))}
+            />
+          </label>
+        );
+      })}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Moving…" : "Move it"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** The same, in a dialog of its own: the Board, where there's no card to ask in. */
+export function NeedsDialog(props: NeedsProps) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && props.onCancel()}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {reasonPrompt ??
-              (needs.labels.length === 1 ? `Add ${needs.labels[0]} first.` : `Add these first.`)}
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          className="space-y-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setPending(true);
-            await onSubmit(fill);
-            setPending(false);
-          }}
-        >
-          {keys.map((k, i) => {
-            const known =
-              fields.find((f) => f.key === k || f.key === `custom.${k}`) ??
-              ({
-                key: k,
-                label: labelOf(k, i),
-                kind: k === "closeReason" ? "LONG_TEXT" : "TEXT",
-                value: null,
-              } as EditField);
-            const key = known.key;
-            return (
-              <label key={key} className="grid gap-1.5 text-sm">
-                <span className="text-muted-foreground">{known.label}</span>
-                <FieldEditor
-                  f={{ ...known, value: fill[key] ?? known.value }}
-                  orgId={orgId}
-                  orgSlug=""
-                  onLocal={(v) => setFill((cur) => ({ ...cur, [key]: v }))}
-                />
-              </label>
-            );
-          })}
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Moving…" : "Move it"}
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogTitle className="sr-only">{props.title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {props.reasonPrompt ?? "What this stage needs before it moves."}
+        </DialogDescription>
+        <NeedsForm {...props} />
       </DialogContent>
     </Dialog>
   );

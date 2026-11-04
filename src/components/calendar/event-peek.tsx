@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowRight,
+  ArrowUpRight,
   CalendarClock,
   CalendarX2,
   Globe,
@@ -11,61 +11,33 @@ import {
   Ticket,
 } from "@/components/icons";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
 
 import { RsvpButtons } from "@/components/meetings/rsvp-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHead } from "@/components/ui/dialog";
+import { PHONE_FULL_SCREEN } from "@/components/ui/form-dialog";
+import { cn } from "@/lib/utils";
 
 import { type CalendarItem, timeRange } from "./item";
 import { itemStyle, KIND_META, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
 import { shortDay } from "./day-label";
 
 /**
- * Event detail, anchored to the chip you opened it from.
+ * Event detail, opened by clicking (or pressing Enter on) an event in the
+ * Calendar: the same centred popup every other detail opens in, with the
+ * shared header (DialogHead: the black Close in the corner, Edit and Open
+ * the full page as round buttons under it). It opens on click, never on
+ * hover: an admin drags chips between days, and a card under the pointer
+ * mid-drag is in the way.
  *
- * This is the club website's popover, with one deliberate difference: it
- * opens on CLICK and on keyboard activation, never on hover. On the website
- * the calendar is read-only, so a hover peek costs nothing; here an admin
- * drags chips between days, and a card that appears under the pointer
- * mid-drag is in the way. One interaction that touch, pointer and keyboard
- * all share is also simply less to explain.
- *
- * It carries the answer to "what is this" and the two things you would do
- * next (open it, edit it). Everything heavier than that — attendees, notes,
- * the sync error, delete — stays on the event's own page.
+ * It answers "what is this" and lets you answer the invitation. The full
+ * page (/meetings/<id>) stays for attendees, notes, the sync error and
+ * delete, and for links from elsewhere.
  */
-
-export interface PeekAnchor {
-  id: string;
-  x: number;
-  y: number;
-  place: "above" | "below";
-}
-
-/** Enough room above the chip for the card plus its gap; below this it flips under. */
-const CLEARANCE = 260;
-const WIDTH = 304;
-
-/** The anchor position for a chip, measured against the positioned wrapper. */
-export function anchorFor(chip: HTMLElement, wrapper: HTMLElement, id: string): PeekAnchor {
-  const w = wrapper.getBoundingClientRect();
-  const c = chip.getBoundingClientRect();
-  const above = c.top - w.top > CLEARANCE;
-  const half = Math.min(WIDTH, w.width) / 2;
-  const rawX = c.left - w.left + c.width / 2;
-  return {
-    id,
-    x: Math.min(Math.max(rawX, half), Math.max(w.width - half, half)),
-    y: above ? c.top - w.top - 8 : c.bottom - w.top + 8,
-    place: above ? "above" : "below",
-  };
-}
-
 export function EventPeek({
   orgId,
   item,
-  anchor,
   orgSlug,
   canManage,
   showSync,
@@ -75,145 +47,111 @@ export function EventPeek({
   /** For answering an invitation right here. */
   orgId?: string;
   item: CalendarItem;
-  anchor: PeekAnchor;
   orgSlug: string;
   canManage: boolean;
   showSync: boolean;
   onClose: () => void;
   onEdit: (item: CalendarItem) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
   const kind = KIND_META[item.kind];
   const visibility = VISIBILITY_META[item.visibility];
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
-
-  // Opening is always deliberate here (a click or Enter), so moving focus
-  // into the card is the right thing: it puts Escape, the links and the
-  // edit button one tab away.
-  useEffect(() => {
-    ref.current?.focus();
-  }, [anchor.id]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    function onPointerDown(event: PointerEvent) {
-      const node = ref.current;
-      if (!node) return;
-      const target = event.target as Node | null;
-      if (
-        target &&
-        !node.contains(target) &&
-        !(target as HTMLElement).closest?.("[aria-expanded]")
-      ) {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [onClose]);
-
   const dayKey = item.allDay ? item.start : localKey(new Date(item.start));
   // An invitee answers here, until it's over; tasks have no invitation.
   const canAnswer = Boolean(item.rsvp) && !item.task && new Date(item.end) > new Date();
+  const when = `${shortDay(dayKey)}, ${item.allDay ? "All day" : timeRange(item)}`;
 
   return (
-    <div
-      id="cal-peek"
-      className="cal-pop"
-      style={{ left: `${anchor.x}px`, top: `${anchor.y}px` }}
-      data-place={anchor.place}
-      ref={ref}
-      tabIndex={-1}
-      role="group"
-      aria-label={`${item.title}, detail`}
-    >
-      <h3 className="heading text-[17px] leading-snug break-words">{item.title}</h3>
-
-      <p className="mt-1 text-sm font-medium">
-        {shortDay(dayKey)}, {item.allDay ? "All day" : timeRange(item)}
-      </p>
-
-      {item.location && (
-        <p className="text-muted-foreground mt-1 flex items-start gap-1.5 text-sm">
-          <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-          <span className="break-words">{item.location}</span>
-        </p>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {/* Its type, beside the other facts (not a label above the title). */}
-        <Badge variant="outline">
-          <span aria-hidden className="cal-chip__dot" style={itemStyle(item)} />
-          {item.meetingType || kind.label}
-        </Badge>
-        {/* Internal is the default; only Public is worth saying. */}
-        {item.visibility === "PUBLIC" && (
-          <Badge variant="secondary" title={visibility.hint}>
-            <VisIcon aria-hidden className="size-3" />
-            {visibility.label}
-          </Badge>
-        )}
-        {item.rsvp && !(orgId && canAnswer) && (
-          <Badge
-            variant={item.rsvp === "YES" ? "success" : item.rsvp === "NO" ? "outline" : "secondary"}
-          >
-            <Ticket aria-hidden className="size-3" />
-            {RSVP_META[item.rsvp].label}
-          </Badge>
-        )}
-        {showSync && item.syncState === "PENDING" && (
-          <Badge variant="outline" title={SYNC_META.PENDING.hint}>
-            <CalendarClock aria-hidden className="size-3" />
-            {SYNC_META.PENDING.label}
-          </Badge>
-        )}
-        {showSync && item.syncState === "FAILED" && (
-          <Badge variant="destructive" title={SYNC_META.FAILED.hint}>
-            <CalendarX2 aria-hidden className="size-3" />
-            {SYNC_META.FAILED.label}
-          </Badge>
-        )}
-      </div>
-
-      {orgId && canAnswer && (
-        <RsvpButtons
-          orgId={orgId}
-          eventId={item.id}
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className={cn("flex flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]", PHONE_FULL_SCREEN)}
+      >
+        <DialogHead
+          className="shrink-0 ps-6 pe-4 pt-4 pb-3"
           title={item.title}
-          value={item.rsvp === "PENDING" ? null : (item.rsvp ?? null)}
-          className="mt-3"
+          titleClassName="display-title text-[24px] leading-tight break-words"
+          subtitle={<DialogDescription className="text-foreground font-medium">{when}</DialogDescription>}
+          onClose={onClose}
+          actions={
+            <>
+              {canManage && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onEdit(item)}
+                  aria-label={`Edit ${item.title}`}
+                  title="Edit"
+                >
+                  <Pencil aria-hidden className="size-4" />
+                </Button>
+              )}
+              <Button variant="outline" size="icon" asChild>
+                <Link
+                  href={`/app/${orgSlug}/meetings/${item.id}`}
+                  aria-label="Open the full page"
+                  title="Open the full page: who's coming, notes, delete"
+                >
+                  <ArrowUpRight aria-hidden className="size-4" />
+                </Link>
+              </Button>
+            </>
+          }
         />
-      )}
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pt-1 pb-6">
+          {item.location && (
+            <p className="text-muted-foreground flex items-start gap-1.5 text-sm">
+              <MapPin aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+              <span className="break-words">{item.location}</span>
+            </p>
+          )}
 
-      <div className="mt-4 flex items-center gap-2">
-        {/* One solid action (the event's page: details, RSVPs, notes) and,
-            for whoever runs it, a plainly labelled edit beside it. */}
-        <Button size="sm" className="flex-1" asChild>
-          <Link href={`/app/${orgSlug}/meetings/${item.id}`}>
-            Open
-            <ArrowRight aria-hidden className="size-3.5" />
-          </Link>
-        </Button>
-        {canManage && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex-1"
-            onClick={() => onEdit(item)}
-            aria-label={`Edit ${item.title}`}
-          >
-            <Pencil aria-hidden className="size-3.5" />
-            Edit
-          </Button>
-        )}
-      </div>
-    </div>
+          <div className="flex flex-wrap gap-1.5">
+            {/* Its type, beside the other facts (not a label above the title). */}
+            <Badge variant="outline">
+              <span aria-hidden className="cal-chip__dot" style={itemStyle(item)} />
+              {item.meetingType || kind.label}
+            </Badge>
+            {/* Internal is the default; only Public is worth saying. */}
+            {item.visibility === "PUBLIC" && (
+              <Badge variant="secondary" title={visibility.hint}>
+                <VisIcon aria-hidden className="size-3" />
+                {visibility.label}
+              </Badge>
+            )}
+            {item.rsvp && !(orgId && canAnswer) && (
+              <Badge
+                variant={item.rsvp === "YES" ? "success" : item.rsvp === "NO" ? "outline" : "secondary"}
+              >
+                <Ticket aria-hidden className="size-3" />
+                {RSVP_META[item.rsvp].label}
+              </Badge>
+            )}
+            {showSync && item.syncState === "PENDING" && (
+              <Badge variant="outline" title={SYNC_META.PENDING.hint}>
+                <CalendarClock aria-hidden className="size-3" />
+                {SYNC_META.PENDING.label}
+              </Badge>
+            )}
+            {showSync && item.syncState === "FAILED" && (
+              <Badge variant="destructive" title={SYNC_META.FAILED.hint}>
+                <CalendarX2 aria-hidden className="size-3" />
+                {SYNC_META.FAILED.label}
+              </Badge>
+            )}
+          </div>
+
+          {orgId && canAnswer && (
+            <RsvpButtons
+              orgId={orgId}
+              eventId={item.id}
+              title={item.title}
+              value={item.rsvp === "PENDING" ? null : (item.rsvp ?? null)}
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

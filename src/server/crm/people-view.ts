@@ -1,20 +1,32 @@
+import type { Prisma } from "@/generated/prisma/client";
+import type { DealsFilters } from "@/lib/crm/deals-tab";
+import { formatMoney } from "@/lib/crm/fields";
 import {
   COMPANY_LISTS,
+  dealsTotalLabel,
   lastTalked,
   PEOPLE_LISTS,
+  peopleDealFilters,
   readList,
+  readPeopleView,
   relationshipTone,
+  rowDeal,
   rowNext,
   strengthBars,
+  type PeopleView,
+  type RowDealInput,
   type RowNext,
 } from "@/lib/crm/people-view";
+import { effectiveStatus } from "@/lib/crm/quotes";
 import type { TagColor } from "@/lib/tag-colors";
 import type { TxClient } from "@/server/db/context";
 
 import { bringInCounts } from "./bring-in";
+import { dealFilterWhere, dealTypeFields, defaultDealPipeline, loadDealsTab, typeLabelsOf, type DealRow } from "./deals-tab";
 import { pendingDuplicates } from "./dedupe";
 import { viewListQuery } from "./outreach/lists";
 import { ownerLabel, type RoleOwner } from "./owners";
+import type { PipelineView } from "./pipelines";
 import {
   companiesWhere,
   listCompanies,
@@ -23,14 +35,17 @@ import {
   peopleWhere,
   type ListQuery,
 } from "./queries";
+import { taskSteps } from "./task-steps";
 
 /**
- * The People tab's data (docs/features/crm.md, "Redesign"): which list is
- * picked in Filters (`?list=`: a built-in one, one of the organization's
- * own, or everyone) on top of Owner and Relationship, the rows with the
- * one next step each shows, every list with its count, and what the
- * brand-new empty state offers. People and Companies (`?view=companies`)
- * share it. Read as the member (RLS decides what they see).
+ * The People tab's data (docs/features/crm.md, "Redesign" and "One list"):
+ * one list of everyone you deal with, as People, Companies or a Board of
+ * their deals by stage (`?view=`). Filters picks a list (`?list=`: a
+ * built-in one, one of the organization's own, or everyone), Owner and
+ * Relationship, and the deal filters (Pipeline, Stage, Deal type,
+ * Open/Won/Lost). The rows carry the one next step each shows and their
+ * open deal (Stage and Deal value); every list comes with its count; the
+ * board gets its pipeline's deals. Read as the member (RLS decides).
  */
 
 type Search = Record<string, string | string[] | undefined>;
@@ -44,11 +59,28 @@ export interface PeopleListEntry {
   /** The `?list=` value ("" for everyone). */
   id: string;
   label: string;
-  count: number;
+  /**
+   * How many it holds: counted for the open list only. Filters asks for the
+   * rest when it opens (peopleListCounts), so a page load isn't a count per list.
+   */
+  count: number | null;
   /** One of the organization's own lists (its people can be added to by hand). */
   own: boolean;
   /** A hand-picked list (Add to list adds to these). */
   picked: boolean;
+}
+
+/** The deal a row shows: the most advanced of theirs that the filters allow (open by default). */
+export interface PeopleRowDeal {
+  id: string;
+  title: string;
+  stage: string;
+  stageKind: "OPEN" | "WON" | "LOST";
+  /** Where the stage sits among its pipeline's (for its dot's colour). */
+  openIndex: number;
+  amount: string | null;
+  /** How many more deals they have besides this one. */
+  more: number;
 }
 
 export interface PeopleTableRow {
@@ -64,12 +96,20 @@ export interface PeopleTableRow {
   mergeWith: string | null;
   owner: string | null;
   deleted: boolean;
+  deal: PeopleRowDeal | null;
+}
+
+export interface PeopleBoard {
+  pipeline: PipelineView;
+  rows: DealRow[];
 }
 
 export interface PeoplePageData {
+  view: PeopleView;
   companies: boolean;
   listId: string;
   listName: string;
+  /** Rows on the tables; deals on the board. */
   total: number;
   page: number;
   rows: PeopleTableRow[];
@@ -78,6 +118,19 @@ export interface PeoplePageData {
   trash: number;
   /** Nobody in the CRM at all yet: the "Nobody here yet" state, with what can come in. */
   empty: { members: number; contacts: number } | null;
+  /** A deal filter is on (the tables narrow to those with a matching deal). */
+  dealsOn: boolean;
+  /** "$X in open deals" beside the heading, when a deal filter or the board is on. */
+  money: { text: string; label: string } | null;
+  /** What the deal filters offer. */
+  dealOptions: {
+    pipelines: { id: string; name: string }[];
+    stages: { id: string; label: string }[];
+    types: string[];
+  };
+  board: PeopleBoard | null;
+  /** Follow-up series that are on (Add to a follow-up series). */
+  series: { id: string; name: string }[];
 }
 
 const DAY = 86_400_000;
@@ -128,22 +181,138 @@ async function unanswered(db: TxClient, organizationId: string, ids: string[], n
   return out;
 }
 
-export async function peoplePage(
+/** The pipelines a deal filter covers: the one picked, the picked stage's, or all. */
+function pipelinesFor(pipelines: readonly PipelineView[], f: DealsFilters): PipelineView[] {
+  if (f.pipeline) return pipelines.filter((p) => p.id === f.pipeline);
+  if (f.stage) return pipelines.filter((p) => p.stages.some((s) => s.id === f.stage));
+  return [...pipelines];
+}
+
+interface RowDealFull extends RowDealInput {
+  stage: string;
+  stageKind: "OPEN" | "WON" | "LOST";
+  stageOrder: number;
+  openIndex: number;
+  amountCents: number | null;
+  amount: string | null;
+}
+
+/** Each row's deals that the filters allow, by person (or company). */
+async function dealsByRow(
+  db: TxClient,
+  where: Prisma.CrmDealWhereInput,
+  companies: boolean,
+  ids: string[],
+  pipelines: readonly PipelineView[],
+  now: Date,
+): Promise<Map<string, RowDealFull[]>> {
+  const out = new Map<string, RowDealFull[]>();
+  if (ids.length === 0) return out;
+  const order = new Map<string, { at: number; open: number }>();
+  for (const p of pipelines) {
+    let open = 0;
+    p.stages.forEach((s, i) => order.set(s.id, { at: i, open: s.kind === "OPEN" ? open++ : 0 }));
+  }
+  const found = await db.crmDeal.findMany({
+    where: {
+      AND: [where, companies ? { companyId: { in: ids } } : { people: { some: { personId: { in: ids } } } }],
+    },
+    take: 1000,
+    select: {
+      id: true,
+      title: true,
+      stageId: true,
+      amountCents: true,
+      currency: true,
+      companyId: true,
+      nextStep: true,
+      nextStepAt: true,
+      stage: { select: { name: true, kind: true } },
+      people: { where: { personId: { in: ids } }, select: { personId: true } },
+      quotes: {
+        where: { kind: { not: "invoice" } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { status: true, validUntil: true },
+      },
+    },
+  });
+  for (const d of found) {
+    const q = d.quotes[0];
+    const status = q ? effectiveStatus(q, now) : null;
+    const at = order.get(d.stageId);
+    const full: RowDealFull = {
+      id: d.id,
+      title: d.title,
+      quote:
+        d.stage.kind === "OPEN" && (status === "DRAFT" || status === "DECLINED" || status === "EXPIRED")
+          ? status
+          : null,
+      nextStep: d.nextStep,
+      nextStepAt: d.nextStepAt,
+      stage: d.stage.name,
+      stageKind: d.stage.kind,
+      stageOrder: at?.at ?? 0,
+      openIndex: at?.open ?? 0,
+      amountCents: d.amountCents,
+      amount: d.amountCents !== null ? formatMoney(d.amountCents, d.currency) : null,
+    };
+    const keys = companies ? (d.companyId ? [d.companyId] : []) : d.people.map((p) => p.personId);
+    for (const k of keys) {
+      const list = out.get(k);
+      if (list) list.push(full);
+      else out.set(k, [full]);
+    }
+  }
+  return out;
+}
+
+function rowDealView(deals: RowDealFull[] | undefined): { view: PeopleRowDeal | null; next: RowDealInput | null } {
+  const picked = rowDeal(deals ?? []);
+  if (!picked) return { view: null, next: null };
+  const d = picked.deal;
+  return {
+    view: {
+      id: d.id,
+      title: d.title,
+      stage: d.stage,
+      stageKind: d.stageKind,
+      openIndex: d.openIndex,
+      amount: d.amount,
+      more: picked.more,
+    },
+    next: d.stageKind === "OPEN" ? d : null,
+  };
+}
+
+/** What the lists are read from: the view, the URL's filters, the organization's lists and each list's query. */
+async function listSetup(
   db: TxClient,
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
   sp: Search,
-  options: {
-    names: ReadonlyMap<string, string>;
-    relationships: readonly { id: string; label: string; color: string }[];
-    now?: Date;
-  },
-): Promise<PeoplePageData> {
-  const now = options.now ?? new Date();
-  const companies = one(sp, "view") === "companies";
+  pipelines: readonly PipelineView[],
+) {
+  const view = readPeopleView(sp.view);
+  const companies = view === "companies";
+  const onBoard = view === "board";
   const objectKind = companies ? "companies" : "people";
   const builtIns = companies ? COMPANY_LISTS : PEOPLE_LISTS;
+  const viewer = { id: viewerId, roles };
+
+  // The deal filters: as a where for the tables (the person's owner and
+  // search are the table's own), and the pipelines they cover.
+  const { filters: dealF, on: dealsOn } = peopleDealFilters(sp);
+  const covered = pipelinesFor(pipelines, dealF);
+  const typeFields = await dealTypeFields(db, organizationId, pipelines);
+  const rowDealWhere = dealFilterWhere(
+    organizationId,
+    covered.map((p) => p.id),
+    { ...dealF, owner: null, q: null },
+    typeFields,
+    viewer,
+  );
 
   // The base query: Owner, Relationship, search and page from the URL;
   // never a status or "due" of its own (lists hold those).
@@ -152,10 +321,11 @@ export async function peoplePage(
     q: url.q,
     owner: url.owner,
     relationship: companies ? undefined : url.relationship,
-    trash: url.trash,
+    trash: onBoard ? false : url.trash,
     page: url.page,
     sort: url.sort,
     dir: url.dir,
+    deals: dealsOn && !onBoard ? rowDealWhere : undefined,
   };
 
   const views = await db.crmView.findMany({
@@ -184,29 +354,66 @@ export async function peoplePage(
         relationship: base.relationship ?? own.relationship,
         q: base.q,
         page: base.page,
+        deals: base.deals,
       };
     }
     return base;
   };
-  const countOf = (q: ListQuery) =>
-    companies
-      ? db.crmCompany.count({ where: companiesWhere(organizationId, q, viewerId, roles, now) })
-      : db.crmPerson.count({ where: peopleWhere(organizationId, q, viewerId, roles, now) });
 
-  const lists: PeopleListEntry[] = [];
-  for (const l of builtIns) {
-    if (l.id === "dupes" && dupes.size === 0) continue;
-    lists.push({ id: l.id, label: l.label, count: await countOf(queryFor(l.id)), own: false, picked: false });
+  return { view, companies, onBoard, builtIns, dealF, dealsOn, covered, typeFields, rowDealWhere, base, views, dupes, queryFor };
+}
+
+/** Lists' counts, for Filters when it opens: each list with the bar's Owner, Relationship, search and deal filters. */
+export async function peopleListCounts(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  roles: ReadonlyMap<string, RoleOwner>,
+  sp: Search,
+  pipelines: readonly PipelineView[],
+  now: Date = new Date(),
+): Promise<Record<string, number>> {
+  const { companies, builtIns, views, dupes, queryFor } = await listSetup(db, organizationId, viewerId, roles, sp, pipelines);
+  const ids = [...builtIns.filter((l) => l.id !== "dupes" || dupes.size > 0).map((l) => l.id), ...views.map((v) => v.id)];
+  const out: Record<string, number> = {};
+  for (const id of ids) {
+    const q = queryFor(id);
+    out[id] = companies
+      ? await db.crmCompany.count({ where: companiesWhere(organizationId, q, viewerId, roles, now) })
+      : await db.crmPerson.count({ where: peopleWhere(organizationId, q, viewerId, roles, now) });
   }
-  for (const v of views) {
-    lists.push({
+  return out;
+}
+
+export async function peoplePage(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  roles: ReadonlyMap<string, RoleOwner>,
+  sp: Search,
+  options: {
+    names: ReadonlyMap<string, string>;
+    relationships: readonly { id: string; label: string; color: string }[];
+    pipelines: readonly PipelineView[];
+    now?: Date;
+  },
+): Promise<PeoplePageData> {
+  const now = options.now ?? new Date();
+  const pipelines = options.pipelines;
+  const { view, companies, onBoard, builtIns, dealF, dealsOn, covered, typeFields, rowDealWhere, views, dupes, queryFor } =
+    await listSetup(db, organizationId, viewerId, roles, sp, pipelines);
+  const lists: PeopleListEntry[] = [
+    ...builtIns
+      .filter((l) => l.id !== "dupes" || dupes.size > 0)
+      .map((l) => ({ id: l.id, label: l.label, count: null, own: false, picked: false })),
+    ...views.map((v) => ({
       id: v.id,
       label: v.name,
-      count: await countOf(queryFor(v.id)),
+      count: null,
       own: true,
       picked: viewListQuery(v.filters).ids !== undefined,
-    });
-  }
+    })),
+  ];
 
   const requested = one(sp, "list") ?? "";
   const picked = readList(requested, companies);
@@ -216,27 +423,134 @@ export async function peoplePage(
   const listName = lists.find((l) => l.id === listId)?.label ?? builtIns[0]!.label;
   const tones = new Map(options.relationships.map((r) => [r.id, r]));
 
+  const stageOptions = covered.length === 1 || pipelines.length === 1
+    ? (covered[0] ?? pipelines[0])!.stages.map((s) => ({ id: s.id, label: s.name }))
+    : covered.flatMap((p) => p.stages.map((s) => ({ id: s.id, label: `${p.name}: ${s.name}` })));
+  const dealOptions = {
+    pipelines: pipelines.map((p) => ({ id: p.id, name: p.name })),
+    stages: pipelines.length === 0 ? [] : stageOptions,
+    types: typeLabelsOf(new Map([...typeFields].filter(([id]) => covered.some((p) => p.id === id)))),
+  };
+  const series = (
+    await db.crmSequence.findMany({
+      where: { organizationId, archivedAt: null, status: "ON" },
+      orderBy: { name: "asc" },
+      take: 50,
+      select: { id: true, name: true },
+    })
+  ).map((s) => ({ id: s.id, name: s.name }));
+
+  const trash = onBoard
+    ? 0
+    : companies
+      ? await db.crmCompany.count({ where: { organizationId, deletedAt: { not: null } } })
+      : await db.crmPerson.count({ where: { organizationId, deletedAt: { not: null } } });
+
+  // ---- The board: one pipeline's deals, narrowed through their people by
+  // the list and relationship picked; Owner is the deal's owner.
+  if (onBoard) {
+    // With no pipeline picked, the board opens on the one with the most open
+    // deals (an empty Deals pipeline next to a busy one would look like nothing's there).
+    const choices = dealF.stage ? covered : pipelines;
+    let busiest: (typeof choices)[number] | null = null;
+    if (covered.length !== 1 && choices.length > 1) {
+      const open = await db.crmDeal.groupBy({
+        by: ["pipelineId"],
+        where: { organizationId, deletedAt: null, closedAt: null, pipelineId: { in: choices.map((p) => p.id) } },
+        _count: { _all: true },
+      });
+      const top = open.sort((a, b) => b._count._all - a._count._all)[0];
+      busiest = top ? (choices.find((p) => p.id === top.pipelineId) ?? null) : null;
+    }
+    // A deal opened from a link (search, the Inbox) opens over its own pipeline's board.
+    const opened = one(sp, "open")?.match(/^deal:([A-Za-z0-9_-]{1,64})$/)?.[1];
+    const openedIn =
+      opened && covered.length !== 1
+        ? await db.crmDeal.findFirst({ where: { id: opened, organizationId }, select: { pipelineId: true } })
+        : null;
+    const ownPipeline = openedIn ? (choices.find((p) => p.id === openedIn.pipelineId) ?? null) : null;
+    const pipeline = covered.length === 1 ? covered[0]! : (ownPipeline ?? busiest ?? defaultDealPipeline(choices) ?? null);
+    let board: PeopleBoard | null = null;
+    let money: PeoplePageData["money"] = null;
+    if (pipeline) {
+      const narrowed = Boolean(listId || query.relationship);
+      const extra: Prisma.CrmDealWhereInput | undefined = narrowed
+        ? {
+            people: {
+              some: {
+                person: peopleWhere(organizationId, { ...query, q: undefined, owner: undefined, page: undefined, deals: undefined }, viewerId, roles, now),
+              },
+            },
+          }
+        : undefined;
+      const tab = await loadDealsTab(
+        db,
+        organizationId,
+        pipelines,
+        { ...dealF, pipeline: pipeline.id },
+        { id: viewerId, roles, names: options.names },
+        now,
+        extra,
+      );
+      board = { pipeline, rows: tab.rows };
+      const sum = tab.rows.reduce((n, r) => n + (r.amountCents ?? 0), 0);
+      if (sum > 0) money = { text: formatMoney(sum, pipeline.currency), label: dealsTotalLabel(dealF.show) };
+    }
+    return {
+      view,
+      companies: false,
+      listId,
+      listName: listId ? listName : (pipeline?.name ?? "Deals"),
+      total: board?.rows.length ?? 0,
+      page: 1,
+      rows: [],
+      lists,
+      trash,
+      empty: null,
+      dealsOn,
+      money,
+      dealOptions,
+      board,
+      series,
+    };
+  }
+
+  // ---- The tables.
   let rows: PeopleTableRow[];
   let total: number;
   if (companies) {
     const data = await listCompanies(db, organizationId, query, viewerId, roles);
     total = data.total;
-    rows = data.rows.map((c) => ({
-      id: c.id,
-      name: c.name,
-      sub:
-        [c.people === 1 ? "1 person" : c.people ? `${c.people} people` : null, c.industry ?? c.domain]
-          .filter(Boolean)
-          .join(", ") || null,
-      rel: null,
-      bars: strengthBars(c.strength),
-      strength: c.strength,
-      last: lastTalked(c.lastContactedAt, now),
-      next: rowNext({ nextFollowUpAt: c.nextFollowUpAt, lastContactedAt: c.lastContactedAt }, now),
-      mergeWith: null,
-      owner: ownerLabel(c, roles, options.names),
-      deleted: Boolean(c.deletedAt),
-    }));
+    const deals = await dealsByRow(db, rowDealWhere, true, data.rows.map((c) => c.id), pipelines, now);
+    const tasks = await taskSteps(db, organizationId, "company", data.rows.map((c) => c.id));
+    rows = data.rows.map((c) => {
+      const deal = rowDealView(deals.get(c.id));
+      return {
+        id: c.id,
+        name: c.name,
+        sub:
+          [c.people === 1 ? "1 person" : c.people ? `${c.people} people` : null, c.industry ?? c.domain]
+            .filter(Boolean)
+            .join(", ") || null,
+        rel: null,
+        bars: strengthBars(c.strength),
+        strength: c.strength,
+        last: lastTalked(c.lastContactedAt, now),
+        next: rowNext(
+          {
+            nextFollowUpAt: c.nextFollowUpAt,
+            lastContactedAt: c.lastContactedAt,
+            deal: deal.next,
+            task: tasks.get(c.id) ?? null,
+          },
+          now,
+        ),
+        mergeWith: null,
+        owner: ownerLabel(c, roles, options.names),
+        deleted: Boolean(c.deletedAt),
+        deal: deal.view,
+      };
+    });
   } else {
     const data = await listPeople(db, organizationId, query, viewerId, roles);
     total = data.total;
@@ -250,9 +564,12 @@ export async function peoplePage(
       ).map((p) => p.id),
     );
     const wrote = await unanswered(db, organizationId, ids, now);
+    const deals = await dealsByRow(db, rowDealWhere, false, ids, pipelines, now);
+    const tasks = await taskSteps(db, organizationId, "person", ids);
     rows = data.rows.map((p) => {
       const dup = dupes.get(p.id) ?? null;
       const type = p.relationship ? tones.get(p.relationship) : null;
+      const deal = rowDealView(deals.get(p.id));
       return {
         id: p.id,
         name: p.name,
@@ -270,14 +587,37 @@ export async function peoplePage(
             doNotContact: blocked.has(p.id),
             duplicate: dup ? { name: dup.name, reason: dup.reason } : null,
             wroteAt: wrote.get(p.id) ?? null,
+            deal: deal.next,
+            task: tasks.get(p.id) ?? null,
           },
           now,
         ),
         mergeWith: dup?.otherId ?? null,
         owner: ownerLabel(p, roles, options.names),
         deleted: Boolean(p.deletedAt),
+        deal: deal.view,
       };
     });
+  }
+
+  // The open list's count is the table's; Filters asks for the others when it opens.
+  const openList = lists.find((l) => l.id === listId);
+  if (openList && !query.trash) openList.count = total;
+
+  // "$X in open deals": the deals the filters allow, among everyone listed.
+  let money: PeoplePageData["money"] = null;
+  if (dealsOn && !query.trash) {
+    const who: Prisma.CrmDealWhereInput = companies
+      ? { company: companiesWhere(organizationId, { ...query, page: undefined }, viewerId, roles, now) }
+      : { people: { some: { person: peopleWhere(organizationId, { ...query, page: undefined }, viewerId, roles, now) } } };
+    const sum = await db.crmDeal.aggregate({ _sum: { amountCents: true }, where: { AND: [rowDealWhere, who] } });
+    const cents = sum._sum.amountCents ?? 0;
+    if (cents > 0) {
+      money = {
+        text: formatMoney(cents, (covered[0] ?? pipelines[0])?.currency ?? "USD"),
+        label: dealsTotalLabel(dealF.show),
+      };
+    }
   }
 
   // Nobody in the CRM yet (not just nobody matching): what can come in.
@@ -290,11 +630,8 @@ export async function peoplePage(
     }
   }
 
-  const trash = companies
-    ? await db.crmCompany.count({ where: { organizationId, deletedAt: { not: null } } })
-    : await db.crmPerson.count({ where: { organizationId, deletedAt: { not: null } } });
-
   return {
+    view,
     companies,
     listId,
     listName: query.trash ? "In the trash" : listName,
@@ -304,5 +641,10 @@ export async function peoplePage(
     lists,
     trash,
     empty,
+    dealsOn,
+    money,
+    dealOptions,
+    board: null,
+    series,
   };
 }

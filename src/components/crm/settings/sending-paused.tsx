@@ -6,6 +6,7 @@ import { sendingPauses, type SendingPause } from "@/lib/crm/settings-prefs";
 import { crmSettingsHref } from "@/lib/crm/settings-sections";
 import { cn } from "@/lib/utils";
 import { loadSendingHealth } from "@/server/crm/sending-health";
+import { withOrgTx } from "@/server/db/context";
 
 /**
  * "Sending is paused." (docs/features/crm.md, "Redesign", States): a
@@ -20,6 +21,37 @@ import { loadSendingHealth } from "@/server/crm/sending-health";
 export async function SendingPausedBanner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const { health } = await loadSendingHealth(orgId);
   return <SendingPausedView pauses={sendingPauses(health)} orgSlug={orgSlug} />;
+}
+
+/**
+ * The banner on the CRM's own pages (Today, People): what stopped, as
+ * above, but the missing sender only once group email is actually waiting
+ * on it. An organization that never sends group email isn't told on every
+ * page; CRM settings, Sending, always says it.
+ */
+export async function CrmSendingBanner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
+  const loaded = await loadSendingHealth(orgId).catch(() => null);
+  if (!loaded) return null;
+  const { health } = loaded;
+  let waiting = 0;
+  if (!health.senderOk) {
+    waiting = await withOrgTx(orgId, ({ db }) =>
+      db.crmEmailMessage.count({
+        where: {
+          organizationId: orgId,
+          direction: "OUTBOUND",
+          status: { in: ["QUEUED", "SCHEDULED"] },
+          OR: [
+            { campaignId: { not: null } },
+            { enrollmentId: { not: null } },
+            { workflowId: { not: null } },
+          ],
+        },
+      }),
+    ).catch(() => 0);
+  }
+  const pauses = sendingPauses({ ...health, senderOk: health.senderOk || waiting === 0 });
+  return <SendingPausedView pauses={pauses} orgSlug={orgSlug} />;
 }
 
 export function SendingPausedView({

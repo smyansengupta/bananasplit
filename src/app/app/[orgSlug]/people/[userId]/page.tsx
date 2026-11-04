@@ -1,12 +1,15 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { LinkedSection } from "@/components/links/linked-section";
 import { PersonProfile } from "@/components/profile/person-profile";
 import { PinToggle } from "@/components/pins/pins-context";
+import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { peopleHref } from "@/lib/profile/href";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { crmPersonForMember } from "@/server/crm/outside-links";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getPersonSheet } from "@/server/profiles/directory";
 import { planGate } from "@/server/billing/plan-gate";
 
@@ -32,6 +35,10 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
     organization.timezone,
   );
   if (!person) notFound();
+  // The same person in the CRM (by account, else email), when the viewer can open it there.
+  const crmHref = await withOrgTx(organization.id, (ctx) =>
+    crmPersonForMember(ctx, orgSlug, userId),
+  );
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5">
@@ -48,10 +55,17 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
           // Pin them right from their page (on a phone too, where the
           // header's pin isn't).
           extraActions={
-            <PinToggle
-              path={`/people/${encodeURIComponent(userId)}`}
-              label={person.name ?? "this person"}
-            />
+            <>
+              {crmHref && (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={crmHref}>Open in CRM</Link>
+                </Button>
+              )}
+              <PinToggle
+                path={`/people/${encodeURIComponent(userId)}`}
+                label={person.name ?? "this person"}
+              />
+            </>
           }
         />
       </article>

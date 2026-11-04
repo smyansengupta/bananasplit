@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
-/** Sequences are plans on Outreach now; old links land there. */
+import { outreachRedirectHref } from "@/lib/crm/redirects";
+
+/** Sequences are follow-up series in CRM settings > Automations now. */
 export default async function SequencesPage({ params }: PageProps<"/app/[orgSlug]/crm/outreach/sequences">) {
   const { orgSlug } = await params;
-  redirect(`/app/${orgSlug}/crm/outreach`);
+  redirect(outreachRedirectHref(orgSlug, "sequences"));
 }

@@ -68,7 +68,7 @@ export interface BuilderDraft {
   actions: WorkflowAction[];
 }
 
-const OBJECT_LABEL: Record<WorkflowObject, string> = { person: "A person", company: "A company", deal: "An item" };
+const OBJECT_LABEL: Record<WorkflowObject, string> = { person: "A person", company: "A company", deal: "A deal" };
 
 const label = "text-muted-foreground mb-1.5 block text-[13px] font-medium";
 
@@ -648,7 +648,7 @@ function ActionEditor({
             <Chips
               label="Amount"
               options={[
-                { value: "item", label: "The item's amount" },
+                { value: "item", label: "The deal's amount" },
                 { value: "fixed", label: "A set amount" },
               ]}
               value={p.amountFrom}

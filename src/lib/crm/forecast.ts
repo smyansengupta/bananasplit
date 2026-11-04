@@ -8,8 +8,7 @@
  * - weighted: each open item's amount (or 1) times its stage's likelihood;
  * - categories: what members marked Commit, Best case and Pipeline, rolled
  *   up (Best case includes Commit; Pipeline is everything open), plus what
- *   is already won; owners, admins and CRM managers can put their own call
- *   over the roll-up;
+ *   is already won;
  * - trend: from the organization's own closed items (win rate, average
  *   amount, how many usually close in a period), once it has enough.
  *
@@ -198,7 +197,7 @@ export function computeTrend(items: readonly ForecastItem[], p: Period, current:
     runRate,
     expected,
     basis: closed
-      ? `${Math.round(winRate * 100)}% of the ${closed} items closed in the four quarters before were won.`
+      ? `${Math.round(winRate * 100)}% of the ${closed} deals closed in the four quarters before were won.`
       : "Nothing has closed in the last four quarters yet.",
   };
 }
@@ -213,27 +212,13 @@ export interface SnapshotData {
   bestCase: Figures;
   pipeline: Figures;
   trend: Figures | null;
-  /** The call a manager put over the roll-up, if any. */
-  call: Figures | null;
   /** Open items' categories, ids only, to say what changed between snapshots. */
   items: { id: string; c: Category; a: number | null; s: string }[];
 }
 
-/** A manager's own call over the roll-up (CrmForecastSnapshot.data with kind "call"). */
-export interface CallData {
-  kind: "call";
-  period: string;
-  amount: number;
-  count: number;
-  note: string | null;
-  by: string;
-}
-
-export function readSnapshot(raw: unknown): SnapshotData | CallData | null {
+export function readSnapshot(raw: unknown): SnapshotData | null {
   if (!raw || typeof raw !== "object") return null;
-  const k = (raw as { kind?: string }).kind;
-  if (k === "snapshot" || k === "call") return raw as SnapshotData | CallData;
-  return null;
+  return (raw as { kind?: string }).kind === "snapshot" ? (raw as SnapshotData) : null;
 }
 
 /** What changed between two snapshots: items added, gone, moved category or amount. */

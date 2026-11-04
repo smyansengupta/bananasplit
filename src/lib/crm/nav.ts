@@ -1,9 +1,10 @@
 /**
- * The CRM's tabs (docs/features/crm.md, "Redesign"): four, in one list.
- * Everything else lives under one of them (People | Companies is a switch
- * on People; pipelines, forecast and quotes are Deals; campaigns are
- * Outreach) or behind the settings button in the header. A tab stays lit
- * on the older pages it now holds, through `also`, until they move.
+ * The CRM's tabs (docs/features/crm.md, "One list"): two, Today and
+ * People. People is the one list of everyone you deal with: People,
+ * Companies and Board (their deals by stage) are its view switch.
+ * Follow-up series are in CRM settings > Automations, behind the settings
+ * button in the header. A tab stays lit on the older pages it now holds,
+ * through `also`, while they redirect.
  */
 
 export interface CrmTab {
@@ -33,16 +34,19 @@ export const CRM_TABS: readonly CrmTab[] = [
     label: "People",
     icon: "Users",
     path: "/people",
-    also: ["/companies", "/import", "/handover"],
+    also: [
+      "/companies",
+      "/import",
+      "/handover",
+      "/deals",
+      "/pipelines",
+      "/items",
+      "/forecast",
+      "/quotes",
+      "/outreach",
+      "/campaigns",
+    ],
   },
-  {
-    id: "deals",
-    label: "Deals",
-    icon: "Columns3",
-    path: "/deals",
-    also: ["/pipelines", "/items", "/forecast", "/quotes"],
-  },
-  { id: "outreach", label: "Outreach", icon: "Send", path: "/outreach", also: ["/campaigns"] },
 ];
 
 export interface ResolvedCrmTab {
@@ -58,7 +62,7 @@ export interface ResolvedCrmTab {
 
 /**
  * The tabs a viewer sees. `pipelines` and `manager` are kept for the
- * callers that pass them; the four tabs are the same for everyone.
+ * callers that pass them; the two tabs are the same for everyone.
  */
 export function resolveCrmTabs(
   orgSlug: string,

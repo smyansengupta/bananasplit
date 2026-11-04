@@ -58,7 +58,7 @@ import { loadCustomDatabase } from "@/server/databases/custom";
 import { isCrmKind, loadSourceFor } from "@/server/databases/sources";
 import { CrmRowPanel } from "@/components/crm/row-panel";
 import { loadCrmRowPanel } from "@/server/crm/row-panel";
-import { crmBase } from "@/lib/crm/href";
+import { crmNewHref } from "@/lib/crm/href";
 import {
   canViewBallotRows,
   getDatabase,
@@ -284,20 +284,11 @@ export default async function DatabaseViewPage({
   let addRow: ReactNode = null;
   if (isCrmKind(kind)) {
     // The CRM's own databases: a row is a CRM record, made in the CRM.
-    const crm = crmBase(orgSlug);
+    // The New card for it (?open=new:...), over the CRM list it belongs to.
+    const what = kind === "CRM_PEOPLE" ? "person" : kind === "CRM_COMPANIES" ? "company" : "deal";
     addRow = (
       <Button asChild variant="create">
-        <Link
-          href={
-            kind === "CRM_PEOPLE"
-              ? `${crm}/people?new=1`
-              : kind === "CRM_COMPANIES"
-                ? `${crm}/companies?new=1`
-                : `${crm}/items/new`
-          }
-        >
-          {kind === "CRM_PEOPLE" ? "New person" : kind === "CRM_COMPANIES" ? "New company" : "New item"}
-        </Link>
+        <Link href={crmNewHref(orgSlug, what)}>New {what}</Link>
       </Button>
     );
   } else if (admin) {

@@ -15,7 +15,7 @@ export const AiRecordContext = createContext<{ kind: "person" | "company" | "dea
  * An AI field's Fill button on a record (the record page and the Databases
  * row panel): asks the organization's AI for this one row's value now. The
  * value is written with where it came from; a value someone typed stays,
- * and the answer waits in Review instead.
+ * and the answer waits in To approve instead.
  */
 export function AiFillButton({ orgId, fieldId, hasPrompt }: { orgId: string; fieldId: string; hasPrompt: boolean }) {
   const record = useContext(AiRecordContext);
@@ -42,7 +42,7 @@ export function AiFillButton({ orgId, fieldId, hasPrompt }: { orgId: string; fie
             r.result === "written"
               ? "Filled."
               : r.result === "suggested"
-                ? "Someone typed a value here, so the answer waits in Review."
+                ? "Someone typed a value here, so the answer waits in To approve."
                 : r.result === "same"
                   ? "Still the same answer."
                   : "The AI didn't find an answer for this one.",

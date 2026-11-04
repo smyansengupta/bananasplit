@@ -298,7 +298,7 @@ export async function updateDeal(
   if (!options.trusted) await requireCrm(actor);
   const { db, organizationId, userId } = actor;
   const before = await db.crmDeal.findFirst({ where: { id: dealId, organizationId }, select: DEAL_SELECT });
-  if (!before) throw new CrmError("That item isn't here any more.");
+  if (!before) throw new CrmError("That deal isn't here any more.");
   if (before.deletedAt) throw new CrmError("It's in the trash. Restore it first.");
   if (input.stageId && input.stageId !== before.stageId) {
     // A stage change goes through the move (required fields, Finance).
@@ -401,7 +401,7 @@ export async function moveDeal(
   if (!options.trusted) await requireCrm(actor);
   const { db, organizationId, userId } = actor;
   const deal = await db.crmDeal.findFirst({ where: { id: dealId, organizationId }, select: DEAL_SELECT });
-  if (!deal) throw new CrmError("That item isn't here any more.");
+  if (!deal) throw new CrmError("That deal isn't here any more.");
   if (deal.deletedAt) throw new CrmError("It's in the trash. Restore it first.");
   const stage = await stageOf(db, organizationId, deal.pipelineId, input.stageId);
   const fill = input.fill ? await clean(actor, input.fill) : {};
@@ -541,7 +541,7 @@ export async function addDealPerson(
   });
   if (!person) throw new CrmError("That person isn't in the CRM any more.");
   const deal = await db.crmDeal.findFirst({ where: { id: dealId, organizationId }, select: { id: true } });
-  if (!deal) throw new CrmError("That item isn't here any more.");
+  if (!deal) throw new CrmError("That deal isn't here any more.");
   await db.crmDealPerson.upsert({
     where: { dealId_personId: { dealId, personId } },
     create: { organizationId, dealId, personId, role: role?.slice(0, 60) ?? null },

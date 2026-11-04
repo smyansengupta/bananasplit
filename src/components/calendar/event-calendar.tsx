@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { AgendaList } from "./agenda-list";
 import "./calendar.css";
 import { useTodayKey } from "./hooks";
-import { anchorFor, EventPeek, type PeekAnchor } from "./event-peek";
+import { EventPeek } from "./event-peek";
 import type { EventFormEvent } from "./event-form-dialog";
 import type { CalendarItem } from "./item";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
@@ -133,7 +133,8 @@ export function EventCalendar({
   const asked = canManage ? searchParams.get(NEW_EVENT_PARAM) : null;
   const askedNew = newMeetingAsk(asked) ? asked : null;
   const askedShape = shapeFromParam(askedNew) ?? undefined;
-  const [peek, setPeek] = useState<PeekAnchor | null>(null);
+  // The event whose detail is open (a centred dialog, event-peek.tsx).
+  const [peek, setPeek] = useState<{ id: string } | null>(null);
   const [dialog, setDialog] = useState<
     | {
         mode: "create";
@@ -227,15 +228,13 @@ export function EventCalendar({
   }
 
   const openPeek = useCallback(
-    (item: CalendarItem, chip: HTMLElement) => {
+    (item: CalendarItem) => {
       // A task's due date opens the task itself.
       if (item.task) {
         router.push(`/app/${orgSlug}/tasks/${item.id}`);
         return;
       }
-      const wrap = wrapRef.current;
-      if (!wrap) return;
-      setPeek((current) => (current?.id === item.id ? null : anchorFor(chip, wrap, item.id)));
+      setPeek({ id: item.id });
     },
     [orgSlug, router],
   );
@@ -663,7 +662,6 @@ export function EventCalendar({
           <EventPeek
             orgId={orgId}
             item={openItem}
-            anchor={peek}
             orgSlug={orgSlug}
             canManage={canManage}
             showSync={canManage}

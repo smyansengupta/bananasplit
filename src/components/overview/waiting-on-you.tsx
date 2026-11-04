@@ -168,6 +168,13 @@ export function WaitingOnYou({ orgId, data }: { orgId: string; data: WaitingData
                   </Button>
                 </>
               )}
+              {row.kind === "crm" && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={row.href} aria-label={row.title}>
+                    {row.id === "review" ? "Review" : "Reply"}
+                  </Link>
+                </Button>
+              )}
               {row.kind === "review" && (
                 <Button asChild variant="outline" size="sm">
                   <Link href={row.href} aria-label={`Review ${row.title}`}>

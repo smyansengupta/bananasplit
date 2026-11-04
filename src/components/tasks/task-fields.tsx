@@ -226,27 +226,51 @@ export function useMemberSearch(
  * mean: one person here, any number there. No owner means anyone can take
  * it, and that's a choice of its own at the top of the list.
  */
-export function OwnerField({
-  id,
-  value,
-  onChange,
-  disabled,
-}: {
+export function OwnerField(props: {
   id?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   disabled?: boolean;
 }) {
-  const { members, memberById } = useTasks();
+  const { members } = useTasks();
+  return <MemberOwnerField {...props} members={members} hint={(m) => <MemberHint member={m} />} />;
+}
+
+/**
+ * OwnerField without Tasks around it: the same well, menu and keyboard for
+ * any list of members (the CRM's New person, company and deal use it, so an
+ * owner is picked the same way everywhere). `hint` is the quiet line at the
+ * end of a row; by default the member's title. `none` names having no owner
+ * (a task: anyone can take it); `allowNone={false}` takes that choice away.
+ */
+export function MemberOwnerField({
+  id,
+  value,
+  onChange,
+  disabled,
+  allowNone = true,
+  members,
+  hint,
+  none = { well: "Anyone", option: "Anyone can take it" },
+}: {
+  id?: string;
+  value: string | null;
+  onChange: (id: string | null) => void;
+  disabled?: boolean;
+  allowNone?: boolean;
+  members: MemberOption[];
+  hint?: (member: MemberOption) => ReactNode;
+  none?: { well: string; option: string };
+}) {
   const [open, setOpen] = useState(false);
-  const owner = value ? memberById.get(value) : undefined;
+  const owner = value ? members.find((m) => m.id === value) : undefined;
   const search = useMemberSearch(members, {
     always: true,
     onPick: (m) => {
       onChange(m.id);
       setOpen(false);
     },
-    onRemoveLast: () => onChange(null),
+    onRemoveLast: () => allowNone && onChange(null),
   });
 
   return (
@@ -265,7 +289,7 @@ export function OwnerField({
             </span>
           )}
           {!owner && <Users className="size-3.5 shrink-0" aria-hidden="true" />}
-          <span className="truncate">{owner ? firstName(owner) : "Anyone"}</span>
+          <span className="truncate">{owner ? firstName(owner) : none.well}</span>
           <UpDown />
         </button>
       </PopoverTrigger>
@@ -283,18 +307,20 @@ export function OwnerField({
             <span className="bg-muted inline-flex h-6 items-center gap-1 rounded-md ps-0.5 pe-0.5 text-xs font-medium">
               <UserAvatar user={owner} size="xs" />
               {firstName(owner)}
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={`Remove ${owner.name ?? "member"}`}
-                onClick={() => {
-                  onChange(null);
-                  search.focus();
-                }}
-                className="text-muted-foreground hover:text-foreground hover:bg-background rounded p-0.5"
-              >
-                <X className="size-3" aria-hidden="true" />
-              </button>
+              {allowNone && (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={`Remove ${owner.name ?? "member"}`}
+                  onClick={() => {
+                    onChange(null);
+                    search.focus();
+                  }}
+                  className="text-muted-foreground hover:text-foreground hover:bg-background rounded p-0.5"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
+              )}
             </span>
           </div>
         )}
@@ -305,22 +331,24 @@ export function OwnerField({
           aria-label="Owner"
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
-          <button
-            type="button"
-            role="option"
-            aria-selected={value === null}
-            className={menuItemClass(value === null)}
-            onClick={() => {
-              onChange(null);
-              setOpen(false);
-            }}
-          >
-            <Users className="size-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Anyone can take it</span>
-            {value === null && (
-              <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
-            )}
-          </button>
+          {allowNone && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === null}
+              className={menuItemClass(value === null)}
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+            >
+              <Users className="size-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">{none.option}</span>
+              {value === null && (
+                <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+              )}
+            </button>
+          )}
           {search.filtered.length === 0 && (
             <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}
@@ -341,8 +369,14 @@ export function OwnerField({
                 <span className="truncate">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+                ) : hint ? (
+                  hint(m)
                 ) : (
-                  <MemberHint member={m} />
+                  m.title && (
+                    <small className="text-muted-foreground ms-auto max-w-28 shrink-0 truncate text-xs font-normal">
+                      {m.title}
+                    </small>
+                  )
                 )}
               </button>
             );

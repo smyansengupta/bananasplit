@@ -10,6 +10,7 @@ import { loadCompany } from "@/server/crm/records";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmCanEnrich, crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const DAY = 86_400_000;
 /** Someone at a company nobody has talked to in this long gets the intro button. */
@@ -32,7 +33,7 @@ function lastLabel(d: Date | null, now: Date): string {
 export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"company">) {
   const orgId = shell.org.id;
   const now = new Date();
-  const names = new Map(shell.members.map((m) => [m.id, m.name]));
+  const membersP = crmMembers(orgId);
   const data = await withOrgTx(orgId, async ({ db }) => {
     const loaded = await loadCompany(db, orgId, orgSlug, open.id);
     if (!loaded) return null;
@@ -80,6 +81,8 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
     return { ...loaded, form, summary, person, deal, notes, authors: new Map(authors.map((a) => [a.id, a.createdById])) };
   });
   if (!data) return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={null} />;
+  const members = await membersP;
+  const names = new Map(members.map((m) => [m.id, m.name]));
   const { company } = data;
 
   // The soonest of the two, as one line with where it's done.
@@ -151,7 +154,10 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
             },
           ]
         : []),
-      { label: "Owner", value: ownerLabel(company, shell.roles, names) ?? "Nobody" },
+      // A Personal space has one owner: no Owner fact, field or intro to ask a member for.
+      ...(shell.access.personal
+        ? []
+        : [{ label: "Owner", value: ownerLabel(company, shell.roles, names) ?? "Nobody" }]),
     ],
     openDeal: firstOpen
       ? {
@@ -162,7 +168,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
         }
       : null,
     intro:
-      quiet && best
+      quiet && best && !shell.access.personal
         ? {
             quiet: quiet.name,
             best: { id: best.id, name: best.name },
@@ -184,7 +190,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
       stage: d.closedAt ? `${d.stage.name} ${shortDate(d.closedAt)}` : d.stage.name,
       amount: d.amountCents !== null ? formatMoney(d.amountCents, d.currency) : null,
     })),
-    form: data.form,
+    form: shell.access.personal ? data.form.filter((f) => f.key !== "owner") : data.form,
     history: presentHistory(data.history, "company", data.fields, names),
     notes: data.notes.map((n) => {
       const author = data.authors.get(n.id) ?? null;
@@ -199,7 +205,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
         about: about ? { id: about.id, label: about.label! } : null,
       };
     }),
-    members: shell.members,
+    members,
   };
-  return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} />;
+  return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} canEnrich={await crmCanEnrich(orgId)} />;
 }

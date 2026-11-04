@@ -32,7 +32,7 @@ import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
-import { linkRefOfHit, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
+import { linkRefOfHit, opensAsCard, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
 
 import { SidePeek } from "./side-peek";
 import type { SearchHit } from "@/lib/search/types";
@@ -205,8 +205,10 @@ export function LinkedPanel({
                   href={item.href}
                   onClick={(e) => {
                     // A plain click peeks beside the page; Ctrl, Cmd, Shift
-                    // or the middle button still open it as a page.
+                    // or the middle button still open it as a page. A CRM
+                    // record opens its card in one click, no peek first.
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    if (opensAsCard(item.kind)) return;
                     e.preventDefault();
                     setPeek(item);
                   }}

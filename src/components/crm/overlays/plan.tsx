@@ -24,6 +24,7 @@ import type { TxClient } from "@/server/db/context";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const DAY = 86_400_000;
 
@@ -92,15 +93,18 @@ async function repliesOf(
   return out;
 }
 
-/** An outreach plan's card (?open=plan:...): a sequence or a campaign, or a new one-email or split plan. */
+/** A plan's card (?open=plan:...): a follow-up series or a campaign, or a new one-email or split plan. */
 export async function PlanOverlay({ shell, orgSlug, open, searchParams }: OverlayProps<"plan">) {
   const orgId = shell.org.id;
   const viewerId = shell.user.id;
   const now = new Date();
-  const members = new Map(shell.members.map((m) => [m.id, m.name]));
+  const memberList = await crmMembers(orgId);
+  const members = new Map(memberList.map((m) => [m.id, m.name]));
   const relTypes = shell.access.settings?.relationshipTypes ?? [];
   const relationships = new Map(relTypes.map((t) => [t.id, t.label]));
   const me = members.get(viewerId) ?? "You";
+  // Splitting a list among members needs members (the server refuses it too).
+  if (open.type === "split" && shell.access.personal) return null;
 
   if (open.id === null) {
     const sender =
@@ -161,12 +165,19 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
         sequences={data.sequences}
         events={data.events}
         forms={data.forms}
-        members={shell.members}
+        members={memberList}
         userId={viewerId}
         orgSlug={orgSlug}
         sender={sender}
         canSend={shell.access.manager}
-        initialList={typeof searchParams.list === "string" ? searchParams.list : null}
+        initialList={
+          // People's "Email them" names its list ?to= (People's own ?list= is its filter).
+          typeof searchParams.to === "string"
+            ? searchParams.to
+            : typeof searchParams.list === "string"
+              ? searchParams.list
+              : null
+        }
       />
     );
   }
@@ -518,7 +529,7 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
       }),
       next: null,
     },
-    members: shell.members,
+    members: memberList,
     userId: viewerId,
   };
   return <PlanCard orgId={orgId} data={card} />;

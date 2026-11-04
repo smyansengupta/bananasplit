@@ -1,7 +1,12 @@
 import type { Role } from "@/generated/prisma/enums";
 import { can } from "@/lib/auth/permissions";
+import { crmTodayHref } from "@/lib/crm/href";
 import { inboxKey } from "@/lib/inbox/items";
 import { whenWord } from "@/lib/overview/format";
+import { crmOpenFor } from "@/server/crm/outside-links";
+import { followUpQueue } from "@/server/crm/outreach/queue";
+import type { RoleOwner } from "@/server/crm/owners";
+import { REVIEW_WHERE } from "@/server/crm/review";
 import type { TxClient } from "@/server/db/context";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
@@ -32,6 +37,8 @@ export interface WaitingInput {
   timeZone: string;
   orgTimeZone: string;
   now: Date;
+  /** The CRM is added: its org chart roles, for whose follow-ups are whose. */
+  crm?: { roles: ReadonlyMap<string, RoleOwner> } | null;
 }
 
 export async function loadWaitingOnYou(db: TxClient, input: WaitingInput): Promise<WaitingOnYou> {
@@ -177,6 +184,8 @@ export async function loadWaitingFacts(db: TxClient, input: WaitingInput): Promi
   const firstEvent = (ids: string[] | undefined) =>
     (ids ?? []).map((id) => eventById.get(id)).find(Boolean) ?? null;
 
+  const crm = input.crm ? await crmWaiting(db, input, input.crm.roles, live) : null;
+
   return {
     base,
     now,
@@ -226,5 +235,46 @@ export async function loadWaitingFacts(db: TxClient, input: WaitingInput): Promi
       when: whenWord(e.startsAt, e.allDay, { viewer: input.timeZone, org: input.orgTimeZone }, now),
       host: e.host ?? e.createdBy ?? null,
     })),
+    crm,
+  };
+}
+
+/**
+ * The CRM's part, as the Inbox counts it (src/server/crm/outreach/inbox.ts):
+ * the member's own people who replied and wait for an answer (each row
+ * snoozed or done in the Inbox stays out), and the suggestions assigned
+ * to them (the Inbox's one "crm:review" row). Null when the CRM isn't
+ * there for them or is still being set up.
+ */
+async function crmWaiting(
+  db: TxClient,
+  input: WaitingInput,
+  roles: ReadonlyMap<string, RoleOwner>,
+  live: (key: string) => boolean,
+): Promise<WaitingFacts["crm"]> {
+  const actor = { db, organizationId: input.orgId, userId: input.userId, role: input.role };
+  if (!(await crmOpenFor(actor))) return null;
+  const settings = await db.crmSettings.findUnique({
+    where: { organizationId: input.orgId },
+    select: { setupDoneAt: true },
+  });
+  if (!settings?.setupDoneAt) return null;
+  const queue = await followUpQueue(db, input.orgId, input.userId, roles, {
+    mine: true,
+    limit: 40,
+    now: input.now,
+  });
+  const replies = queue.filter((i) => i.reasons.some((r) => r.kind === "reply") && live(i.key)).length;
+  const approve = live("crm:review")
+    ? await db.crmSuggestion.count({
+        where: { organizationId: input.orgId, ...REVIEW_WHERE, status: "PENDING", assigneeId: input.userId },
+      })
+    : 0;
+  if (!replies && !approve) return null;
+  return {
+    replies,
+    repliesHref: crmTodayHref(input.orgSlug, "replies"),
+    approve,
+    approveHref: crmTodayHref(input.orgSlug, "approve"),
   };
 }

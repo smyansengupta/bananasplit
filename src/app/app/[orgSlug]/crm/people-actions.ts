@@ -13,12 +13,15 @@ import { readContact } from "@/server/crm/assist";
 import { createCompany, updateCompany } from "@/server/crm/companies";
 import { createDeal } from "@/server/crm/deals";
 import { likelyExisting, type MergePayload } from "@/server/crm/dedupe";
-import { mergeCompanies, mergePeople } from "@/server/crm/merge";
+import { mergeCompanies, mergePeople, undoMerge } from "@/server/crm/merge";
 import { viewIds } from "@/server/crm/outreach/lists";
-import { createPerson, updatePerson } from "@/server/crm/people";
+import { rolePositions } from "@/server/crm/owners";
+import { peopleListCounts } from "@/server/crm/people-view";
+import { listPipelines } from "@/server/crm/pipelines";
+import { createPerson, findCompanyByName, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
-import { crmAction, toResult } from "./run";
+import { checkInput, crmAction, toResult } from "./run";
 
 /**
  * The People tab's own actions (docs/features/crm.md, "Redesign"): a next
@@ -31,6 +34,15 @@ import { crmAction, toResult } from "./run";
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const ids = z.array(id).min(1).max(500);
 const DAY = 86_400_000;
+const LikelyDraft = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("person"),
+    name: z.string().max(200),
+    email: z.string().max(320).nullish(),
+    phone: z.string().max(40).nullish(),
+  }),
+  z.object({ kind: z.literal("company"), name: z.string().max(200), domain: z.string().max(253).nullish() }),
+]);
 /** Most people a hand-picked list holds. */
 const MAX_PICKED = 2000;
 
@@ -132,7 +144,7 @@ export const mergeRecordsAction = crmAction(
     if (kind === "company") {
       const r = await mergeCompanies(ctx, keep, drop);
       const kept = await ctx.db.crmCompany.findFirst({ where: { id: keep }, select: { name: true } });
-      return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0 };
+      return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0, undoId: r.undoId };
     }
     const r = await mergePeople(ctx, keep, drop);
     const input: Parameters<typeof updatePerson>[2] = {};
@@ -152,9 +164,12 @@ export const mergeRecordsAction = crmAction(
     }
     if (Object.keys(input).length) await updatePerson(ctx, keep, input, { source: "merge" });
     const kept = await ctx.db.crmPerson.findFirst({ where: { id: keep }, select: { name: true } });
-    return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0 };
+    return { name: kept?.name ?? "", moved: r.moved.timeline ?? 0, deals: r.moved.items ?? 0, undoId: r.undoId };
   },
 );
+
+/** Undo in the merge toast (or within 7 days): both records back as they were. */
+export const undoMergeAction = crmAction(async (ctx, _a, undoId: string) => undoMerge(ctx, id.parse(undoId)));
 
 /**
  * Keep both: the two aren't the same. A pending suggestion for the pair is
@@ -209,11 +224,9 @@ export const likelyExistingAction = crmAction(
       | { kind: "person"; name: string; email?: string | null; phone?: string | null }
       | { kind: "company"; name: string; domain?: string | null },
   ) => {
-    const clean = {
-      ...draft,
-      name: String(draft.name ?? "").slice(0, 200),
-    } as typeof draft;
-    return { match: await likelyExisting(ctx.db, ctx.organizationId, clean) };
+    const clean = LikelyDraft.safeParse(draft);
+    if (!clean.success) return { match: null };
+    return { match: await likelyExisting(ctx.db, ctx.organizationId, clean.data) };
   },
 );
 
@@ -281,18 +294,22 @@ export const newDealAction = crmAction(
       amount?: string | null;
       expectedOn?: string | null;
       companyId?: string | null;
+      /** A company typed by name: the one here by that name, or a new one. */
+      companyName?: string | null;
       people?: string[];
       ownerId?: string | null;
     },
   ) => {
     const people = input.people?.length ? ids.parse(input.people) : [];
+    const companyName = input.companyId ? "" : (input.companyName ?? "").trim().slice(0, 200);
+    const companyId = input.companyId || (companyName ? await findCompanyByName(ctx, companyName) : null);
     return createDeal(ctx, {
       pipelineId: id.parse(input.pipelineId),
       stageId: input.stageId ? id.parse(input.stageId) : undefined,
       title: input.title,
       amount: input.amount || null,
       expectedOn: input.expectedOn || null,
-      companyId: input.companyId || null,
+      companyId,
       primaryPersonId: people[0] ?? null,
       people,
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId || null } : {}),
@@ -343,3 +360,17 @@ export async function readSignatureAction(orgId: string, text: string): Promise<
     return toResult(error);
   }
 }
+
+const ListSearch = z.record(z.string().max(40), z.string().max(500));
+
+/**
+ * Lists' counts for People's Filters, asked for when it opens (the page
+ * counts only the open list): every list with the bar's Owner,
+ * Relationship, search and deal filters, as the member sees them.
+ */
+export const peopleListCountsAction = crmAction(async (ctx, _a, search: Record<string, string>) => {
+  const sp = checkInput(ListSearch, search);
+  const pipelines = await listPipelines(ctx.db, ctx.organizationId);
+  const roles = await rolePositions(ctx.organizationId);
+  return { counts: await peopleListCounts(ctx.db, ctx.organizationId, ctx.userId, roles, sp, pipelines) };
+});

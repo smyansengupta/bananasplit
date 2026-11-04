@@ -13,16 +13,21 @@ describe("the ?open= contract", () => {
     expect(parseOpen("power")).toEqual({ kind: "power" });
     expect(parseOpen("log")).toEqual({ kind: "log" });
     expect(parseOpen("ask")).toEqual({ kind: "ask" });
+    expect(parseOpen("calls")).toEqual({ kind: "calls" });
+    expect(parseOpen("text:t_1")).toEqual({ kind: "text", id: "t_1" });
     expect(parseOpen("new:person")).toEqual({ kind: "new", what: "person" });
     expect(parseOpen("new:deal")).toEqual({ kind: "new", what: "deal" });
     expect(parseOpen("goal")).toEqual({ kind: "goal", id: null });
     expect(parseOpen("goal:g1")).toEqual({ kind: "goal", id: "g1" });
     expect(parseOpen("merge:a1,b2")).toEqual({ kind: "merge", ids: ["a1", "b2"] });
+    expect(parseOpen("quote:q1")).toEqual({ kind: "quote", id: "q1" });
+    expect(formatOpen({ kind: "quote", id: "q1" })).toBe("quote:q1");
   });
 
-  it("merges exactly two different records", () => {
+  it("merges two different records, or asks for the second", () => {
     expect(parseOpen("merge")).toBeNull();
-    expect(parseOpen("merge:a1")).toBeNull();
+    expect(parseOpen("merge:a1")).toEqual({ kind: "merge", ids: ["a1"] });
+    expect(formatOpen({ kind: "merge", ids: ["a1"] })).toBe("merge:a1");
     expect(parseOpen("merge:a1,a1")).toBeNull();
     expect(parseOpen("merge:a1,b2,c3")).toBeNull();
     expect(parseOpen("merge:a1,<b>")).toBeNull();
@@ -37,6 +42,8 @@ describe("the ?open= contract", () => {
     expect(parseOpen("person:<script>")).toBeNull();
     expect(parseOpen("new:meeting")).toBeNull();
     expect(parseOpen("power:1")).toBeNull();
+    expect(parseOpen("calls:1")).toBeNull();
+    expect(parseOpen("text:")).toBeNull();
     expect(parseOpen("club:1")).toBeNull();
   });
 
@@ -52,6 +59,8 @@ describe("the ?open= contract", () => {
       "power",
       "log",
       "ask",
+      "calls",
+      "text:t1",
       "new:company",
       "goal",
       "goal:g2",
@@ -95,7 +104,7 @@ describe("the ?open= contract", () => {
     expect(crmRecordHref("o", "company", "c1")).toBe(
       "/app/o/crm/people?view=companies&open=company%3Ac1",
     );
-    expect(crmRecordHref("o", "deal", "d1")).toBe("/app/o/crm/deals?open=deal%3Ad1");
+    expect(crmRecordHref("o", "deal", "d1")).toBe("/app/o/crm/people?view=board&open=deal%3Ad1");
     expect(
       parseOpen(
         new URL(`https://x${crmRecordHref("o", "company", "c1")}`).searchParams.get("open"),
@@ -105,19 +114,18 @@ describe("the ?open= contract", () => {
 });
 
 describe("pages that open cards in place", () => {
-  it("are the tabs, companies and a pipeline's board", () => {
-    for (const p of [
-      "/app/o/crm",
-      "/app/o/crm/people",
-      "/app/o/crm/companies",
-      "/app/o/crm/deals",
-      "/app/o/crm/outreach",
-      "/app/o/crm/pipelines/p1",
-    ]) {
+  it("are the tabs and a settings section", () => {
+    for (const p of ["/app/o/crm", "/app/o/crm/people", "/app/o/crm/settings/automations"]) {
       expect(rendersOverlays(p)).toBe(true);
     }
     for (const p of [
       "/app/o/crm/settings",
+      "/app/o/crm/settings/automations/w1",
+      // Only redirect now.
+      "/app/o/crm/companies",
+      "/app/o/crm/pipelines/p1",
+      "/app/o/crm/deals",
+      "/app/o/crm/outreach",
       "/app/o/crm/outreach/sequences",
       "/app/o/crm/campaigns/c1",
       "/app/o/inbox",

@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { addressList, cleanMessageId, ourAddresses, type InboundMessage } from "@/lib/crm/outreach/inbound";
+import { addressList, bareAddress, cleanMessageId, ourAddresses, singleSender, type InboundMessage } from "@/lib/crm/outreach/inbound";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withSystemOrgTx } from "@/server/db/context";
 import { ingestEmail, type IngestResult } from "@/server/crm/outreach/inbound";
@@ -30,7 +30,33 @@ const body = z.object({
   headers: z.record(z.string().max(100), z.string().max(20_000)).default({}),
   text: z.string().max(1_000_000).default(""),
   html: z.string().max(1_000_000).nullish(),
+  /** The Worker's reading of SPF, DKIM and DMARC for the From address (workers/crm-inbound, senderAuth). */
+  auth: z
+    .object({
+      verdict: z.enum(["pass", "fail", "none"]),
+      spf: z.string().max(40).nullish(),
+      dkim: z.string().max(40).nullish(),
+      dmarc: z.string().max(40).nullish(),
+      fromDomain: z.string().max(300).nullish(),
+    })
+    .nullish(),
 });
+
+function verifiedSender(
+  from: string,
+  auth: { verdict: string; dmarc?: string | null; fromDomain?: string | null } | null | undefined,
+): boolean {
+  if (auth?.verdict !== "pass") return false;
+  // A DMARC verdict other than pass (or none) is a fail, whatever else passed.
+  if (auth.dmarc && !["pass", "none"].includes(auth.dmarc.toLowerCase())) return false;
+  const address = singleSender(from);
+  const domain = address?.split("@").pop()?.replace(/\.$/, "") ?? null;
+  return Boolean(domain && auth.fromDomain && domain === auth.fromDomain.toLowerCase());
+}
+
+/** Most messages one reply address, or one sender, may bring in an hour; past it they're dropped. */
+const PER_TOKEN_HOUR = 20;
+const PER_SENDER_HOUR = 60;
 
 function authorized(request: Request): boolean {
   const secret = process.env.CRM_INBOUND_SECRET;
@@ -76,12 +102,25 @@ export async function POST(request: Request) {
     html: parsed.html ?? null,
     date: dateHeader && !Number.isNaN(dateHeader.getTime()) ? dateHeader : null,
     headers: h,
+    // The Worker's pass counts only for the one address this From line
+    // names, and only when it checked that same domain: a From line naming
+    // two addresses, or a verdict about another domain, is unverified.
+    senderVerified: verifiedSender(h["from"] ?? parsed.from, parsed.auth),
   };
+  // One sender (verified or not) can't flood the CRM: dropped, not bounced.
+  const sender = bareAddress(message.from) ?? parsed.from.toLowerCase().slice(0, 300);
+  const bySender = await checkRateLimit(rateLimitKey("crm-inbound-from", sender), PER_SENDER_HOUR, 3600);
+  if (!bySender.allowed) return NextResponse.json({ ok: true, results: ["rate-limited"] });
   const ours = ourAddresses([...(message.envelopeTo ?? []), ...message.to, ...message.cc], domain);
   const results: IngestResult[] = [];
   for (const token of [...new Set(ours.bcc)].slice(0, 5)) {
     const t = await publicTarget("bcc", token);
     if (!t) continue;
+    const byToken = await checkRateLimit(rateLimitKey("crm-inbound-token", token), PER_SENDER_HOUR, 3600);
+    if (!byToken.allowed) {
+      results.push({ status: "ignored", reason: "too many messages to this address" });
+      continue;
+    }
     const settings = await withSystemOrgTx(t.organizationId, ({ db }) =>
       db.crmMemberSettings.findFirst({ where: { id: t.id, organizationId: t.organizationId }, select: { userId: true } }),
     );
@@ -90,6 +129,11 @@ export async function POST(request: Request) {
   }
   for (const token of [...new Set(ours.reply)].slice(0, 5)) {
     if (!/^[a-f0-9]{24}$/.test(token)) continue;
+    const byToken = await checkRateLimit(rateLimitKey("crm-inbound-token", token), PER_TOKEN_HOUR, 3600);
+    if (!byToken.allowed) {
+      results.push({ status: "ignored", reason: "too many messages to this address" });
+      continue;
+    }
     const t = await publicTarget("track", token);
     if (!t) continue;
     results.push(await ingestEmail({ kind: "reply", organizationId: t.organizationId, messageId: t.id }, message));

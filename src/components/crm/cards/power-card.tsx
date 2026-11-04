@@ -55,6 +55,7 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
   const { close } = useCrmOpen();
   const [i, setI] = useState(0);
   const [sent, setSent] = useState(0);
+  const [called, setCalled] = useState(0);
   const [skipped, setSkipped] = useState(0);
   const [busy, setBusy] = useState(false);
   const n = people.length;
@@ -70,8 +71,9 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
   }
   const canEmail = Boolean(p?.email);
   const first = p ? (p.name.split(" ")[0] ?? p.name) : "";
-  const next = (kind: "sent" | "skip" | "snooze") => {
+  const next = (kind: "sent" | "called" | "skip" | "snooze") => {
     if (kind === "sent") setSent((s) => s + 1);
+    if (kind === "called") setCalled((s) => s + 1);
     if (kind === "skip") setSkipped((s) => s + 1);
     setI((x) => x + 1);
   };
@@ -79,8 +81,11 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
   async function send() {
     if (!p || busy) return;
     if (!canEmail) {
-      if (p.phone) window.location.href = `tel:${p.phone}`;
-      next("sent");
+      // A call is a call, not a send; no email and no number is a skip.
+      if (p.phone) {
+        window.location.href = `tel:${p.phone}`;
+        next("called");
+      } else next("skip");
       return;
     }
     if (!subject.trim() || !body.trim()) {
@@ -99,7 +104,8 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
         body: body.trim(),
         draftId: who.draft?.id ?? null,
         replyToMessageId: who.reply?.messageId ?? null,
-        sendAt: new Date(Date.now() + HOLD_MS + 2000).toISOString(),
+        // Held on the server's clock (a wrong clock here can't skip Undo).
+        holdSeconds: HOLD_MS / 1000 + 2,
         confirmConflict: true,
       }),
     );
@@ -181,10 +187,13 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
                 Snooze a week
                 <Key k="S" />
               </Button>
-              <Button disabled={busy} onClick={() => void send()}>
-                {canEmail ? "Send" : p.phone ? `Call ${first}` : "Done"}
-                <Key k="E" />
-              </Button>
+              {/* No email and no number: nothing to send, so Skip is the way on. */}
+              {(canEmail || p.phone) && (
+                <Button disabled={busy} onClick={() => void send()}>
+                  {canEmail ? "Send" : `Call ${first}`}
+                  <Key k="E" />
+                </Button>
+              )}
             </div>
           </div>
         ) : undefined
@@ -211,7 +220,8 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
             <p className="display-title text-[32px]">That&apos;s everyone.</p>
             <p className="text-muted-foreground text-[15px]">
-              {sent} sent, {skipped} skipped. Snoozed people come back on the day you chose.
+              {sent} sent,{called > 0 ? ` ${called} called,` : ""} {skipped} skipped. Snoozed
+              people come back on the day you chose.
             </p>
             <div className="flex gap-2.5 pt-2">
               <Button
@@ -227,6 +237,7 @@ export function PowerCard({ orgId, people }: { orgId: string; people: PowerPerso
                 onClick={() => {
                   setI(0);
                   setSent(0);
+                  setCalled(0);
                   setSkipped(0);
                   setShownFor(null);
                 }}

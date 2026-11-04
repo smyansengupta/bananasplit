@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
-/** Campaigns are plans on Outreach now; old links land there. */
+import { outreachRedirectHref } from "@/lib/crm/redirects";
+
+/** Split lists and group emails are listed in CRM settings > Automations now. */
 export default async function CampaignsPage({ params }: PageProps<"/app/[orgSlug]/crm/campaigns">) {
   const { orgSlug } = await params;
-  redirect(`/app/${orgSlug}/crm/outreach`);
+  redirect(outreachRedirectHref(orgSlug, "campaigns"));
 }

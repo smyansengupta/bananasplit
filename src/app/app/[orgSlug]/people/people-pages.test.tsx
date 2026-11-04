@@ -17,6 +17,8 @@ const { getOrgContextBySlugMock, getPersonSheetMock, loadDirectoryMock } = vi.ho
   loadDirectoryMock: vi.fn(),
 }));
 
+// Not a CRM person here (src/server/crm/outside-links.ts has its own tests).
+vi.mock("@/server/crm/outside-links", () => ({ crmPersonForMember: async () => null }));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: getOrgContextBySlugMock,
   // The roster extras (emails, invites, the join code) a member doesn't get.

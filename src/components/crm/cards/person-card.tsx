@@ -1,10 +1,14 @@
 "use client";
 
-import { Phone } from "@/components/icons";
+import { CircleMinus, Phone, Repeat } from "@/components/icons";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { stopEnrollmentAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { BiggestIssue, type IssueView } from "@/components/crm/card/biggest-issue";
+import { CardPanel, useCardPanel } from "@/components/crm/card/card-panel";
+import { useFindDetails } from "@/components/crm/card/find-details";
 import { CrmAvatar, CrmCard, CrmCardButton } from "@/components/crm/card/crm-card";
 import { Composer, type ComposerSeed } from "@/components/crm/card/composer";
 import { NextStepBar, type NextStep } from "@/components/crm/card/next-step";
@@ -12,15 +16,19 @@ import { NotesList, type NoteItem } from "@/components/crm/card/notes";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
+import { SERIES_ABOUT, SERIES_NONE, SeriesPicker } from "@/components/crm/people/series-dialog";
 import { Timeline, type TimelineItem } from "@/components/crm/timeline";
 import { EmptyState } from "@/components/empty-state";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toaster";
+import { runAction } from "@/lib/run-action";
 import type { EditField } from "@/lib/crm/record-form";
 import { cn } from "@/lib/utils";
 
 /**
  * A person, as a card over whatever CRM page you're on (?open=person:<id>):
  * who they are in the header, with Call when there's a number and "…" for
- * history, merge and the trash; Overview (the next step, their biggest
+ * Add to a follow-up series, history, merge and the trash; Overview (the next step, their biggest
  * issue, the brief, the latest thing and what it needs, money owed),
  * Timeline, Notes, Deals and Details (click a value to change it); one
  * composer at the foot (Email, Text, Note, Task).
@@ -74,7 +82,14 @@ export interface PersonCardData {
   };
   conflict: string | null;
   templates: { id: string; name: string; subject: string | null; body: string }[];
-  booking: string | null;
+  /** Booking links for the "/" menu: yours first, then the organization's. */
+  booking: { label: string; url: string }[];
+  /** Follow-up series that are on (Add to a follow-up series). */
+  series: { id: string; name: string }[];
+  /** The series they're in now; `canStop` when the viewer may take them out. */
+  enrollments: { id: string; name: string; canStop: boolean }[];
+  /** A data connector or AI connection is set up: Find their details is offered. */
+  canEnrich: boolean;
 }
 
 export function PersonCard({
@@ -88,7 +103,22 @@ export function PersonCard({
 }) {
   const { setOpen, close } = useCrmOpen();
   const [seed, setSeed] = useState<ComposerSeed | null>(null);
+  const router = useRouter();
+  // Add to a follow-up series: a panel over this card, never a second dialog.
+  const {
+    anchor: seriesAnchor,
+    host: seriesHost,
+    back: seriesBack,
+    show: seriesShow,
+    hide: seriesHide,
+  } = useCardPanel();
   const memberList = data ? Object.entries(data.members).map(([id, name]) => ({ id, name })) : [];
+  const details = useFindDetails({
+    orgId,
+    kind: "person",
+    id: data?.id ?? "",
+    name: data?.name ?? "",
+  });
 
   if (!data) {
     return (
@@ -133,8 +163,57 @@ export function PersonCard({
             deleted={data.deleted}
             history={data.history}
             menu
+            menuItems={
+              <>
+                {data.canEnrich && !data.deleted && details.item}
+                <DropdownMenuItem onSelect={() => seriesShow()}>
+                  <Repeat className="size-4" aria-hidden="true" />
+                  Add to a follow-up series
+                </DropdownMenuItem>
+                {data.enrollments
+                  .filter((e) => e.canStop)
+                  .map((e) => (
+                    <DropdownMenuItem
+                      key={e.id}
+                      onSelect={async () => {
+                        const r = await runAction(() => stopEnrollmentAction(orgId, e.id));
+                        if (!r) return;
+                        if (!r.ok) return toast({ title: r.error, tone: "error" });
+                        toast({ title: `${first} is out of ${e.name}.` });
+                        router.refresh();
+                      }}
+                    >
+                      <CircleMinus className="size-4" aria-hidden="true" />
+                      Take out of {e.name}
+                    </DropdownMenuItem>
+                  ))}
+              </>
+            }
             onTrashed={close}
           />
+          {details.panel}
+          <span ref={seriesAnchor} hidden />
+          {seriesHost && (
+            <CardPanel
+              host={seriesHost}
+              title="Add to a follow-up series"
+              subtitle={data.series.length === 0 ? SERIES_NONE : SERIES_ABOUT}
+              label={`Add ${data.name} to a follow-up series`}
+              onClose={seriesHide}
+              returnFocus={seriesBack}
+            >
+              <div className="px-6 py-5 max-sm:px-4">
+                <SeriesPicker
+                  orgId={orgId}
+                  personIds={[data.id]}
+                  series={data.series}
+                  settingsHref={`/app/${orgSlug}/crm/settings/automations`}
+                  onClose={seriesHide}
+                  onDone={() => router.refresh()}
+                />
+              </div>
+            </CardPanel>
+          )}
         </>
       }
       tabs={[
@@ -328,6 +407,11 @@ export function PersonCard({
             {!data.brief && !data.latest && !data.money && !data.issue && (
               <p className="text-muted-foreground text-sm">
                 Nothing with {first} yet. Write below, or log a call or a note.
+              </p>
+            )}
+            {data.enrollments.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                In the follow-up series {data.enrollments.map((e) => e.name).join(" and ")}.
               </p>
             )}
             {data.owner && <p className="text-muted-foreground text-xs">Owner: {data.owner}</p>}

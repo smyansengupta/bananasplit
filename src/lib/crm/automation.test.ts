@@ -218,7 +218,7 @@ describe("workflow helpers", () => {
     });
     expect(parsed.conditions).toHaveLength(1);
     expect(parsed.actions).toHaveLength(1);
-    expect(describeWorkflow(parsed)).toBe("When an item is stuck: notify someone");
+    expect(describeWorkflow(parsed)).toBe("When a deal is stuck: notify someone");
     expect(readWorkflow({ trigger: { type: "nope" }, conditions: null, actions: null }).trigger).toBeNull();
   });
 
@@ -377,7 +377,6 @@ describe("forecasts", () => {
       bestCase: { amount: 0, count: 0 },
       pipeline: { amount: 0, count: 0 },
       trend: null,
-      call: null,
       items: [
         { id: "a", c: "PIPELINE", a: 100, s: "" },
         { id: "b", c: "COMMIT", a: 50, s: "" },

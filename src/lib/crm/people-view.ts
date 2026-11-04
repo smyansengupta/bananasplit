@@ -1,16 +1,67 @@
 /**
- * The People tab's pure parts (docs/features/crm.md, "Redesign"): the
- * lists in Filters, the one next step a row shows (with its ambient
- * button and the reason beside it), the relationship pill's colour, what
- * a merge keeps from each side, and reading a pasted email signature.
+ * The People tab's pure parts (docs/features/crm.md, "Redesign" and "One
+ * list"): its views, the deal filters, the lists in Filters, the deal a
+ * row shows, the one next step a row shows (with its ambient button and
+ * the reason beside it), the relationship pill's colour, what a merge
+ * keeps from each side, and reading a pasted email signature.
  * Client-safe; the server decides the inputs.
  */
 
 import type { TagColor } from "@/lib/tag-colors";
 
+import { parseDealsFilters, type DealsFilters } from "./deals-tab";
 import { COLD_AFTER_DAYS } from "./strength";
+import { taskStepText, type TaskStep } from "./task-steps";
 
 const DAY = 86_400_000;
+
+// ---------------------------------------------------------------- views and deal filters
+
+/** People's view switch: everyone, every company, or their deals as a board by stage (`?view=`). */
+export type PeopleView = "people" | "companies" | "board";
+
+export function readPeopleView(raw: string | readonly string[] | null | undefined): PeopleView {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v === "companies" ? "companies" : v === "board" ? "board" : "people";
+}
+
+type Search = Readonly<Record<string, string | readonly string[] | undefined>>;
+
+/**
+ * People's deal filters (Pipeline, Stage, Deal type, Open/Won/Lost) and
+ * whether any is on. Picking a stage alone shows that stage whatever its
+ * kind; otherwise a filter means open deals unless Won, Lost or all is
+ * picked. The board always shows deals (open ones by default); a table
+ * narrows to those with a matching deal only when a filter is on.
+ */
+export function peopleDealFilters(sp: Search): { filters: DealsFilters; on: boolean } {
+  const base = parseDealsFilters(sp);
+  const picked = typeof sp.show === "string" && ["open", "won", "lost", "all"].includes(sp.show);
+  const filters: DealsFilters = { ...base, show: picked ? base.show : base.stage ? "all" : "open" };
+  return { filters, on: Boolean(base.pipeline || base.stage || base.type || picked) };
+}
+
+/** What "$X in open deals" says for what's shown. */
+export function dealsTotalLabel(show: DealsFilters["show"]): string {
+  if (show === "won") return "won";
+  if (show === "lost") return "lost";
+  if (show === "all") return "in deals";
+  return "in open deals";
+}
+
+/**
+ * The deal a row shows in Stage and Deal value: the most advanced of
+ * theirs (furthest stage, then the biggest), with how many more they have.
+ */
+export function rowDeal<D extends { stageOrder: number; amountCents: number | null }>(
+  deals: readonly D[],
+): { deal: D; more: number } | null {
+  if (deals.length === 0) return null;
+  const best = [...deals].sort(
+    (a, b) => b.stageOrder - a.stageOrder || (b.amountCents ?? 0) - (a.amountCents ?? 0),
+  )[0]!;
+  return { deal: best, more: deals.length - 1 };
+}
 
 // ---------------------------------------------------------------- lists
 
@@ -92,13 +143,30 @@ export function relationshipTone(color: string | null | undefined): TagColor | n
 /** The ambient button tones (src/components/ambient/ambient-button.tsx). */
 export type AmbientTone = "solid" | "outline" | "spark";
 
-export type RowActionKind = "merge" | "reply" | "followup" | "checkin" | "add";
+export type RowActionKind = "merge" | "reply" | "quote" | "followup" | "deal-step" | "checkin" | "add";
 
 export interface RowNext {
   /** The one ambient button, with its reason (shown beside it). */
-  action: { kind: RowActionKind; label: string; tone: AmbientTone; reason: string } | null;
+  action: {
+    kind: RowActionKind;
+    label: string;
+    tone: AmbientTone;
+    reason: string;
+    /** The deal the button opens (quote, deal-step). */
+    dealId?: string;
+  } | null;
   /** The next step in words when there's nothing to press. */
   text: string | null;
+}
+
+/** The open deal a row shows, for the next step: its quote and its own next step. */
+export interface RowDealInput {
+  id: string;
+  title: string;
+  /** Its latest quote's status, when that's one waiting to go (again). */
+  quote: "DRAFT" | "DECLINED" | "EXPIRED" | null;
+  nextStep: string | null;
+  nextStepAt: Date | null;
 }
 
 export interface RowNextInput {
@@ -109,6 +177,10 @@ export interface RowNextInput {
   duplicate?: { name: string; reason: string | null } | null;
   /** They wrote and nobody has answered. */
   wroteAt?: Date | null;
+  /** Their open deal (the most advanced), if they have one. */
+  deal?: RowDealInput | null;
+  /** An open task linked to them: it is their next step (src/lib/crm/task-steps.ts). */
+  task?: TaskStep | null;
 }
 
 function shortDate(d: Date): string {
@@ -129,9 +201,12 @@ export function duplicateReason(reason: string | null, other: string): string {
 
 /**
  * The one thing a People row offers, most pressing first: merge a likely
- * duplicate, answer someone who wrote, a follow-up that's due, someone
- * going cold, or a next step when someone you've talked to has none.
- * Otherwise the next step in words, and no button.
+ * duplicate, answer someone who wrote, send their deal's quote, a
+ * follow-up that's due, their deal's next step when it's late or missing,
+ * someone going cold, or a next step when someone you've talked to has
+ * none. Otherwise the next step in words (theirs, else their deal's), and
+ * no button. An open linked task is a next step (its due date is when): it
+ * shows in words, and nobody with one is "going cold" or missing a step.
  */
 export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
   if (input.duplicate) {
@@ -161,6 +236,19 @@ export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
       text: null,
     };
   }
+  const deal = input.deal ?? null;
+  if (deal?.quote) {
+    return {
+      action: {
+        kind: "quote",
+        label: "Send the quote",
+        tone: "solid",
+        reason: deal.quote === "DRAFT" ? "Quote drafted, not sent" : `The quote was ${deal.quote.toLowerCase()}`,
+        dealId: deal.id,
+      },
+      text: null,
+    };
+  }
   if (input.nextFollowUpAt && !later) {
     const late = daysBetween(input.nextFollowUpAt, now);
     return {
@@ -173,20 +261,62 @@ export function rowNext(input: RowNextInput, now: Date = new Date()): RowNext {
       text: null,
     };
   }
+  const step = deal?.nextStep?.trim() || null;
+  if (deal && step && deal.nextStepAt) {
+    const late = daysBetween(deal.nextStepAt, endOfDay(now));
+    if (deal.nextStepAt < startOfDay(now)) {
+      return {
+        action: {
+          kind: "deal-step",
+          label: "Follow up",
+          tone: "solid",
+          reason: `${deal.title}: ${late <= 1 ? "a day" : `${late} days`} late`,
+          dealId: deal.id,
+        },
+        text: null,
+      };
+    }
+  }
+  if (deal && !step) {
+    return {
+      action: {
+        kind: "deal-step",
+        label: "Add a next step",
+        tone: "outline",
+        reason: `${deal.title} has no next step`,
+        dealId: deal.id,
+      },
+      text: null,
+    };
+  }
+  if (input.task) {
+    const laterKey = later ? later.toISOString().slice(0, 10) : null;
+    // A later follow-up that comes before the task is the nearer step.
+    if (!laterKey || (input.task.dueKey !== null && input.task.dueKey <= laterKey)) {
+      return { action: null, text: taskStepText(input.task, now.toISOString().slice(0, 10)) };
+    }
+  }
   const quiet = input.lastContactedAt ? daysBetween(input.lastContactedAt, now) : null;
-  if (!later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
+  if (!input.task && !later && quiet !== null && quiet >= COLD_AFTER_DAYS) {
     return {
       action: { kind: "checkin", label: "Check in", tone: "spark", reason: `${quiet} days quiet` },
       text: null,
     };
   }
   if (later) return { action: null, text: `Follow up, ${shortDate(later)}` };
+  if (deal && step) return { action: null, text: deal.nextStepAt ? `${step}, ${shortDate(deal.nextStepAt)}` : step };
   // Nobody has talked to them yet: nothing in progress to keep going.
   if (!input.lastContactedAt) return { action: null, text: "None yet" };
   return {
     action: { kind: "add", label: "Add a next step", tone: "outline", reason: "No next step" },
     text: null,
   };
+}
+
+function startOfDay(now: Date): Date {
+  const d = new Date(now);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 }
 
 function endOfDay(now: Date): Date {
@@ -337,4 +467,22 @@ export function likeliest<T extends { id: string }>(
     }
   }
   return best;
+}
+
+// ---------------------------------------------------------------- the New card's company
+
+/**
+ * The company a new person or deal saves with. One picked from the list
+ * (or filled from a signature) wins; otherwise whatever was typed in the
+ * box counts too, so "Acme" typed without clicking "Add" is never dropped.
+ * A name is matched to a company already here (ignoring case) on the
+ * server, or made.
+ */
+export function companyToSave(
+  picked: { id: string | null; label: string } | null,
+  typed: string,
+): { companyId: string | null; companyName: string | null } {
+  if (picked?.id) return { companyId: picked.id, companyName: null };
+  const name = (picked?.label ?? typed).trim().slice(0, 200);
+  return { companyId: null, companyName: name || null };
 }

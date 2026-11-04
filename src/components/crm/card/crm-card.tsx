@@ -10,10 +10,15 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PHONE_FULL_SCREEN } from "@/components/ui/form-dialog";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
-import { useCrmOpen } from "./use-crm-open";
+import { useCrmOpen, usePendingOpen } from "./use-crm-open";
+
+/** The card's frame: Tasks' task dialog at 680px (CrmPendingCard draws the same one while loading). */
+export const CRM_CARD_FRAME =
+  "bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]";
 
 /**
  * The one card everything in the CRM opens as (a person, company, deal,
@@ -80,31 +85,52 @@ export function CrmCard({
   bodyClassName?: string;
   children: ReactNode | ((tab: string) => ReactNode);
 }) {
-  const { close } = useCrmOpen();
+  const { close, raw } = useCrmOpen();
+  // Closing hides the card on the click; the URL catches up after. Another
+  // card on its way (CrmPendingCard) takes this one's place too.
+  const [closing, setClosing] = useState(false);
+  const pending = usePendingOpen();
   const [own, setOwn] = useState(defaultTab ?? tabs?.[0]?.value ?? "");
   const current = tab ?? own;
   const pick = (value: string) => {
     if (tab === undefined) setOwn(value);
     onTab?.(value);
   };
-  const shut = onClose ?? close;
+  const shut = () => {
+    setClosing(true);
+    (onClose ?? close)();
+  };
+  const shown = !closing && !(pending !== null && pending !== raw);
   const plainTitle = typeof title === "string" ? title : "Details";
   return (
-    <Dialog open onOpenChange={(o) => !o && shut()}>
+    <Dialog open={shown} onOpenChange={(o) => !o && shut()}>
       <DialogContent
         showCloseButton={false}
-        className="bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]"
+        className={cn(
+          CRM_CARD_FRAME,
+          // On a phone the card is the whole screen, rounded at the top.
+          PHONE_FULL_SCREEN,
+        )}
+        // A panel over the card (History, a follow-up series) takes Escape: it closes, the card stays.
+        onEscapeKeyDown={(e) => {
+          if (document.querySelector("[data-card-panel]")) e.preventDefault();
+        }}
         // A toast's Undo sits outside the card: clicking it mustn't close the card.
         onInteractOutside={(e) => {
           if (e.target instanceof Element && e.target.closest("[data-toaster]")) e.preventDefault();
         }}
       >
         <DialogDescription className="sr-only">{description ?? plainTitle}</DialogDescription>
-        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b ps-6 pe-4 pt-4 pb-3.5">
+        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b ps-6 pe-4 pt-4 pb-3.5 max-sm:ps-4">
           <DialogHead
-            leading={avatar}
+            // At 375px the avatar and the title give way to the round buttons.
+            leading={
+              avatar && (
+                <div className="max-sm:[&>span]:!size-10 max-sm:[&>span]:!text-[14px]">{avatar}</div>
+              )
+            }
             title={title}
-            titleClassName="display-title truncate text-[26px] leading-tight"
+            titleClassName="display-title truncate text-[26px] leading-tight max-sm:text-[22px]"
             subtitle={subtitle && <div className="truncate">{subtitle}</div>}
             onClose={shut}
             actions={
@@ -139,18 +165,22 @@ export function CrmCard({
                 // The sections, then anything beside them (a deal's stages),
                 // like Tasks' view switch with Mine / My team / Everyone next
                 // to it; on a narrow card the second group wraps under.
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                   {tabs && tabs.length > 0 && (
-                    <Segmented
-                      label={`${plainTitle}: sections`}
-                      value={current}
-                      onSelect={pick}
-                      options={tabs.map((t) => ({
-                        value: t.value,
-                        label: t.label,
-                        count: t.count,
-                      }))}
-                    />
+                    // On a phone the pills stay inside the card: tighter, and
+                    // they scroll sideways within it if they still don't fit.
+                    <div className="max-w-full min-w-0 [scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden max-sm:[&_button]:px-2.5">
+                      <Segmented
+                        label={`${plainTitle}: sections`}
+                        value={current}
+                        onSelect={pick}
+                        options={tabs.map((t) => ({
+                          value: t.value,
+                          label: t.label,
+                          count: t.count,
+                        }))}
+                      />
+                    </div>
                   )}
                   {tabsAside}
                 </div>
@@ -158,11 +188,11 @@ export function CrmCard({
             </div>
           )}
         </header>
-        <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", bodyClassName)}>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5 max-sm:px-4", bodyClassName)}>
           {typeof children === "function" ? children(current) : children}
         </div>
         {foot && (
-          <footer className="border-border/60 shrink-0 border-t px-6 pt-3.5 pb-5">{foot}</footer>
+          <footer className="border-border/60 shrink-0 border-t px-6 pt-3.5 pb-5 max-sm:px-4">{foot}</footer>
         )}
       </DialogContent>
     </Dialog>

@@ -17,6 +17,8 @@ import { CrmSettingsNav } from "./settings-nav";
  * section list on the left and the open section on the right, its title
  * and line on top and its SettingsCards under them. A page under a section
  * (one automation, one booking page) passes `back` and its own title.
+ * `overlays` is what's open over it (CrmOverlays, ?open=): a follow-up
+ * series' card opens over Automations, and any card a link sets.
  */
 export function CrmSettingsFrame({
   orgSlug,
@@ -25,6 +27,7 @@ export function CrmSettingsFrame({
   title,
   description,
   back,
+  overlays,
   children,
 }: {
   orgSlug: string;
@@ -35,6 +38,8 @@ export function CrmSettingsFrame({
   description?: ReactNode;
   /** A page under the section: the link back to it. */
   back?: { href: string; label: string };
+  /** The card open over the page (CrmOverlays), rendered once after it. */
+  overlays?: ReactNode;
   children: ReactNode;
 }) {
   const items = visibleSections(viewer).map((s) => ({
@@ -47,7 +52,6 @@ export function CrmSettingsFrame({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        settings={viewer.manager || viewer.admin}
         title="CRM settings"
         create={false}
       />
@@ -66,6 +70,7 @@ export function CrmSettingsFrame({
           {children}
         </div>
       </div>
+      {overlays}
     </div>
   );
 }

@@ -44,7 +44,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { signalsFor } from "@/server/crm/signals";
-import { crmRecordHref } from "@/lib/crm/href";
+import { crmRecordHref, crmTodayHref } from "@/lib/crm/href";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadElsewhereUpdates } from "@/server/inbox/elsewhere";
 import { crmInboxItems, crmReviewRow } from "@/server/crm/outreach/inbox";
@@ -313,7 +313,7 @@ export default async function InboxPage({
       href:
         s.targetKind && s.targetId
           ? crmRecordHref(orgSlug, s.targetKind, s.targetId)
-          : `${base}/crm`,
+          : crmTodayHref(orgSlug),
       peek: null,
     })),
   );
@@ -513,6 +513,7 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   EVENT_INVITE: "meeting",
   EVENT_UPDATED: "meeting",
   EVENT_CANCELLED: "meeting",
+  MEETING_BOOKED: "meeting",
   SECURITY_ALERT: "alert",
   INTEGRATION_ERROR: "alert",
   // The CRM's lines (src/server/crm/inbox-notify.ts) share one chip.

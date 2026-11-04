@@ -2,13 +2,14 @@
 
 import { PageTabs } from "@/components/ui/page-tabs";
 
-export type MeetingsView = "upcoming" | "find";
+export type MeetingsView = "upcoming" | "find" | "booking";
 
 /**
  * Meetings' views, the same switch bar every section uses (Tasks' layouts,
  * Finance's pages): the meetings themselves (coming up, with what's past in
- * a list right under them) and Find a time, which lives under Meetings now
- * (it is how a meeting gets its date), so its pages show this bar too.
+ * a list right under them), Find a time, which lives under Meetings now
+ * (it is how a meeting gets its date), so its pages show this bar too, and
+ * Booking links (your own link and the organization's; docs/features/booking.md).
  */
 export function MeetingsTabs({
   orgSlug,
@@ -35,6 +36,12 @@ export function MeetingsTabs({
           label: "Find a time",
           count: counts?.find,
           active: current === "find",
+        },
+        {
+          href: `${base}/meetings/booking`,
+          label: "Booking links",
+          count: counts?.booking,
+          active: current === "booking",
         },
       ]}
     />

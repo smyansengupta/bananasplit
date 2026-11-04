@@ -66,6 +66,18 @@ Workers on the free plan cover it.
 - In the app's logs, `/api/crm/inbound` answers 401 when the two secrets
   don't match and 503 when `CRM_INBOUND_DOMAIN` isn't set.
 
+## Who really sent it
+
+The Worker reads the SPF, DKIM and DMARC results Cloudflare records in the
+message's `Authentication-Results` (or `ARC-Authentication-Results`)
+header, only under Cloudflare's own name (`AUTHSERV_ID` in
+`wrangler.toml`, `mx.cloudflare.net` by default) and only the topmost one,
+and sends the app a verdict: `pass`, `fail` or `none`. The app acts on a
+message as coming from its From address only on `pass`. After deploying,
+send yourself a reply and check with `npx wrangler tail` that the verdict
+is `pass`: if Cloudflare's results don't reach the Worker, every message
+reads as `none` and the app ignores replies.
+
 ## How it behaves
 
 - The app answers 200 for mail it takes or deliberately ignores (nobody

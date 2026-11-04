@@ -1,5 +1,6 @@
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import { AmbientActions } from "@/components/ambient/ambient-button";
+import { crmPeopleHref } from "@/lib/crm/href";
 import { importsToFix, recentImports } from "@/server/crm/import";
 import { withOrgTx } from "@/server/db/context";
 
@@ -68,7 +69,7 @@ export async function ImportSection({ shell, orgSlug }: SectionProps) {
                   label: "Review them",
                   tone: "solid",
                   reason: "Same email, phone or name",
-                  href: `/app/${orgSlug}/crm/review`,
+                  href: crmPeopleHref(orgSlug, { list: "dupes" }),
                 },
               ]}
             />

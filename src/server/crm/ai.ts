@@ -107,13 +107,81 @@ function monthStart(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-/** This month's spend on the org's own keys (AI and every other per-use cost), in micro-dollars (service path: everyone's). */
+/** A hold on spend for a call still running (reserveUnderCap). */
+export const RESERVE_FEATURE = "crm.reserve";
+/** A hold left behind by a call that died counts this long, then no more. */
+const RESERVE_TTL_MS = 10 * 60_000;
+
+/** This month's spend on the org's own keys (AI and every other per-use cost), in micro-dollars (service path: everyone's). Calls still running count by their reservation. */
 export async function aiSpendThisMonth(db: TxClient, organizationId: string): Promise<number> {
   const agg = await db.aiUsage.aggregate({
-    where: { organizationId, paidBy: "ORG_KEY", createdAt: { gte: monthStart() } },
+    where: {
+      organizationId,
+      paidBy: "ORG_KEY",
+      createdAt: { gte: monthStart() },
+      NOT: { feature: RESERVE_FEATURE, createdAt: { lt: new Date(Date.now() - RESERVE_TTL_MS) } },
+    },
     _sum: { costMicros: true },
   });
   return agg._sum.costMicros ?? 0;
+}
+
+export interface SpendHold {
+  /** Drops the hold (call it once the real use is written, or the call failed). */
+  release(): Promise<void>;
+}
+
+/**
+ * The cap check for a paid call about to run, holding its estimated cost
+ * until it's done: one organization's checks run one at a time (an
+ * advisory lock), and each counts the holds of the calls still running, so
+ * ten at once can't each see room for one and all go past the cap. With no
+ * cap set there's nothing to hold. Service path, no transaction open.
+ */
+export async function reserveUnderCap(organizationId: string, estimateMicros: number): Promise<SpendHold> {
+  const micros = Math.max(0, Math.round(estimateMicros));
+  const id = await withSystemOrgTx(organizationId, async ({ db }) => {
+    await db.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`crm-cap:${organizationId}`}))::text AS locked`;
+    await checkAiCap(db, organizationId, micros);
+    const settings = await db.crmSettings.findUnique({ where: { organizationId }, select: { aiMonthlyCapCents: true } });
+    if (settings?.aiMonthlyCapCents == null || micros === 0) return null;
+    const row = await db.aiUsage.create({
+      data: { organizationId, feature: RESERVE_FEATURE, provider: "reserve", costMicros: micros, paidBy: "ORG_KEY" },
+      select: { id: true },
+    });
+    return row.id;
+  });
+  let released = false;
+  return {
+    async release() {
+      if (!id || released) return;
+      released = true;
+      await withSystemOrgTx(organizationId, ({ db }) => db.aiUsage.deleteMany({ where: { id, organizationId } }));
+    },
+  };
+}
+
+/**
+ * The cap check for one paid call, as runCrmAi does it: on the
+ * organization's own key the estimate is held until `release()` (calls at
+ * once can't all pass a full cap); otherwise just the check. Service path,
+ * no transaction open.
+ */
+export async function holdForCall(
+  organizationId: string,
+  creds: AiCredentials,
+  estimateMicros: number,
+): Promise<SpendHold | null> {
+  if (paidByOf(creds) === "ORG_KEY" && creds.protocol !== "standin") {
+    return reserveUnderCap(organizationId, estimateMicros);
+  }
+  await assertUnderCap(organizationId);
+  return null;
+}
+
+/** A rough cost for a model call before it runs: its text (about four characters a token) and its longest answer. */
+export function estimateCallMicros(model: string | null | undefined, chars: number, maxOutputTokens: number): number {
+  return estimateCostMicros(model ?? null, Math.ceil(chars / 4), maxOutputTokens);
 }
 
 export class AiCapError extends AiImportError {
@@ -249,23 +317,33 @@ export async function runCrmAi<S extends z.ZodObject>(call: CrmAiCall<S>): Promi
   const base = call.creds ?? (await crmCredentials(call.organizationId));
   if (!base) throw new NoAiConnectionError();
   await checkCrmAiRate(call.organizationId, call.job ? null : call.userId);
-  await assertUnderCap(call.organizationId);
   const creds = withTier(base, job.tier);
-  const result = await crmGenerate(creds, {
-    ...call.request,
-    maxOutputTokens: call.request.maxOutputTokens ?? job.maxOutputTokens,
-  } as StructuredRequest<S>);
-  await withSystemOrgTx(call.organizationId, ({ db }) =>
-    recordAiUsage(db, {
-      organizationId: call.organizationId,
-      userId: call.userId,
-      feature: call.feature,
-      provider: providerOf(creds),
-      result,
-      paidBy: paidByOf(creds),
-    }),
-  );
-  return { ...result, creds };
+  const maxOutputTokens = call.request.maxOutputTokens ?? job.maxOutputTokens;
+  // What it may cost is held against the cap while it runs (on the
+  // organization's key only), so calls at once can't all pass a full cap.
+  const hold =
+    paidByOf(creds) === "ORG_KEY" && creds.protocol !== "standin"
+      ? await reserveUnderCap(
+          call.organizationId,
+          estimateCallMicros(creds.model, (call.request.system?.length ?? 0) + (call.request.text?.length ?? 0), maxOutputTokens),
+        )
+      : (await assertUnderCap(call.organizationId), null);
+  try {
+    const result = await crmGenerate(creds, { ...call.request, maxOutputTokens } as StructuredRequest<S>);
+    await withSystemOrgTx(call.organizationId, ({ db }) =>
+      recordAiUsage(db, {
+        organizationId: call.organizationId,
+        userId: call.userId,
+        feature: call.feature,
+        provider: providerOf(creds),
+        result,
+        paidBy: paidByOf(creds),
+      }),
+    );
+    return { ...result, creds };
+  } finally {
+    await hold?.release();
+  }
 }
 
 /** One schema-bound answer. Outside a transaction; record it with recordAiUsage. */
@@ -313,6 +391,8 @@ export async function recordAiUsage(
 
 /** Claude's web search: $10 per thousand searches, on top of the tokens. */
 const WEB_SEARCH_MICROS = 10_000;
+/** One Claude web search, for estimating a research call before it runs. */
+export const WEB_RESEARCH_SEARCH_MICROS = WEB_SEARCH_MICROS;
 
 /**
  * Research with Claude's own web search (the research agent's fallback when

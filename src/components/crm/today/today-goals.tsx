@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Goals on Today's right: each goal's progress, and a click on one opens
- * its card to change it (?open=goal:<id>). Hovering the block shows a round
+ * its card (?open=goal:<id>): to change it for whoever sets goals,
+ * read-only for everyone else. Hovering the block shows a round
  * + in its corner for a new goal (always there when there are none yet, for
  * whoever may set them).
  */
@@ -60,7 +61,7 @@ export function TodayGoals({ goals, canEdit }: { goals: TodayGoal[]; canEdit: bo
             key={g.id}
             href={hrefFor({ kind: "goal", id: g.id })}
             scroll={false}
-            title="Change this goal"
+            title={canEdit ? "Change this goal" : "See this goal"}
             className="hover:bg-muted/60 focus-glow -mx-2 block space-y-1.5 rounded-xl px-2 py-1 outline-none"
           >
             <div className="flex items-baseline gap-2 text-sm">

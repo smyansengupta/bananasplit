@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 
-import { CrmError, type CrmActor } from "../access";
+import { CrmError } from "../access";
 import type { RoleOwner } from "../owners";
 import { parseListQuery, peopleWhere } from "../queries";
 
@@ -10,16 +10,8 @@ import { parseListQuery, peopleWhere } from "../queries";
  * a saved view of people (CrmView, objectKind "people"); its filters are
  * the People page's own (owner, follow-up due, relationship, status), so a
  * list always holds whoever matches it today. Campaigns, bulk email and
- * keep-in-touch in bulk all start from one.
+ * the plans' audiences all start from one.
  */
-
-export interface ListFilters {
-  relationship?: string | null;
-  status?: "ACTIVE" | "INACTIVE" | "ALUMNI" | "all" | null;
-  /** "me", "none" or a member id. */
-  owner?: string | null;
-  due?: "due" | "cold" | "new" | null;
-}
 
 type ViewFilter = { col?: string; op?: string; value?: string };
 
@@ -54,15 +46,6 @@ export function viewIds(filters: unknown): string[] | undefined {
 /** A list's stored filters as a People query (its own filters plus its hand-picked people). */
 export function viewListQuery(filters: unknown) {
   return { ...parseListQuery(viewParams(filters)), ids: viewIds(filters) };
-}
-
-export function filtersToView(f: ListFilters): ViewFilter[] {
-  const out: ViewFilter[] = [];
-  if (f.owner) out.push({ col: "owner", op: "eq", value: f.owner });
-  if (f.due) out.push({ col: "due", op: "eq", value: f.due });
-  if (f.relationship) out.push({ col: "relationship", op: "eq", value: f.relationship });
-  if (f.status) out.push({ col: "status", op: "eq", value: f.status });
-  return out;
 }
 
 /** Whoever is on a list right now, as a where (the viewer's RLS still applies). */
@@ -117,22 +100,6 @@ export async function listsWithCounts(
     });
   }
   return out;
-}
-
-export async function saveList(actor: CrmActor, name: string, filters: ListFilters, shared = true): Promise<{ id: string }> {
-  const n = name.trim().slice(0, 80);
-  if (!n) throw new CrmError("Give the list a name.", ["name"]);
-  return actor.db.crmView.create({
-    data: {
-      organizationId: actor.organizationId,
-      objectKind: "people",
-      name: n,
-      filters: filtersToView(filters) as Prisma.InputJsonArray,
-      shared,
-      createdById: actor.userId,
-    },
-    select: { id: true },
-  });
 }
 
 /** Up to `max` people of a list, owner first, for a campaign or a send. */

@@ -121,7 +121,7 @@ export function TaskFormFields({
             required
             maxLength={200}
             placeholder={
-              isEpic ? "e.g. Fall Showcase" : "e.g. Book the room (#tag, /file to link one)"
+              isEpic ? "e.g. Annual showcase" : "e.g. Book the room (#tag, /file to link one)"
             }
           />
           {!readOnly && <HashTagHint title={title.value} />}

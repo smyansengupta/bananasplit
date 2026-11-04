@@ -1,6 +1,7 @@
 "use client";
 
-import { Banknote, Handshake, Plus, Ticket, Trash2 } from "@/components/icons";
+import { Banknote, Columns3, Handshake, Plus, Ticket, Trash2 } from "@/components/icons";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -121,6 +122,7 @@ export function DealsView({
   members,
   currentUserId,
   budgetHref,
+  crm,
   orgName = "our organization",
 }: {
   orgId: string;
@@ -131,6 +133,11 @@ export function DealsView({
   /** A new deal is yours to look after unless you pick someone else. */
   currentUserId?: string;
   budgetHref?: string;
+  /**
+   * The same deal and partner in the CRM, by Finance id (src/server/crm/
+   * outside-links.ts): only those the viewer can open there.
+   */
+  crm?: { deals: Record<string, string>; partners: Record<string, string> };
   /** Signs the reminder to a sponsor. */
   orgName?: string;
 }) {
@@ -475,7 +482,17 @@ export function DealsView({
                     <TableRow key={s.id}>
                       <TableCell>
                         <span className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="font-semibold">{s.sponsor.name}</span>
+                          {crm?.deals[s.id] ? (
+                            <Link
+                              href={String(crm.deals[s.id])}
+                              className="font-semibold underline-offset-4 hover:underline"
+                              title="Open in CRM"
+                            >
+                              {s.sponsor.name}
+                            </Link>
+                          ) : (
+                            <span className="font-semibold">{s.sponsor.name}</span>
+                          )}
                           {s.type === "CREDITS" && (
                             <Badge variant="secondary">
                               <Ticket aria-hidden="true" />
@@ -556,8 +573,14 @@ export function DealsView({
                         <ItemMenu
                           label={`Actions for ${s.sponsor.name}`}
                           items={[
+                            !!crm?.deals[s.id] && {
+                              label: "Open in CRM",
+                              icon: Columns3,
+                              href: crm.deals[s.id],
+                            },
                             {
                               label: "Delete",
+                              separated: Boolean(crm?.deals[s.id]),
                               icon: Trash2,
                               destructive: true,
                               onSelect: () =>
@@ -626,13 +649,29 @@ export function DealsView({
                 key={s.id}
                 className="bg-muted inline-flex h-8 items-center gap-0.5 rounded-full pr-0.5 pl-3.5 text-[13px] font-medium"
               >
-                {s.name}
+                {crm?.partners[s.id] ? (
+                  <Link
+                    href={String(crm.partners[s.id])}
+                    className="underline-offset-4 hover:underline"
+                    title="Open in CRM"
+                  >
+                    {s.name}
+                  </Link>
+                ) : (
+                  s.name
+                )}
                 <ItemMenu
                   label={`Actions for ${s.name}`}
                   size="xs"
                   items={[
+                    !!crm?.partners[s.id] && {
+                      label: "Open in CRM",
+                      icon: Handshake,
+                      href: crm.partners[s.id],
+                    },
                     {
                       label: "Delete",
+                      separated: Boolean(crm?.partners[s.id]),
                       icon: Trash2,
                       destructive: true,
                       onSelect: () => void removeSponsor(s.id, s.name),

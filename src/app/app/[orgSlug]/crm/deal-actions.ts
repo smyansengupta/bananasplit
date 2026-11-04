@@ -11,7 +11,21 @@ import { updateDeal } from "@/server/crm/deals";
 import { cancelEmail, composeEmail } from "@/server/crm/outreach/send";
 import { createQuote, duplicateQuote, saveQuote, sendQuote } from "@/server/crm/quotes";
 
-import { crmAction } from "./run";
+import { z } from "zod";
+
+import { checkInput, crmAction } from "./run";
+
+const Id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const Lines = z
+  .array(
+    z.object({
+      description: z.string().max(500),
+      quantity: z.number().finite().min(0).max(1_000_000),
+      unitCents: z.number().int().min(-1_000_000_000).max(1_000_000_000),
+    }),
+  )
+  .max(100);
 
 /**
  * The deal card's actions (docs/features/crm.md, "Redesign"): its type,
@@ -24,7 +38,9 @@ import { crmAction } from "./run";
 const HOLD_MS = 12_000;
 
 /** Sets a deal's type (null clears it); the first pick adds the Type field to its pipeline. */
-export const setDealTypeAction = crmAction(async (ctx, access, dealId: string, label: string | null) => {
+export const setDealTypeAction = crmAction(async (ctx, access, rawDealId: string, rawLabel: string | null) => {
+  const dealId = checkInput(Id, rawDealId);
+  const label = checkInput(z.string().trim().max(80).nullable(), rawLabel, "Pick one of the types.");
   const deal = await ctx.db.crmDeal.findFirst({
     where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
     select: { id: true, pipelineId: true, custom: true },
@@ -51,7 +67,9 @@ export const setDealTypeAction = crmAction(async (ctx, access, dealId: string, l
 });
 
 /** Moves the next step's date on by `days` (from today when it's late); answers what it was. */
-export const pushDealStepAction = crmAction(async (ctx, _a, dealId: string, days: number) => {
+export const pushDealStepAction = crmAction(async (ctx, _a, rawDealId: string, rawDays: number) => {
+  const dealId = checkInput(Id, rawDealId);
+  const days = checkInput(z.number().int().min(1).max(60), rawDays, "Pick between 1 and 60 days.");
   const deal = await ctx.db.crmDeal.findFirst({
     where: { id: dealId, organizationId: ctx.organizationId },
     select: { nextStepAt: true },
@@ -67,12 +85,14 @@ export const pushDealStepAction = crmAction(async (ctx, _a, dealId: string, days
 
 /** Puts the next step's date back (Undo after Push). */
 export const setDealStepAtAction = crmAction(async (ctx, _a, dealId: string, at: string | null) => {
-  await updateDeal(ctx, dealId, { nextStepAt: at });
+  await updateDeal(ctx, checkInput(Id, dealId), { nextStepAt: checkInput(Day.nullable(), at, "Pick a real day.") });
   return {};
 });
 
 /** A draft quote (or invoice) filled from the deal: its amount as the first line. */
-export const makeDealQuoteAction = crmAction(async (ctx, _a, dealId: string, kind: QuoteKind = "quote") => {
+export const makeDealQuoteAction = crmAction(async (ctx, _a, rawDealId: string, rawKind: QuoteKind = "quote") => {
+  const dealId = checkInput(Id, rawDealId);
+  const kind = checkInput(z.enum(["quote", "invoice"]), rawKind);
   if (kind === "invoice") {
     // From the quote they agreed to, when there is one.
     const agreed = await ctx.db.crmQuote.findFirst({
@@ -91,7 +111,7 @@ export const makeDealQuoteAction = crmAction(async (ctx, _a, dealId: string, kin
  */
 export const sendDealQuoteAction = crmAction(async (ctx, _a, quoteId: string) => {
   const q = await ctx.db.crmQuote.findFirst({
-    where: { id: quoteId, organizationId: ctx.organizationId },
+    where: { id: checkInput(Id, quoteId), organizationId: ctx.organizationId },
     select: { id: true, kind: true, number: true, title: true, totalCents: true, currency: true, personId: true, dealId: true },
   });
   if (!q) throw new CrmError("That quote isn't here any more.");
@@ -113,7 +133,7 @@ export const sendDealQuoteAction = crmAction(async (ctx, _a, quoteId: string) =>
       q.kind === "invoice"
         ? `Hi {{first_name|there}},\n\nHere's invoice ${q.number} for ${formatMoney(q.totalCents, q.currency)}: ${link}\n\nThank you!\n{{my_first_name}}`
         : `Hi {{first_name|there}},\n\nHere's the quote for ${q.title}, ${formatMoney(q.totalCents, q.currency)} in all. You can read it and accept it here: ${link}\n\n{{my_first_name}}`,
-    sendAt: new Date(Date.now() + HOLD_MS).toISOString(),
+    holdSeconds: HOLD_MS / 1000,
     confirmConflict: true,
     track: true,
   });
@@ -123,13 +143,15 @@ export const sendDealQuoteAction = crmAction(async (ctx, _a, quoteId: string) =>
 
 /** Undo a send: the email doesn't go and the quote is a draft again (its link stops working). */
 export const unsendDealQuoteAction = crmAction(async (ctx, _a, quoteId: string, messageId: string) => {
-  await cancelEmail(ctx, messageId);
-  await saveQuote(ctx, quoteId, {});
+  await cancelEmail(ctx, checkInput(Id, messageId));
+  await saveQuote(ctx, checkInput(Id, quoteId), {});
   return {};
 });
 
 /** Saves a quote's lines from the deal card (a sent one goes back to a draft). */
 export const saveDealQuoteLinesAction = crmAction(
   async (ctx, _a, quoteId: string, lines: { description: string; quantity: number; unitCents: number }[]) =>
-    saveQuote(ctx, quoteId, { lines }),
+    saveQuote(ctx, checkInput(Id, quoteId), {
+      lines: checkInput(Lines, lines, "Check the lines: up to 100, each with a quantity and a price."),
+    }),
 );

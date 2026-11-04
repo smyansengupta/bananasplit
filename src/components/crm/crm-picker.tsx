@@ -103,7 +103,7 @@ export function CrmPicker({
                 ? "Search people"
                 : kind === "company"
                   ? "Search companies"
-                  : "Search items"
+                  : "Search deals"
             }
             aria-label="Search"
             className="bg-muted/60 h-9 w-full rounded-full ps-9 pe-3 text-sm outline-none"

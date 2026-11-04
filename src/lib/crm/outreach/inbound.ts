@@ -23,6 +23,12 @@ export interface InboundMessage {
   date: Date | null;
   /** Lowercased header names: auto-submitted, x-autoreply, precedence, content-type... */
   headers: Record<string, string>;
+  /**
+   * The From address is really the sender's: SPF, DKIM or DMARC passed for
+   * it where the mail came in (the Worker's verdict). Anything else is
+   * unverified, and ingestEmail never acts on it as that person or member.
+   */
+  senderVerified?: boolean;
 }
 
 /** "Ada Lovelace <Ada@Example.org>" -> "ada@example.org"; null when there's no address. */
@@ -30,6 +36,22 @@ export function bareAddress(value: string | null | undefined): string | null {
   if (!value) return null;
   const m = /<([^<>\s]+@[^<>\s]+)>/.exec(value) ?? /([^\s<>",;]+@[^\s<>",;]+)/.exec(value);
   return m ? m[1]!.trim().toLowerCase().replace(/^mailto:/, "") : null;
+}
+
+/**
+ * The one sender a From line names, read the way the inbound Worker reads
+ * it (workers/crm-inbound, fromAddress): the address in angle brackets,
+ * else the bare address. Null when the line names more than one address
+ * anywhere, display name included ("mallory@x" <victim@y>): a sender check
+ * made on one address must never be taken for another.
+ */
+export function singleSender(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const all = new Set(
+    [...value.matchAll(/([^\s<>",;:]+@[^\s<>",;]+)/g)].map((m) => m[1]!.trim().toLowerCase().replace(/^mailto:/, "")),
+  );
+  if (all.size !== 1) return null;
+  return bareAddress(value);
 }
 
 /** "Ada Lovelace <ada@x.org>" -> "Ada Lovelace". */

@@ -379,16 +379,15 @@ export async function crmWidgetPayload(
         doNotContact: false,
         nextFollowUpAt: { lt: today },
       };
-      const [count, rows, names] = await Promise.all([
-        c.db.crmPerson.count({ where }),
-        c.db.crmPerson.findMany({
-          where,
-          orderBy: { nextFollowUpAt: "asc" },
-          take: 6,
-          select: { id: true, name: true, nextFollowUpAt: true, ownerId: true },
-        }),
-        memberNames(c),
-      ]);
+      // One after another: a transaction runs one query at a time.
+      const count = await c.db.crmPerson.count({ where });
+      const rows = await c.db.crmPerson.findMany({
+        where,
+        orderBy: { nextFollowUpAt: "asc" },
+        take: 6,
+        select: { id: true, name: true, nextFollowUpAt: true, ownerId: true },
+      });
+      const names = await memberNames(c);
       return {
         type,
         data: stat({
@@ -414,10 +413,8 @@ export async function crmWidgetPayload(
         strength: { gte: 30 },
         lastContactedAt: { lt: new Date(c.now.getTime() - COLD_DAYS * DAY) },
       };
-      const [count, rows] = await Promise.all([
-        c.db.crmPerson.count({ where }),
-        c.db.crmPerson.findMany({ where, orderBy: { strength: "desc" }, take: 6, select: { id: true, name: true, lastContactedAt: true } }),
-      ]);
+      const count = await c.db.crmPerson.count({ where });
+      const rows = await c.db.crmPerson.findMany({ where, orderBy: { strength: "desc" }, take: 6, select: { id: true, name: true, lastContactedAt: true } });
       return {
         type,
         data: stat({
@@ -577,7 +574,7 @@ export async function crmWidgetPayload(
           }),
           max: 100,
           caption: null,
-          empty: "No goals for this quarter or year. Set them on the CRM's Forecast tab.",
+          empty: "No goals for this quarter or year. Add one on the CRM's Today tab.",
         },
       };
     }
