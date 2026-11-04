@@ -1889,10 +1889,12 @@ named by one search param (`src/lib/crm/overlay.ts`):
   `crm-overlays.tsx`. A kind with no entry opens nothing.
 - **The frame.** Cards are built on `CrmCard`
   (`src/components/crm/card/crm-card.tsx`): Tasks' task dialog at 680px
-  with a fixed header (`avatar`, `title`, `subtitle`, round `actions`, an
-  optional "…" `menu`, Close), `tabs` drawn as the pill segment (children
-  can be a function of the tab), a scrolling body and an optional fixed
-  `foot`. `CrmAvatar` and `CrmCardButton` go with it; `RecordActions` with
+  with a fixed header (`DialogHead`, the header every centred popup shares:
+  `avatar`, `title` and `subtitle` on the left, the black Close in the
+  corner with the round `actions` and an optional "…" `menu` under it),
+  `tabs` drawn as the pill segment with `tabsAside` beside it (a deal's
+  stages; children can be a function of the tab), a scrolling body and an
+  optional fixed `foot`. `CrmAvatar` and `CrmCardButton` go with it; `RecordActions` with
   `menu` draws history, merge and trash as the round "…".
 
 ### What's built
@@ -1919,8 +1921,9 @@ named by one search param (`src/lib/crm/overlay.ts`):
   the card (closing sends it); `/` lists templates, the member's booking
   link and a voice note; a red line names who else reached them lately.
 - **Power hour card**: the Today rows that are people, replies first; the
-  draft waiting for each (or a blank one); Send (E), Snooze a week (S),
-  Skip (J); a send waits ten seconds with Undo in a toast.
+  draft waiting for each (or a blank one); the foot has who's next on the
+  left and Skip (J), Snooze a week (S) and Send (E) on the right; a send
+  waits ten seconds with Undo in a toast.
 - **Done on its own** (`src/server/crm/on-its-own.ts`): automation and
   sequence mail (Undo while it's still waiting), fields an automation or
   the system changed (Undo puts the record back, while nothing changed it
