@@ -157,6 +157,8 @@ export async function todayRows(
   roles: ReadonlyMap<string, RoleOwner>,
   options: {
     everyone: boolean;
+    /** Not everyone's: the viewer's team too (My team). */
+    team?: readonly string[];
     relationships: ReadonlyMap<string, string>;
     now?: Date;
     /** A Personal space: no shares of a list split among members. */
@@ -166,6 +168,7 @@ export async function todayRows(
   const now = options.now ?? new Date();
   let items = await followUpQueue(db, organizationId, viewerId, roles, {
     mine: !options.everyone,
+    team: options.team,
     now,
   });
   let mine = !options.everyone;
@@ -320,7 +323,7 @@ export async function todayRows(
   }
 
   // Deals that are stuck or have no next step.
-  const deals = await todayList(db, organizationId, viewerId, roles, { mine }, now);
+  const deals = await todayList(db, organizationId, viewerId, roles, { mine, team: options.team }, now);
   const seen = new Set<string>();
   for (const d of [...deals.stuck, ...deals.nostep]) {
     if (seen.has(d.id)) continue;

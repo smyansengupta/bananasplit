@@ -11,6 +11,7 @@ import { crmAccessOf, readCrmSettings, type CrmAccess } from "@/server/crm/acces
 import { rolePositions, type RoleOwner } from "@/server/crm/owners";
 import { listPipelines, type PipelineView } from "@/server/crm/pipelines";
 import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/db/context";
+import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
 
 /**
  * Every CRM page starts here: the plan (Team Advanced), the add-on (added
@@ -58,6 +59,16 @@ export const crmMembers = cache(async (organizationId: string): Promise<CrmMembe
 });
 
 /** crmMembers as id to name. */
+/**
+ * The viewer's team, as Tasks' My team reads it: the people under them on
+ * the published org chart (not the viewer). Empty without reports, and
+ * then My team isn't offered. Once per request.
+ */
+export const crmTeam = cache(async (organizationId: string, userId: string): Promise<string[]> => {
+  const positions = await getChartForPage(organizationId).catch(() => null);
+  return buildViewerChart(positions, userId).subtree.filter((id) => id !== userId);
+});
+
 export async function crmMemberNames(organizationId: string): Promise<Map<string, string>> {
   return new Map((await crmMembers(organizationId)).map((m) => [m.id, m.name]));
 }

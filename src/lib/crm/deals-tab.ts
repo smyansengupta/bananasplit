@@ -49,7 +49,13 @@ export function parseDealsFilters(sp: Search): DealsFilters {
     view: one(sp, "view") === "board" ? "board" : "list",
     pipeline: pipeline && ID.test(pipeline) ? pipeline : null,
     stage: stage && ID.test(stage) ? stage : null,
-    owner: owner && (owner === "me" || owner === "none" || ID.test(owner)) ? owner : null,
+    // "me", "none", a member's id, or several ("me" and ids) joined with commas (My team).
+    owner:
+      owner &&
+      (owner === "none" ||
+        (owner.split(",").length <= 200 && owner.split(",").every((x) => x === "me" || ID.test(x))))
+        ? owner
+        : null,
     type: type ? type.toLowerCase().slice(0, 80) : null,
     show: show === "won" || show === "lost" || show === "all" ? show : "open",
     q: one(sp, "q")?.slice(0, 100) ?? null,

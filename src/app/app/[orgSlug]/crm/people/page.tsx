@@ -7,13 +7,14 @@ import { PeopleEmpty } from "@/components/crm/people/people-empty";
 import { PeopleTable } from "@/components/crm/people/people-table";
 import { PeopleToolbar } from "@/components/crm/people/people-toolbar";
 import { hrefWithOpen } from "@/lib/crm/overlay";
+import { ownerParamFor } from "@/lib/crm/scope";
 import type { EditField } from "@/lib/crm/record-form";
 import { customFieldsFor } from "@/server/crm/databases";
 import { peoplePage } from "@/server/crm/people-view";
 import { PAGE } from "@/server/crm/queries";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmMembers, crmShell } from "../shell";
+import { crmMembers, crmShell, crmTeam } from "../shell";
 
 export const metadata = { title: "People" };
 
@@ -48,12 +49,15 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
   const relationships = shell.access.settings?.relationshipTypes ?? [];
   // The members, the list and the card open over it load at once, each in its own transaction.
   const membersP = crmMembers(orgId);
+  // My team (?owner=team, as Tasks' scope): the viewer and the people under them on the org chart.
+  const team = shell.access.personal ? [] : await crmTeam(orgId, shell.user.id);
+  const query: Search = typeof sp.owner === "string" ? { ...sp, owner: ownerParamFor(sp.owner, team) } : sp;
   const [members, { data, boardFields }, overlay] = await Promise.all([
     membersP,
     membersP.then((members) => {
       const names = new Map(members.map((m) => [m.id, m.name]));
       return withOrgTx(orgId, async ({ db }) => {
-        const data = await peoplePage(db, orgId, shell.user.id, shell.roles, sp, {
+        const data = await peoplePage(db, orgId, shell.user.id, shell.roles, query, {
           names,
           relationships,
           pipelines: shell.pipelines,
@@ -97,7 +101,7 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        create={data.companies ? "company" : "person"}
+        create={data.view === "board" ? "deal" : data.companies ? "company" : "person"}
         toolbar={
           <PeopleToolbar
             orgId={orgId}
@@ -110,6 +114,7 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
             deals={data.dealOptions}
             reportHref={reportHref}
             personal={shell.access.personal}
+            hasTeam={team.length > 0}
           />
         }
       />
