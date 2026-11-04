@@ -15,6 +15,7 @@ import { randomToken } from "@/server/crm/outreach/tokens";
 import type { MemberContext, TxClient } from "@/server/db/context";
 
 import { bookingAccess } from "./access";
+import { tellHosts } from "./notify";
 
 /**
  * Making and changing booking links (Meetings > Booking links;
@@ -191,6 +192,7 @@ export async function updateLink(ctx: MemberContext, id: string, input: LinkInpu
       .slice(0, 4);
   }
   if (input.active !== undefined) data.active = input.active;
+  let addedHosts: string[] = [];
   if (!page.ownerUserId) {
     if (input.hostIds) {
       const hosts = [...new Set(input.hostIds)].slice(0, 20);
@@ -204,6 +206,7 @@ export async function updateLink(ctx: MemberContext, id: string, input: LinkInpu
       if (added.length && !(await runsLinks(ctx))) {
         throw new BookingLinkError("Only admins and CRM managers can add other people as hosts.");
       }
+      addedHosts = added;
       data.hostIds = hosts;
     }
     if (input.pipelineId !== undefined) {
@@ -221,7 +224,30 @@ export async function updateLink(ctx: MemberContext, id: string, input: LinkInpu
     if (taken) throw new BookingLinkError("That link is taken.");
     data.slug = s;
   }
-  await db.crmBookingPage.update({ where: { id: page.id }, data });
+  try {
+    await db.crmBookingPage.update({ where: { id: page.id }, data });
+  } catch (error) {
+    // Slugs are unique across every space, and another space's links aren't
+    // visible here: the index says it's taken.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new BookingLinkError("That link is taken.");
+    }
+    throw error;
+  }
+  // Someone put on a public link by someone else hears about it, and can take themselves off.
+  if (addedHosts.length) {
+    const [who, link] = await Promise.all([
+      db.user.findUnique({ where: { id: ctx.userId }, select: { name: true } }),
+      db.crmBookingPage.findUnique({ where: { id: page.id }, select: { title: true } }),
+    ]);
+    await tellHosts(db, organizationId, addedHosts, {
+      title: `${who?.name ?? "Someone"} made you a host of ${link?.title ?? "a booking link"}`,
+      body: "Guests can book your open times through it. Take yourself off in Meetings, Booking links.",
+      eventId: null,
+      key: `host-added:${page.id}:${addedHosts.join(",")}:${Date.now()}`,
+      actorId: ctx.userId,
+    });
+  }
 }
 
 /**

@@ -395,6 +395,15 @@ describe("booking links against the local database", () => {
     expect(await onTimeline()).toBe(1);
     expect((await ownerDb.booking.findUniqueOrThrow({ where: { id: b.id } })).personId).toBe(existing.id);
     expect(await verifyBooking("x".repeat(32))).toBe(false);
+
+    // The guest moves it: the timeline's meeting moves with it; then they cancel: it goes.
+    const later = await slotsOf(link.slug, 9);
+    expect((await guestReschedule(bookingToken(b.id), later)).ok).toBe(true);
+    const meeting = () =>
+      ownerDb.crmActivity.findFirst({ where: { organizationId: crmOrg, kind: "MEETING", sourceKind: "event", sourceId: b.eventId } });
+    expect((await meeting())?.occurredAt.toISOString()).toBe(later);
+    expect((await guestCancel(bookingToken(b.id), "")).ok).toBe(true);
+    expect((await meeting())?.deletedAt).not.toBeNull();
   });
 
   it("moves a leaving host's bookings to another host, flags what nobody can take, and stops their own link", async () => {

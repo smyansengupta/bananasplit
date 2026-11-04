@@ -224,6 +224,8 @@ export async function book(slug: string, input: BookInput, now: Date = new Date(
         if (q.required && !cleanAnswer(input.answers[q.id])) return { ok: false as const, error: `Answer "${q.label}".` };
       }
       // Abuse caps: a burst on one link, unconfirmed bookings piling up, one address holding many times.
+      // One booking on a link at a time from here, so bookings at once can't all pass the counts.
+      await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`booking-page:${page.id}`}, 0))`;
       const dayAgo = new Date(now.getTime() - 86_400_000);
       const [lastDay, unverified, mine] = await Promise.all([
         db.booking.count({ where: { organizationId: orgId, pageId: page.id, createdAt: { gte: dayAgo } } }),
@@ -489,9 +491,38 @@ export async function guestCancel(token: string, reason: string, now: Date = new
 }
 
 /** Shared by the guest, the host and the jobs: mark it cancelled, take the meeting off, tell whoever didn't do it. */
+/**
+ * The CRM keeps up with a booking that moved or was called off: the
+ * meeting on their timeline (Today's Coming up reads it) takes the new
+ * time or goes, and a deal the booking opened keeps its next step's date in
+ * step, unless someone has changed that date since.
+ */
+async function crmFollowsBooking(
+  db: TxClient,
+  b: { organizationId: string; eventId: string; startsAt: Date },
+  to: { start: Date } | null,
+): Promise<void> {
+  const meeting = await db.crmActivity.findFirst({
+    where: { organizationId: b.organizationId, kind: "MEETING", sourceKind: "event", sourceId: b.eventId, deletedAt: null },
+    select: { id: true, targets: { where: { targetKind: "deal" }, select: { targetId: true } } },
+  });
+  if (!meeting) return;
+  await db.crmActivity.update({
+    where: { id: meeting.id },
+    data: to ? { occurredAt: to.start } : { deletedAt: new Date() },
+  });
+  const deals = meeting.targets.map((t) => t.targetId);
+  if (deals.length) {
+    await db.crmDeal.updateMany({
+      where: { organizationId: b.organizationId, id: { in: deals }, nextStepAt: b.startsAt },
+      data: to ? { nextStepAt: to.start } : { nextStepAt: null, nextStep: null },
+    });
+  }
+}
+
 export async function cancelBooking(
   db: TxClient,
-  b: { id: string; organizationId: string; eventId: string; hostUserId: string; guestName: string; startsAt: Date; personId: string | null; page: { title: string } },
+  b: { id: string; organizationId: string; eventId: string; hostUserId: string; guestName: string; startsAt: Date; personId: string | null; page: { title: string; timezone: string | null; hours: Prisma.JsonValue } },
   by: "guest" | "host" | "system",
   reason: string,
   actorId: string | null,
@@ -503,8 +534,10 @@ export async function cancelBooking(
   if (done.count === 0) return;
   const live = await db.event.findFirst({ where: { id: b.eventId, organizationId: b.organizationId, deletedAt: null }, select: { id: true } });
   if (live) await deleteEvent(systemCtx(db, b.organizationId, b.hostUserId, null), b.eventId);
+  await crmFollowsBooking(db, b, null);
   const org = await db.organization.findUnique({ where: { id: b.organizationId }, select: { timezone: true } });
-  const when = whenText(b.startsAt, org?.timezone ?? "UTC");
+  // In the link's own zone, as the booked notice was.
+  const when = whenText(b.startsAt, pageTimeZone(b.page, org?.timezone ?? "UTC"));
   await tellHosts(db, b.organizationId, [b.hostUserId], {
     title: by === "guest" ? `${b.guestName} cancelled ${b.page.title}` : `${b.page.title} with ${b.guestName} was cancelled`,
     body: `${when}${reason.trim() ? `\n"${reason.trim().slice(0, 300)}"` : ""}`,
@@ -556,7 +589,7 @@ export async function guestReschedule(token: string, startIso: string, now: Date
 /** Move a booking (and its meeting) and tell whoever didn't move it. */
 export async function moveBooking(
   db: TxClient,
-  b: { id: string; organizationId: string; eventId: string; hostUserId: string; guestName: string; startsAt: Date; page: { title: string } },
+  b: { id: string; organizationId: string; eventId: string; hostUserId: string; guestName: string; startsAt: Date; page: { title: string; timezone: string | null; hours: Prisma.JsonValue } },
   start: Date,
   end: Date,
   by: "guest" | "host",
@@ -567,8 +600,10 @@ export async function moveBooking(
   if (moveEvent) {
     await updateEvent(systemCtx(db, b.organizationId, b.hostUserId, null), b.eventId, { startsAt: start, endsAt: end });
   }
+  await crmFollowsBooking(db, b, { start });
   const org = await db.organization.findUnique({ where: { id: b.organizationId }, select: { timezone: true } });
-  const tz = org?.timezone ?? "UTC";
+  // In the link's own zone, as the booked notice was.
+  const tz = pageTimeZone(b.page, org?.timezone ?? "UTC");
   await tellHosts(db, b.organizationId, [b.hostUserId], {
     title: by === "guest" ? `${b.guestName} moved ${b.page.title}` : `${b.page.title} with ${b.guestName} moved`,
     body: `Now ${whenText(start, tz)} (was ${whenText(b.startsAt, tz)})`,

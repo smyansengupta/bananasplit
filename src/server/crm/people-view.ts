@@ -462,7 +462,14 @@ export async function peoplePage(
       const top = open.sort((a, b) => b._count._all - a._count._all)[0];
       busiest = top ? (choices.find((p) => p.id === top.pipelineId) ?? null) : null;
     }
-    const pipeline = covered.length === 1 ? covered[0]! : (busiest ?? defaultDealPipeline(choices) ?? null);
+    // A deal opened from a link (search, the Inbox) opens over its own pipeline's board.
+    const opened = one(sp, "open")?.match(/^deal:([A-Za-z0-9_-]{1,64})$/)?.[1];
+    const openedIn =
+      opened && covered.length !== 1
+        ? await db.crmDeal.findFirst({ where: { id: opened, organizationId }, select: { pipelineId: true } })
+        : null;
+    const ownPipeline = openedIn ? (choices.find((p) => p.id === openedIn.pipelineId) ?? null) : null;
+    const pipeline = covered.length === 1 ? covered[0]! : (ownPipeline ?? busiest ?? defaultDealPipeline(choices) ?? null);
     let board: PeopleBoard | null = null;
     let money: PeoplePageData["money"] = null;
     if (pipeline) {

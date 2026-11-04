@@ -544,6 +544,18 @@ export async function undoMerge(actor: CrmActor, undoId: string): Promise<{ keep
   const before = thaw(u.keepBefore);
   const custom = (before.custom ?? {}) as Prisma.InputJsonObject;
   delete before.custom;
+  // Anyone who changed the kept record since the merge keeps their change:
+  // its fields go back to before the merge only when nobody touched them.
+  const touched =
+    (await db.crmFieldHistory.count({
+      where: {
+        organizationId,
+        targetKind: u.kind,
+        targetId: keepId,
+        changedAt: { gt: new Date(row.createdAt.getTime() + 5_000) },
+        NOT: { source: "merge" },
+      },
+    })) > 0;
 
   if (u.kind === "person") {
     const [keep, drop] = [
@@ -555,8 +567,9 @@ export async function undoMerge(actor: CrmActor, undoId: string): Promise<{ keep
       where: { id: dropId },
       data: { deletedAt: null, contactId: u.dropBefore.contactId, userId: u.dropBefore.userId, updatedById: userId },
     });
+    // An address goes back only if it's still on the kept person (not moved or given to someone since).
     for (const e of u.emails) {
-      await db.crmPersonEmail.updateMany({ where: { id: e.id, organizationId }, data: { personId: dropId, isPrimary: e.isPrimary } });
+      await db.crmPersonEmail.updateMany({ where: { id: e.id, organizationId, personId: keepId }, data: { personId: dropId, isPrimary: e.isPrimary } });
     }
     for (const e of u.keepEmails) {
       await db.crmPersonEmail.updateMany({ where: { id: e.id, organizationId, personId: keepId }, data: { isPrimary: e.isPrimary } });
@@ -582,14 +595,17 @@ export async function undoMerge(actor: CrmActor, undoId: string): Promise<{ keep
         skipDuplicates: true,
       });
     }
+    // Plans go back to the duplicate, but one that was running comes back
+    // paused: whatever stopped it since (a reply, a booking) isn't undone by
+    // Undo, and nothing sends again until someone resumes it.
     for (const e of u.enrollments) {
       await db.crmEnrollment.updateMany({
         where: { id: e.id, organizationId },
         data: {
           personId: dropId,
-          status: e.status as "ACTIVE",
-          stopReason: e.stopReason,
-          finishedAt: e.finishedAt ? new Date(e.finishedAt) : null,
+          ...(e.status === "ACTIVE"
+            ? { status: "PAUSED" as const, stopReason: "paused when a merge was undone", nextRunAt: null, finishedAt: null }
+            : { status: e.status as "STOPPED", stopReason: e.stopReason, finishedAt: e.finishedAt ? new Date(e.finishedAt) : null }),
         },
       });
     }
@@ -615,7 +631,7 @@ export async function undoMerge(actor: CrmActor, undoId: string): Promise<{ keep
     }
     await db.crmPerson.update({
       where: { id: keepId },
-      data: { ...(before as Prisma.CrmPersonUncheckedUpdateInput), custom, updatedById: userId },
+      data: touched ? { updatedById: userId } : { ...(before as Prisma.CrmPersonUncheckedUpdateInput), custom, updatedById: userId },
     });
     await writeHistory(db, {
       organizationId,
@@ -634,7 +650,7 @@ export async function undoMerge(actor: CrmActor, undoId: string): Promise<{ keep
     // The kept one gives the Finance link and domain back before the duplicate takes them.
     await db.crmCompany.update({
       where: { id: keepId },
-      data: { ...(before as Prisma.CrmCompanyUncheckedUpdateInput), custom, updatedById: userId },
+      data: touched ? { updatedById: userId } : { ...(before as Prisma.CrmCompanyUncheckedUpdateInput), custom, updatedById: userId },
     });
     await db.crmCompany.update({
       where: { id: dropId },

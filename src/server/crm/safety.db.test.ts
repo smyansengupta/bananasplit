@@ -539,11 +539,11 @@ describe("spending and our sender", () => {
       }),
     ).rejects.toBeInstanceOf(EmailConfigError);
     const cy = await as(member, (ctx) => createPerson(ctx, { name: "Cy Bell", primaryEmail: `cy-${tag}@bell.example` }));
-    // A booking receipt: nobody pressed Send, so without the organization's own sender it doesn't go.
+    // Mail nobody pressed Send on, marked untracked: no person approved it, so it waits as a draft.
     const receipt = await withSystemOrgTx(org, ({ db }) =>
       queueEmail(db, { organizationId: org, senderId: member.id, createdById: null, personId: cy.id, subject: "Booked", body: "You're booked", track: false }),
     );
-    expect(await deliver(org, receipt.messageId)).toBe("failed");
+    expect(await deliver(org, receipt.messageId)).toBe("held");
     const pressed = await as(member, (ctx) => composeEmail(ctx, { personId: cy.id, subject: "Hello", body: "Hi Cy", confirmConflict: true }));
     if (!("messageId" in pressed)) throw new Error("expected a send");
     expect(await deliver(org, pressed.messageId)).toBe("sent");
@@ -576,7 +576,7 @@ describe("merge undo and notes", () => {
     expect((await ownerDb.crmPerson.findUniqueOrThrow({ where: { id: keep.id } })).title).toBeNull();
     expect((await ownerDb.crmPersonEmail.findMany({ where: { personId: drop.id } })).map((e) => e.email)).toEqual([`dee.fox-${tag}@work.example`]);
     expect(await ownerDb.crmActivityTarget.count({ where: { activityId: note, targetKind: "person", targetId: drop.id } })).toBe(1);
-    expect(await ownerDb.crmEnrollment.findUniqueOrThrow({ where: { id: dropEnrollment.id } })).toMatchObject({ personId: drop.id, status: "ACTIVE" });
+    expect(await ownerDb.crmEnrollment.findUniqueOrThrow({ where: { id: dropEnrollment.id } })).toMatchObject({ personId: drop.id, status: "PAUSED" });
     await expect(as(member, (ctx) => undoMerge(ctx, merged.undoId))).rejects.toThrow(/can't be undone/);
   });
 

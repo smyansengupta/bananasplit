@@ -37,6 +37,7 @@ vi.mock("@/server/db/context", () => ({
         eventRegistration: { groupBy: mocks.groupBy },
         itemLink: { findMany: async () => [] },
         task: { findMany: async () => [] },
+        booking: { findFirst: async () => null },
       },
     }),
 }));

@@ -48,6 +48,30 @@ export function cleanAnswer(raw: string | undefined): string {
     .slice(0, ANSWER_MAX);
 }
 
+/** Every link-like run: a scheme URL, www., an address, a dotted host. */
+const LINKISH_RUN = /\S*(?::\/\/|\bwww\.|@)\S*|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,24}\b\S*/gi;
+
+/**
+ * Words a link's maker typed (its name, the host's name, the space's name),
+ * fit to put in an email the platform sends to whatever address a visitor
+ * typed: links and addresses taken out, control characters gone, short. So
+ * a booking link can't be used to mail a stranger somebody's link.
+ */
+export function plainForEmail(text: string, max = 80): string {
+  const s = text
+    .replace(CONTROL, "")
+    .replace(LINKISH_RUN, "")
+    .replace(/[<>{}[\]\\|`$]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+}
+
+/** Whether a typed place reads as a link (then it isn't put in an email). */
+export function looksLikeLink(text: string): boolean {
+  return LINKISH.test(text);
+}
+
 /** "Coffee with Ada Lovelace", or the link's own name when it already says who ("Meet with Ada"). */
 export function withHost(title: string, hostName: string): string {
   const first = hostName.trim().split(/\s+/)[0]?.toLowerCase() ?? "";

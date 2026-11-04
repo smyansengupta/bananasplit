@@ -1,4 +1,4 @@
-import { greetingName, withHost } from "@/lib/booking/guest";
+import { greetingName, looksLikeLink, plainForEmail, withHost } from "@/lib/booking/guest";
 import { reminderLead } from "@/lib/meetings/reminders";
 import { escapeHtml, safeHref } from "@/server/email/escape";
 import { layout, paragraph, type RenderedEmail } from "@/server/email/templates";
@@ -27,6 +27,12 @@ export interface GuestEmailInput {
   location: string | null;
   /** A video account is making the meeting's link and it isn't there yet. */
   linkPending?: boolean;
+  /**
+   * The join link came from a connected video account (Meet, Zoom, Teams),
+   * not typed by the link's maker. Only such a link is put in the email; a
+   * typed one is on the guest's booking page.
+   */
+  joinFromAccount?: boolean;
   manageUrl: string;
   calendarUrl: string;
   offsetMinutes?: number;
@@ -36,7 +42,19 @@ function row(label: string, valueHtml: string): string {
   return `<tr><td style="padding:6px 12px 6px 0;vertical-align:top;font-size:12px;color:#6b6b6b;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;vertical-align:top">${valueHtml}</td></tr>`;
 }
 
-export function guestEmail(i: GuestEmailInput): RenderedEmail {
+export function guestEmail(raw: GuestEmailInput): RenderedEmail {
+  // What the link's maker typed reaches a stranger's inbox from our sender:
+  // only as plain words, never a link they chose.
+  const i = {
+    ...raw,
+    title: plainForEmail(raw.title, 80) || "Your meeting",
+    hostName: plainForEmail(raw.hostName, 60) || "your host",
+    orgName: plainForEmail(raw.orgName, 60),
+    joinUrl: raw.joinFromAccount === false ? null : raw.joinUrl,
+    location: raw.location && !looksLikeLink(raw.location) ? plainForEmail(raw.location, 120) : null,
+    linkPending: raw.linkPending || (raw.joinFromAccount === false && Boolean(raw.joinUrl)),
+  };
+  const typedPlace = Boolean(raw.location && !i.location);
   const who = withHost(i.title, i.hostName);
   const cancelled = i.template === "cancelled";
   const subject = {
@@ -69,6 +87,9 @@ export function guestEmail(i: GuestEmailInput): RenderedEmail {
   } else if (!cancelled && i.linkPending) {
     rows.push(row("Online", "The join link will be on your booking page."));
     text.push("The join link will be on your booking page.");
+  } else if (!cancelled && typedPlace) {
+    rows.push(row("Where", "On your booking page."));
+    text.push("Where: on your booking page.");
   } else if (!cancelled) {
     const how = `${i.hostName.split(" ")[0]} will let you know how to join.`;
     rows.push(row("Where", escapeHtml(how)));

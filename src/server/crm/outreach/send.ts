@@ -175,9 +175,7 @@ export function approvalFor(input: Pick<QueueEmailInput, "approval" | "createdBy
     return { approval: input.approval?.kind ?? null, approvedById: input.approval?.by ?? null };
   }
   if (input.createdById) return { approval: "send", approvedById: input.createdById };
-  if (!input.enrollmentId && !input.workflowId && !input.campaignId && input.track === false) {
-    return { approval: "receipt", approvedById: null };
-  }
+  // Nothing is approved by being untracked: with no person behind it, it's a draft.
   return { approval: null, approvedById: null };
 }
 
@@ -753,9 +751,18 @@ export async function approvalProblem(
   const member = async (userId: string) =>
     Boolean(await db.membership.findFirst({ where: { organizationId, userId }, select: { userId: true } }));
   switch (m.approval) {
-    case "send":
+    case "send": {
       if (!m.approvedById) return "nobody approved it";
-      return (await member(m.approvedById)) ? null : "whoever approved it left the organization";
+      if (!(await member(m.approvedById))) return "whoever approved it left the organization";
+      // Group mail is a CRM manager's to send: still theirs when it leaves.
+      if (m.campaignId) {
+        const role = await db.membership.findFirst({ where: { organizationId, userId: m.approvedById }, select: { role: true } });
+        const managers = await db.crmSettings.findUnique({ where: { organizationId }, select: { managerIds: true } });
+        const still = role?.role === "OWNER" || role?.role === "ADMIN" || Boolean(managers?.managerIds.includes(m.approvedById));
+        if (!still) return "whoever approved it no longer runs the CRM";
+      }
+      return null;
+    }
     case "start": {
       if (!m.enrollmentId || !m.approvedById) return "nobody approved it";
       const e = await db.crmEnrollment.findFirst({
@@ -785,9 +792,8 @@ export async function approvalProblem(
       return (await member(m.approvedById)) ? null : "whoever started the plan left the organization";
     }
     case "receipt":
-      return !m.enrollmentId && !m.workflowId && !m.campaignId && m.error === "untracked"
-        ? null
-        : "nobody approved it";
+      // Nothing makes these any more; one left from before waits for a person.
+      return "nobody approved it";
     default:
       return "nobody approved it";
   }

@@ -18,6 +18,25 @@ const base: GuestEmailInput = {
 };
 
 describe("the guest's booking emails", () => {
+  it("puts no link the link's maker typed in front of a stranger", () => {
+    const m = guestEmail({
+      ...base,
+      title: "URGENT re-verify at https://bananasplit-verify.example.net/login now",
+      hostName: "Support support@evil.example",
+      orgName: "Accounts www.evil.example",
+      location: "https://bananasplit-account-verify.example.net/login",
+      joinUrl: "https://evil.example/join",
+      joinFromAccount: false,
+    });
+    const all = `${m.subject}
+${m.text}
+${m.html}`;
+    expect(all).not.toMatch(/evil\.example|verify\.example|account-verify/);
+    expect(m.text).toContain("booking page");
+    // A join link from a connected video account still goes in.
+    const ok = guestEmail({ ...base, verified: true, joinUrl: "https://zoom.us/j/123", joinFromAccount: true });
+    expect(ok.text).toContain("https://zoom.us/j/123");
+  });
   it("asks an unconfirmed guest to say the address is theirs, on their booking page", () => {
     const m = guestEmail(base);
     expect(m.subject).toBe("Confirm your time: Coffee with the president with Ada Lovelace");

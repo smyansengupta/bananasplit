@@ -12,10 +12,10 @@ import { payloadOf } from "./today";
 /** The pure parts of the CRM's safety fixes (the rest is in safety.db.test.ts). */
 
 describe("what a queued email records as its approval", () => {
-  it("a member queued it: Send; a bare untracked note: a receipt; anything else: nobody", () => {
+  it("a member queued it: Send; anything else, an untracked note too: nobody", () => {
     expect(approvalFor({ createdById: "u1" })).toEqual({ approval: "send", approvedById: "u1" });
     expect(approvalFor({ createdById: "u1", workflowId: "w1" })).toEqual({ approval: "send", approvedById: "u1" });
-    expect(approvalFor({ createdById: null, track: false })).toEqual({ approval: "receipt", approvedById: null });
+    expect(approvalFor({ createdById: null, track: false })).toEqual({ approval: null, approvedById: null });
     expect(approvalFor({ createdById: null, workflowId: "w1" })).toEqual({ approval: null, approvedById: null });
     expect(approvalFor({ createdById: null, enrollmentId: "e1" })).toEqual({ approval: null, approvedById: null });
     expect(approvalFor({ createdById: null, enrollmentId: "e1", track: false })).toEqual({ approval: null, approvedById: null });

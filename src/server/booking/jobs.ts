@@ -78,6 +78,7 @@ export const bookingEmailJob: JobHandler<EmailPayload> = async (run): Promise<Jo
     durationMin: Math.round((b.endsAt.getTime() - b.startsAt.getTime()) / 60_000),
     verified: Boolean(b.verifiedAt),
     joinUrl: event && event.conferenceProvider !== "NONE" ? event.conferenceUrl : null,
+    joinFromAccount: Boolean(event && ["MEET", "ZOOM", "TEAMS"].includes(event.conferenceProvider)),
     location: event?.location ?? null,
     linkPending: Boolean(event && event.conferenceProvider !== "NONE" && !event.conferenceUrl),
     manageUrl: appUrl(`/book/m/${token}`),
