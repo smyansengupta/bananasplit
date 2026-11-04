@@ -1862,11 +1862,12 @@ email and recipe workflow.
 
 ## Redesign
 
-The CRM is four tabs now: Today (`/crm`), People (`/crm/people`, with a
-People | Companies switch), Deals (`/crm/deals`) and Outreach
-(`/crm/outreach`), plus Settings (the round button in the header) and
-Setup. Reports are in Databases > Reports ("Reports (module 7)"). `src/lib/crm/nav.ts` holds the four tabs; each stays lit on
-the older pages it now holds (`also`) until those move or redirect.
+The CRM is two tabs now (see "One list" below): Today (`/crm`) and People
+(`/crm/people`, with People, Companies and Board as its view switch),
+plus Settings (the round button in the header) and Setup. Deals and
+Outreach were tabs until 2026-11-03. Reports are in Databases > Reports
+("Reports (module 7)"). `src/lib/crm/nav.ts` holds the two tabs; People
+stays lit on the older pages it now holds (`also`) while they redirect.
 
 Every CRM tab page is laid out like Tasks: `CrmHeader` (the "CRM" title,
 the split create button New person with New company, New deal and Import a
@@ -1896,7 +1897,7 @@ named by one search param (`src/lib/crm/overlay.ts`):
 | `goal`, `goal:<id>` | a goal (not built yet) |
 | `merge:<idA>,<idB>` | Merge two people (or two companies) |
 
-| `plan:sequence:<id>`, `plan:campaign:<id>` | an outreach plan |
+| `plan:sequence:<id>`, `plan:campaign:<id>` | a follow-up series, a split list or a group email |
 | `plan:email`, `plan:split` | a new one-email or split-a-list plan |
 
 - **Opening and closing.** `useCrmOpen()` (client) gives the open card,
@@ -1906,7 +1907,8 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Record links.** `crmRecordHref(orgSlug, kind, id)` is for links from
   outside the CRM: `/crm/people?open=person:<id>`,
   `/crm/people?view=companies&open=company:<id>`,
-  `/crm/deals?open=deal:<id>`. Inside the CRM, `useCrmRecordHref(orgSlug)`
+  `/crm/people?view=board&open=deal:<id>`; `crmPlanHref` is
+  `/crm/settings/automations?open=plan:<type>:<id>`. Inside the CRM, `useCrmRecordHref(orgSlug)`
   sets `open` on the current page when it renders overlays
   (`rendersOverlays`), else falls back to `crmRecordHref`. The old
   `people/[personId]`, `companies/[companyId]` and `items/[itemId]` pages
@@ -1980,9 +1982,11 @@ named by one search param (`src/lib/crm/overlay.ts`):
   when it's gone quiet, Add a next step when someone you've talked to has
   none; otherwise the next step in words). Picking rows brings the
   selection bar: Start a deal (`?open=new:deal&with=person:<ids>`), Add to
-  list, Change owner, Email them (a list of exactly them, opened in
-  Outreach's bulk email with `?list=`), and "…" with Merge (two picked),
-  Export (`/crm/export?ids=`) and Move to trash, each with Undo. A CRM with
+  list, Change owner, Email them (a list of exactly them, opened as the
+  one-email card over People with `?open=plan:email&to=<list>`), and "…"
+  with Add to a follow-up series, Merge (two picked), Export
+  (`/crm/export?ids=`) and Move to trash, each with Undo. Deals joined
+  People on 2026-11-03: see "One list". A CRM with
   nobody in it shows "Nobody here yet": bring in members and event guests,
   a spreadsheet (Import), or one person (New).
 - **Lists** are CrmViews. One made of filters holds whoever matches; a
@@ -2016,8 +2020,9 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Ctrl+Shift+Enter (Create and open another) keeps it blank for the next.
   One email to a list and Split a list (`plan:email`, `plan:split`) use the
   same window; Ctrl+Enter sends, plain Enter doesn't. `/crm/scan` opens it.
-- **Deal card** is a plain first cut (facts, people, timeline, details)
-  until its own design lands. `/crm/deals` lists the pipelines for now.
+- **Deal card** opens centered with `?open=deal:<id>` over whatever page
+  you're on: People's board, a person's or company's Deals tab, Today.
+  `/crm/deals` redirects to People's board ("One list").
 
 ### Notes and tasks
 
@@ -2061,6 +2066,77 @@ named by one search param (`src/lib/crm/overlay.ts`):
   click to change it, X clears it (Undo). A member's own line stays
   until something new comes in, and stays when the AI then finds nothing.
   With none yet and something to read, "Find it" asks now.
+
+## One list
+
+Built 2026-11-03 on `claude/crm-onelist`. People and Deals were the same
+list seen two ways, and Outreach was a third place to look for the same
+people. Now the CRM is two tabs, **Today** and **People**, and People is
+the one list of everyone you deal with.
+
+- **The view switch** (round buttons in People's toolbar, like Tasks'):
+  People (the table), Companies (the table) and Board (`?view=board`:
+  one pipeline's deals by stage, drag to move, `DealBoard` from
+  `src/components/crm/pipeline-view.tsx`; each card names its person and
+  company). Report sits beside the switch on the board and opens that
+  pipeline's Deals report in Databases > Reports
+  (`/crm/reports/deals/<pipeline>`).
+- **Deal columns.** The People and Companies tables show Stage and Deal
+  value: the row's open deal, or the most advanced one when there are
+  several, with "+1" for the rest (`rowDeal` in
+  `src/lib/crm/people-view.ts`). The stage links to the deal's card.
+- **The next step keeps the deal's reasons** (`rowNext`): after Merge and
+  Reply, Send the quote (a drafted, declined or expired quote; opens the
+  deal card on its quote), then a due follow-up, then the deal's next
+  step when it's late (Follow up) or missing (Add a next step), both
+  opening the deal's card, then Check in. Otherwise the person's next step
+  in words, else the deal's.
+- **Filters** holds Lists, Owner and Relationship as before, plus
+  Pipeline (when there's more than one), Stage, Deal type and Open, won
+  or lost (`?pipeline=`, `?stage=`, `?type=`, `?show=`;
+  `peopleDealFilters`). On the tables a deal filter narrows to people (or
+  companies) with a matching deal (`ListQuery.deals`, `dealFilterWhere`
+  in `src/server/crm/deals-tab.ts`); a stage alone means that stage
+  whatever its kind, otherwise open deals unless Won, Lost or all is
+  picked. On the board, Lists and Relationship narrow through the deal's
+  people and Owner is the deal's owner.
+- **The heading** reads "{list} {count}"; with a deal filter on, or on
+  the board, also "$X in open deals" (or won, lost, in deals).
+- **Search** covers people, companies and deal names (a person or
+  company matches through its deals' titles; the board also matches the
+  deal's people).
+- **Create** stays New person (New company on Companies), with New
+  company, New deal and Import in its menu.
+
+### Where things moved
+
+| Was | Now |
+| --- | --- |
+| `/crm/deals` (list, board, filters) | `/crm/people?view=board`, with `pipeline`, `stage`, `owner`, `type`, `show`, `q`, `open` and `tab` carried over (`dealsRedirectHref`, `src/lib/crm/redirects.ts`) |
+| A deal's link (`crmRecordHref`) | `/crm/people?view=board&open=deal:<id>` |
+| A pipeline's link (`crmPipelineHref`) | `/crm/people?view=board&pipeline=<id>` |
+| Outreach's plans | Follow-up series (sequences) are a card in CRM settings > Automations, each row opening its plan card over Settings; split lists and group emails are the card under it, with Split a list |
+| A plan's link (`crmPlanHref`, `/crm/outreach?open=plan:...`, `/crm/outreach/sequences/<id>`, `/crm/campaigns/<id>`) | `/crm/settings/automations?open=plan:<type>:<id>`; a member who can't open Automations gets the card over People instead |
+| One email to many (`/crm/outreach/bulk?list=`, `plan:email`) | People's Email them: the same one-email card over People (`?open=plan:email&to=<list>`), approval rules unchanged |
+| Putting someone in a sequence | Add to a follow-up series: the person card's "…" and the selection bar's "…" (`src/components/crm/people/series-dialog.tsx`, `enroll`) |
+| Outreach's Templates, Your mail | CRM settings > Templates, > You (`?view=templates`, `?view=mail` and `/crm/outreach/mail` redirect there) |
+| `/crm/outreach`, `/crm/outreach/sequences`, `/crm/campaigns` | People; the two lists go to Automations |
+
+CRM settings sections render the CRM's cards now (`CrmSettingsFrame`'s
+`overlays`, and `rendersOverlays` covers `/crm/settings/<section>`).
+Removed as unused: `deals-list.tsx`, `deals-toolbar.tsx`, Outreach's
+`plans-view.tsx`, `mail-settings.tsx`, `outreach-header.tsx`,
+`campaigns.tsx`, `sequences.tsx`, `person-section.tsx` and
+`person-controls.tsx`. The server code (`src/server/crm/outreach/`,
+the actions in `crm/outreach/actions.ts`) stays.
+
+Tests: `src/lib/crm/redirects.test.ts` (the redirect mapping, the deal
+filters, the row's deal and its next step), the nav case in
+`src/lib/crm/crm.test.ts`, `src/lib/crm/overlay.test.ts`.
+
+Not done: no browser walkthrough yet; the board shows one pipeline at a
+time (Pipeline in Filters picks it); "$X" sums in the first pipeline's
+currency.
 
 ## Personal CRM
 

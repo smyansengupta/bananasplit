@@ -27,9 +27,9 @@ import { cn } from "@/lib/utils";
 import { NeedsDialog } from "./record-fields";
 
 /**
- * One pipeline as a board, on the Deals tab (?view=board): a column per
- * stage with its dot, count and amount, a card per deal (its type, name and
- * amount) that opens the deal's card over the page. Drag a card to another
+ * One pipeline as a board, People's Board view (?view=board): a column per
+ * stage with its dot, count and amount, a card per deal (its type, name,
+ * who it is with and amount) that opens the deal's card over the page. Drag a card to another
  * stage; a closing stage asks why in the same step, and a stage that needs a
  * field asks for just that. A card past its stage's limit is tinted.
  */
@@ -48,6 +48,8 @@ export interface BoardCard {
   amountCents: number | null;
   currency: string;
   companyName: string | null;
+  /** The person it is with, when it has one. */
+  personName?: string | null;
   type: { label: string; color: ChoiceColor } | null;
   stuck: boolean;
   days: number;
@@ -299,7 +301,11 @@ function Card({ card }: { card: BoardCard }) {
         {card.amountCents !== null && (
           <b className="text-foreground tabular-nums">{formatMoney(card.amountCents, card.currency)}</b>
         )}
-        {card.companyName && <span className="min-w-0 truncate">{card.companyName}</span>}
+        {(card.personName || card.companyName) && (
+          <span className="min-w-0 truncate">
+            {[card.personName, card.companyName].filter(Boolean).join(", ")}
+          </span>
+        )}
         {card.stuck && <span className="ms-auto shrink-0">{card.days} days here</span>}
       </div>
     </div>

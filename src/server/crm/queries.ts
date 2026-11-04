@@ -26,6 +26,8 @@ export interface ListQuery {
   companyId?: string;
   /** Only these records (a hand-picked list, the ones that look like duplicates). */
   ids?: readonly string[];
+  /** Only those with a deal like this (People's Pipeline, Stage, Deal type and Open/Won/Lost filters). */
+  deals?: Prisma.CrmDealWhereInput;
   trash?: boolean;
   sort?: string;
   dir?: "asc" | "desc";
@@ -125,6 +127,7 @@ export function peopleWhere(
     });
   }
   if (query.due === "new") and.push({ createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) } });
+  if (query.deals) and.push({ deals: { some: { deal: { AND: [{ deletedAt: null }, query.deals] } } } });
   if (query.q) {
     const q = query.q;
     and.push({
@@ -134,6 +137,7 @@ export function peopleWhere(
         { emails: { some: { email: { contains: q.toLowerCase() } } } },
         { phone: { contains: q } },
         { company: { name: { contains: q, mode: "insensitive" } } },
+        { deals: { some: { deal: { deletedAt: null, title: { contains: q, mode: "insensitive" } } } } },
       ],
     });
   }
@@ -265,12 +269,14 @@ export function companiesWhere(
     and.push({ lastContactedAt: { lt: new Date(now.getTime() - COLD_AFTER_DAYS * 86_400_000), not: null } });
   }
   if (query.due === "new") and.push({ createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) } });
+  if (query.deals) and.push({ deals: { some: { AND: [{ deletedAt: null }, query.deals] } } });
   if (query.q) {
     and.push({
       OR: [
         { name: { contains: query.q, mode: "insensitive" } },
         { domain: { contains: query.q.toLowerCase() } },
         { industry: { contains: query.q, mode: "insensitive" } },
+        { deals: { some: { deletedAt: null, title: { contains: query.q, mode: "insensitive" } } } },
       ],
     });
   }

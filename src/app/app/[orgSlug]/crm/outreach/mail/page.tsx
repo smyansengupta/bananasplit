@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
-/** Your mail lives on Outreach now (its Your mail round button). */
+import { outreachRedirectHref } from "@/lib/crm/redirects";
+
+/** Your mail is in CRM settings > You. */
 export default async function MailPage({ params }: PageProps<"/app/[orgSlug]/crm/outreach/mail">) {
   const { orgSlug } = await params;
-  redirect(`/app/${orgSlug}/crm/outreach?view=mail`);
+  redirect(outreachRedirectHref(orgSlug, "mail"));
 }

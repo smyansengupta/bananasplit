@@ -17,10 +17,11 @@ import { ownerLabel, rolesHeldBy, type RoleOwner } from "./owners";
 import type { PipelineView } from "./pipelines";
 
 /**
- * The Deals tab's rows (docs/features/crm.md, "Redesign"), read as the
- * viewer (RLS decides): every deal in the pipelines shown, filtered by
- * owner, type, open/won/lost and search, each with its type, its next step
- * and what it asks of you (dealAmbient).
+ * Deals as People reads them (docs/features/crm.md, "One list"), as the
+ * viewer (RLS decides): the Board view's cards, and the deal filters
+ * (pipeline, stage, owner, type, open/won/lost, search) as a where that
+ * People's tables use too. Each row carries its type, its next step and
+ * what it asks of you (dealAmbient).
  */
 
 export interface DealRow {
@@ -32,6 +33,8 @@ export interface DealRow {
   amountCents: number | null;
   currency: string;
   companyName: string | null;
+  /** The person it's with (its first person), for the board's card. */
+  personName: string | null;
   owner: string | null;
   nextStep: string | null;
   nextStepAt: string | null;
@@ -57,30 +60,38 @@ export interface DealsTabData {
 
 const DAY = 86_400_000;
 
-export async function loadDealsTab(
+/** Each pipeline's Type field (null where it has none yet). */
+export async function dealTypeFields(
   db: TxClient,
   organizationId: string,
   pipelines: readonly PipelineView[],
-  filters: DealsFilters,
-  viewer: { id: string; roles: ReadonlyMap<string, RoleOwner>; names: ReadonlyMap<string, string> },
-  now: Date = new Date(),
-): Promise<DealsTabData> {
-  const shown = filters.pipeline ? pipelines.filter((p) => p.id === filters.pipeline) : [...pipelines];
-  const stages: StageLike[] = shown.flatMap((p) =>
-    p.stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, pipelineId: p.id, pipelineName: p.name })),
-  );
-  const typeFields = new Map<string, FieldDef | null>();
-  for (const p of shown) typeFields.set(p.id, dealTypeField(await customFieldsFor(db, organizationId, "deal", p.id)));
-  const typeLabels = [
-    ...new Set(
-      [...typeFields.values()].flatMap((f) => f?.options.choices?.map((c) => c.label) ?? []),
-    ),
-  ];
-  if (shown.length === 0) return { rows: [], stages, typeFields, typeLabels };
+): Promise<Map<string, FieldDef | null>> {
+  const out = new Map<string, FieldDef | null>();
+  for (const p of pipelines) out.set(p.id, dealTypeField(await customFieldsFor(db, organizationId, "deal", p.id)));
+  return out;
+}
 
+/** Every type label the pipelines offer, for Filters. */
+export function typeLabelsOf(fields: ReadonlyMap<string, FieldDef | null>): string[] {
+  return [...new Set([...fields.values()].flatMap((f) => f?.options.choices?.map((c) => c.label) ?? []))];
+}
+
+/**
+ * The deal filters as a where: in these pipelines, this stage, this type,
+ * open, won or lost (or all), this owner, and search over the title, the
+ * company, the next step and the people on it.
+ */
+export function dealFilterWhere(
+  organizationId: string,
+  pipelineIds: readonly string[],
+  filters: Pick<DealsFilters, "stage" | "type" | "show" | "owner" | "q">,
+  typeFields: ReadonlyMap<string, FieldDef | null>,
+  viewer: { id: string; roles: ReadonlyMap<string, RoleOwner> },
+): Prisma.CrmDealWhereInput {
   const and: Prisma.CrmDealWhereInput[] = [
-    { organizationId, deletedAt: null, pipelineId: { in: shown.map((p) => p.id) } },
+    { organizationId, deletedAt: null, pipelineId: { in: [...pipelineIds] } },
   ];
+  if (filters.stage) and.push({ stageId: filters.stage });
   if (filters.show === "open") and.push({ stage: { kind: "OPEN" } });
   if (filters.show === "won") and.push({ stage: { kind: "WON" } });
   if (filters.show === "lost") and.push({ stage: { kind: "LOST" } });
@@ -94,6 +105,7 @@ export async function loadDealsTab(
     // A type is a choice id per pipeline: match whichever pipelines have it.
     const or: Prisma.CrmDealWhereInput[] = [];
     for (const [pipelineId, field] of typeFields) {
+      if (!pipelineIds.includes(pipelineId)) continue;
       const choice = field?.options.choices?.find((c) => c.label.toLowerCase() === filters.type);
       if (field && choice) or.push({ pipelineId, custom: { path: [field.id], equals: choice.id } });
     }
@@ -105,12 +117,40 @@ export async function loadDealsTab(
         { title: { contains: filters.q, mode: "insensitive" } },
         { company: { name: { contains: filters.q, mode: "insensitive" } } },
         { nextStep: { contains: filters.q, mode: "insensitive" } },
+        { people: { some: { person: { name: { contains: filters.q, mode: "insensitive" } } } } },
       ],
     });
   }
+  return { AND: and };
+}
 
+export async function loadDealsTab(
+  db: TxClient,
+  organizationId: string,
+  pipelines: readonly PipelineView[],
+  filters: DealsFilters,
+  viewer: { id: string; roles: ReadonlyMap<string, RoleOwner>; names: ReadonlyMap<string, string> },
+  now: Date = new Date(),
+  /** More to match (People's list or relationship, through the deal's people). */
+  extra?: Prisma.CrmDealWhereInput,
+): Promise<DealsTabData> {
+  const shown = filters.pipeline ? pipelines.filter((p) => p.id === filters.pipeline) : [...pipelines];
+  const stages: StageLike[] = shown.flatMap((p) =>
+    p.stages.map((s) => ({ id: s.id, name: s.name, kind: s.kind, pipelineId: p.id, pipelineName: p.name })),
+  );
+  const typeFields = await dealTypeFields(db, organizationId, shown);
+  const typeLabels = typeLabelsOf(typeFields);
+  if (shown.length === 0) return { rows: [], stages, typeFields, typeLabels };
+
+  const where = dealFilterWhere(
+    organizationId,
+    shown.map((p) => p.id),
+    filters,
+    typeFields,
+    viewer,
+  );
   const found = await db.crmDeal.findMany({
-    where: { AND: and },
+    where: extra ? { AND: [where, extra] } : where,
     orderBy: [{ rank: "asc" }, { id: "asc" }],
     take: 2000,
     select: {
@@ -128,8 +168,10 @@ export async function loadDealsTab(
       closedAt: true,
       closeReason: true,
       sponsorshipId: true,
+      primaryPersonId: true,
       custom: true,
       company: { select: { name: true } },
+      people: { orderBy: { createdAt: "asc" }, take: 5, select: { personId: true, person: { select: { name: true } } } },
       stage: { select: { kind: true, name: true, stuckAfterDays: true } },
     },
   });
@@ -139,6 +181,7 @@ export async function loadDealsTab(
     const next = nextOpenStage(stagesOf.get(d.pipelineId) ?? [], d.stageId);
     const closed = d.stage.kind !== "OPEN";
     const days = Math.max(0, Math.floor((now.getTime() - d.stageEnteredAt.getTime()) / DAY));
+    const person = d.people.find((p) => p.personId === d.primaryPersonId) ?? d.people[0];
     return {
       id: d.id,
       title: d.title,
@@ -148,6 +191,7 @@ export async function loadDealsTab(
       amountCents: d.amountCents,
       currency: d.currency,
       companyName: d.company?.name ?? null,
+      personName: person?.person.name ?? null,
       owner: ownerLabel(d, viewer.roles, viewer.names),
       nextStep: d.nextStep,
       nextStepAt: d.nextStepAt?.toISOString() ?? null,
@@ -174,7 +218,7 @@ export async function loadDealsTab(
   return { rows, stages, typeFields, typeLabels };
 }
 
-/** The pipeline Deals opens on when there are several: the ready-made Deals one, else the first. */
+/** The pipeline the board opens on when there are several: the ready-made Deals one, else the first. */
 export function defaultDealPipeline<P extends { template: string | null }>(pipelines: readonly P[]): P | null {
   return pipelines.find((p) => p.template === "sponsors") ?? pipelines[0] ?? null;
 }

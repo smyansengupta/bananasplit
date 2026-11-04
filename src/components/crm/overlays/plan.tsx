@@ -92,7 +92,7 @@ async function repliesOf(
   return out;
 }
 
-/** An outreach plan's card (?open=plan:...): a sequence or a campaign, or a new one-email or split plan. */
+/** A plan's card (?open=plan:...): a follow-up series or a campaign, or a new one-email or split plan. */
 export async function PlanOverlay({ shell, orgSlug, open, searchParams }: OverlayProps<"plan">) {
   const orgId = shell.org.id;
   const viewerId = shell.user.id;
@@ -166,7 +166,14 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
         orgSlug={orgSlug}
         sender={sender}
         canSend={shell.access.manager}
-        initialList={typeof searchParams.list === "string" ? searchParams.list : null}
+        initialList={
+          // People's "Email them" names its list ?to= (People's own ?list= is its filter).
+          typeof searchParams.to === "string"
+            ? searchParams.to
+            : typeof searchParams.list === "string"
+              ? searchParams.list
+              : null
+        }
       />
     );
   }

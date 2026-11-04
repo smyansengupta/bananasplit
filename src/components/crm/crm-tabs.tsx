@@ -54,7 +54,7 @@ export const CRM_ICONS: Record<string, IconComponent> = {
 };
 
 /**
- * The CRM's four tabs (Today, People, Deals, Outreach): the same switch bar
+ * The CRM's two tabs (Today and People): the same switch bar
  * as every section's pages. A tab stays lit on the older pages it holds.
  */
 export function CrmTabs({ tabs, className }: { tabs: readonly ResolvedCrmTab[]; className?: string }) {

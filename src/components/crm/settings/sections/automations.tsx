@@ -2,17 +2,21 @@ import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import { RecipeGrid, ScoringPanel } from "@/components/crm/automations";
 import { BackLink } from "@/components/back-link";
 import { readAutonomy } from "@/lib/crm/settings-prefs";
+import { listPlans } from "@/server/crm/outreach/plans";
 import { listScoreRules, modelStatus } from "@/server/crm/scoring";
 import { listRecipes, listWorkflows } from "@/server/crm/workflows";
 import { withOrgTx } from "@/server/db/context";
 
 import { RunningCard, TrustCard } from "../automations-settings";
+import { NewSeriesButton, SeriesList, SplitListButton, type SeriesRow } from "../follow-up-series";
 import type { SectionProps } from "./types";
 
 /**
  * Automations: what's running (switches, and a sentence to describe a new
- * one), how much the CRM may do alone; ?view=recipes and ?view=scoring for
- * the ready-made recipes and the score rules. One automation opens at
+ * one), the follow-up series (each opens its card over the page,
+ * ?open=plan:sequence:<id>), split lists and group emails, and how much
+ * the CRM may do alone; ?view=recipes and ?view=scoring for the
+ * ready-made recipes and the score rules. One automation opens at
  * /crm/settings/automations/{id}.
  */
 export async function AutomationsSection({ shell, orgSlug, sp }: SectionProps) {
@@ -28,7 +32,16 @@ export async function AutomationsSection({ shell, orgSlug, sp }: SectionProps) {
       where: { organizationId: orgId },
       select: { autonomy: true },
     });
-    return { workflows, recipes, rules, model, autonomy: readAutonomy(settings?.autonomy) };
+    const plans =
+      view === "running"
+        ? await listPlans(db, orgId, shell.user.id, {
+            relationships: new Map(
+              (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
+            ),
+            members: new Map(shell.members.map((m) => [m.id, m.name])),
+          })
+        : [];
+    return { workflows, recipes, rules, model, plans, autonomy: readAutonomy(settings?.autonomy) };
   });
   const base = `/app/${orgSlug}/crm/settings/automations`;
   if (view === "recipes") {
@@ -48,6 +61,17 @@ export async function AutomationsSection({ shell, orgSlug, sp }: SectionProps) {
     );
   }
   const ready = data.recipes.filter((r) => !r.missing).slice(0, 6);
+  const row = (p: (typeof data.plans)[number]): SeriesRow => ({
+    type: p.type,
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    who: p.who,
+    note: p.note,
+    ambient: p.ambient,
+  });
+  const series = data.plans.filter((p) => p.shape === "steps").map(row);
+  const lists = data.plans.filter((p) => p.shape !== "steps").map(row);
   return (
     <>
       <RunningCard
@@ -63,6 +87,20 @@ export async function AutomationsSection({ shell, orgSlug, sp }: SectionProps) {
           <RecipeGrid orgId={orgId} orgSlug={orgSlug} recipes={ready} />
         </SettingsCard>
       )}
+      <SettingsCard
+        title="Follow-up series"
+        description="Emails, texts and tasks over days that stop when someone replies. Add people from People or from their card. After the first email, each one waits for your OK."
+        action={<NewSeriesButton orgId={orgId} />}
+      >
+        <SeriesList orgId={orgId} rows={series} empty="None yet. A series is who it's for, the steps and who sends." />
+      </SettingsCard>
+      <SettingsCard
+        title="Split lists and group emails"
+        description="A list split among members to reach from their own mailbox, and the emails sent to many people from People."
+        action={<SplitListButton />}
+      >
+        <SeriesList orgId={orgId} rows={lists} empty="None yet. To email a few people at once, pick them on People and press Email them." />
+      </SettingsCard>
       <TrustCard orgId={orgId} initial={data.autonomy} />
     </>
   );

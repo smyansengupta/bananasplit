@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { CrmSettingsFrame } from "@/components/crm/settings/settings-frame";
 import { CRM_SETTINGS_SECTION_VIEWS } from "@/components/crm/settings/sections";
 import {
@@ -8,6 +9,7 @@ import {
   defaultSection,
   findSection,
 } from "@/lib/crm/settings-sections";
+import { hrefWithOpen, OPEN_PARAM, parseOpen } from "@/lib/crm/overlay";
 
 import { crmShell } from "../../shell";
 
@@ -23,7 +25,9 @@ export async function generateMetadata({
  * each its own URL: /crm/settings/{you, automations, sending, stages,
  * fields, templates, booking, phone, team, ai, import, api}. Old sub-pages
  * (webhooks) land on their section; a section the viewer can't open (or
- * Team and access in a Personal space) goes to the one they can.
+ * Team and access in a Personal space) goes to the one they can, except a
+ * card it was opening (a follow-up series' link from the Inbox), which
+ * opens over People instead. Every section renders the CRM's cards (?open=).
  */
 export default async function CrmSettingsSectionPage({
   params,
@@ -41,10 +45,22 @@ export default async function CrmSettingsSectionPage({
     manager: shell.access.manager,
     personal: shell.access.personal,
   };
-  if (!canOpenSection(section, viewer)) redirect(crmSettingsHref(orgSlug, defaultSection(viewer)));
+  if (!canOpenSection(section, viewer)) {
+    const open = parseOpen(sp[OPEN_PARAM]);
+    redirect(
+      open
+        ? hrefWithOpen(`/app/${orgSlug}/crm/people`, "", open)
+        : crmSettingsHref(orgSlug, defaultSection(viewer)),
+    );
+  }
   const View = CRM_SETTINGS_SECTION_VIEWS[section.id];
   return (
-    <CrmSettingsFrame orgSlug={orgSlug} viewer={viewer} section={section}>
+    <CrmSettingsFrame
+      orgSlug={orgSlug}
+      viewer={viewer}
+      section={section}
+      overlays={<CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />}
+    >
       <View shell={shell} orgSlug={orgSlug} sp={sp} />
     </CrmSettingsFrame>
   );

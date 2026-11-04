@@ -1,17 +1,23 @@
 "use client";
 
-import { Building2, UserRound } from "@/components/icons";
+import { Building2, ChartColumn, Columns3, UserRound } from "@/components/icons";
+import Link from "next/link";
 
-import { CrmToolbar, useParamSetter } from "@/components/crm/chrome/crm-toolbar";
+import { CrmFilterPick, CrmToolbar, useParamSetter } from "@/components/crm/chrome/crm-toolbar";
+import { chipClass } from "@/components/ui/segmented";
 import { ExpandChip } from "@/components/ui/toolbar-chips";
 import type { ResolvedCrmTab } from "@/lib/crm/nav";
+import type { PeopleView } from "@/lib/crm/people-view";
 import { cn } from "@/lib/utils";
 
 /**
- * People's toolbar (People.dc.html): the tabs, People and Companies as
- * round buttons (?view=companies), Filters holding Lists (the ones the CRM
- * keeps and the organization's own, each with its count), Owner and
- * Relationship, then search.
+ * People's toolbar (People.dc.html; docs/features/crm.md, "One list"):
+ * the tabs, People, Companies and Board as round buttons (?view=), Report
+ * on the board (its pipeline's Deals report in Databases > Reports),
+ * Filters holding Lists (the ones the CRM keeps and the organization's
+ * own, each with its count), Owner, Relationship and the deal filters
+ * (Pipeline when there's more than one, Stage, Deal type, Open, won or
+ * lost), then search over people, companies and deal names.
  */
 
 export interface ToolbarList {
@@ -34,30 +40,59 @@ function chip(on: boolean) {
   );
 }
 
+const DEAL_KEYS = ["pipeline", "stage", "type", "show"] as const;
+
 export function PeopleToolbar({
   tabs,
-  companies,
+  view,
   lists,
   trash,
   members,
   relationships,
+  deals,
+  reportHref,
 }: {
   tabs: readonly ResolvedCrmTab[];
-  companies: boolean;
+  view: PeopleView;
   lists: readonly ToolbarList[];
   trash: number;
   members: readonly { id: string; name: string }[];
   relationships: readonly { id: string; label: string }[];
+  deals: {
+    pipelines: readonly { id: string; name: string }[];
+    stages: readonly { id: string; label: string }[];
+    types: readonly string[];
+  };
+  /** The board's report (Databases > Reports), when on the board. */
+  reportHref: string | null;
 }) {
   const { params, set } = useParamSetter();
+  const companies = view === "companies";
+  const board = view === "board";
   const list = params.get("list") ?? "";
   const inTrash = params.get("trash") === "1";
   const owner = params.get("owner") ?? "";
   const rel = params.get("rel") ?? "";
-  const count = (list || inTrash ? 1 : 0) + (owner ? 1 : 0) + (rel && !companies ? 1 : 0);
-  // A switch of view starts over: its lists and relationships aren't the other's.
-  const show = (view: "people" | "companies") =>
-    set({ view: view === "companies" ? "companies" : null, list: null, rel: null, page: null, trash: null, open: null });
+  const count =
+    (list || inTrash ? 1 : 0) +
+    (owner ? 1 : 0) +
+    (rel && !companies ? 1 : 0) +
+    DEAL_KEYS.filter((k) => params.get(k)).length;
+  // A switch between People and Companies starts over: their lists and
+  // relationships aren't the other's. The deal filters carry over.
+  const show = (next: PeopleView) => {
+    const patch: Record<string, string | null> = {
+      view: next === "people" ? null : next,
+      page: null,
+      trash: null,
+      open: null,
+    };
+    if ((next === "companies") !== companies) {
+      patch.list = null;
+      patch.rel = null;
+    }
+    set(patch);
+  };
 
   const filters = [
     {
@@ -76,7 +111,7 @@ export function PeopleToolbar({
               <span className="text-muted-foreground text-sm font-medium tabular-nums">{l.count}</span>
             </button>
           ))}
-          {trash > 0 && (
+          {trash > 0 && !board && (
             <button
               type="button"
               aria-pressed={inTrash}
@@ -135,6 +170,86 @@ export function PeopleToolbar({
           },
         ]
       : []),
+    ...(deals.pipelines.length > 1
+      ? [
+          {
+            name: "Pipeline",
+            node: (
+              <CrmFilterPick
+                param="pipeline"
+                also={{ stage: null, page: null }}
+                options={[
+                  { value: "", label: board ? "The main one" : "Every pipeline" },
+                  ...deals.pipelines.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(deals.stages.length > 0
+      ? [
+          {
+            name: "Stage",
+            node: (
+              <CrmFilterPick
+                param="stage"
+                also={{ page: null }}
+                options={[
+                  { value: "", label: "Any stage" },
+                  ...deals.stages.map((s) => ({ value: s.id, label: s.label })),
+                ]}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(deals.types.length > 0
+      ? [
+          {
+            name: "Deal type",
+            node: (
+              <CrmFilterPick
+                param="type"
+                also={{ page: null }}
+                options={[
+                  { value: "", label: "Any type" },
+                  ...deals.types.map((t) => ({ value: t.toLowerCase(), label: t })),
+                ]}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(deals.pipelines.length > 0
+      ? [
+          {
+            name: board ? "Show" : "Deals",
+            node: (
+              <CrmFilterPick
+                param="show"
+                also={{ page: null }}
+                options={
+                  board
+                    ? [
+                        { value: "", label: "Open" },
+                        { value: "won", label: "Won" },
+                        { value: "lost", label: "Lost" },
+                        { value: "all", label: "Open, won and lost" },
+                      ]
+                    : [
+                        { value: "", label: "With a deal or not" },
+                        { value: "open", label: "With an open deal" },
+                        { value: "won", label: "With a won deal" },
+                        { value: "lost", label: "With a lost deal" },
+                        { value: "all", label: "With any deal" },
+                      ]
+                }
+              />
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -142,17 +257,34 @@ export function PeopleToolbar({
       tabs={tabs}
       filters={filters}
       filterCount={count}
-      search={{ placeholder: companies ? "Search companies" : "Search people" }}
+      search={{ placeholder: "Search people, companies and deals" }}
     >
       <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Show">
-        <ExpandChip icon={UserRound} label="People" active={!companies} onClick={() => show("people")} />
+        <ExpandChip icon={UserRound} label="People" active={view === "people"} onClick={() => show("people")} />
         <ExpandChip
           icon={Building2}
           label="Companies"
           active={companies}
           onClick={() => show("companies")}
         />
+        <ExpandChip icon={Columns3} label="Board" active={board} onClick={() => show("board")} />
       </div>
+      {reportHref && (
+        <Link
+          href={reportHref}
+          aria-label="Report"
+          title="Report"
+          className={cn(chipClass(false), "group/expand gap-0 px-3")}
+        >
+          <ChartColumn className="size-4 flex-none" aria-hidden="true" />
+          <span
+            aria-hidden="true"
+            className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-300 ease-(--ease-ink) group-hover/expand:ms-1.5 group-hover/expand:max-w-32 group-hover/expand:opacity-100 group-focus-visible/expand:ms-1.5 group-focus-visible/expand:max-w-32 group-focus-visible/expand:opacity-100 motion-reduce:transition-none"
+          >
+            Report
+          </span>
+        </Link>
+      )}
     </CrmToolbar>
   );
 }

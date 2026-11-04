@@ -300,7 +300,7 @@ export async function inboxListener(organizationId: string, event: CrmEventPaylo
     const link = crmRecordHref(slug, rec.kind, rec.id);
     const base = crmBase(slug);
     const listOf = (kind: CrmTargetKind) =>
-      kind === "deal" ? `${base}/deals` : kind === "company" ? `${base}/people?view=companies` : `${base}/people?list=new`;
+      kind === "deal" ? `${base}/people?view=board` : kind === "company" ? `${base}/people?view=companies` : `${base}/people?list=new`;
     const to = (await ownerOrManagers(db, organizationId, rec, roles)).filter((u) => u !== actorId);
     if (to.length === 0) return;
     const key = meta.jobKey;
@@ -376,7 +376,7 @@ export async function inboxListener(organizationId: string, event: CrmEventPaylo
         linkUrl: link,
         recordId: rec.id,
         actorId,
-        many: (n) => ({ title: `${plural(n, "deal", "deals")} closed`, linkUrl: `${base}/deals` }),
+        many: (n) => ({ title: `${plural(n, "deal", "deals")} closed`, linkUrl: `${base}/people?view=board` }),
         latest: `Latest: ${won ? "won" : "lost"} ${rec.name}`,
         key,
       });
@@ -449,7 +449,7 @@ export async function crmImportDone(
     linkUrl: input.skipped
       ? `${base}/settings/import`
       : input.object === "deal"
-        ? `${base}/deals`
+        ? `${base}/people?view=board`
         : input.object === "company"
           ? `${base}/people?view=companies`
           : `${base}/people?list=new`,
@@ -474,7 +474,7 @@ export async function crmGivenInBulk(
     group: OWN_GROUP[input.kind],
     title: `${plural(input.count, one, many)} ${input.count === 1 ? "is" : "are"} yours now`,
     body: by ? `Given to you by ${by}` : null,
-    linkUrl: input.kind === "deal" ? `${base}/deals` : `${base}/people`,
+    linkUrl: input.kind === "deal" ? `${base}/people?view=board` : `${base}/people`,
     actorId: input.byUserId,
     key: input.batchId,
   });
@@ -502,7 +502,7 @@ export async function crmQuoteEvent(
     ? crmRecordHref(slug, "deal", q.dealId)
     : q.personId
       ? crmRecordHref(slug, "person", q.personId)
-      : `${crmBase(slug)}/deals`;
+      : `${crmBase(slug)}/people?view=board`;
   await crmInbox(db, organizationId, to, {
     type: "CRM_DEAL",
     group: "quote",

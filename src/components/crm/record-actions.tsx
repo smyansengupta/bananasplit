@@ -2,7 +2,7 @@
 
 import { History, Merge, MoreHorizontal, RotateCcw, Trash2, Undo2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { mergeAction, restoreAction, restoreToPointAction, trashAction, undoAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export function RecordActions({
   canMerge = true,
   canTrash = true,
   menu = false,
+  menuItems,
   onTrashed,
 }: {
   orgId: string;
@@ -57,6 +58,8 @@ export function RecordActions({
   canMerge?: boolean;
   canTrash?: boolean;
   menu?: boolean;
+  /** More items at the top of the "…" menu (a person's Add to a follow-up series). */
+  menuItems?: ReactNode;
   onTrashed?: () => void;
 }) {
   const router = useRouter();
@@ -112,7 +115,8 @@ export function RecordActions({
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-60">
+            {menuItems}
             <DropdownMenuItem onSelect={() => setShowHistory(true)}>
               <History className="size-4" aria-hidden="true" />
               History

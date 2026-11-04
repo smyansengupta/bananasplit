@@ -22,8 +22,8 @@ export const OPEN_PARAM = "open";
 export type CrmNewKind = "person" | "company" | "deal";
 
 /**
- * An outreach plan (docs/features/crm.md, "Redesign", Outreach): a
- * sequence (timed steps) or a campaign (a list split among members, or one
+ * A plan (docs/features/crm.md, "One list"): a follow-up series (a
+ * sequence, timed steps) or a campaign (a list split among members, or one
  * email to everyone on it). `email` and `split` are new ones, not saved yet.
  */
 export type CrmPlanType = "sequence" | "campaign";
@@ -160,7 +160,7 @@ export function hrefWithOpen(
  * list (crmRecordHref). Add a page here when it starts rendering overlays.
  */
 const OVERLAY_PAGES =
-  /^\/app\/[^/]+\/crm(?:\/(?:people|companies|deals|outreach|pipelines\/[^/]+))?\/?$/;
+  /^\/app\/[^/]+\/crm(?:\/(?:people|companies|pipelines\/[^/]+|settings\/[^/]+))?\/?$/;
 
 export function rendersOverlays(pathname: string): boolean {
   return OVERLAY_PAGES.test(pathname);

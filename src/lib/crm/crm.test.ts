@@ -354,16 +354,21 @@ describe("small helpers", () => {
     expect(decodeOwner("")).toEqual({ ownerId: null, ownerRoleKey: null });
   });
 
-  it("has four tabs, each lit on the older pages it holds", () => {
+  it("has two tabs, Today and People, People lit on the deal and outreach pages it took in", () => {
     const tabs = resolveCrmTabs("o", [{ id: "p1", name: "Donations" }], { manager: false, counts: { today: 3 } });
-    expect(tabs.map((t) => t.label)).toEqual(["Today", "People", "Deals", "Outreach"]);
+    expect(tabs.map((t) => t.label)).toEqual(["Today", "People"]);
+    expect(tabs.map((t) => t.href)).toEqual(["/app/o/crm", "/app/o/crm/people"]);
     expect(tabs.find((t) => t.id === "today")?.count).toBe(3);
     const lit = (path: string) => tabs.filter((t) => crmTabActive(t, path)).map((t) => t.id);
     expect(lit("/app/o/crm")).toEqual(["today"]);
     expect(lit("/app/o/crm/queue")).toEqual(["today"]);
     expect(lit("/app/o/crm/companies")).toEqual(["people"]);
-    expect(lit("/app/o/crm/pipelines/p1")).toEqual(["deals"]);
-    expect(lit("/app/o/crm/campaigns/c1")).toEqual(["outreach"]);
+    expect(lit("/app/o/crm/deals")).toEqual(["people"]);
+    expect(lit("/app/o/crm/pipelines/p1")).toEqual(["people"]);
+    expect(lit("/app/o/crm/outreach")).toEqual(["people"]);
+    expect(lit("/app/o/crm/outreach/sequences/s1")).toEqual(["people"]);
+    expect(lit("/app/o/crm/campaigns/c1")).toEqual(["people"]);
     expect(lit("/app/o/crm/settings")).toEqual([]);
+    expect(lit("/app/o/crm/settings/automations")).toEqual([]);
   });
 });
