@@ -23,7 +23,7 @@ export async function AiSettingsSection({
   orgId: string;
   orgSlug: string;
   admin: boolean;
-  /** Off in CRM settings > AI, where the organization's keys card has the cap. */
+  /** Off in CRM settings > Connections, where the organization's keys card has the cap. */
   showCap?: boolean;
 }) {
   const [data, connection, connectors] = await Promise.all([

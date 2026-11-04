@@ -30,7 +30,7 @@ export async function RecentCalls({ orgId, orgSlug, userId }: { orgId: string; o
   );
   if (calls.length === 0) return null;
   return (
-    <SettingsCard title="Your recent calls" description="Each person's calls are on their card's Timeline too.">
+    <SettingsCard title="Your recent calls">
       <ul className="divide-border divide-y text-sm">
         {calls.map((c) => (
           <li key={c.id} className="space-y-1.5 py-2">

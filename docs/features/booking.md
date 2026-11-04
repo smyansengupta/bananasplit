@@ -18,10 +18,10 @@ bookings (the public page says it isn't open) and personal links keep
 working. The CRM side of a booking (below) runs only when the CRM is also set
 up.
 
-The CRM keeps pointing here: CRM settings > Booking link opens Meetings >
-Booking links, `/crm/settings/booking`, `/crm/settings/booking/{id}`,
+The CRM keeps pointing here: `/crm/settings/booking`, `/crm/settings/booking/{id}`,
 `/crm/outreach/booking` and `/crm/outreach/booking/{id}` redirect to it
-(with `?edit={id}` opening that link's editor), You shows your own link, and
+(with `?edit={id}` opening that link's editor), You shows your own link and
+turns it on in place, "Get your CRM started" on Today does the same, and
 the person card's `/` menu inserts your link or any organization link.
 
 ## The page

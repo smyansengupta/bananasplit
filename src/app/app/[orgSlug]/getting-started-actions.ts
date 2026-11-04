@@ -55,7 +55,8 @@ export const hideGettingStarted = withOrgAction(
     const previous = row?.startedSkipped ?? [];
     await ctx.db.orgSettings.update({
       where: { organizationId: ctx.organizationId },
-      data: { startedSkipped: [...STARTED_STEP_KEYS] },
+      // The CRM's own checked-off steps share this list ("crm:people") and stay.
+      data: { startedSkipped: [...previous.filter((s) => !isStartedStep(s)), ...STARTED_STEP_KEYS] },
       select: { organizationId: true },
     });
     await writeOrgAuditLog(ctx.db, {
@@ -75,9 +76,14 @@ export const restoreStartedSkipped = withOrgAction(
   async (ctx, previous: unknown): Promise<{ ok: boolean; error?: string }> => {
     requirePermission(ctx, "settings.general.write");
     if (!Array.isArray(previous)) return { ok: false, error: "Nothing to put back." };
+    const row = await ctx.db.orgSettings.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: { startedSkipped: true },
+    });
+    const others = (row?.startedSkipped ?? []).filter((s) => !isStartedStep(s));
     await ctx.db.orgSettings.update({
       where: { organizationId: ctx.organizationId },
-      data: { startedSkipped: previous.filter(isStartedStep) },
+      data: { startedSkipped: [...others, ...previous.filter(isStartedStep)] },
       select: { organizationId: true },
     });
     return { ok: true };

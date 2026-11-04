@@ -4,22 +4,25 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { startImportAction } from "@/app/app/[orgSlug]/crm/actions";
+import { bringInAction, startImportAction } from "@/app/app/[orgSlug]/crm/actions";
 import { fixImportRowAction, letRowGoAction } from "@/app/app/[orgSlug]/crm/settings-actions";
 import { SettingsCard, SettingsStatus } from "@/app/app/[orgSlug]/settings/settings-card";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { Ban } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toaster";
+import type { BringInChoice } from "@/lib/crm/started";
 import { runAction } from "@/lib/run-action";
 
 import { SheetDrop, SheetMatches, type DroppedSheet } from "./sheet-drop";
 
 /**
- * CRM settings > Import and export: a spreadsheet in (matched for you,
+ * CRM settings > Connections: bringing more people in (who Bananasplit
+ * already knows, one click each, or a spreadsheet, matched for you and
  * checked before it's added), the rows an import couldn't bring in with a
- * fix for each, everything out as one zip, and duplicates to merge.
+ * fix for each, duplicates to merge, and everything out as one zip.
  */
 
 export interface RecentImportRow {
@@ -32,13 +35,18 @@ export function ImportCard({
   orgId,
   orgSlug,
   recent,
-  admin = false,
+  choices,
+  duplicates,
+  duplicatesHref,
 }: {
   orgId: string;
   orgSlug: string;
   recent: RecentImportRow[];
-  /** Owners and admins also get the way to bring in who Bananasplit already knows (setup). */
-  admin?: boolean;
+  /** Who Bananasplit knows and the CRM doesn't yet (owners and admins). */
+  choices: BringInChoice[];
+  /** Possible duplicates waiting to merge. */
+  duplicates: number;
+  duplicatesHref: string;
 }) {
   const router = useRouter();
   const [sheet, setSheet] = useState<DroppedSheet | null>(null);
@@ -66,19 +74,34 @@ export function ImportCard({
       setSheet(null);
       router.refresh();
     });
+  const bringKnown = (choice: BringInChoice) =>
+    start(async () => {
+      const r = await runAction(() => bringInAction(orgId, choice.id));
+      if (!r) return;
+      if (!r.ok) {
+        setStatus({ tone: "error", text: r.error });
+        return;
+      }
+      setStatus({
+        tone: "ok",
+        text: r.queued
+          ? `${r.queued.toLocaleString("en-US")} are coming in the background.`
+          : `${(r.added + r.linked).toLocaleString("en-US")} brought in.`,
+      });
+      router.refresh();
+    });
   return (
     <SettingsCard
-      title="Import"
-      description="Columns are matched for you. Anyone already here by email gets only their empty details filled."
+      title="Bring people in"
       status={
         status ? (
           <SettingsStatus status={status} />
         ) : (
           <Link
-            href={admin ? `/app/${orgSlug}/crm/setup` : `/app/${orgSlug}/crm/import`}
+            href={`/app/${orgSlug}/crm/import`}
             className="text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline"
           >
-            {admin ? "Members, event guests and form answers" : "Companies, deals or another CRM's export"}
+            Companies, deals or another CRM&apos;s export
           </Link>
         )
       }
@@ -90,6 +113,22 @@ export function ImportCard({
         ) : undefined
       }
     >
+      {choices.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {choices.map((choice) => (
+            <Button
+              key={choice.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() => bringKnown(choice)}
+            >
+              {choice.label} {choice.n.toLocaleString("en-US")}
+            </Button>
+          ))}
+        </div>
+      )}
       {sheet ? (
         <SheetMatches sheet={sheet} onRemove={() => setSheet(null)} />
       ) : (
@@ -106,6 +145,25 @@ export function ImportCard({
             </li>
           ))}
         </ul>
+      )}
+      {duplicates > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <b className="min-w-0 flex-[1_1_15rem] text-[15px] font-semibold">
+            {duplicates} possible {duplicates === 1 ? "duplicate" : "duplicates"} to merge
+          </b>
+          <AmbientActions
+            why
+            actions={[
+              {
+                key: "review",
+                label: "Review them",
+                tone: "solid",
+                reason: "Same email, phone or name",
+                href: duplicatesHref,
+              },
+            ]}
+          />
+        </div>
       )}
     </SettingsCard>
   );
@@ -225,7 +283,6 @@ export function ExportCard({ orgSlug }: { orgSlug: string }) {
   return (
     <SettingsCard
       title="Export"
-      description="Every person, company and deal as spreadsheets in one zip. It's your data."
       footer={
         <Button asChild>
           <a href={`/app/${orgSlug}/crm/export?kind=all${notes ? "&notes=1" : ""}`} download>
@@ -235,12 +292,9 @@ export function ExportCard({ orgSlug }: { orgSlug: string }) {
       }
     >
       <div className="flex flex-wrap items-center gap-3">
-        <span className="min-w-0 flex-[1_1_16rem]">
-          <b className="block text-[15px] font-semibold">Include notes and emails</b>
-          <span className="text-muted-foreground text-sm">
-            Every timeline entry too. Makes the zip bigger.
-          </span>
-        </span>
+        <b className="min-w-0 flex-[1_1_16rem] text-[15px] font-semibold">
+          Include notes and emails
+        </b>
         <Switch checked={notes} onCheckedChange={setNotes} aria-label="Include notes and emails" />
       </div>
     </SettingsCard>

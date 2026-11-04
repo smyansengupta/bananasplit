@@ -61,7 +61,7 @@ export function outreachRedirectHref(orgSlug: string, from: OutreachFrom, sp: Se
   }
   if (open) return hrefWithOpen(people, {}, open);
   const view = one(sp, "view");
-  if (view === "templates") return `${base}/settings/templates`;
+  if (view === "templates") return `${base}/settings/you#templates`;
   if (view === "mail") return `${base}/settings/you`;
   return people;
 }

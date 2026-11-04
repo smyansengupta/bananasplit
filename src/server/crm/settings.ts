@@ -112,7 +112,7 @@ export async function setRequired(
 }
 
 /**
- * CRM settings > Sending: the window group mail waits for (hours in the
+ * CRM settings > Automations and sending: the window group mail waits for (hours in the
  * organization's timezone, weekends or not) and the unsubscribe line.
  * Whoever runs the CRM. Saved cleaned (readSending).
  */

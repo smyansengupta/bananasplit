@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils";
 import { useSave } from "./use-save";
 
 /**
- * CRM settings > Fields: the custom fields of People, Companies or one
+ * CRM settings > Deals and fields: the custom fields of People, Companies or one
  * pipeline (renamed in place, required or not, deleted), adding one with
  * its type, and the relationship types people are tagged with.
  */
@@ -116,7 +116,6 @@ export function CustomFieldsCard({
       >
         <SettingsCard
           title="Custom fields"
-          description="They show under Details and work in filters, lists and templates."
           status={<SettingsStatus status={status} />}
           footer={
             <Button type="submit" disabled={pending || !ready}>
@@ -274,7 +273,6 @@ export function RelationshipTypesCard({
     >
       <SettingsCard
         title="Relationship types"
-        description="What people are to you. Each person can have one."
         status={<SettingsStatus status={status} />}
         footer={
           <>

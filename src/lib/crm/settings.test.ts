@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { nextInWindow } from "./outreach/schedule";
-import { planOwners, setupSummary, startingKinds } from "./setup-owners";
+import { planOwners, startingKinds } from "./setup-owners";
 import {
   automationEmailReview,
   DEFAULT_SENDING,
@@ -16,8 +16,11 @@ import {
   unsubscribeFooter,
 } from "./settings-prefs";
 import {
+  bookingLinksHref,
   canOpenSection,
+  CRM_SETTINGS_ALIASES,
   CRM_SETTINGS_SECTIONS,
+  crmSettingsAliasHref,
   defaultSection,
   findSection,
   visibleSections,
@@ -29,46 +32,103 @@ const member = { admin: false, manager: false, personal: false };
 const personal = { admin: true, manager: true, personal: true };
 
 describe("CRM settings sections", () => {
-  it("shows owners and admins everything, in the mockup's order", () => {
-    expect(visibleSections(admin).map((s) => s.id)).toEqual(CRM_SETTINGS_SECTIONS.map((s) => s.id));
-    expect(visibleSections(admin)[0]!.id).toBe("you");
+  it("is five sections, You first, for owners and admins", () => {
+    expect(visibleSections(admin).map((s) => s.id)).toEqual([
+      "you",
+      "automations",
+      "deals",
+      "team",
+      "connections",
+    ]);
   });
 
-  it("gives managers the CRM's own sections, not phone, team or API", () => {
-    const ids = visibleSections(manager).map((s) => s.id);
-    expect(ids).toContain("automations");
-    expect(ids).toContain("stages");
-    expect(ids).not.toContain("phone");
-    expect(ids).not.toContain("team");
-    expect(ids).not.toContain("api");
-    // Handing people over is theirs too, though Team and access isn't.
-    expect(ids).toContain("handover");
+  it("gives managers every section; the sections hide what's for admins only", () => {
+    expect(visibleSections(manager).map((s) => s.id)).toEqual(
+      CRM_SETTINGS_SECTIONS.map((s) => s.id),
+    );
+  });
+
+  it("gives every member You alone", () => {
+    expect(visibleSections(member).map((s) => s.id)).toEqual(["you"]);
     expect(canOpenSection(findSection("handover")!, member)).toBe(false);
+    expect(canOpenSection(findSection("templates")!, member)).toBe(true);
   });
 
-  it("gives every member their own sections only", () => {
-    expect(visibleSections(member).map((s) => s.id)).toEqual(["you", "templates", "booking"]);
-  });
-
-  it("hides Team and access in a Personal space", () => {
+  it("hides Team in a Personal space", () => {
     const ids = visibleSections(personal).map((s) => s.id);
-    expect(ids).not.toContain("team");
-    expect(ids).not.toContain("handover");
-    expect(ids).toContain("api");
+    expect(ids).toEqual(["you", "automations", "deals", "connections"]);
     expect(canOpenSection(findSection("team")!, personal)).toBe(false);
+    expect(canOpenSection(findSection("handover")!, personal)).toBe(false);
   });
 
   it("opens on Automations for whoever runs it, else You", () => {
     expect(defaultSection(admin)).toBe("automations");
     expect(defaultSection(manager)).toBe("automations");
+    expect(defaultSection(personal)).toBe("automations");
     expect(defaultSection(member)).toBe("you");
   });
 
-  it("maps the old sub-pages onto their sections", () => {
-    expect(findSection("webhooks")!.id).toBe("api");
-    expect(findSection("handover")!.id).toBe("handover");
-    expect(findSection("phone")!.id).toBe("phone");
+  it("finds nothing for what was never a section", () => {
     expect(findSection("nope")).toBeNull();
+    expect(crmSettingsAliasHref("o", "nope")).toBeNull();
+    expect(crmSettingsAliasHref("o", "you")).toBeNull();
+  });
+});
+
+describe("Old CRM settings links", () => {
+  it("cover every section the old list had but Booking link, which went to Meetings", () => {
+    for (const old of [
+      "sending",
+      "stages",
+      "fields",
+      "templates",
+      "phone",
+      "handover",
+      "ai",
+      "import",
+      "api",
+    ]) {
+      expect(CRM_SETTINGS_ALIASES[old], old).toBeDefined();
+      expect(findSection(old), old).not.toBeNull();
+    }
+    expect(bookingLinksHref("o", "b1")).toBe("/app/o/meetings/booking?edit=b1");
+  });
+
+  it("map onto their sections", () => {
+    const section = (id: string) => findSection(id)!.id;
+    expect(section("mail")).toBe("you");
+    expect(section("templates")).toBe("you");
+    expect(section("sending")).toBe("automations");
+    expect(section("stages")).toBe("deals");
+    expect(section("pipelines")).toBe("deals");
+    expect(section("fields")).toBe("deals");
+    expect(section("access")).toBe("team");
+    expect(section("handover")).toBe("team");
+    expect(section("ai")).toBe("connections");
+    expect(section("phone")).toBe("connections");
+    expect(section("import")).toBe("connections");
+    expect(section("webhooks")).toBe("connections");
+    expect(section("keys")).toBe("connections");
+  });
+
+  it("land on the card, keeping the query", () => {
+    expect(crmSettingsAliasHref("o", "templates")).toBe("/app/o/crm/settings/you#templates");
+    expect(crmSettingsAliasHref("o", "handover")).toBe("/app/o/crm/settings/team#handover");
+    expect(crmSettingsAliasHref("o", "stages", { pipeline: "p1" })).toBe(
+      "/app/o/crm/settings/deals?pipeline=p1",
+    );
+    expect(crmSettingsAliasHref("o", "sending", { open: "person:p1" })).toBe(
+      "/app/o/crm/settings/automations?open=person%3Ap1#sending",
+    );
+  });
+
+  it("still mean People on the old Fields page, unless it said otherwise", () => {
+    expect(crmSettingsAliasHref("o", "fields")).toBe(
+      "/app/o/crm/settings/deals?for=people#fields",
+    );
+    expect(crmSettingsAliasHref("o", "fields", { for: "p1" })).toBe(
+      "/app/o/crm/settings/deals?for=p1#fields",
+    );
   });
 });
 
@@ -232,9 +292,4 @@ describe("Setup: who looks after them", () => {
     expect(startingKinds(true, ["members", "grants"], false)).toEqual(["grants"]);
   });
 
-  it("sums it up in a line", () => {
-    expect(setupSummary(214, "split")).toBe("About 214 people, owners split evenly.");
-    expect(setupSummary(1, null)).toBe("About 1 person.");
-    expect(setupSummary(1200, "none")).toBe("About 1,200 people, no owners yet.");
-  });
 });

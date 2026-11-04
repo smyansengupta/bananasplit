@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-import { BackLink } from "@/components/back-link";
-import { CrmHeader } from "@/components/crm/chrome/crm-header";
+import { SettingsCloseFloat } from "@/components/settings-close";
 import {
   crmSettingsHref,
   visibleSections,
@@ -13,31 +12,22 @@ import { CrmSettingsNav } from "./settings-nav";
 
 /**
  * Every CRM settings page (docs/features/crm.md, "Redesign", Settings): the
- * CRM header titled "CRM settings" with no create button, then the
- * section list on the left and the open section on the right, its title
- * and line on top and its SettingsCards under them. A page under a section
- * (one automation, one booking page) passes `back` and its own title.
- * `overlays` is what's open over it (CrmOverlays, ?open=): a follow-up
- * series' card opens over Automations, and any card a link sets.
+ * title and, kept in view at the top right, the black Close back to where
+ * you came from (Today by default); then the section list on the left and
+ * the open section's cards on the right. With only one section to open
+ * (a member's You) there's no list. `overlays` is what's open over it
+ * (CrmOverlays, ?open=): an automation, a follow-up series, any card.
  */
 export function CrmSettingsFrame({
   orgSlug,
   viewer,
   section,
-  title,
-  description,
-  back,
   overlays,
   children,
 }: {
   orgSlug: string;
   viewer: SettingsViewer;
   section: CrmSettingsSection;
-  /** Defaults to the section's label. */
-  title?: ReactNode;
-  description?: ReactNode;
-  /** A page under the section: the link back to it. */
-  back?: { href: string; label: string };
   /** The card open over the page (CrmOverlays), rendered once after it. */
   overlays?: ReactNode;
   children: ReactNode;
@@ -48,25 +38,21 @@ export function CrmSettingsFrame({
     icon: s.icon,
     href: crmSettingsHref(orgSlug, s.id),
   }));
+  const list = items.length > 1;
   return (
     <div>
-      <CrmHeader
-        orgSlug={orgSlug}
-        title="CRM settings"
-        create={false}
-      />
-      <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-7.5">
-        <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
-          <CrmSettingsNav items={items} />
-        </aside>
+      <SettingsCloseFloat orgSlug={orgSlug} fallback={`/app/${orgSlug}/crm`} />
+      <div className="mb-[30px] flex min-h-9 items-end max-md:mb-5">
+        <h1 className="page-title min-w-0">CRM settings</h1>
+      </div>
+      <div className={list ? "grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-7.5" : undefined}>
+        {list && (
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+            <CrmSettingsNav items={items} />
+          </aside>
+        )}
         <div className="min-w-0 space-y-4.5">
-          {back && <BackLink href={back.href} label={back.label} />}
-          <header className="space-y-1.5 pb-1">
-            <h2 className="display-title text-[28px] sm:text-[34px]">{title ?? section.label}</h2>
-            <p className="text-muted-foreground max-w-prose text-[15px]">
-              {description ?? section.description}
-            </p>
-          </header>
+          <h2 className="display-title pb-1 text-[28px] sm:text-[34px]">{section.label}</h2>
           {children}
         </div>
       </div>

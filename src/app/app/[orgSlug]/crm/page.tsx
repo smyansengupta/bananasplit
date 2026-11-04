@@ -3,6 +3,7 @@ import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { CrmSendingBanner } from "@/components/crm/settings/sending-paused";
+import { CrmStartedSection } from "@/components/crm/today/crm-started-section";
 import { TodayGoals } from "@/components/crm/today/today-goals";
 import { TodayList } from "@/components/crm/today/today-list";
 import { TodayLog } from "@/components/crm/today/today-log";
@@ -32,8 +33,8 @@ function one(v: string | string[] | undefined): string | undefined {
 }
 
 /**
- * The CRM's Today (docs/features/crm.md, "Redesign"): who needs you and
- * why, in one list grouped as Replies, Due today, To approve and Calls,
+ * The CRM's Today (docs/features/crm.md, "Redesign"): "Get your CRM started"
+ * across the top until it's done, then who needs you and why, in one list grouped as Replies, Due today, To approve and Calls,
  * each row with at most two ambient buttons. Power hour works the list one
  * person at a time (?open=power). On the right: Goals, what's coming up,
  * and Done on its own (the latest few things the CRM did without asking,
@@ -47,8 +48,18 @@ export default async function CrmTodayPage({
 }: PageProps<"/app/[orgSlug]/crm">) {
   const { orgSlug } = await params;
   const sp = (await searchParams) as Search;
-  const { gate, shell } = await crmShell(orgSlug);
+  // An owner or admin arrives here before the CRM has its settings: the panel's
+  // first step makes them, so there's nothing else to show yet and nothing is written here.
+  const { gate, shell } = await crmShell(orgSlug, { setup: true });
   if (!shell) return gate;
+  if (!shell.access.settings) {
+    return (
+      <div>
+        <CrmHeader orgSlug={orgSlug} create={false} />
+        <CrmStartedSection shell={shell} orgSlug={orgSlug} />
+      </div>
+    );
+  }
   const orgId = shell.org.id;
   // A Personal space is one person's: everything is theirs, so no Mine and Everyone's.
   const personal = shell.access.personal;
@@ -120,6 +131,9 @@ export default async function CrmTodayPage({
         }
         toolbar={<TodayToolbar tabs={shell.tabs} personal={personal} hasTeam={team.length > 0} />}
       />
+      <Suspense fallback={null}>
+        <CrmStartedSection shell={shell} orgSlug={orgSlug} />
+      </Suspense>
       {!personal && !data.today.mine && !everyone && (
         <p className="text-muted-foreground -mt-3 mb-5 text-sm">
           {who === "team"

@@ -80,7 +80,7 @@ describe("old Outreach links", () => {
   });
 
   it("send Templates and Your mail to their Settings sections", () => {
-    expect(outreachRedirectHref("o", "outreach", { view: "templates" })).toBe("/app/o/crm/settings/templates");
+    expect(outreachRedirectHref("o", "outreach", { view: "templates" })).toBe("/app/o/crm/settings/you#templates");
     expect(outreachRedirectHref("o", "outreach", { view: "mail" })).toBe("/app/o/crm/settings/you");
     expect(outreachRedirectHref("o", "mail")).toBe("/app/o/crm/settings/you");
   });

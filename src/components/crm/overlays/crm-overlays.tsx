@@ -13,6 +13,7 @@ import {
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { getOrgMembersForPicker } from "@/server/members";
 
+import { AutomationOverlay, RecipesOverlay, ScoringOverlay } from "./automation";
 import { CompanyOverlay } from "./company";
 import { CrmCreateHost, type CrmCreateData } from "./create-host";
 import { DealOverlay } from "./deal";
@@ -70,6 +71,9 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   quote: QuoteOverlay,
   calls: CallsOverlay,
   text: TextOverlay,
+  automation: AutomationOverlay,
+  recipes: RecipesOverlay,
+  scoring: ScoringOverlay,
 };
 
 /** What the create dialogs open from: small, and the same for every page. */

@@ -7,7 +7,7 @@ import { checkSender, type SenderCheck } from "./outreach/mailbox";
 import { underCap } from "./spend";
 
 /**
- * Whether the CRM's sending is healthy (CRM settings > Sending, and the
+ * Whether the CRM's sending is healthy (CRM settings > Automations and sending, and the
  * "Sending is paused" banner): the organization's sender, the spending
  * cap, last week's bounces, and the sends that didn't go. Call outside a
  * transaction (the sender check and the cap open their own).

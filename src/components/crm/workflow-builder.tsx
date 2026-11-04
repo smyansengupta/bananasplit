@@ -20,6 +20,8 @@ import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { FORECAST_LABELS, STATUS_LABELS } from "@/lib/crm/fields";
+import { crmAutomationHref } from "@/lib/crm/href";
+import { crmSettingsHref } from "@/lib/crm/settings-sections";
 import {
   ACTION_INFO,
   ACTION_TYPES,
@@ -748,7 +750,6 @@ export function WorkflowBuilder({
   const [adding, setAdding] = useState(false);
   const object = triggerObject(draft.trigger);
   const pipelineId = draft.trigger.params.pipelineId ?? null;
-  const base = `/app/${orgSlug}/crm/settings/automations`;
 
   const save = (next?: "ON" | "OFF") =>
     start(async () => {
@@ -761,7 +762,7 @@ export function WorkflowBuilder({
         return;
       }
       toast({ title: next === "ON" ? "Saved and switched on" : "Saved" });
-      if (!workflowId) router.replace(`${base}/${r.id}`);
+      if (!workflowId) router.replace(crmAutomationHref(orgSlug, r.id), { scroll: false });
       else router.refresh();
     });
 
@@ -820,7 +821,7 @@ export function WorkflowBuilder({
         return;
       }
       toast({ title: "Deleted" });
-      router.replace(base);
+      router.replace(crmSettingsHref(orgSlug, "automations"), { scroll: false });
     });
 
   const setAction = (i: number, a: WorkflowAction) => setDraft({ ...draft, actions: draft.actions.map((x, j) => (j === i ? a : x)) });

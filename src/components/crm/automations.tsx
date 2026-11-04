@@ -21,13 +21,14 @@ import { Input } from "@/components/ui/input";
 import { chipClass } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toaster";
+import { crmAutomationHref } from "@/lib/crm/href";
 import { BEHAVIOURS, BEHAVIOUR_LABELS, type RuleCondition, type ScoreObject } from "@/lib/crm/scoring";
 import { CONDITION_OPS, OP_LABELS, VALUELESS_OPS, WORKFLOW_FIELDS } from "@/lib/crm/workflows";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * CRM settings > Automations' lists: the organization's workflows
+ * CRM settings > Automations and sending's lists: the organization's workflows
  * (switched on and off right on the row), the ready-made recipes (one
  * click), and the score rules with the learned model's state.
  */
@@ -64,13 +65,12 @@ function useAct(orgId: string) {
 }
 
 /**
- * The running list in CRM settings > Automations, inside its card: each
+ * The running list in CRM settings, inside its card: each
  * automation's name and what it does, a failed count when there is one,
  * and its switch on the right (off stops it right away).
  */
 export function WorkflowList({ orgId, orgSlug, rows }: { orgId: string; orgSlug: string; rows: WorkflowRow[] }) {
   const { pending, act } = useAct(orgId);
-  const base = `/app/${orgSlug}/crm/settings/automations`;
   if (rows.length === 0) {
     return <p className="text-muted-foreground py-2 text-sm">None yet. Describe one above, or start from a recipe.</p>;
   }
@@ -78,7 +78,7 @@ export function WorkflowList({ orgId, orgSlug, rows }: { orgId: string; orgSlug:
     <ul className="divide-border divide-y">
       {rows.map((r) => (
         <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
-          <Link href={`${base}/${r.id}`} className="group min-w-0 flex-[1_1_16rem]">
+          <Link href={crmAutomationHref(orgSlug, r.id)} scroll={false} className="group min-w-0 flex-[1_1_16rem]">
             <b className="block text-[15px] font-semibold group-hover:underline">{r.name}</b>
             <span className="text-muted-foreground block text-sm">
               {/[.!?]$/.test(r.summary.trim()) ? r.summary : `${r.summary.trim()}.`}
@@ -113,7 +113,6 @@ const RECIPE_ICONS: Record<string, IconComponent> = { AlarmClock, Briefcase, Han
 
 export function RecipeGrid({ orgId, orgSlug, recipes }: { orgId: string; orgSlug: string; recipes: RecipeCard[] }) {
   const { pending, act } = useAct(orgId);
-  const base = `/app/${orgSlug}/crm/settings/automations`;
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {recipes.map((r) => {
@@ -137,7 +136,7 @@ export function RecipeGrid({ orgId, orgSlug, recipes }: { orgId: string; orgSlug
                 <>
                   <Badge variant="success">On</Badge>
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={`${base}/${r.workflowId}`}>Edit</Link>
+                    <Link href={crmAutomationHref(orgSlug, r.workflowId)} scroll={false}>Edit</Link>
                   </Button>
                   <Button variant="ghost" size="sm" disabled={pending} onClick={() => act(() => setWorkflowStatusAction(orgId, r.workflowId!, "OFF"), "Switched off")}>
                     Switch off
@@ -150,7 +149,7 @@ export function RecipeGrid({ orgId, orgSlug, recipes }: { orgId: string; orgSlug
                   </Button>
                   {r.workflowId && (
                     <Button variant="ghost" size="sm" asChild>
-                      <Link href={`${base}/${r.workflowId}`}>Edit</Link>
+                      <Link href={crmAutomationHref(orgSlug, r.workflowId)} scroll={false}>Edit</Link>
                     </Button>
                   )}
                 </>

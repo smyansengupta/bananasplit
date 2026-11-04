@@ -24,6 +24,13 @@ describe("the ?open= contract", () => {
     expect(parseOpen("log")).toEqual({ kind: "log" });
     expect(parseOpen("ask")).toEqual({ kind: "ask" });
     expect(parseOpen("calls")).toEqual({ kind: "calls" });
+    expect(parseOpen("recipes")).toEqual({ kind: "recipes" });
+    expect(parseOpen("scoring")).toEqual({ kind: "scoring" });
+    expect(parseOpen("automation")).toEqual({ kind: "automation", id: null });
+    expect(parseOpen("automation:w1")).toEqual({ kind: "automation", id: "w1" });
+    expect(parseOpen("automation:no spaces")).toBeNull();
+    expect(formatOpen({ kind: "automation", id: "w1" })).toBe("automation:w1");
+    expect(formatOpen({ kind: "automation", id: null })).toBe("automation");
     expect(parseOpen("text:t_1")).toEqual({ kind: "text", id: "t_1" });
     expect(parseOpen("new:person")).toEqual({ kind: "new", what: "person" });
     expect(parseOpen("new:deal")).toEqual({ kind: "new", what: "deal" });

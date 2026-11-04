@@ -83,6 +83,24 @@ export function crmPlanHref(orgSlug: string, type: "sequence" | "campaign", id: 
   return hrefWithOpen(`${crmBase(orgSlug)}/settings/automations`, "", { kind: "plan", type, id });
 }
 
+/** The full importer: companies, deals, or another CRM's export. */
+export function crmImportHref(orgSlug: string): string {
+  return `${crmBase(orgSlug)}/import`;
+}
+
+/** An automation open over CRM settings; "new" (or null) starts one, from `describe` when given. */
+export function crmAutomationHref(
+  orgSlug: string,
+  id: string | null,
+  describe?: string | null,
+): string {
+  const search = describe ? `describe=${encodeURIComponent(describe)}` : "";
+  return hrefWithOpen(`${crmBase(orgSlug)}/settings/automations`, search, {
+    kind: "automation",
+    id: id === "new" ? null : id,
+  });
+}
+
 /** A pipeline: People as a board, filtered to it. */
 export function crmPipelineHref(orgSlug: string, pipelineId: string): string {
   return crmDealsHref(orgSlug, pipelineId);

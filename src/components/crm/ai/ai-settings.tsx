@@ -88,7 +88,7 @@ export function AiSettings({
   agents: { researchNew: boolean; followUp: boolean; followUpDays: number };
   runs: Run[];
   fields: { id: string; name: string; database: string; auto: AiAuto; research: boolean; hasPrompt: boolean }[];
-  /** The cap form; off where the organization's keys card already has it (CRM settings > AI). */
+  /** The cap form; off where the organization's keys card already has it (CRM settings > Connections). */
   showCap?: boolean;
 }) {
   const router = useRouter();
