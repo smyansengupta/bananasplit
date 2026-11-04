@@ -15,7 +15,7 @@ import { canStopEnrollment } from "@/server/crm/outreach/sequences";
 import { composeTemplates } from "@/server/crm/outreach/view";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
+import { crmCanEnrich, crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 import type { OverlayProps } from "./crm-overlays";
 
@@ -206,7 +206,13 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       timelineItems: await presentTimeline(db, orgId, loaded.timeline),
     };
   });
-  const [status, record, around, members] = await Promise.all([statusP, recordP, aroundP, membersP]);
+  const [status, record, around, members, canEnrich] = await Promise.all([
+    statusP,
+    recordP,
+    aroundP,
+    membersP,
+    crmCanEnrich(orgId),
+  ]);
   if (!record) return <PersonCard orgId={orgId} orgSlug={orgSlug} data={null} />;
   const data = { ...record, ...around };
   const { person } = data.loaded;
@@ -298,6 +304,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
     booking: data.booking,
     series: data.series,
     enrollments: data.enrollments,
+    canEnrich,
   };
   return <PersonCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

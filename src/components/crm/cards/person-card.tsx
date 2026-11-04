@@ -8,6 +8,7 @@ import { stopEnrollmentAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { BiggestIssue, type IssueView } from "@/components/crm/card/biggest-issue";
 import { CardPanel, useCardPanel } from "@/components/crm/card/card-panel";
+import { useFindDetails } from "@/components/crm/card/find-details";
 import { CrmAvatar, CrmCard, CrmCardButton } from "@/components/crm/card/crm-card";
 import { Composer, type ComposerSeed } from "@/components/crm/card/composer";
 import { NextStepBar, type NextStep } from "@/components/crm/card/next-step";
@@ -87,6 +88,8 @@ export interface PersonCardData {
   series: { id: string; name: string }[];
   /** The series they're in now; `canStop` when the viewer may take them out. */
   enrollments: { id: string; name: string; canStop: boolean }[];
+  /** A data connector or AI connection is set up: Find their details is offered. */
+  canEnrich: boolean;
 }
 
 export function PersonCard({
@@ -110,6 +113,12 @@ export function PersonCard({
     hide: seriesHide,
   } = useCardPanel();
   const memberList = data ? Object.entries(data.members).map(([id, name]) => ({ id, name })) : [];
+  const details = useFindDetails({
+    orgId,
+    kind: "person",
+    id: data?.id ?? "",
+    name: data?.name ?? "",
+  });
 
   if (!data) {
     return (
@@ -156,6 +165,7 @@ export function PersonCard({
             menu
             menuItems={
               <>
+                {data.canEnrich && !data.deleted && details.item}
                 <DropdownMenuItem onSelect={() => seriesShow()}>
                   <Repeat className="size-4" aria-hidden="true" />
                   Add to a follow-up series
@@ -181,6 +191,7 @@ export function PersonCard({
             }
             onTrashed={close}
           />
+          {details.panel}
           <span ref={seriesAnchor} hidden />
           {seriesHost && (
             <CardPanel

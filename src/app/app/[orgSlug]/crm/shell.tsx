@@ -12,6 +12,8 @@ import { rolePositions, type RoleOwner } from "@/server/crm/owners";
 import { listPipelines, type PipelineView } from "@/server/crm/pipelines";
 import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/db/context";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
+import { crmConnectionLabel } from "@/server/crm/ai";
+import { connectedDataProviders } from "@/server/crm/data-connectors";
 
 /**
  * Every CRM page starts here: the plan (Team Advanced), the add-on (added
@@ -67,6 +69,18 @@ export const crmMembers = cache(async (organizationId: string): Promise<CrmMembe
 export const crmTeam = cache(async (organizationId: string, userId: string): Promise<string[]> => {
   const positions = await getChartForPage(organizationId).catch(() => null);
   return buildViewerChart(positions, userId).subtree.filter((id) => id !== userId);
+});
+
+/**
+ * Whether "Find their details" can run: a data connector (Hunter, Prospeo,
+ * Tavily) or an AI connection for Claude's web search. Once per request.
+ */
+export const crmCanEnrich = cache(async (organizationId: string): Promise<boolean> => {
+  const [data, ai] = await Promise.all([
+    connectedDataProviders(organizationId).catch(() => []),
+    crmConnectionLabel(organizationId).catch(() => null),
+  ]);
+  return data.length > 0 || ai !== null;
 });
 
 export async function crmMemberNames(organizationId: string): Promise<Map<string, string>> {

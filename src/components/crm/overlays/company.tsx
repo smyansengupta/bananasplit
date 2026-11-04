@@ -10,7 +10,7 @@ import { loadCompany } from "@/server/crm/records";
 import { withOrgTx } from "@/server/db/context";
 
 import type { OverlayProps } from "./crm-overlays";
-import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
+import { crmCanEnrich, crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const DAY = 86_400_000;
 /** Someone at a company nobody has talked to in this long gets the intro button. */
@@ -207,5 +207,5 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
     }),
     members,
   };
-  return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} />;
+  return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} canEnrich={await crmCanEnrich(orgId)} />;
 }
