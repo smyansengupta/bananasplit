@@ -2009,6 +2009,49 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Deal card** is a plain first cut (facts, people, timeline, details)
   until its own design lands. `/crm/deals` lists the pipelines for now.
 
+### Notes and tasks
+
+- **Notes tab** on the person and company cards
+  (`src/components/crm/card/notes.tsx`): the NOTE entries of the record's
+  timeline, newest first (a company's include its people's, each naming
+  who it's about). No second store: a note is a `CrmActivity` of kind NOTE.
+  Notes is its own tab rather than part of Timeline because it's the list
+  you come back to change, and each note can become a task. Whoever wrote
+  a note, or an owner or admin (the row-level rules decide), can change
+  it or delete it, with Undo. New notes come from the card's composer
+  (Note); the company card now has the composer too, with Note and Task.
+- **Make it a task** on any note, and the composer's **Task** channel
+  ("Marcus doesn't like the new export, for Kristine"): the
+  organization's AI (`runCrmAi`, feature `crm.task`, a fast model)
+  writes a task from the note and the record (`draftNoteTask` in
+  `src/server/crm/note-task.ts`, pure rules in `src/lib/crm/note-task.ts`):
+  a title, a description that names them and quotes the note, an
+  assignee (a member the text names wins; else the model's pick from the
+  members with their org chart titles and responsibilities; else the
+  record's owner; else the writer), a due date when the note implies one,
+  a priority. It shows as an editable preview in the card
+  (`task-preview.tsx`) with Create task. Without an AI key it's read
+  plainly from the note and says AI can write it once a key is added in
+  CRM settings > AI. Create task makes a real task in Tasks
+  (`createTask`, `confirmFlagged`), links it to the record (an
+  `ItemLink`, so its linked panel opens the card) with "Open {name} in the
+  CRM" (`?open=person:<id>`) at the foot of the description, and logs
+  "Task created for {name}" on the record's timeline (the link's own
+  row; the nightly mirror keeps that wording). Undo trashes the task and
+  the row.
+- **Biggest issue** (`src/server/crm/issue.ts`, `src/lib/crm/issue.ts`):
+  one line per person, kept on the person's enrichment as
+  `_issue: { text, at, model, sources }` (sources are the `CrmActivity`
+  ids it came from; Reports counts the top issues across people from it).
+  A note (written, changed or deleted), a reply, an incoming text or a
+  call queues the crm-ai job `issue:{personId}` (`issue-queue.ts`, 15
+  seconds out so a burst merges); it asks the model (`crm.issue`, metered
+  and capped like the rest) only when the digest of what it reads
+  (`_issueSeen`) changed. Overview shows it with where it came from;
+  click to change it, X clears it (Undo). A member's own line stays
+  until something new comes in, and stays when the AI then finds nothing.
+  With none yet and something to read, "Find it" asks now.
+
 ## Personal CRM
 
 Built 2026-11-03 on `claude/crm` (152a250e). Every account's Personal space

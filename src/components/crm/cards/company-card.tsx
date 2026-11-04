@@ -5,7 +5,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 import { setNextStepAction } from "@/app/app/[orgSlug]/crm/people-actions";
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
+import { Composer } from "@/components/crm/card/composer";
 import { CrmAvatar, CrmCard } from "@/components/crm/card/crm-card";
+import { NotesList, type NoteItem } from "@/components/crm/card/notes";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
@@ -19,8 +21,9 @@ import { cn } from "@/lib/utils";
  * (?open=company:<id>, Company.dc.html): who they are in the header with
  * "…" for history, merge and the trash; Overview (the next thing anyone
  * here is due to do, what they are, money, the open deal, and someone
- * nobody has talked to with who to ask for an intro), People, Deals and
- * Details (click a value to change it).
+ * nobody has talked to with who to ask for an intro), People, Notes (its
+ * own and its people's; any can become a task), Deals and Details (click a
+ * value to change it). The composer at the foot has Note and Task.
  */
 
 export interface CompanyCardData {
@@ -37,6 +40,9 @@ export interface CompanyCardData {
   deals: { id: string; title: string; kind: string; stage: string; amount: string | null }[];
   form: EditField[];
   history: HistoryItem[];
+  /** Its notes and its people's, newest first. */
+  notes: NoteItem[];
+  members: { id: string; name: string }[];
 }
 
 const ROW =
@@ -82,7 +88,7 @@ export function CompanyCard({
           <CrmAvatar name={data.name} />
         </span>
       }
-      description={`${data.name}: overview, people, deals and details`}
+      description={`${data.name}: overview, people, notes, deals and details`}
       actions={
         <RecordActions
           orgId={orgId}
@@ -99,11 +105,39 @@ export function CompanyCard({
       tabs={[
         { value: "overview", label: "Overview" },
         { value: "people", label: "People", count: data.people.length || undefined },
+        { value: "notes", label: "Notes", count: data.notes.length || undefined },
         { value: "deals", label: "Deals", count: data.deals.length || undefined },
         { value: "details", label: "Details" },
       ]}
+      foot={
+        data.deleted ? undefined : (
+          <Composer
+            orgId={orgId}
+            orgSlug={orgSlug}
+            record={{ kind: "company", id: data.id, name: data.name }}
+            members={data.members}
+            channels={{ email: false, text: false }}
+            conflict={null}
+            templates={[]}
+            booking={null}
+          />
+        )
+      }
     >
       {(tab) => {
+        if (tab === "notes") {
+          return (
+            <NotesList
+              orgId={orgId}
+              orgSlug={orgSlug}
+              target={{ kind: "company", id: data.id }}
+              notes={data.notes}
+              members={data.members}
+              recordName={data.name}
+              readOnly={data.deleted}
+            />
+          );
+        }
         if (tab === "people") {
           return (
             <div className="grid gap-2">

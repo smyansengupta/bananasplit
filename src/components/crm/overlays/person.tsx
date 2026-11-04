@@ -1,11 +1,13 @@
 import { PersonCard, type PersonCardData } from "@/components/crm/cards/person-card";
 import { formatMoney } from "@/lib/crm/fields";
+import { issueSourceLabel, issueSources, readIssue } from "@/lib/crm/issue";
 import { appOrigin } from "@/lib/app-url";
 import { crmDatabaseIds } from "@/server/crm/databases";
 import { readEnrichment, summaryOf } from "@/server/crm/enrichment-store";
 import { formContext, personForm, withRelationLabels } from "@/server/crm/forms";
 import { ownerLabel } from "@/server/crm/owners";
 import { phoneStatus } from "@/server/crm/phone/connection";
+import { timeline } from "@/server/crm/activity";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { loadPerson } from "@/server/crm/records";
 import { conflictFor, contactable } from "@/server/crm/outreach/send";
@@ -48,7 +50,17 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       orgId,
       personForm(person, loaded.fields, fctx, def?.columns),
     );
-    const summary = summaryOf(await readEnrichment(db, orgId, { kind: "person", id: person.id }));
+    const enrichment = await readEnrichment(db, orgId, { kind: "person", id: person.id });
+    const summary = summaryOf(enrichment);
+    // Their notes (the NOTE entries of the timeline), and their biggest issue with what it came from.
+    const notes = await timeline(db, orgId, { kind: "person", id: person.id }, { kinds: ["NOTE"], take: 100 });
+    const issue = readIssue(enrichment);
+    const issueKinds = issue?.sources.length
+      ? await db.crmActivity.findMany({
+          where: { organizationId: orgId, id: { in: issue.sources } },
+          select: { kind: true, direction: true },
+        })
+      : [];
 
     // Their latest message to us that nobody has answered: the one thing to do.
     // Incoming mail is tied to them through its timeline entry.
@@ -147,6 +159,8 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       loaded,
       form,
       summary,
+      notes,
+      issue: issue ? { ...issue, from: issueSourceLabel(issue, issueKinds) } : null,
       replyTo,
       conflict: conflict ? { name: conflictName!, what: conflict.what, at: conflict.at } : null,
       step,
@@ -219,6 +233,17 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
     })),
     form: data.form,
     timeline: data.timelineItems,
+    notes: data.notes.map((n) => ({
+      id: n.id,
+      subject: n.subject,
+      body: n.body,
+      occurredAt: n.occurredAt.toISOString(),
+      by: names.get(n.actorId ?? n.createdById ?? "") ?? null,
+      canEdit: shell.access.admin || n.createdById === viewerId,
+      about: null,
+    })),
+    issue: data.issue,
+    issueSources: issueSources(data.loaded.timeline).length,
     history: presentHistory(data.loaded.history, "person", data.loaded.fields, names),
     members: Object.fromEntries(names),
     channels: {

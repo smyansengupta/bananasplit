@@ -4,7 +4,8 @@ import { crmDatabaseIds } from "@/server/crm/databases";
 import { readEnrichment, summaryOf } from "@/server/crm/enrichment-store";
 import { companyForm, formContext, withRelationLabels } from "@/server/crm/forms";
 import { ownerLabel } from "@/server/crm/owners";
-import { presentHistory } from "@/server/crm/present";
+import { timeline } from "@/server/crm/activity";
+import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { loadCompany } from "@/server/crm/records";
 import { withOrgTx } from "@/server/db/context";
 
@@ -66,7 +67,17 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
       orderBy: { nextStepAt: { sort: "asc", nulls: "last" } },
       select: { id: true, title: true, nextStep: true, nextStepAt: true },
     });
-    return { ...loaded, form, summary, person, deal };
+    // Its notes and its people's (the NOTE entries of the timeline), with who each is about.
+    const notes = await presentTimeline(
+      db,
+      orgId,
+      await timeline(db, orgId, { kind: "company", id: open.id }, { kinds: ["NOTE"], take: 100 }),
+    );
+    const authors = await db.crmActivity.findMany({
+      where: { organizationId: orgId, id: { in: notes.map((n) => n.id) } },
+      select: { id: true, createdById: true },
+    });
+    return { ...loaded, form, summary, person, deal, notes, authors: new Map(authors.map((a) => [a.id, a.createdById])) };
   });
   if (!data) return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={null} />;
   const { company } = data;
@@ -175,6 +186,20 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
     })),
     form: data.form,
     history: presentHistory(data.history, "company", data.fields, names),
+    notes: data.notes.map((n) => {
+      const author = data.authors.get(n.id) ?? null;
+      const about = n.targets.find((t) => t.kind === "person" && t.label);
+      return {
+        id: n.id,
+        subject: n.subject,
+        body: n.body,
+        occurredAt: n.occurredAt,
+        by: names.get(n.actorId ?? author ?? "") ?? null,
+        canEdit: shell.access.admin || author === shell.user.id,
+        about: about ? { id: about.id, label: about.label! } : null,
+      };
+    }),
+    members: shell.members,
   };
   return <CompanyCard orgId={orgId} orgSlug={orgSlug} data={card} />;
 }

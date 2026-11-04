@@ -3,10 +3,12 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { sanitize } from "@/server/jobs/sanitize";
 
+import { CrmError } from "./access";
 import { AiCapError, NoAiConnectionError } from "./ai";
 import { autoFields, fillTurn, pollBatch } from "./ai-fields";
 import { jobWho } from "./ai-tx";
 import { readAgentSettings, runFollowUpAgent, runResearchAgent } from "./agents";
+import { refreshIssue } from "./issue";
 
 /**
  * The CRM's AI jobs (src/server/jobs/registry.ts row crm-ai): filling an
@@ -19,7 +21,7 @@ import { readAgentSettings, runFollowUpAgent, runResearchAgent } from "./agents"
  */
 
 export type CrmAiPayload = {
-  action: "fill" | "batch-poll" | "research" | "follow-up" | "sweep" | "new-record";
+  action: "fill" | "batch-poll" | "research" | "follow-up" | "sweep" | "new-record" | "issue";
   userId?: string;
   fieldId?: string;
   onlyEmpty?: boolean;
@@ -89,6 +91,20 @@ export const crmAiJob: JobHandler<CrmAiPayload> = async (run) => {
       case "new-record":
         await onNewRecord(orgId, p);
         return;
+      case "issue": {
+        if (!p.personId) throw new PermanentJobError("an issue names its person");
+        // As whoever wrote the note (still a member), else the member automatic runs act as.
+        const member = await withSystemOrgTx(orgId, async ({ db }) =>
+          actingMember(db, orgId, p.userId ?? (await readAgentSettings(db, orgId)).by),
+        );
+        if (!member) return;
+        await refreshIssue(jobWho(orgId, member), p.personId, { job: true }).catch((error: unknown) => {
+          // Gone since (merged or trashed): nothing to keep.
+          if (error instanceof CrmError) return;
+          throw error;
+        });
+        return;
+      }
       case "sweep":
         await sweep(orgId);
         return;

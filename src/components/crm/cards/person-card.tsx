@@ -4,9 +4,11 @@ import { Phone } from "@/components/icons";
 import { useState } from "react";
 
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
+import { BiggestIssue, type IssueView } from "@/components/crm/card/biggest-issue";
 import { CrmAvatar, CrmCard, CrmCardButton } from "@/components/crm/card/crm-card";
 import { Composer, type ComposerSeed } from "@/components/crm/card/composer";
 import { NextStepBar, type NextStep } from "@/components/crm/card/next-step";
+import { NotesList, type NoteItem } from "@/components/crm/card/notes";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
@@ -18,9 +20,14 @@ import { cn } from "@/lib/utils";
 /**
  * A person, as a card over whatever CRM page you're on (?open=person:<id>):
  * who they are in the header, with Call when there's a number and "…" for
- * history, merge and the trash; Overview (the next step, the brief, the
- * latest thing and what it needs, money owed), Timeline, Deals and Details
- * (click a value to change it); one composer at the foot.
+ * history, merge and the trash; Overview (the next step, their biggest
+ * issue, the brief, the latest thing and what it needs, money owed),
+ * Timeline, Notes, Deals and Details (click a value to change it); one
+ * composer at the foot (Email, Text, Note, Task).
+ *
+ * Notes is a tab of its own rather than part of Timeline: it's the one
+ * list you come back to change, and each note can become a task, which
+ * would crowd a timeline of emails, RSVPs and stage moves.
  */
 
 export interface PersonCardData {
@@ -52,6 +59,12 @@ export interface PersonCardData {
   }[];
   form: EditField[];
   timeline: TimelineItem[];
+  /** The NOTE entries of their timeline, newest first. */
+  notes: NoteItem[];
+  /** Their biggest issue (enrichment._issue) and where it came from. */
+  issue: IssueView | null;
+  /** Notes, replies and calls it could be read from. */
+  issueSources: number;
   history: HistoryItem[];
   members: Record<string, string>;
   channels: {
@@ -75,6 +88,7 @@ export function PersonCard({
 }) {
   const { setOpen, close } = useCrmOpen();
   const [seed, setSeed] = useState<ComposerSeed | null>(null);
+  const memberList = data ? Object.entries(data.members).map(([id, name]) => ({ id, name })) : [];
 
   if (!data) {
     return (
@@ -102,7 +116,7 @@ export function PersonCard({
       title={data.name}
       subtitle={subtitle || undefined}
       avatar={<CrmAvatar name={data.name} />}
-      description={`${data.name}: overview, timeline, deals and details`}
+      description={`${data.name}: overview, timeline, notes, deals and details`}
       actions={
         <>
           {data.phone && (
@@ -126,6 +140,7 @@ export function PersonCard({
       tabs={[
         { value: "overview", label: "Overview" },
         { value: "timeline", label: "Timeline" },
+        { value: "notes", label: "Notes", count: data.notes.length || undefined },
         { value: "deals", label: "Deals", count: data.deals.length || undefined },
         { value: "details", label: "Details" },
       ]}
@@ -133,7 +148,9 @@ export function PersonCard({
         data.deleted ? undefined : (
           <Composer
             orgId={orgId}
-            person={{ id: data.id, name: data.name }}
+            orgSlug={orgSlug}
+            record={{ kind: "person", id: data.id, name: data.name }}
+            members={memberList}
             channels={{ email: Boolean(data.channels.email), text: Boolean(data.channels.text) }}
             conflict={data.conflict}
             templates={data.templates}
@@ -155,6 +172,19 @@ export function PersonCard({
               members={data.members}
               alsoOn={data.company ? [{ kind: "company", id: data.company.id }] : []}
               logForm={false}
+            />
+          );
+        }
+        if (tab === "notes") {
+          return (
+            <NotesList
+              orgId={orgId}
+              orgSlug={orgSlug}
+              target={{ kind: "person", id: data.id }}
+              notes={data.notes}
+              members={memberList}
+              recordName={data.name}
+              readOnly={data.deleted}
             />
           );
         }
@@ -203,6 +233,13 @@ export function PersonCard({
         return (
           <div className="space-y-4">
             {!data.deleted && <NextStepBar orgId={orgId} personId={data.id} step={data.nextStep} />}
+            <BiggestIssue
+              orgId={orgId}
+              personId={data.id}
+              issue={data.issue}
+              sourceCount={data.issueSources}
+              readOnly={data.deleted}
+            />
             {data.brief && (
               <div className="space-y-2 text-[15px] leading-relaxed">
                 <p>{data.brief.text}</p>
@@ -288,7 +325,7 @@ export function PersonCard({
                 )}
               </div>
             )}
-            {!data.brief && !data.latest && !data.money && (
+            {!data.brief && !data.latest && !data.money && !data.issue && (
               <p className="text-muted-foreground text-sm">
                 Nothing with {first} yet. Write below, or log a call or a note.
               </p>

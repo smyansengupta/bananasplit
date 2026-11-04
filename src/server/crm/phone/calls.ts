@@ -7,6 +7,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
+import { queueIssueRefresh } from "../issue-queue";
 import { closeStep } from "../outreach/sequences";
 import { billedMinutes, meterUseIn } from "../spend";
 import { readPhoneStatus } from "./connection";
@@ -143,6 +144,8 @@ export async function syncCallActivity(
   if (call.activityId !== activityId) {
     await db.crmCall.update({ where: { id: call.id }, data: { activityId } });
   }
+  // Its notes and transcript may change their biggest issue (asked again only when they did).
+  await queueIssueRefresh(db, organizationId, targets.filter((t) => t.kind === "person").map((t) => t.id), call.userId ?? null);
   return activityId;
 }
 
