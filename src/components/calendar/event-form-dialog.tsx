@@ -3,7 +3,7 @@
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { ChevronDown, Globe, MapPin, Ticket, Video, type IconComponent } from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
-import { useId, useRef, useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 
 import {
   createEvent,
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ChoiceCards } from "@/components/ui/form-dialog";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey, allDaySpan } from "@/lib/calendar/dates";
 import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
@@ -1111,10 +1112,16 @@ function EventForm({
 }
 
 /**
- * The shape of a new meeting: three cards, one chosen, a radio group's
- * keyboard. Tab reaches the chosen card only, and the arrow keys move the
- * choice (and focus) to the next or the one before, wrapping round.
+ * The shape of a new meeting: three cards, one chosen (ChoiceCards, a
+ * radio group's keyboard).
  */
+const SHAPE_CARDS = SHAPES.map((shape) => ({
+  value: shape,
+  label: SHAPE_META[shape].label,
+  hint: SHAPE_META[shape].hint,
+  icon: SHAPE_ICON[shape],
+}));
+
 function ShapePicker({
   value,
   onChange,
@@ -1122,63 +1129,8 @@ function ShapePicker({
   value: MeetingShape;
   onChange: (next: MeetingShape) => void;
 }) {
-  const id = useId();
-  const cards = useRef<Partial<Record<MeetingShape, HTMLButtonElement | null>>>({});
-
-  function onKeyDown(keyEvent: React.KeyboardEvent, index: number) {
-    if (keyEvent.altKey || keyEvent.ctrlKey || keyEvent.metaKey) return;
-    const step =
-      keyEvent.key === "ArrowRight" || keyEvent.key === "ArrowDown"
-        ? 1
-        : keyEvent.key === "ArrowLeft" || keyEvent.key === "ArrowUp"
-          ? -1
-          : 0;
-    if (step === 0) return;
-    keyEvent.preventDefault();
-    const next = SHAPES[(index + step + SHAPES.length) % SHAPES.length]!;
-    onChange(next);
-    cards.current[next]?.focus();
-  }
-
   return (
-    <div
-      role="radiogroup"
-      aria-label="Kind of meeting"
-      className="grid grid-cols-1 gap-2 sm:grid-cols-3"
-    >
-      {SHAPES.map((shape, index) => {
-        const selected = shape === value;
-        const Icon = SHAPE_ICON[shape];
-        return (
-          <button
-            key={shape}
-            ref={(node) => {
-              cards.current[shape] = node;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-labelledby={`${id}-${shape}-label`}
-            aria-describedby={`${id}-${shape}-hint`}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(shape)}
-            onKeyDown={(keyEvent) => onKeyDown(keyEvent, index)}
-            className={cn(
-              "focus-visible:outline-foreground flex min-w-0 flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
-              selected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
-            )}
-          >
-            <span className="flex items-center gap-1.5 text-sm font-medium">
-              <Icon aria-hidden className="text-muted-foreground size-4 shrink-0" />
-              <span id={`${id}-${shape}-label`}>{SHAPE_META[shape].label}</span>
-            </span>
-            <span id={`${id}-${shape}-hint`} className="text-muted-foreground text-xs leading-snug">
-              {SHAPE_META[shape].hint}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+    <ChoiceCards label="Kind of meeting" options={SHAPE_CARDS} value={value} onChange={onChange} />
   );
 }
 
