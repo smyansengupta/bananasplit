@@ -84,13 +84,8 @@ const SUBPAGES: Record<string, string> = {
   // Pins saved before Sponsorships became Deals (the old URL redirects).
   "finance/sponsorships": "Deals",
   "finance/transactions": "Transactions",
-  "crm/deals": "CRM deals",
-  "crm/calls": "CRM calls",
   "crm/import": "CRM import",
   "crm/setup": "CRM setup",
-  "crm/forecast": "CRM forecast",
-  "crm/handover": "CRM handover",
-  "crm/settings": "CRM settings",
   "org-chart/import": "Import org chart",
   "org-chart/versions": "Org chart history",
   "setup/status": "Connection status",

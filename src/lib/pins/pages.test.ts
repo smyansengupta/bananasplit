@@ -161,7 +161,9 @@ describe("the CRM's pages", () => {
       href: "/app/cbc/crm/people?list=cmabc123",
       label: "CRM people, A saved list",
     });
-    expect(describePath("cbc", "/app/cbc/crm/deals")).toMatchObject({ label: "CRM deals" });
+    expect(describePath("cbc", "/app/cbc/crm/people?view=board")).toMatchObject({ label: "CRM deals" });
+    // Old pages that only redirect now (deals, calls, forecast, handover) aren't pages to pin.
+    expect(describePath("cbc", "/app/cbc/crm/deals")).toBeNull();
     expect(describePath("cbc", "/app/cbc/crm/settings/automations")).toMatchObject({
       label: "CRM settings, Automations",
     });

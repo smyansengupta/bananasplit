@@ -34,7 +34,6 @@ import { createOrgLink as createBookingPage, updateLink as updateBookingPage } f
 import { lapseCadences } from "./daily";
 import { briefs, handOver } from "./handover";
 import { ingestEmail } from "./inbound";
-import { createGuestLink, loadGuestPage, addDeliverable } from "./partners";
 import { applyUnsubscribe } from "./public";
 import { followUpQueue } from "./queue";
 import { ensureSelfUpdateLink, loadSelfUpdate, saveSelfUpdate } from "./self-update";
@@ -268,7 +267,7 @@ describe("reaching out against the local database", () => {
     expect((await ownerDb.crmPerson.findUniqueOrThrow({ where: { id: p.id } })).nextFollowUpAt).not.toBeNull();
   });
 
-  it("hands one member's relationships to another, with a brief, and gives partners and contacts their own links", async () => {
+  it("hands one member's relationships to another, with a brief, and gives contacts their own link", async () => {
     if (!reachable) return;
     const p = await as(member, (ctx) => createPerson(ctx, { name: "Handed Over" }));
     const access = await as(owner, async (ctx) => (await import("../access")).requireCrm(ctx));
@@ -277,9 +276,8 @@ describe("reaching out against the local database", () => {
     const b = await as(owner, (ctx) => briefs(ctx.db, org, { id: p.id }));
     expect(b[0]?.lines[0]).toContain("member looked after them");
 
-    // Guest link: the partner sees their item and what we owe them.
-    const pipeline = await ownerDb.crmPipeline.findFirstOrThrow({ where: { organizationId: org } });
     // A Deals item is a Finance deal too: it needs its company and an amount.
+    const pipeline = await ownerDb.crmPipeline.findFirstOrThrow({ where: { organizationId: org } });
     const harbor = await as(owner, async (ctx) => (await import("../companies")).createCompany(ctx, { name: "Harbor Light" }));
     const deal = await as(owner, async (ctx) =>
       (await import("../deals")).createDeal(ctx, { pipelineId: pipeline.id, title: "Harbor sponsorship", companyId: harbor.id, amount: 500 }),
@@ -287,13 +285,6 @@ describe("reaching out against the local database", () => {
     const made = await ownerDb.crmDeal.findUniqueOrThrow({ where: { id: deal.id } });
     expect(made.sponsorshipId).not.toBeNull();
     expect(await ownerDb.sponsorship.findUniqueOrThrow({ where: { id: made.sponsorshipId! } })).toMatchObject({ amountCents: 50000, status: "PROSPECT" });
-    await as(owner, (ctx) => addDeliverable(ctx, deal.id, { title: "Logo on shirts" }));
-    const link = await as(owner, (ctx) => createGuestLink(ctx, deal.id, null));
-    const token = link.url.split("/g/")[1]!;
-    const guest = await loadGuestPage(token);
-    expect(guest?.title).toBe("Harbor sponsorship");
-    expect(guest?.deliverables.map((d) => d.title)).toEqual(["Logo on shirts"]);
-    expect(await loadGuestPage("x".repeat(40))).toBeNull();
 
     // Self-update: they fix their own title.
     await as(owner, (ctx) => ensureSelfUpdateLink(ctx.db, org, p.id));

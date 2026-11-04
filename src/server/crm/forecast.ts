@@ -4,8 +4,6 @@ import {
   computeTrend,
   periodOf,
   readSnapshot,
-  shiftPeriod,
-  type CallData,
   type Forecast,
   type ForecastItem,
   type Period,
@@ -16,13 +14,10 @@ import { safeTimeZone } from "@/lib/calendar/dates";
 import { localDateKey } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
-import { CrmError, requireCrm, requireManager, type CrmActor } from "./access";
-
 /**
  * Forecasts per pipeline (docs/features/crm.md, module 8), the server half:
- * the items as the forecast reads them, the weekly snapshot (crm-daily)
- * and a manager's own call. Snapshots are CrmForecastSnapshot rows; a
- * manager's call is one too (data.kind "call"), the newest one standing.
+ * the items as the forecast reads them and the weekly snapshot (crm-daily),
+ * kept as CrmForecastSnapshot rows.
  * Quarters and years are the organization's: a close is counted on its day
  * in the organization's timezone.
  */
@@ -98,23 +93,9 @@ async function closedHistory(db: TxClient, organizationId: string, pipelineId: s
   }));
 }
 
-export interface OwnerRow {
-  ownerId: string | null;
-  commit: number;
-  bestCase: number;
-  pipeline: number;
-  won: number;
-  commitCount: number;
-  bestCaseCount: number;
-  pipelineCount: number;
-  wonCount: number;
-}
-
 export interface PipelineForecast {
   forecast: Forecast;
   trend: Trend;
-  call: (CallData & { at: Date }) | null;
-  byOwner: OwnerRow[];
   /** Open items in the period, for the list under the numbers. */
   items: ForecastItem[];
 }
@@ -131,40 +112,12 @@ export async function pipelineForecast(
   const current = today >= period.start && today <= period.end;
   const forecast = computeForecast(items, period, current);
   const trend = computeTrend(items, period, current, await closedHistory(db, organizationId, pipelineId, ownerId));
-  const owners = new Map<string | null, ForecastItem[]>();
-  for (const i of items) owners.set(i.ownerId, [...(owners.get(i.ownerId) ?? []), i]);
-  const byOwner: OwnerRow[] = [...owners.entries()]
-    .map(([o, list]) => {
-      const f = computeForecast(list, period, current);
-      return {
-        ownerId: o,
-        commit: f.commit.amount,
-        bestCase: f.bestCase.amount,
-        pipeline: f.pipeline.amount,
-        won: f.won.amount,
-        commitCount: f.commit.count,
-        bestCaseCount: f.bestCase.count,
-        pipelineCount: f.pipeline.count,
-        wonCount: f.won.count,
-      };
-    })
-    .filter((r) => r.pipelineCount > 0)
-    .sort((a, b) => b.pipeline - a.pipeline || b.pipelineCount - a.pipelineCount);
-  const callRow = ownerId
-    ? null
-    : await db.crmForecastSnapshot.findFirst({
-        where: { organizationId, pipelineId, periodLabel: `call:${period.key}` },
-        orderBy: { takenAt: "desc" },
-      });
-  const call = callRow ? readSnapshot(callRow.data) : null;
   const open = items.filter(
     (i) => i.stageKind === "OPEN" && (i.expectedOn ? i.expectedOn >= period.start && i.expectedOn <= period.end : current),
   );
   return {
     forecast,
     trend,
-    call: call && call.kind === "call" ? { ...call, at: callRow!.takenAt } : null,
-    byOwner,
     items: open,
   };
 }
@@ -197,7 +150,6 @@ export async function takeSnapshot(
     bestCase: f.forecast.bestCase,
     pipeline: f.forecast.pipeline,
     trend: f.trend.enough ? f.trend.expected : null,
-    call: f.call ? { amount: f.call.amount, count: f.call.count } : null,
     items: f.items.slice(0, 2000).map((i) => ({ id: i.id, c: i.category, a: i.amountCents, s: i.expectedOn ?? "" })),
   };
   await db.crmForecastSnapshot.create({
@@ -229,30 +181,3 @@ export async function snapshotsFor(db: TxClient, organizationId: string, pipelin
     return d && d.kind === "snapshot" ? [{ id: r.id, at: r.takenAt, data: d }] : [];
   });
 }
-
-/** A manager's own call over the roll-up. */
-export async function saveForecastCall(
-  actor: CrmActor,
-  input: { pipelineId: string; periodKey: string; amount: number; count: number; note?: string | null },
-  period: Period,
-): Promise<void> {
-  requireManager(await requireCrm(actor));
-  const { db, organizationId, userId } = actor;
-  const p = await db.crmPipeline.findFirst({ where: { id: input.pipelineId, organizationId }, select: { id: true } });
-  if (!p) throw new CrmError("That pipeline isn't there any more.");
-  if (!Number.isFinite(input.amount) || input.amount < 0 || input.amount > 1e12) throw new CrmError("Give an amount of zero or more.");
-  if (!Number.isFinite(input.count) || input.count < 0 || input.count > 1e6) throw new CrmError("Give a number of zero or more.");
-  const data: CallData = {
-    kind: "call",
-    period: period.key,
-    amount: Math.round(input.amount * 100),
-    count: Math.round(input.count),
-    note: input.note?.trim().slice(0, 300) || null,
-    by: userId,
-  };
-  await db.crmForecastSnapshot.create({
-    data: { organizationId, pipelineId: p.id, periodLabel: `call:${period.key}`, data: data as unknown as Prisma.InputJsonObject },
-  });
-}
-
-export { shiftPeriod };

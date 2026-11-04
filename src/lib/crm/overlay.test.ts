@@ -114,19 +114,16 @@ describe("the ?open= contract", () => {
 });
 
 describe("pages that open cards in place", () => {
-  it("are the tabs, companies, a pipeline's board and a settings section", () => {
-    for (const p of [
-      "/app/o/crm",
-      "/app/o/crm/people",
-      "/app/o/crm/companies",
-      "/app/o/crm/pipelines/p1",
-      "/app/o/crm/settings/automations",
-    ]) {
+  it("are the tabs and a settings section", () => {
+    for (const p of ["/app/o/crm", "/app/o/crm/people", "/app/o/crm/settings/automations"]) {
       expect(rendersOverlays(p)).toBe(true);
     }
     for (const p of [
       "/app/o/crm/settings",
       "/app/o/crm/settings/automations/w1",
+      // Only redirect now.
+      "/app/o/crm/companies",
+      "/app/o/crm/pipelines/p1",
       "/app/o/crm/deals",
       "/app/o/crm/outreach",
       "/app/o/crm/outreach/sequences",

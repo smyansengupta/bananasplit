@@ -1,12 +1,11 @@
 "use server";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { readConsent, readPhoneSettings, type ConsentChannel } from "@/lib/crm/phone";
-import { phoneStatus } from "@/server/crm/phone/connection";
+import { readPhoneSettings } from "@/lib/crm/phone";
 import { CrmError } from "@/server/crm/access";
 import { logCall, startCall, type LogCallInput, type StartedCall } from "@/server/crm/phone/calls";
 import { dropVoicemail, softphoneToken, startRecording, type SoftphoneToken } from "@/server/crm/phone/live";
-import { addTextSender, queueText, setConsent } from "@/server/crm/phone/texts";
+import { addTextSender, queueText } from "@/server/crm/phone/texts";
 import { assertCanSpend, costOf, textSegments } from "@/server/crm/spend";
 
 import { crmAction, crmGate, toResult, type CrmResult } from "./run";
@@ -66,39 +65,6 @@ export async function dropVoicemailAction(orgId: string, callId: string): Promis
     return toResult(error);
   }
 }
-
-export const setConsentAction = crmAction(
-  async (ctx, _access, personId: string, channel: ConsentChannel, input: { granted: boolean; how: string }) => {
-    if (!["email", "text", "call"].includes(channel)) throw new CrmError("Pick text, email or calls.");
-    await setConsent(ctx, personId, channel, input);
-    return {};
-  },
-);
-
-/** One person's texts, whether texting is set up, and their consent: the text window anywhere. */
-export const textThreadAction = crmAction(async (ctx, _access, personId: string) => {
-  const p = await ctx.db.crmPerson.findFirst({
-    where: { id: String(personId), organizationId: ctx.organizationId },
-    select: { id: true, name: true, phone: true, doNotContact: true, consent: true },
-  });
-  if (!p) throw new CrmError("That person isn't in the CRM any more.");
-  const texts = (
-    await ctx.db.crmTextMessage.findMany({
-      where: { organizationId: ctx.organizationId, personId: p.id },
-      orderBy: { sentAt: "desc" },
-      take: 30,
-      select: { id: true, direction: true, body: true, status: true, sentAt: true },
-    })
-  ).reverse();
-  const status = await phoneStatus(ctx.organizationId);
-  const consent = readConsent(p.consent).text;
-  return {
-    name: p.name,
-    texts: texts.map((t) => ({ ...t, sentAt: t.sentAt.toISOString() })),
-    consent: (consent ? (consent.granted ? "granted" : "opted-out") : "none") as "granted" | "opted-out" | "none",
-    enabled: Boolean(status.active && status.number) && !p.doNotContact && Boolean(p.phone),
-  };
-});
 
 /** Adds whoever texted from a number not in the CRM, their texts moving onto their timeline. */
 export const addTextSenderAction = crmAction(async (ctx, _access, textId: string, name: string | null) =>

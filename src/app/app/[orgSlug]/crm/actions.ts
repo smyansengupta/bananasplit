@@ -11,14 +11,14 @@ import { logActivity, timeline, type TimelineEntry } from "@/server/crm/activity
 import { queueIssueRefresh } from "@/server/crm/issue-queue";
 import { bringIn, bringInCounts, BATCH, type BringInSource } from "@/server/crm/bring-in";
 import { bulkTrash, bulkUpdate, restoreToPoint, undoBatch, type BulkPatch } from "@/server/crm/bulk";
-import { createCompany, restoreCompanies } from "@/server/crm/companies";
+import { restoreCompanies } from "@/server/crm/companies";
 import { convertDatabase, previewConvert, type ConvertPreview, type ConvertResult } from "@/server/crm/convert";
 import { addCrmField, deleteCrmField, updateCrmField } from "@/server/crm/databases";
-import { createDeal, moveDeal, restoreDeals, type MoveResult } from "@/server/crm/deals";
-import { resolveDuplicate, scanDuplicates } from "@/server/crm/dedupe";
+import { moveDeal, restoreDeals, type MoveResult } from "@/server/crm/deals";
+import { resolveDuplicate } from "@/server/crm/dedupe";
 import { saveForm } from "@/server/crm/forms";
 import { startImport, type ImportLog } from "@/server/crm/import";
-import { createPerson, restorePeople } from "@/server/crm/people";
+import { restorePeople } from "@/server/crm/people";
 import { archivePipeline, createPipeline, saveStages, updatePipeline, type PipelineSettingsInput, type StageInput } from "@/server/crm/pipelines";
 import { runSetup, type SetupResult } from "@/server/crm/setup";
 import { saveRelationshipTypes, setManagers, setMemberAccess, setRequired } from "@/server/crm/settings";
@@ -91,57 +91,6 @@ export const bringInAction = crmAction(async (ctx, source: BringInSource) => {
 });
 
 // ---- Records ------------------------------------------------------------------------
-
-export interface QuickPerson {
-  name?: string;
-  primaryEmail?: string;
-  phone?: string;
-  title?: string;
-  companyName?: string;
-  companyId?: string;
-  relationship?: string;
-}
-
-export const createPersonAction = crmAction(async (ctx, input: QuickPerson) => {
-  const { id } = await createPerson(ctx, {
-    name: input.name,
-    primaryEmail: input.primaryEmail,
-    phone: input.phone,
-    title: input.title,
-    companyName: input.companyId ? undefined : input.companyName,
-    companyId: input.companyId,
-    relationship: input.relationship || undefined,
-    source: "manual",
-  });
-  await enqueueJob(ctx.db, {
-    orgId: ctx.organizationId,
-    kind: "crm-refresh",
-    key: `p:${id}`,
-    payload: { personId: id },
-  });
-  return { id };
-});
-
-export const createCompanyAction = crmAction(
-  async (ctx, input: { name: string; domain?: string; website?: string; industry?: string }) =>
-    createCompany(ctx, { ...input }),
-);
-
-export const createDealAction = crmAction(
-  async (
-    ctx,
-    input: {
-      pipelineId: string;
-      stageId?: string;
-      title: string;
-      amount?: string | number | null;
-      companyId?: string | null;
-      primaryPersonId?: string | null;
-      nextStep?: string | null;
-      expectedOn?: string | null;
-    },
-  ) => createDeal(ctx, { ...input, source: "manual" }),
-);
 
 export const saveRecordAction = crmAction(
   async (ctx, kind: "person" | "company" | "deal", id: string, patch: Record<string, unknown>) =>
@@ -272,8 +221,6 @@ export const resolveDuplicateAction = crmAction(
     return {};
   },
 );
-
-export const scanDuplicatesAction = crmAction(async (ctx) => scanDuplicates(ctx.db, ctx.organizationId, ctx.userId));
 
 // ---- Pickers ------------------------------------------------------------------------
 

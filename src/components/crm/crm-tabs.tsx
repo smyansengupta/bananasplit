@@ -1,57 +1,14 @@
 "use client";
 
-import {
-  Briefcase,
-  Building2,
-  ChartLine,
-  Columns3,
-  Handshake,
-  HandCoins,
-  Inbox,
-  Megaphone,
-  Merge,
-  Mic,
-  Package,
-  Phone,
-  PiggyBank,
-  ReceiptText,
-  Send,
-  Settings,
-  Sunrise,
-  UserPlus,
-  Users,
-  Zap,
-  type IconComponent,
-} from "@/components/icons";
+import { Columns3, Sunrise, Users, type IconComponent } from "@/components/icons";
 
 import { usePathname } from "next/navigation";
 
 import { PageTabs } from "@/components/ui/page-tabs";
 import { crmTabActive, type ResolvedCrmTab } from "@/lib/crm/nav";
 
-/** Icons the CRM's tabs and pipelines name (src/lib/crm/nav.ts, templates.ts). */
-export const CRM_ICONS: Record<string, IconComponent> = {
-  Briefcase,
-  Building2,
-  ChartLine,
-  Columns3,
-  Handshake,
-  HandCoins,
-  Inbox,
-  Megaphone,
-  Merge,
-  Mic,
-  Package,
-  Phone,
-  PiggyBank,
-  ReceiptText,
-  Send,
-  Settings,
-  Sunrise,
-  UserPlus,
-  Users,
-  Zap,
-};
+/** Icons the CRM's tabs name (src/lib/crm/nav.ts). */
+const CRM_ICONS: Record<string, IconComponent> = { Sunrise, Users };
 
 /**
  * The CRM's two tabs (Today and People): the same switch bar

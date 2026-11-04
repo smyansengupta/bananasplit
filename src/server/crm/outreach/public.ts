@@ -14,7 +14,7 @@ import { readUnsubscribeToken, sha256, TOKEN_RE } from "./tokens";
  * organization's context.
  */
 
-export type PublicKind = "booking" | "booking-guest" | "guest" | "self" | "bcc" | "track";
+export type PublicKind = "booking" | "booking-guest" | "self" | "bcc" | "track";
 
 export interface PublicTarget {
   organizationId: string;
@@ -31,8 +31,8 @@ export async function publicTarget(kind: PublicKind, key: string): Promise<Publi
   });
 }
 
-/** A guest or self-update token, looked up by its hash. */
-export async function tokenTarget(kind: "guest" | "self", token: string): Promise<PublicTarget | null> {
+/** A self-update token, looked up by its hash. */
+export async function tokenTarget(kind: "self", token: string): Promise<PublicTarget | null> {
   if (!TOKEN_RE.test(token)) return null;
   return publicTarget(kind, sha256(token));
 }

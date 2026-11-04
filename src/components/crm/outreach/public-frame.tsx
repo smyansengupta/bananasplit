@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { PublicThemeRoot } from "@/components/theme/public-theme-root";
 
 /**
- * The CRM's public pages (booking, guest links, update your details,
+ * The CRM's public pages (booking, update your details,
  * unsubscribe): one quiet card on the page background, the organization's
  * name under the title, nothing from the CRM beyond what the link is for.
  */

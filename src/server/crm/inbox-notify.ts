@@ -448,8 +448,10 @@ export async function crmImportDone(
     ]
       .filter(Boolean)
       .join(", ") || "Nothing new in it",
+    // Skipped rows are fixed on the import page: any member can import, and
+    // Settings > Import and export is for managers.
     linkUrl: input.skipped
-      ? `${base}/settings/import`
+      ? `${base}/import`
       : input.object === "deal"
         ? `${base}/people?view=board`
         : input.object === "company"

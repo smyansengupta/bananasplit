@@ -37,7 +37,7 @@ import { useRelationContext } from "./relation-cell";
 
 /**
  * The settings of the two field types that need more than a name: what a
- * RELATION field links to (People, Companies, Pipeline items, or the rows
+ * RELATION field links to (People, Companies, Deals, or the rows
  * of one database) and whether it holds one link; what an AI field asks,
  * what it writes, and whether it searches the web first.
  */

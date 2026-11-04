@@ -174,7 +174,7 @@ export function hrefWithOpen(
  * list (crmRecordHref). Add a page here when it starts rendering overlays.
  */
 const OVERLAY_PAGES =
-  /^\/app\/[^/]+\/crm(?:\/(?:people|companies|pipelines\/[^/]+|settings\/[^/]+))?\/?$/;
+  /^\/app\/[^/]+\/crm(?:\/(?:people|settings\/[^/]+))?\/?$/;
 
 export function rendersOverlays(pathname: string): boolean {
   return OVERLAY_PAGES.test(pathname);
