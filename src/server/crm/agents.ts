@@ -6,7 +6,7 @@ import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 
 import { CrmError, type CrmActor } from "./access";
-import { claudeWebResearch, crmCredentials, dataRule, fenced, assertUnderCap, recordAiUsage, runCrmAi, withTier } from "./ai";
+import { claudeWebResearch, crmCredentials, dataRule, fenced, assertUnderCap, recordAiUsage, reserveUnderCap, runCrmAi, withTier } from "./ai";
 import { recordContext } from "./ai-context";
 import type { AiWho } from "./ai-tx";
 import { draftFollowUp } from "./assist";
@@ -231,7 +231,8 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
     if (connected.includes("tavily")) {
       const key = await dataKey(who.organizationId, "tavily");
       const searches = key ? (kind === "company" ? 2 : 1) : 0;
-      await assertUnderCap(who.organizationId, costOf("tavily.search", searches));
+      // Held against the cap until the searches are metered (a hold left by a failure lapses in minutes).
+      const hold = await reserveUnderCap(who.organizationId, costOf("tavily.search", searches));
       log.note(`Searched the web with Tavily for ${ctx.name}.`);
       results = key ? await tavilySearch(key, query, { maxResults: 6 }) : [];
       if (kind === "company" && key) {
@@ -240,6 +241,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
         log.note("Looked for recent news.");
       }
       await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.research", provider: "tavily", what: "tavily.search", units: searches });
+      await hold.release();
       log.note(`${results.length} pages found.`);
       const r = await runCrmAi({
         organizationId: who.organizationId,

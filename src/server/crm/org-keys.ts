@@ -74,7 +74,7 @@ export async function loadOrgKeys(orgId: string, actor: OrgActor, now = new Date
     }),
     usage: await db.aiUsage.groupBy({
       by: ["provider"],
-      where: { organizationId: orgId, paidBy: "ORG_KEY", createdAt: { gte: since } },
+      where: { organizationId: orgId, paidBy: "ORG_KEY", createdAt: { gte: since }, feature: { not: "crm.reserve" } },
       _count: { _all: true },
       _sum: { costMicros: true },
     }),

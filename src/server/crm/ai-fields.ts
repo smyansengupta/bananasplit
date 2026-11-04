@@ -11,6 +11,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { CrmError, type CrmActor } from "./access";
 import {
   assertUnderCap,
+  reserveUnderCap,
   createClaudeBatch,
   crmCredentials,
   dataRule,
@@ -167,10 +168,14 @@ async function research(organizationId: string, ref: AiFieldRef, p: Prepared): P
   const key = await dataKey(organizationId, "tavily");
   if (!key) return [];
   const prompt = cleanText(ref.field.options.prompt, 150) ?? ref.field.name;
-  await assertUnderCap(organizationId, costOf("tavily.search"));
-  const results = await tavilySearch(key, `${p.name} ${prompt}`, { maxResults: 4 });
-  await meterUse({ organizationId, userId: null, feature: "crm.ai_field", provider: "tavily", what: "tavily.search" });
-  return results;
+  const hold = await reserveUnderCap(organizationId, costOf("tavily.search"));
+  try {
+    const results = await tavilySearch(key, `${p.name} ${prompt}`, { maxResults: 4 });
+    await meterUse({ organizationId, userId: null, feature: "crm.ai_field", provider: "tavily", what: "tavily.search" });
+    return results;
+  } finally {
+    await hold.release();
+  }
 }
 
 function userText(ref: AiFieldRef, p: Prepared): string {

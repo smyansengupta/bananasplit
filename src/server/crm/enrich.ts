@@ -4,7 +4,7 @@ import type { Citation, TargetRef } from "@/lib/crm/suggestions";
 import { withSystemOrgTx } from "@/server/db/context";
 
 import { CrmError } from "./access";
-import { claudeWebResearch, crmCredentials, dataRule, fenced, runCrmAi, assertUnderCap, recordAiUsage, withTier } from "./ai";
+import { claudeWebResearch, crmCredentials, dataRule, fenced, runCrmAi, assertUnderCap, recordAiUsage, reserveUnderCap, withTier } from "./ai";
 import type { AiWho } from "./ai-tx";
 import { updateCompany } from "./companies";
 import { costOf, meterUse } from "./spend";
@@ -216,36 +216,41 @@ async function tryStep(
   const key = await dataKey(who.organizationId, step);
   if (!key) return "skip";
   const what = step === "hunter" ? "hunter.lookup" : step === "prospeo" ? "prospeo.lookup" : "tavily.search";
-  await assertUnderCap(who.organizationId, costOf(what));
-  let found: FoundValues | null = null;
-  const urls: Record<string, string> = {};
-  if (step === "hunter") {
-    if (kind === "person") found = s.email ? await hunterPerson(key, s.email) : null;
-    else found = s.domain ? await hunterCompany(key, s.domain) : null;
-    if (found === null && !(kind === "person" ? s.email : s.domain)) return "skip";
-  } else if (step === "prospeo") {
-    if (kind === "company" || (!s.email && !s.linkedinUrl)) return "skip";
-    found = await prospeoPerson(key, { email: s.email, linkedinUrl: s.linkedinUrl });
-  } else {
-    const results = await tavilySearch(key, kind === "person" ? `"${s.name}" ${s.companyName ?? ""} ${s.title ?? ""}` : `${s.name} ${s.domain ?? ""} company`, { maxResults: 5 });
-    await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", what: "tavily.search" });
-    if (results.length === 0) return null;
-    const r = await runCrmAi({
-      organizationId: who.organizationId,
-      userId: who.userId,
-      feature: "crm.enrich",
-      request: {
-        system: enrichSystemPrompt(kind),
-        text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\n<results>\n${fenced(resultsText(results), "results")}\n</results>\n\nList the facts the results state about this ${kind}.`,
-        schema: EnrichOutput,
-        name: "crm_enrich",
-        standin: () => ({ facts: results[0] ? [{ field: kind === "person" ? ("title" as const) : ("description" as const), value: results[0].title.slice(0, 80), source: "1" }] : [], notes: [] }),
-      },
-    });
-    return factsFrom(r.data, results);
+  // Its cost is held against the cap while it runs (calls at once can't all pass a full cap).
+  const hold = await reserveUnderCap(who.organizationId, costOf(what));
+  try {
+    let found: FoundValues | null = null;
+    const urls: Record<string, string> = {};
+    if (step === "hunter") {
+      if (kind === "person") found = s.email ? await hunterPerson(key, s.email) : null;
+      else found = s.domain ? await hunterCompany(key, s.domain) : null;
+      if (found === null && !(kind === "person" ? s.email : s.domain)) return "skip";
+    } else if (step === "prospeo") {
+      if (kind === "company" || (!s.email && !s.linkedinUrl)) return "skip";
+      found = await prospeoPerson(key, { email: s.email, linkedinUrl: s.linkedinUrl });
+    } else {
+      const results = await tavilySearch(key, kind === "person" ? `"${s.name}" ${s.companyName ?? ""} ${s.title ?? ""}` : `${s.name} ${s.domain ?? ""} company`, { maxResults: 5 });
+      await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: "tavily", what: "tavily.search" });
+      if (results.length === 0) return null;
+      const r = await runCrmAi({
+        organizationId: who.organizationId,
+        userId: who.userId,
+        feature: "crm.enrich",
+        request: {
+          system: enrichSystemPrompt(kind),
+          text: `<subject>\n${fenced(subjectLine(s), "subject")}\n</subject>\n\n<results>\n${fenced(resultsText(results), "results")}\n</results>\n\nList the facts the results state about this ${kind}.`,
+          schema: EnrichOutput,
+          name: "crm_enrich",
+          standin: () => ({ facts: results[0] ? [{ field: kind === "person" ? ("title" as const) : ("description" as const), value: results[0].title.slice(0, 80), source: "1" }] : [], notes: [] }),
+        },
+      });
+      return factsFrom(r.data, results);
+    }
+    await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, what });
+    return found ? { values: found, urls } : null;
+  } finally {
+    await hold.release();
   }
-  await meterUse({ organizationId: who.organizationId, userId: who.userId, feature: "crm.enrich", provider: step, what });
-  return found ? { values: found, urls } : null;
 }
 
 /** Runs the waterfall on one person or company. */
