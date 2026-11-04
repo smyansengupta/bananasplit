@@ -250,7 +250,10 @@ export async function todayRows(
             label,
             draftId: draft.id,
             personId: item.id,
-            subject: draft.subject ?? "",
+            // A reply keeps their thread: "Re: <their subject>" when the draft has none.
+            subject:
+              draft.subject ||
+              (replyTo && reply ? `Re: ${reply.label.replace(/^Replied: /, "")}` : ""),
             body: draft.bodyText ?? "",
             replyTo,
           }

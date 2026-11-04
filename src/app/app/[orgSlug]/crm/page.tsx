@@ -6,7 +6,12 @@ import { TodayList } from "@/components/crm/today/today-list";
 import { TodayLog } from "@/components/crm/today/today-log";
 import { TodayToolbar } from "@/components/crm/today/today-toolbar";
 import { hrefWithOpen } from "@/lib/crm/overlay";
-import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/power-hour";
+import {
+  POWER_HOUR_KEY,
+  powerHourBackLabel,
+  powerHourMinutes,
+  powerHourSnoozeUntil,
+} from "@/lib/crm/power-hour";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
 import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
@@ -131,6 +136,14 @@ export default async function CrmTodayPage({
             minutes: powerHourMinutes(powerRows.length),
             drafts: powerRows.filter((r) => r.draft).length,
             snoozed: data.snoozedUntil ? powerHourBackLabel(data.snoozedUntil, now, data.tz) : null,
+            snoozeWhy: powerHourBackLabel(powerHourSnoozeUntil(now, data.tz), now, data.tz).replace(
+              /^Power hour is back/,
+              "Snooze brings it back",
+            ),
+          }}
+          hidden={{
+            count: data.today.rows.length,
+            clearHref: hrefWithOpen(base, { ...sp, show: undefined, q: undefined }, null),
           }}
         />
         <aside className="flex min-w-0 flex-col gap-4">
@@ -166,7 +179,7 @@ export default async function CrmTodayPage({
                   mins < 60
                     ? `Starts in ${Math.max(1, mins)} min`
                     : mins < 24 * 60
-                      ? `Starts in ${Math.round(mins / 60)} hours`
+                      ? `Starts in ${Math.round(mins / 60)} ${Math.round(mins / 60) === 1 ? "hour" : "hours"}`
                       : m.at.toLocaleDateString("en-US", { weekday: "long", timeZone: data.tz });
                 return (
                   <div
