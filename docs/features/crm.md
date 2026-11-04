@@ -2005,7 +2005,7 @@ named by one search param (`src/lib/crm/overlay.ts`):
   is one light strip; Snooze hides it
   until 2 PM, or 8 AM the next day, where the member is
   (`src/lib/crm/power-hour.ts`, an `InboxItemState` row keyed
-  `crm-power-hour`), with Undo.
+  `crm:power-hour`), with Undo.
 - **Person card**: header with Call (when there's a number) and "…",
   tabs Overview (the next step with Done and Push, then two likely next
   steps; the kept brief; the latest thing with Reply when they wrote and

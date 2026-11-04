@@ -6,7 +6,7 @@ import { addDaysToKey, localDateKey, localHour, zonedInstant } from "@/lib/tasks
  */
 
 /** The member's snooze of the strip, an InboxItemState row of their own (not a "crm:" queue key). */
-export const POWER_HOUR_KEY = "crm-power-hour";
+export const POWER_HOUR_KEY = "crm:power-hour";
 
 /** The afternoon hour the strip comes back at, local time. */
 export const POWER_HOUR_AFTERNOON = 14;

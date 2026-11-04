@@ -155,14 +155,16 @@ export function EventCalendar({
     }
   }
 
-  // Then drop the param, so a reload or Back doesn't open another.
+  // Then drop the param, so a reload or Back doesn't open another. Only the
+  // address changes: a router navigation would swap the page for its
+  // loading skeleton behind the open dialog.
   useEffect(() => {
     if (!askedNew) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete(NEW_EVENT_PARAM);
     const search = params.toString();
-    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-  }, [askedNew, searchParams, router, pathname]);
+    window.history.replaceState(null, "", search ? `${pathname}?${search}` : pathname);
+  }, [askedNew, searchParams, pathname]);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null);
   const [shotOpen, setShotOpen] = useState(false);
