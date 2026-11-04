@@ -563,6 +563,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "CRM_REPLY",
           "CRM_REVIEW",
           "CRM_HANDOVER",
+          // A task nobody owns, posted for anyone to take (20261105090000_task_up_for_grabs).
+          "TASK_UP_FOR_GRABS",
           // The CRM in the Inbox (20261106090000_crm_inbox_kinds).
           "CRM_NEW",
           "CRM_BOOKED",
