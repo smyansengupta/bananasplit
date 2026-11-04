@@ -6,7 +6,7 @@ import { PublicThemeRoot } from "@/components/theme/public-theme-root";
 import { initialsOf } from "@/lib/crm/outreach/booking-calendar";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
-import { loadBooking } from "@/server/crm/outreach/booking";
+import { loadBooking } from "@/server/booking/book";
 
 export const metadata: Metadata = { title: "Book a time", robots: { index: false } };
 
@@ -15,8 +15,9 @@ export const metadata: Metadata = { title: "Book a time", robots: { index: false
  * picks a free time and books it, no sign-in. The organization's name and
  * logo on top, then one card: who you're meeting and for how long on the
  * left, a month calendar, the day's times and a short form on the right,
- * and "You're booked" once done. Times come from the hosts' availability
- * and calendars (src/server/crm/outreach/booking.ts). Rate-limited per visitor.
+ * and "You're booked" once done. Times come from the link's hours and the
+ * hosts' calendars in every space they're in (src/server/booking/book.ts;
+ * docs/features/booking.md). Rate-limited per visitor.
  */
 export default async function BookPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -35,7 +36,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
         body="Ask whoever sent it for a new link."
       />
     );
-  const host = page.hosts.length === 1 ? page.hosts[0]!.name : null;
+  const host = page.ownerName ?? (page.hosts.length === 1 ? page.hosts[0]!.name : null);
   return (
     <PublicThemeRoot>
       <main className="bg-background text-foreground flex min-h-dvh flex-col items-center gap-9 px-4 pt-10 pb-16 sm:px-8">
@@ -60,8 +61,8 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
         <BookForm
           slug={slug}
           tz={page.tz}
-          durationMin={page.durationMin}
-          slots={page.slots.map((s) => s.start.toISOString())}
+          durations={page.durations}
+          slots={page.slots}
           questions={page.questions}
           heading={host ? `Meet with ${host}` : page.title}
           hostName={host}
