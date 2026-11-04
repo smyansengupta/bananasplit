@@ -2036,14 +2036,17 @@ named by one search param (`src/lib/crm/overlay.ts`):
   `purpose=fill`); with no AI connected, a pasted signature is read without
   it (`parseSignature`). A line under the name says who's already here, with
   Open (`likelyExisting`, scored like the duplicate scan). It's built like
-  New task and New event from the shared `ui/form-dialog.tsx` pieces: New
-  task's window, header and foot, New event's kind cards for Person,
-  Company and Deal (switching keeps what was typed), the name first and
-  focused, the rest as labelled fields in pairs with selects for
-  Relationship, Owner, Pipeline and Stage. Owner isn't asked in a Personal
-  space. A deal takes company, people, amount, close date, pipeline and
-  stage. Enter or Ctrl+Enter creates and opens the new card;
-  Ctrl+Shift+Enter (Create and open another) keeps it blank for the next.
+  New task from the shared `ui/form-dialog.tsx` pieces: New task's window,
+  header and foot (Cancel, then Create), a small Person, Company, Deal
+  switch under the header's line (switching keeps what was typed), the
+  name as the first field and focused, the rest as labelled fields in
+  pairs, and the signature box under a person's details. Owner is New
+  task's member picker (`MemberOwnerField`), not asked in a Personal space;
+  Pipeline, Stage and Owner share one line when all three are asked. A
+  deal takes company, people, amount, close date, pipeline and stage. The
+  company box saves what's typed even when nothing was picked: the server
+  matches the name to a company here or makes it (`companyToSave`, for a
+  deal too). Enter or Ctrl+Enter creates and opens the new card.
   One email to a list and Split a list (`plan:email`, `plan:split`) use the
   same window; Ctrl+Enter sends, plain Enter doesn't. `/crm/scan` opens it.
 - **Deal card** opens centered with `?open=deal:<id>` over whatever page

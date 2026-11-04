@@ -1,8 +1,8 @@
 import { NewCard, type NewCardWith } from "@/components/crm/cards/new-card";
 import { withOrgTx } from "@/server/db/context";
+import { getOrgMembersForPicker } from "@/server/members";
 
 import type { OverlayProps } from "./crm-overlays";
-import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -46,14 +46,15 @@ export async function NewOverlay({ shell, open, searchParams }: OverlayProps<"ne
     }
     return { company: null, people: [] };
   });
-  const others = (await crmMembers(orgId)).filter((m) => m.id !== shell.user.id);
+  // Owner is New task's picker (faces, names, titles); a Personal space doesn't ask.
+  const members = shell.access.personal ? [] : await getOrgMembersForPicker(orgId);
   return (
     <NewCard
       orgId={orgId}
       what={open.what}
       start={start}
       viewerId={shell.user.id}
-      owners={others.map((m) => ({ id: m.id, label: m.name }))}
+      members={members}
       personal={shell.access.personal}
       pipelines={shell.pipelines.map((p) => ({
         id: p.id,

@@ -66,22 +66,29 @@ export function keepOpenForToasts(e: { target: EventTarget | null; preventDefaul
   if (e.target instanceof Element && e.target.closest("[data-toaster]")) e.preventDefault();
 }
 
-/** The title, the quiet line under it, and the black Close in the corner. */
+/**
+ * The title, the quiet line under it, and the black Close in the corner.
+ * `children` sit under the line (a small switch, never a field).
+ */
 export function FormDialogHead({
   title,
   description,
   className,
+  children,
 }: {
   title: ReactNode;
   description: ReactNode;
   className?: string;
+  children?: ReactNode;
 }) {
   return (
     <DialogHead
       className={cn("shrink-0 ps-6 pe-4 pt-4 pb-2", className)}
       title={title}
       subtitle={<DialogDescription>{description}</DialogDescription>}
-    />
+    >
+      {children}
+    </DialogHead>
   );
 }
 

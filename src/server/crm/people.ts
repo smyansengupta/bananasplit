@@ -88,7 +88,8 @@ function historyFields(p: Partial<PersonRow>): Record<string, unknown> {
   return rest;
 }
 
-async function findCompanyByName(actor: CrmActor, name: string): Promise<string> {
+/** The company here by that name (ignoring case), or a new one by it. */
+export async function findCompanyByName(actor: CrmActor, name: string): Promise<string> {
   const { db, organizationId, userId } = actor;
   const existing = await db.crmCompany.findFirst({
     where: { organizationId, deletedAt: null, name: { equals: name, mode: "insensitive" } },

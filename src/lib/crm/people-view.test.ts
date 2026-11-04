@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  companyToSave,
   defaultPicks,
   duplicateReason,
   lastTalked,
@@ -157,5 +158,29 @@ describe("a pasted signature", () => {
       phone: null,
       website: null,
     });
+  });
+});
+
+describe("the New card's company", () => {
+  it("saves a picked company by id", () => {
+    expect(companyToSave({ id: "c1", label: "Acme" }, "Acme")).toEqual({
+      companyId: "c1",
+      companyName: null,
+    });
+  });
+
+  it("keeps a typed name nobody clicked Add on", () => {
+    expect(companyToSave(null, "  Acme  ")).toEqual({ companyId: null, companyName: "Acme" });
+  });
+
+  it("keeps a new one carried over from another kind", () => {
+    expect(companyToSave({ id: null, label: "Harborlight" }, "")).toEqual({
+      companyId: null,
+      companyName: "Harborlight",
+    });
+  });
+
+  it("saves none when the box is empty", () => {
+    expect(companyToSave(null, "   ")).toEqual({ companyId: null, companyName: null });
   });
 });

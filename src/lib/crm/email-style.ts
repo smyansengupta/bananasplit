@@ -51,7 +51,7 @@ export const EMAIL_STYLE_RULES: readonly string[] = [
   // Shape
   "Plain text: no markdown, bold, headings, bullet lists or emoji.",
   "Short: usually 50 to 150 words, in two or three paragraphs of one to three sentences.",
-  "Subject: a few plain words naming the topic (\"Spring workshop room\", \"Your November pledge\"). No clickbait, no \"Quick question\", no exclamation marks, no title case.",
+  "Subject: a few plain words naming the topic (\"Workshop room for June\", \"Your November pledge\"). No clickbait, no \"Quick question\", no exclamation marks, no title case.",
   "Straight quotes and apostrophes, sentence case throughout.",
   "Before answering, reread it as the contact would and cut anything that could have been sent to anyone.",
 ];

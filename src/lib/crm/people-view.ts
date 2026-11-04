@@ -468,3 +468,21 @@ export function likeliest<T extends { id: string }>(
   }
   return best;
 }
+
+// ---------------------------------------------------------------- the New card's company
+
+/**
+ * The company a new person or deal saves with. One picked from the list
+ * (or filled from a signature) wins; otherwise whatever was typed in the
+ * box counts too, so "Acme" typed without clicking "Add" is never dropped.
+ * A name is matched to a company already here (ignoring case) on the
+ * server, or made.
+ */
+export function companyToSave(
+  picked: { id: string | null; label: string } | null,
+  typed: string,
+): { companyId: string | null; companyName: string | null } {
+  if (picked?.id) return { companyId: picked.id, companyName: null };
+  const name = (picked?.label ?? typed).trim().slice(0, 200);
+  return { companyId: null, companyName: name || null };
+}

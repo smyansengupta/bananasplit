@@ -3,7 +3,7 @@
 import { Building2, Handshake, ImageUp, Loader2, User, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { searchCrmAction, type PickerHit } from "@/app/app/[orgSlug]/crm/actions";
 import {
@@ -17,9 +17,9 @@ import { AMBIENT_BUTTON, AmbientWhy } from "@/components/ambient/ambient-button"
 import { IMAGE_ACCEPT, sendImage, shrinkImage } from "@/components/crm/ai/image";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { CrmPicker } from "@/components/crm/crm-picker";
+import { MemberOwnerField } from "@/components/tasks/task-fields";
 import { Button } from "@/components/ui/button";
 import {
-  ChoiceCards,
   FormDialog,
   FormDialogBody,
   FormDialogFoot,
@@ -28,9 +28,9 @@ import {
   FormField,
   FormRow,
   keepOpenForToasts,
-  type ChoiceCard,
 } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
+import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -40,24 +40,25 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/toaster";
 import { hrefWithOpen, type CrmNewKind } from "@/lib/crm/overlay";
-import { parseSignature, type ContactFill } from "@/lib/crm/people-view";
+import { companyToSave, parseSignature, type ContactFill } from "@/lib/crm/people-view";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
+import type { OrgMemberOption } from "@/server/members";
 
 /**
- * New person, company or deal, built like New task and New event (the
- * shared FormDialog pieces): the header with the black Close, the Person,
- * Company and Deal cards the way New event picks its kind, the name first
- * and focused, the rest as labelled fields in pairs, and the foot with
- * Create, Cancel and Create and open another. Enter or Ctrl+Enter creates;
- * Ctrl+Shift+Enter creates and opens another.
+ * New person, company or deal, built like New task (the shared FormDialog
+ * pieces): the header with the black Close and a small Person, Company,
+ * Deal switch under its line, the name as the first field and focused, the
+ * rest as labelled fields in pairs, and the foot with Cancel then Create.
+ * Enter or Ctrl+Enter creates.
  *
- * For a person, paste an email signature or drop a card photo and the
- * organization's own AI fills the fields in (read without AI when it isn't
- * connected). A line under the name says when they're already here, with
- * Open. Switching kind keeps what was typed. Create opens the new card in
- * its place; Create and open another keeps this one blank for the next. In
- * a Personal space there's nobody else to own it, so Owner isn't asked.
+ * For a person, paste an email signature or drop a card photo (the box
+ * under their details) and the organization's own AI fills the fields in
+ * (read without AI when it isn't connected). A line under the name says
+ * when they're already here, with Open. Switching kind keeps what was
+ * typed, a company still being typed included. Create opens the new card
+ * in its place. Owner is New task's member picker; in a Personal space
+ * there's nobody else to own it, so Owner isn't asked.
  */
 
 export interface NewCardWith {
@@ -73,23 +74,14 @@ type Snapshot = {
   title: string;
   website: string;
   company: Company;
+  companyText: string;
 };
 type Match = { id: string; name: string; sub: string | null; reason: string | null } | null;
 
-const KINDS: readonly ChoiceCard<CrmNewKind>[] = [
-  { value: "person", label: "Person", hint: "Someone you know or want to reach", icon: User },
-  {
-    value: "company",
-    label: "Company",
-    hint: "A business or group you work with",
-    icon: Building2,
-  },
-  {
-    value: "deal",
-    label: "Deal",
-    hint: "Money or a partnership you're working toward",
-    icon: Handshake,
-  },
+const KINDS: readonly { value: CrmNewKind; label: string; icon: typeof User }[] = [
+  { value: "person", label: "Person", icon: User },
+  { value: "company", label: "Company", icon: Building2 },
+  { value: "deal", label: "Deal", icon: Handshake },
 ];
 const TITLES: Record<CrmNewKind, string> = {
   person: "New person",
@@ -101,10 +93,11 @@ const DESCRIPTIONS: Record<CrmNewKind, string> = {
   company: "A name is all it takes. Everything else has a sensible default.",
   deal: "A name is all it takes. It starts in the pipeline's first stage.",
 };
+/** Where it now is, for the toast: deals live on People's Board. */
 const WHERE: Record<CrmNewKind, string> = {
-  person: "People",
-  company: "People, under Companies",
-  deal: "Deals",
+  person: "is in People",
+  company: "is in People, under Companies",
+  deal: "is on People's Board",
 };
 const NAME_LABEL: Record<CrmNewKind, string> = {
   person: "Name",
@@ -114,10 +107,9 @@ const NAME_LABEL: Record<CrmNewKind, string> = {
 const NAME_PLACEHOLDER: Record<CrmNewKind, string> = {
   person: "e.g. Maya Chen",
   company: "e.g. Harborlight",
-  deal: "e.g. Spring showcase sponsorship",
+  deal: "e.g. Annual gala sponsorship",
 };
 
-const NOBODY = "__nobody";
 const NO_RELATIONSHIP = "__none";
 
 export function NewCard({
@@ -125,7 +117,7 @@ export function NewCard({
   what: startWhat,
   start,
   viewerId,
-  owners,
+  members,
   pipelines,
   relationships,
   personal = false,
@@ -134,8 +126,8 @@ export function NewCard({
   what: CrmNewKind;
   start: NewCardWith;
   viewerId: string;
-  /** Other members, for Owner (Me comes first). */
-  owners: { id: string; label: string }[];
+  /** Everyone here, for Owner (New task's picker; you start as the owner). */
+  members: OrgMemberOption[];
   pipelines: { id: string; name: string; stages: { id: string; name: string }[] }[];
   relationships: { id: string; label: string }[];
   /** A Personal space: there's nobody else, so Owner isn't asked. */
@@ -154,9 +146,11 @@ export function NewCard({
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
   const [company, setCompany] = useState<Company>(start.company);
+  // What's in the company box, picked or not: typed and never added, it still counts.
+  const [companyText, setCompanyText] = useState(start.company?.label ?? "");
   const [people, setPeople] = useState(start.people);
   const [relationship, setRelationship] = useState("");
-  const [owner, setOwner] = useState<string>(viewerId);
+  const [owner, setOwner] = useState<string | null>(viewerId);
   const [pipelineId, setPipelineId] = useState(pipelines[0]?.id ?? "");
   const [stageId, setStageId] = useState(pipelines[0]?.stages[0]?.id ?? "");
   const [amount, setAmount] = useState("");
@@ -165,11 +159,18 @@ export function NewCard({
   const [error, setError] = useState<string | null>(null);
   const [filled, setFilled] = useState<{ before: Snapshot; how: string } | null>(null);
   const [match, setMatch] = useState<Match>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
-  // Bumped by a reset, so the company box starts over too.
+  // Bumped by Undo, so the company box starts over too.
   const [round, setRound] = useState(0);
 
-  const snapshot = (): Snapshot => ({ name, email, phone, title, website, company });
+  const snapshot = (): Snapshot => ({
+    name,
+    email,
+    phone,
+    title,
+    website,
+    company,
+    companyText,
+  });
   const restore = (s: Snapshot) => {
     setName(s.name);
     setEmail(s.email);
@@ -177,6 +178,7 @@ export function NewCard({
     setTitle(s.title);
     setWebsite(s.website);
     setCompany(s.company);
+    setCompanyText(s.companyText);
   };
 
   /** Leaves the card: `open` (and what it started with) off the URL, or another card in its place. */
@@ -242,7 +244,10 @@ export function NewCard({
     if (r.email) setEmail(r.email);
     if (r.phone) setPhone(r.phone);
     if (r.title) setTitle(r.title);
-    if (r.company) setCompany({ id: null, label: r.company });
+    if (r.company) {
+      setCompany({ id: null, label: r.company });
+      setCompanyText(r.company);
+    }
     if (r.website) setWebsite(r.website);
   };
 
@@ -284,23 +289,6 @@ export function NewCard({
     );
   };
 
-  const reset = () => {
-    setName("");
-    setEmail("");
-    setPhone("");
-    setTitle("");
-    setWebsite("");
-    setCompany(start.company);
-    setPeople(start.people);
-    setAmount("");
-    setCloses("");
-    setFilled(null);
-    setMatch(null);
-    setError(null);
-    setRound((n) => n + 1);
-    requestAnimationFrame(() => nameRef.current?.focus());
-  };
-
   const ready =
     what === "person"
       ? Boolean(name.trim() || email.trim())
@@ -308,11 +296,13 @@ export function NewCard({
         ? Boolean(name.trim() && pipelineId)
         : Boolean(name.trim());
 
-  async function create(another: boolean) {
+  async function create() {
     if (!ready || pending) return;
     setError(null);
     setPending(true);
-    const ownerId = personal ? viewerId : owner;
+    const ownerId = personal ? viewerId : (owner ?? "");
+    // Picked, carried over from Person, or only typed: never dropped.
+    const companyFields = companyToSave(company, companyText);
     const r =
       what === "person"
         ? await runAction(() =>
@@ -321,8 +311,7 @@ export function NewCard({
               primaryEmail: email.trim() || undefined,
               phone: phone.trim() || undefined,
               title: title.trim() || undefined,
-              companyId: company?.id ?? null,
-              companyName: company && !company.id ? company.label : null,
+              ...companyFields,
               website: website.trim() || null,
               relationship: relationship || null,
               ownerId,
@@ -343,7 +332,7 @@ export function NewCard({
                 title: name.trim(),
                 amount: amount.trim() || null,
                 expectedOn: closes || null,
-                companyId: company?.id ?? null,
+                ...companyFields,
                 people: people.map((p) => p.id),
                 ownerId,
               }),
@@ -352,13 +341,7 @@ export function NewCard({
     if (!r) return;
     if (!r.ok) return setError(r.error);
     const made = name.trim() || email.trim() || TITLES[what].replace("New ", "The new ");
-    if (another) {
-      toast({ title: `${made} is in ${WHERE[what]}. This one is blank for the next.` });
-      reset();
-      router.refresh();
-      return;
-    }
-    toast({ title: `${made} is in ${WHERE[what]}.` });
+    toast({ title: `${made} ${WHERE[what]}.` });
     leave(`${what}:${r.id}`);
   }
 
@@ -371,70 +354,87 @@ export function NewCard({
       .split("/")[0] ?? "";
   const id = (field: string) => `${ids}-${field}`;
 
+  // New task's owner picker: faces and names, "You" beside yourself.
   const ownerField = personal ? null : (
     <FormField label="Owner" htmlFor={id("owner")}>
-      <Select value={owner || NOBODY} onValueChange={(v) => setOwner(v === NOBODY ? "" : v)}>
-        <SelectTrigger id={id("owner")} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={viewerId}>Me</SelectItem>
-          {owners.map((o) => (
-            <SelectItem key={o.id} value={o.id}>
-              {o.label}
-            </SelectItem>
-          ))}
-          <SelectItem value={NOBODY}>Nobody</SelectItem>
-        </SelectContent>
-      </Select>
+      <MemberOwnerField
+        id={id("owner")}
+        value={owner}
+        onChange={setOwner}
+        members={members}
+        hint={(m) =>
+          m.id === viewerId || m.title ? (
+            <small className="text-muted-foreground ms-auto max-w-28 shrink-0 truncate text-xs font-normal">
+              {m.id === viewerId ? "You" : m.title}
+            </small>
+          ) : null
+        }
+      />
     </FormField>
   );
+  // One box for a person's company and a deal's: switching kind keeps it.
+  const companyField = (
+    <FormField label="Company" htmlFor={id("company")}>
+      <CompanyInput
+        key={round}
+        id={id("company")}
+        orgId={orgId}
+        value={company}
+        text={companyText}
+        onText={setCompanyText}
+        onChange={setCompany}
+      />
+    </FormField>
+  );
+  const fillBox =
+    what !== "person" ? null : filled ? (
+      <div className="bg-muted rounded-field flex flex-nowrap items-center gap-3 px-3.5 py-2">
+        <span className="min-w-0 flex-1 text-sm">{filled.how}</span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            restore(filled.before);
+            setFilled(null);
+            setRound((n) => n + 1);
+          }}
+        >
+          Undo
+        </Button>
+      </div>
+    ) : (
+      <FillZone onText={readText} onImage={readImage} />
+    );
+  // Pipeline, Stage and Owner share one line when all three are asked, so
+  // Owner never sits alone on a line of its own.
+  const dealLine =
+    [pipelines.length > 1, (pipeline?.stages.length ?? 0) > 0, ownerField !== null].filter(Boolean)
+      .length === 3;
 
   return (
     <FormDialog open onOpenChange={(o) => !o && leave(null)} onInteractOutside={keepOpenForToasts}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void create(false);
+          void create();
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
-            void create(e.shiftKey);
+            void create();
           }
         }}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <FormDialogHead title={TITLES[what]} description={DESCRIPTIONS[what]} />
+        <FormDialogHead title={TITLES[what]} description={DESCRIPTIONS[what]}>
+          <KindSwitch value={what} onChange={pickKind} />
+        </FormDialogHead>
 
         <FormDialogBody>
-          <ChoiceCards label="What to add" options={KINDS} value={what} onChange={pickKind} />
-
-          {what === "person" &&
-            (filled ? (
-              <div className="bg-muted rounded-field flex flex-nowrap items-center gap-3 px-3.5 py-2">
-                <span className="min-w-0 flex-1 text-sm">{filled.how}</span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    restore(filled.before);
-                    setFilled(null);
-                    setRound((n) => n + 1);
-                  }}
-                >
-                  Undo
-                </Button>
-              </div>
-            ) : (
-              <FillZone onText={readText} onImage={readImage} />
-            ))}
-
           <FormField label={NAME_LABEL[what]} htmlFor={id("name")}>
             <Input
               id={id("name")}
-              ref={nameRef}
               autoFocus
               required={what !== "person"}
               maxLength={200}
@@ -488,15 +488,7 @@ export function NewCard({
                 </FormField>
               </FormRow>
               <FormRow>
-                <FormField label="Company" htmlFor={id("company")}>
-                  <CompanyInput
-                    key={round}
-                    id={id("company")}
-                    orgId={orgId}
-                    value={company}
-                    onChange={setCompany}
-                  />
-                </FormField>
+                {companyField}
                 <FormField label="Title" htmlFor={id("title")}>
                   <Input
                     id={id("title")}
@@ -531,6 +523,8 @@ export function NewCard({
                   {ownerField}
                 </FormRow>
               )}
+              {/* Quieter than the fields: a way to fill them in, not one of them. */}
+              {fillBox}
             </>
           )}
 
@@ -559,16 +553,7 @@ export function NewCard({
           {what === "deal" && (
             <>
               <FormRow>
-                <FormField label="Company" htmlFor={id("company")}>
-                  <CompanyInput
-                    key={round}
-                    id={id("company")}
-                    orgId={orgId}
-                    value={company}
-                    onChange={setCompany}
-                    existingOnly
-                  />
-                </FormField>
+                {companyField}
                 <FormField label="People" labelId={id("people")}>
                   <div
                     role="group"
@@ -630,7 +615,7 @@ export function NewCard({
                   There&apos;s no pipeline yet. Add one in CRM settings first.
                 </p>
               ) : (
-                <FormRow>
+                <FormRow className={dealLine ? "sm:grid-cols-3" : undefined}>
                   {pipelines.length > 1 && (
                     <FormField label="Pipeline" htmlFor={id("pipeline")}>
                       <Select
@@ -679,16 +664,6 @@ export function NewCard({
         </FormDialogBody>
 
         <FormDialogFoot>
-          <Button
-            type="button"
-            variant="ghost"
-            className="sm:me-auto"
-            disabled={!ready || pending}
-            title="Ctrl+Shift+Enter"
-            onClick={() => void create(true)}
-          >
-            Create and open another
-          </Button>
           <Button type="button" variant="outline" onClick={() => leave(null)}>
             Cancel
           </Button>
@@ -703,6 +678,64 @@ export function NewCard({
 
 const OUTLINE =
   "bg-transparent text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-current/8";
+
+/**
+ * Person, Company or Deal: a small switch under the header's line, out of
+ * the way of the fields (the name is the first of those). A radio group's
+ * keyboard: Tab reaches the chosen one, the arrows move the choice.
+ */
+function KindSwitch({
+  value,
+  onChange,
+}: {
+  value: CrmNewKind;
+  onChange: (next: CrmNewKind) => void;
+}) {
+  const buttons = useRef<Partial<Record<CrmNewKind, HTMLButtonElement | null>>>({});
+  const onKeyDown = (e: KeyboardEvent, index: number) => {
+    const step =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    const next = KINDS[(index + step + KINDS.length) % KINDS.length]!.value;
+    onChange(next);
+    buttons.current[next]?.focus();
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label="What to add"
+      className={cn(segmentedTrack, "mt-3 h-9 self-start [&>button]:h-7")}
+    >
+      {KINDS.map((k, index) => {
+        const on = k.value === value;
+        const Icon = k.icon;
+        return (
+          <button
+            key={k.value}
+            ref={(node) => {
+              buttons.current[k.value] = node;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onChange(k.value)}
+            onKeyDown={(e) => onKeyDown(e, index)}
+            className={cn(segmentedItem(on), "px-3")}
+          >
+            <Icon aria-hidden="true" className="max-sm:hidden" />
+            {k.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Paste an email signature or a card photo here (or drop the photo, or
@@ -799,30 +832,32 @@ function FillZone({
 
 /**
  * A company by name: the ones already here as you type, or the name as a
- * new one (not for a deal, which links an existing company).
+ * new one. What's typed is the card's (`text`), so it survives switching
+ * kind, and a name typed without picking anything still saves: the server
+ * matches it to a company here or makes it (companyToSave).
  */
 function CompanyInput({
   id,
   orgId,
   value,
+  text,
+  onText,
   onChange,
-  existingOnly = false,
 }: {
   id?: string;
   orgId: string;
   value: Company;
+  text: string;
+  onText: (text: string) => void;
   onChange: (c: Company) => void;
-  existingOnly?: boolean;
 }) {
-  const [text, setText] = useState(value?.label ?? "");
   const [hits, setHits] = useState<PickerHit[]>([]);
   const [open, setOpen] = useState(false);
-  const [seen, setSeen] = useState(value);
-  // Picked here or filled from a signature: show it.
-  if (seen !== value) {
-    setSeen(value);
-    if (value) setText(value.label);
-  }
+  const pick = (c: { id: string | null; label: string }) => {
+    onChange(c);
+    onText(c.label);
+    setOpen(false);
+  };
   useEffect(() => {
     if (!open) return;
     const q = text.trim();
@@ -845,13 +880,13 @@ function CompanyInput({
         id={id}
         value={text}
         onChange={(e) => {
-          setText(e.target.value);
+          onText(e.target.value);
           setOpen(true);
           if (value) onChange(null);
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={existingOnly ? "A company already here" : "Optional"}
+        placeholder="Optional"
         autoComplete="off"
       />
       {value && !value.id && (
@@ -859,31 +894,36 @@ function CompanyInput({
           new
         </span>
       )}
-      {open && q && !value && (hits.length > 0 || !existingOnly) && (
+      {/* Typed and not picked: say what Create will do with it, rather than drop it. */}
+      {!open && q && !value && (
+        <p className="text-muted-foreground pt-1.5 text-xs">
+          Saves as {q}: the company here by that name, or a new one.
+        </p>
+      )}
+      {open && q && !value && (
         <div className="bg-popover ring-foreground/10 rounded-field absolute inset-x-0 top-full z-20 mt-1 grid gap-0.5 p-1 shadow-lg ring-1">
+          {hits.length === 0 && (
+            <p className="text-muted-foreground px-2.5 pt-1 pb-0.5 text-xs">
+              Pick an existing company or add it
+            </p>
+          )}
           {hits.map((h) => (
             <button
               key={h.id}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange({ id: h.id, label: h.label });
-                setOpen(false);
-              }}
+              onClick={() => pick({ id: h.id, label: h.label })}
               className="hover:bg-muted flex items-center gap-2 rounded-md px-2.5 py-1.5 text-start text-sm"
             >
               <b className="min-w-0 truncate font-medium">{h.label}</b>
               {h.sub && <span className="text-muted-foreground truncate text-xs">{h.sub}</span>}
             </button>
           ))}
-          {!existingOnly && !exact && (
+          {!exact && (
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange({ id: null, label: q });
-                setOpen(false);
-              }}
+              onClick={() => pick({ id: null, label: q })}
               className="hover:bg-muted rounded-md px-2.5 py-1.5 text-start text-sm"
             >
               Add &ldquo;{q}&rdquo; as a new company

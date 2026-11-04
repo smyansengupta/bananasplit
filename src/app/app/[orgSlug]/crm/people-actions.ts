@@ -18,7 +18,7 @@ import { viewIds } from "@/server/crm/outreach/lists";
 import { rolePositions } from "@/server/crm/owners";
 import { peopleListCounts } from "@/server/crm/people-view";
 import { listPipelines } from "@/server/crm/pipelines";
-import { createPerson, updatePerson } from "@/server/crm/people";
+import { createPerson, findCompanyByName, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
 import { checkInput, crmAction, toResult } from "./run";
@@ -294,18 +294,22 @@ export const newDealAction = crmAction(
       amount?: string | null;
       expectedOn?: string | null;
       companyId?: string | null;
+      /** A company typed by name: the one here by that name, or a new one. */
+      companyName?: string | null;
       people?: string[];
       ownerId?: string | null;
     },
   ) => {
     const people = input.people?.length ? ids.parse(input.people) : [];
+    const companyName = input.companyId ? "" : (input.companyName ?? "").trim().slice(0, 200);
+    const companyId = input.companyId || (companyName ? await findCompanyByName(ctx, companyName) : null);
     return createDeal(ctx, {
       pipelineId: id.parse(input.pipelineId),
       stageId: input.stageId ? id.parse(input.stageId) : undefined,
       title: input.title,
       amount: input.amount || null,
       expectedOn: input.expectedOn || null,
-      companyId: input.companyId || null,
+      companyId,
       primaryPersonId: people[0] ?? null,
       people,
       ...(input.ownerId !== undefined ? { ownerId: input.ownerId || null } : {}),
