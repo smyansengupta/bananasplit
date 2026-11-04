@@ -63,7 +63,7 @@ import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * An outreach plan as a card over the Outreach tab (?open=plan:...), per
+ * A plan (a follow-up series, a split list, one email to many) as a card over the page (?open=plan:...), per
  * the OutreachPlan design: Steps (edited in place: Email, Wait, Text,
  * Task), Who (plain-language chips, how many, who's left out and why),
  * Results (sent, opened, replied as bars, and who replied) and Settings

@@ -34,7 +34,7 @@ export function CrmHeader({
   toolbar?: ReactNode;
   /**
    * What the create button makes in one click (People's Companies view: a
-   * company; Deals: a deal), a tab's own create in its place (Outreach's New plan), or
+   * company), a page's own create in its place, or
    * false on pages that make nothing (CRM settings).
    */
   create?: "person" | "company" | "deal" | false | ReactElement;

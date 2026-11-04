@@ -163,7 +163,7 @@ export function CampaignView({
               Run again
             </Button>
           )}
-          <Button variant="ghost" onClick={async () => (await runAction(() => setCampaignStatusAction(orgId, campaign.id, "ARCHIVED")))?.ok && router.push(`/app/${orgSlug}/crm/campaigns`)}>
+          <Button variant="ghost" onClick={async () => (await runAction(() => setCampaignStatusAction(orgId, campaign.id, "ARCHIVED")))?.ok && router.push(`/app/${orgSlug}/crm/settings/automations`)}>
             Archive
           </Button>
         </div>

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { crmPipelineHref } from "@/lib/crm/href";
 
-/** A pipeline is a filter on Deals now (?pipeline=, as a board); old links land there. */
+/** A pipeline is a filter on People's Board view now (?view=board&pipeline=); old links land there. */
 export default async function CrmPipelinePage({
   params,
 }: PageProps<"/app/[orgSlug]/crm/pipelines/[pipelineId]">) {
