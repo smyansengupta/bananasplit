@@ -1,9 +1,11 @@
 "use server";
 
-import { CrmError } from "@/server/crm/access";
+import { z } from "zod";
+
+import { newBatchId } from "@/server/crm/history";
 import { updatePerson } from "@/server/crm/people";
 
-import { crmAction } from "./run";
+import { checkInput, crmAction } from "./run";
 
 /**
  * The CRM reports' one ambient job: put the people going quiet in
@@ -12,25 +14,28 @@ import { crmAction } from "./run";
  */
 
 const MAX = 25;
+const Ids = z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).max(MAX);
 
+/** One read for all of them, then one batch of changes (one Undo, no Inbox line per person). */
 export const queueQuietAction = crmAction(async (ctx, _a, personIds: string[]) => {
-  if (personIds.length > MAX) throw new CrmError(`Up to ${MAX} at a time.`);
+  const picked = [...new Set(checkInput(Ids, personIds, `Up to ${MAX} at a time.`))];
   const tomorrow = new Date(Date.now() + 86_400_000);
-  const ids: string[] = [];
-  for (const id of personIds) {
-    const p = await ctx.db.crmPerson.findFirst({
-      where: { id, organizationId: ctx.organizationId, deletedAt: null, nextFollowUpAt: null },
-      select: { id: true },
-    });
-    if (!p) continue;
-    await updatePerson(ctx, p.id, { nextFollowUpAt: tomorrow });
-    ids.push(p.id);
-  }
-  return { ids };
+  const people = await ctx.db.crmPerson.findMany({
+    where: { id: { in: picked }, organizationId: ctx.organizationId, deletedAt: null, nextFollowUpAt: null },
+    select: { id: true },
+  });
+  const batchId = newBatchId();
+  for (const p of people) await updatePerson(ctx, p.id, { nextFollowUpAt: tomorrow }, { batchId });
+  return { ids: people.map((p) => p.id) };
 });
 
 export const unqueueQuietAction = crmAction(async (ctx, _a, personIds: string[]) => {
-  if (personIds.length > MAX) throw new CrmError(`Up to ${MAX} at a time.`);
-  for (const id of personIds) await updatePerson(ctx, id, { nextFollowUpAt: null });
+  const picked = [...new Set(checkInput(Ids, personIds, `Up to ${MAX} at a time.`))];
+  const people = await ctx.db.crmPerson.findMany({
+    where: { id: { in: picked }, organizationId: ctx.organizationId, deletedAt: null },
+    select: { id: true },
+  });
+  const batchId = newBatchId();
+  for (const p of people) await updatePerson(ctx, p.id, { nextFollowUpAt: null }, { batchId });
   return {};
 });

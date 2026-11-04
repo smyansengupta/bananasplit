@@ -4,7 +4,26 @@ import { GOAL_METRICS, parsePeriodKey, type GoalMetric } from "@/lib/crm/forecas
 import { CrmError, requireMember } from "@/server/crm/access";
 import { deleteGoal, goalActual, goalPeriodKey, saveGoal } from "@/server/crm/goals";
 
-import { crmAction } from "./run";
+import { z } from "zod";
+
+import { checkInput, crmAction } from "./run";
+
+const Id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const Period = z.string().max(20);
+const Goal = z.object({
+  id: Id.nullish(),
+  metric: z.enum(GOAL_METRICS),
+  ownerId: Id.nullable(),
+  periodKey: Period,
+  target: z.number().finite().min(0).max(1_000_000_000),
+  name: z.string().trim().max(120).nullish(),
+});
+const Actual = z.object({
+  metric: z.enum(GOAL_METRICS),
+  ownerId: Id.nullable(),
+  pipelineId: Id.nullish(),
+  periodKey: Period,
+});
 
 /**
  * The goal card's actions (docs/features/crm.md, "Redesign"): what a goal
@@ -24,8 +43,8 @@ export interface GoalInput {
 
 /** What it has reached so far (cents for money). */
 export const goalActualAction = crmAction(
-  async (ctx, _a, input: { metric: string; ownerId: string | null; pipelineId?: string | null; periodKey: string }) => {
-    if (!(GOAL_METRICS as readonly string[]).includes(input.metric)) throw new CrmError("Pick what the goal counts.");
+  async (ctx, _a, raw: { metric: string; ownerId: string | null; pipelineId?: string | null; periodKey: string }) => {
+    const input = checkInput(Actual, raw, "Pick what the goal counts, who and when.");
     const period = parsePeriodKey(input.periodKey);
     if (!period) throw new CrmError("Pick a quarter or a year.");
     if (input.ownerId) await requireMember(ctx.db, ctx.organizationId, input.ownerId);
@@ -41,7 +60,8 @@ export const goalActualAction = crmAction(
 );
 
 export const saveGoalAction = crmAction(
-  async (ctx, _a, input: GoalInput) => {
+  async (ctx, _a, raw: GoalInput) => {
+    const input = checkInput(Goal, raw, "Check the goal: what it counts, who, when and a number.");
     // What it was, so Undo can put it back.
     const before = input.id
       ? await ctx.db.crmGoal.findFirst({
@@ -77,7 +97,7 @@ export const saveGoalAction = crmAction(
 
 export const deleteGoalAction = crmAction(
   async (ctx, _a, id: string) => {
-    await deleteGoal(ctx, id);
+    await deleteGoal(ctx, checkInput(Id, id));
     return {};
   },
   { manager: true },

@@ -75,6 +75,11 @@ export interface TodayRow {
 
 const DAY = 86_400_000;
 
+/** A suggestion's payload as an object (a row with none, or a broken one, reads as empty). */
+export function payloadOf(raw: unknown): { draftId?: unknown; subject?: unknown; body?: unknown } {
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
 function ago(at: Date | null, now: Date): string {
   if (!at) return "";
   const mins = Math.round((now.getTime() - at.getTime()) / 60_000);
@@ -197,7 +202,7 @@ export async function todayRows(
   const suggestions = await listQueue(db, organizationId, viewerId, { mine: true, take: 25 });
   const approving = new Set(
     suggestions
-      .map((s) => (s.kind === "DRAFT_EMAIL" ? (s.payload as { draftId?: unknown }).draftId : null))
+      .map((s) => (s.kind === "DRAFT_EMAIL" ? payloadOf(s.payload).draftId : null))
       .filter((x): x is string => typeof x === "string"),
   );
   const draftFor = new Map<string, (typeof drafts)[number]>();
@@ -343,7 +348,7 @@ export async function todayRows(
   const draftPeople = await draftRecipients(db, organizationId, suggestions);
   for (const s of suggestions) {
     const row = s.rows[0];
-    const payload = s.payload as { draftId?: unknown; subject?: unknown; body?: unknown };
+    const payload = payloadOf(s.payload);
     const recipient = s.kind === "DRAFT_EMAIL" && s.target?.kind === "person" ? draftPeople.get(s.target.id) : undefined;
     if (recipient && typeof payload.draftId === "string") {
       // Send is the person's OK: it goes through compose with this draft (ten seconds to Undo).
@@ -383,7 +388,7 @@ export async function todayRows(
       text: s.target ? s.title : (s.summary ?? s.title),
       draft:
         s.kind === "DRAFT_EMAIL"
-          ? ((s.payload as { body?: string }).body ?? "").trim() || null
+          ? (typeof payloadOf(s.payload).body === "string" ? String(payloadOf(s.payload).body).trim() : "") || null
           : null,
       change: s.kind === "UPDATE_FIELD" && row ? { before: row.before, after: row.after } : null,
       warn: null,
