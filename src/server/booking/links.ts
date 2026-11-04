@@ -143,6 +143,36 @@ async function runsLinks(ctx: MemberContext): Promise<boolean> {
   return Boolean(s?.managerIds.includes(ctx.userId));
 }
 
+/** The Inbox line's key: one ask per member per space, whoever asks. */
+export function askKey(organizationId: string, userId: string): string {
+  return `ask-on:${organizationId}:${userId}`;
+}
+
+/**
+ * Ask them, on a member's card: one Inbox line asking them to turn their
+ * link on (it opens Booking links, which makes the link if they never have).
+ * Only ever one per member here, however many people ask, so nobody gets
+ * nagged; the button isn't offered again after that.
+ */
+export async function askToTurnOn(ctx: MemberContext, userId: string): Promise<void> {
+  const { db, organizationId } = ctx;
+  if (userId === ctx.userId) throw new BookingLinkError("That's your own link.");
+  const [member, page, who] = await Promise.all([
+    db.membership.findFirst({ where: { organizationId, userId }, select: { userId: true } }),
+    db.crmBookingPage.findFirst({ where: { organizationId, ownerUserId: userId }, select: { active: true } }),
+    db.user.findUnique({ where: { id: ctx.userId }, select: { name: true } }),
+  ]);
+  if (!member) throw new BookingLinkError("They aren't in the organization any more.");
+  if (page?.active) throw new BookingLinkError("Their link is already on.");
+  await tellHosts(db, organizationId, [userId], {
+    title: `${who?.name ?? "Someone"} asked you to turn on your booking link`,
+    body: "It's off, so nobody can book time with you yet. Turn it on in Meetings, Booking links.",
+    eventId: null,
+    key: askKey(organizationId, userId),
+    actorId: ctx.userId,
+  });
+}
+
 const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(Math.round(n), lo), hi);
 
 export async function updateLink(ctx: MemberContext, id: string, input: LinkInput): Promise<void> {

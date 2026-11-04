@@ -42,6 +42,8 @@ export interface AmbientAction {
   external?: boolean;
   /** The job itself, in place. Its result's `error` is shown; anything else counts as done. */
   run?: () => Promise<Outcome>;
+  /** Opens where the job is done on this page (a dialog): it stays until the page says otherwise. */
+  open?: () => void;
   /** The toast once `run` is done. */
   done?: string;
   /** Screen readers: the label with what it's about ("Push back Book the room"). */
@@ -117,6 +119,7 @@ export function AmbientButton({
         // Rows are often links themselves: the button does its job, not the row's.
         e.preventDefault();
         e.stopPropagation();
+        action.open?.();
         if (!action.run) return;
         start(async () => {
           const result = await runAction(action.run!);

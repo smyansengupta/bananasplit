@@ -28,6 +28,7 @@ import { conferenceStatus } from "@/lib/meetings/conference-status";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
+import { coHostedEventIds } from "@/server/booking/co-hosted";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
 import { meetingsWhere } from "@/server/meetings/where";
@@ -107,6 +108,8 @@ export default async function MeetingsPage({
   const platformAdmin = isPlatformAdmin(await getUserIdentity(user.id));
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
+  // Meetings booked on links they share that went to someone else.
+  const coHosted = canManage ? [] : await coHostedEventIds(org.id, user.id, now);
 
   const [
     { events, counts, attendees, notes, meetingTypes, findOpen, reminded },
@@ -116,7 +119,7 @@ export default async function MeetingsPage({
   ] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
-        where: meetingsWhere(org.id, user.id, canManage, now),
+        where: meetingsWhere(org.id, user.id, canManage, now, coHosted),
         orderBy: { startsAt: "asc" },
         select: {
           id: true,

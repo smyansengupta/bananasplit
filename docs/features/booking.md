@@ -24,6 +24,63 @@ Booking links, `/crm/settings/booking`, `/crm/settings/booking/{id}`,
 (with `?edit={id}` opening that link's editor), You shows your own link, and
 the person card's `/` menu inserts your link or any organization link.
 
+## The page
+
+**An organization** has three zones, top to bottom:
+
+1. **The organization's link** as a strip across the top, the shape and weight
+   of Video calls on Meetings: who it goes to (faces), its name, its hours in a
+   few words, Copy link, and Edit for whoever may. Two show; the rest fold
+   behind More links. With none yet, the strip offers to make one in place
+   (named "Meet {organization}", then its editor opens). Without the CRM
+   there's no strip, and owners and admins get one quiet line saying how to add
+   it.
+2. **Everyone's links**, three to a row (two on a tablet, one on a phone; the
+   grid goes by its own width, since the sidebar takes some of the page). A
+   card is a person: their face, name and title, their next seven days as a
+   picture, the hours in words, their next free time, and Copy link and Book.
+   Yours comes first with Edit, then links that are on, each by name. A member
+   whose link is off stays in the grid, quietly, as "Hasn't turned theirs on".
+   Past nine people, the first nine show with Show everyone and a search field.
+3. **Coming up**: the booked meetings, drawn like Meetings' cards: the date
+   tile, the guest, when, the link, the host's face, and Cancel in a menu.
+   What needs a host comes first. Members see the ones they host; owners and
+   admins see them all.
+
+**A Personal space** is a different page: no grid and no organization strip.
+Your link is the strip, your week is a larger picture inside it (each day's
+hours in words on a wider screen), then Coming up.
+
+A link that's off shows when you're free to nobody, so the loader sends nothing
+of it to anyone else's browser: no address, no hours, no title. Its owner's
+card is all that shows. Faces, names and titles are `userPublicSelect` and
+`Membership.title`, never an email.
+
+### Ambient buttons
+
+Decided in `src/lib/ambient/booking.ts` (on the server, so the first paint and
+the browser agree). Each says why it's there and goes when that stops being
+true; at most two on any one thing.
+
+| Where | Button | Shows when | Goes when |
+| --- | --- | --- | --- |
+| A link | Add a host | Nobody hosts an organization link | It has a host |
+| A link | Turn it on | It's off and you may edit it | It's on |
+| A link | Fix the hours | It's on and nobody can book it in the next two weeks | It has open times |
+| A link | Copy for your signature | It's on and nobody has booked it yet | Someone books it, or you copy it (this browser remembers) |
+| No link yet | Make it | No organization link, with the CRM | It's made |
+| Someone's card | Ask them | Their link is off and nobody has asked yet | It's asked, for everyone |
+| A booking | Join | It has a call, from 10 minutes before until it ends | It ends |
+| A booking | Take it | Owners and admins, when its host left | Someone takes it |
+
+Unconfirmed bookings carry a reason line, not a button: only the guest can
+confirm, and the meeting is on the calendar either way.
+
+**Ask them** sends one Inbox line (`MEETING_BOOKED`, so it follows the same
+email preference) that opens Booking links, which makes the link if they've
+never been there. It's one per member per space however many people ask: the
+line's dedupe key is the member's, not the asker's.
+
 ## A link
 
 - **When you're free**: each weekday's time ranges ("Monday 9 AM to 12 PM and
@@ -106,8 +163,11 @@ it even when no email reaches them.
 | Spam and abuse on the public page | Honeypot field; 10 bookings per visitor per hour, 3 per guest address per day; per link: 40 in 24 hours, 10 unconfirmed made in 24 hours (a burst cap, so old unconfirmed ones never keep a link shut), 2 upcoming per address; page views and manage links rate-limited; input caps (name 80, answers 1000, ten questions) | `booking.db.test.ts` "refuses links in the name, and caps one address and one link" |
 | The page used to email someone else's words | The name can't hold links, addresses or markup; emails repeat only a first name that looks like one and never the answers; fixed copy | `guest.test.ts`, `emails.test.ts` "never repeats a name that isn't one" |
 | A stranger books with a real contact's address | Nothing in the CRM changes until the guest confirms from the email | `booking.db.test.ts` "waits for the guest to confirm before the CRM matches them..."; `outreach.db.test.ts` |
-| A booking the host can't see | It's a real event in the space's calendar with the host attending, so it shows on Calendar, Meetings, the meeting's page, Personal's "when you meet next" and Google Calendar when mirrored; plus the Inbox line | `booking.db.test.ts` "gives every member a personal link..." |
-| Who reads guests' details | `Booking` RLS: the host, and owners and admins; members write nothing (service path only). The calendar event carries none of it (every member reads events): the meeting page shows the guest from the `Booking` | RLS `P-BOOK-01` |
+| A booking the host can't see | It's a real event in the space's calendar with the host attending, so it shows on Calendar, Meetings, the meeting's page, Personal's "when you meet next" and Google Calendar when mirrored; plus the Inbox line | `booking.db.test.ts` "gives every member a personal link..."; `view.db.test.ts` "on a personal link...", "in a Personal space..." |
+| The other hosts of a shared link can't see one | Round-robin gives a booking to one host. The others aren't made attendees (that would block their own time and ask them to reply), so `coHostedEventIds` hands `meetingsWhere` those events and they stay on those hosts' Meetings list and its tab count; the Calendar shows them to everyone already. Members still read only the bookings they host, so they aren't in those hosts' Coming up | `view.db.test.ts` "on a shared link..." |
+| Who reads guests' details | `Booking` RLS: the host, and owners and admins; members write nothing (service path only). The calendar event carries none of it (every member reads events): the meeting page shows the guest from the `Booking`. Coming up's cards don't carry the guest's address at all. `coHostedEventIds` reads bookings on the service path but hands back event ids only | RLS `P-BOOK-01`; `view.db.test.ts` "counts a link's bookings..." |
+| A link that's off shows someone's hours | Every member can read a space's links (`CrmBookingPage` RLS), so the loader is what stops it: only links that are on leave `loadBookingLinks` | `view.db.test.ts` "shows every member, with nothing of a link that's off..." |
+| Nagging a member to turn their link on | Ask them is one Inbox line per member per space, whoever asks, and it isn't offered again | `view.db.test.ts` "sends one Inbox line however many people ask..." |
 | Someone made host without asking | Only owners, admins and CRM managers add other people as hosts of an organization link; anyone may add or remove themselves | `booking.db.test.ts` "lets only admins and CRM managers put someone else on an organization link" |
 | CRM turned off | Organization links stop taking bookings; personal links keep working | `booking.db.test.ts` "closes organization links when the CRM comes off" |
 
@@ -118,11 +178,16 @@ it even when no email reaches them.
   `app.booking_host_busy` and the `booking-guest` kind of
   `app.crm_public_target`).
 - Engine: `src/lib/crm/outreach/booking.ts` (slots, round-robin),
-  `src/lib/booking/hours.ts`, `src/lib/booking/guest.ts`.
+  `src/lib/booking/hours.ts`, `src/lib/booking/week.ts` (the week as a
+  picture), `src/lib/booking/guest.ts`, `src/lib/ambient/booking.ts`.
 - Server: `src/server/booking/` (`book.ts` public side, `links.ts`,
-  `manage.ts` host side and sync, `jobs.ts`, `emails.ts`, `view.ts`).
+  `manage.ts` host side and sync, `jobs.ts`, `emails.ts`, `view.ts`,
+  `co-hosted.ts`).
 - Pages: `/app/{slug}/meetings/booking`, `/book/{link}`, `/book/m/{token}`
   (and its `calendar.ics`).
+- The page's parts: `src/components/booking/` (`booking-links-view.tsx`,
+  `link-strip.tsx`, `people-grid.tsx`, `coming-up.tsx`, `week-bars.tsx`,
+  `link-ambient.tsx`, `link-dialog.tsx`).
 - Jobs: `booking-email`, `booking-sync`, `booking-host-left`.
 
 ## Not done yet
@@ -136,4 +201,7 @@ it even when no email reaches them.
 - A guest can't pick another host when rescheduling an organization link; the
   same host's times are offered.
 - Unconfirmed bookings are kept (a real guest may never click); they're
-  marked "Email not confirmed yet" in Booking links, and capped per link.
+  marked "Unconfirmed" in Booking links, and capped per link.
+- Open times are worked out for the first 20 links on the page (yours, then
+  the organization's, then the members'): past that a card shows its hours but
+  no next free time.

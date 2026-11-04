@@ -2,15 +2,16 @@
 
 import { z } from "zod";
 
-import { BookingLinkError, createOrgLink, updateLink } from "@/server/booking/links";
+import { askToTurnOn, BookingLinkError, createOrgLink, updateLink } from "@/server/booking/links";
 import { BookingActionError, hostCancel, takeBooking } from "@/server/booking/manage";
 import { withOrgAction } from "@/server/db/context";
 
 /**
  * Meetings > Booking links (docs/features/booking.md): change your link or
- * an organization link, make an organization link, cancel a booking or take
- * one whose host left. Every one runs as the session member; the server
- * module checks who may (your link is yours alone).
+ * an organization link, make an organization link, ask a member to turn
+ * theirs on, cancel a booking or take one whose host left. Every one runs as
+ * the session member; the server module checks who may (your link is yours
+ * alone).
  */
 
 export type ActionResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -67,6 +68,15 @@ export const createOrgLinkAction = withOrgAction(
     }
   },
 );
+
+export const askToTurnOnAction = withOrgAction(async (ctx, userId: string): Promise<ActionResult> => {
+  try {
+    await askToTurnOn(ctx, z.string().max(100).parse(userId));
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+});
 
 export const cancelBookingByHostAction = withOrgAction(
   async (ctx, bookingId: string, note: string): Promise<ActionResult> => {

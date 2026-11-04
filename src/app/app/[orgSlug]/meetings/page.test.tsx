@@ -38,6 +38,7 @@ vi.mock("@/server/db/context", () => ({
       },
     }),
 }));
+vi.mock("@/server/booking/co-hosted", () => ({ coHostedEventIds: async () => [] }));
 vi.mock("@/server/rsvp/my-registrations", () => ({ myRsvpRegistrations: mocks.registrations }));
 vi.mock("@/server/conference/connections", () => ({ loadMeetingConnections: mocks.connections }));
 vi.mock("@/server/conference/connect", () => ({ CONFERENCE_CALLBACK_MESSAGES: {} }));
