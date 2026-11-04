@@ -81,6 +81,7 @@ import { getAskDraft } from "@/server/org-chart/service";
 import { joinable, recapTime } from "@/lib/overview/home-acts";
 import { isNight, scoreHome, type HomeSignals } from "@/lib/overview/priority";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
+import { rolePositions } from "@/server/crm/owners";
 import { sidebarCounts } from "@/server/inbox/counts";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import {
@@ -228,6 +229,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const websitePolls = personal
     ? false
     : await websiteSyncConnected(org.id, user.id).catch(() => true);
+  // The CRM's role owners, for its Inbox rows in the Today strip's count (read before the transaction).
+  const crmRoles = settings?.addOns?.includes("crm")
+    ? await rolePositions(org.id).catch(() => null)
+    : null;
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const homeMode = await loadHomeMode(db, org.id, user.id);
@@ -465,6 +470,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         can({ role }, "finance.manage") && (settings?.addOns?.includes("finance") ?? true),
       canReviewForms:
         can({ role }, "databases.write") && (settings?.addOns?.includes("forms") ?? true),
+      crm: crmRoles ? { orgSlug, roles: crmRoles } : null,
       now,
     }).catch(() => null);
     return { ...rest, widgets, online, since, needsYou };

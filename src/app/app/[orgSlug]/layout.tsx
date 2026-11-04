@@ -28,6 +28,7 @@ import { getMySidebar, getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { rolePositions } from "@/server/crm/owners";
 import { sidebarCounts } from "@/server/inbox/counts";
 import { listPins } from "@/server/pins";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
@@ -161,7 +162,11 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
     listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
   );
-  // The small counts beside Inbox, Forms and Finance (src/server/inbox/counts.ts).
+  // The small counts beside Inbox, Forms and Finance (src/server/inbox/counts.ts),
+  // with the CRM's rows when it's added (its role owners read before the transaction).
+  const crmRoles = readAddOns(ctx.settings?.addOns).includes("crm")
+    ? await rolePositions(ctx.organization.id).catch(() => null)
+    : null;
   const counts = await withOrgTx(ctx.organization.id, ({ db }) =>
     sidebarCounts(db, {
       orgId: ctx.organization.id,
@@ -174,6 +179,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
       canReviewForms:
         can({ role: ctx.role }, "databases.write") &&
         readAddOns(ctx.settings?.addOns).includes("forms"),
+      crm: crmRoles ? { orgSlug: ctx.organization.slug, roles: crmRoles } : null,
     }),
   ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.

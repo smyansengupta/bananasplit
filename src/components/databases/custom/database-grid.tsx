@@ -24,7 +24,7 @@ import {
   Trash2,
 } from "@/components/icons";
 import Link from "next/link";
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   addChoiceAction,
@@ -34,7 +34,9 @@ import {
   loadRecordsAction,
   moveFieldAction,
   purgeRecordsAction,
+  relationDatabasesAction,
   restoreRecordsAction,
+  searchRelationTargetsAction,
   trashRecordsAction,
   updateCellAction,
   updateDatabaseSettingsAction,
@@ -82,10 +84,13 @@ import {
   hasChoices,
   parseCell,
   type Choice,
+  readRelation,
   type FieldDef,
+  type FieldOptions,
   type FieldType,
   type StoredValue,
 } from "@/lib/databases/fields";
+import { relationKey, type RelationLabel } from "@/lib/databases/relations";
 import { cn } from "@/lib/utils";
 import type { CustomDatabase, CustomRecord } from "@/server/databases/custom";
 
@@ -94,7 +99,15 @@ import { CellEditor, type Member } from "./cell-editor";
 import { ChoicesDialog, NewFieldPopover } from "./field-dialogs";
 import { FieldIcon } from "./field-icon";
 import { useDeleteDatabase } from "./delete-database";
+import { FieldSettingsDialog, needsOptions } from "./field-options";
+import {
+  RelationProvider,
+  useRelationContext,
+  type RelationDatabases,
+  type RelationSearch,
+} from "./relation-cell";
 import { DatabaseSettingsDialog } from "./settings-dialog";
+import { LinkedFromLoader } from "../linked-from";
 
 /**
  * A club-made database as a spreadsheet you edit in place. Every change
@@ -120,6 +133,8 @@ const WIDTH: Record<FieldType, number> = {
   EMAIL: 220,
   PHONE: 160,
   URL: 200,
+  RELATION: 240,
+  AI: 240,
 };
 
 /** A row's ••• : quiet until the row is hovered or focused (always shown on touch). */
@@ -199,16 +214,30 @@ interface RowActions {
   purge: (recordId: string) => void;
 }
 
-export function DatabaseGrid({
-  orgId,
-  orgSlug,
-  database,
-  members,
-  trash,
-  timezone,
-  personal = false,
-  ambient = null,
-}: {
+export function DatabaseGrid(props: GridProps) {
+  const { orgId } = props;
+  const search = useCallback<RelationSearch>(
+    async (input) => (await searchRelationTargetsAction(orgId, input)).data ?? [],
+    [orgId],
+  );
+  const databases = useCallback<RelationDatabases>(
+    async () => (await relationDatabasesAction(orgId)).data ?? [],
+    [orgId],
+  );
+  return (
+    <RelationProvider
+      orgId={orgId}
+      orgSlug={props.orgSlug}
+      labels={props.database.labels}
+      search={search}
+      databases={databases}
+    >
+      <Grid {...props} />
+    </RelationProvider>
+  );
+}
+
+interface GridProps {
   orgId: string;
   orgSlug: string;
   database: CustomDatabase;
@@ -220,10 +249,25 @@ export function DatabaseGrid({
   personal?: boolean;
   /** Its ambient buttons (Make a report), from the page. */
   ambient?: ReactNode;
-}) {
+}
+
+function Grid({
+  orgId,
+  orgSlug,
+  database,
+  members,
+  trash,
+  timezone,
+  personal = false,
+  ambient = null,
+}: GridProps) {
   const [confirmEl, confirm] = useConfirm();
   const [fields, setFields] = useState(database.fields);
   const [records, setRecords] = useState(database.records);
+  /** Names of what the loaded rows link to (RELATION cells): the provider keeps every page's. */
+  const relations = useRelationContext();
+  /** A field being made (or set up as) a relation or an AI field. */
+  const [settingUp, setSettingUp] = useState<{ field: FieldDef; type: FieldType } | null>(null);
   const [next, setNext] = useState(database.next);
   const [total, setTotal] = useState(database.total);
   const [trashCount, setTrashCount] = useState(database.trashCount);
@@ -366,9 +410,11 @@ export function DatabaseGrid({
       toast({ title: "Couldn't load the rows", description: result.error });
       return;
     }
-    setRecords(result.data.records);
-    setNext(result.data.next);
-    setTotal(result.data.total);
+    const page = result.data;
+    setRecords(page.records);
+    relations?.remember(Object.values(page.labels ?? {}));
+    setNext(page.next);
+    setTotal(page.total);
     setSearchedFor(q);
     setSelected(new Set());
   }
@@ -407,6 +453,7 @@ export function DatabaseGrid({
     }
     const page = result.data;
     setRecords((rs) => mergeRows(rs, page.records, trash));
+    relations?.remember(Object.values(page.labels ?? {}));
     setNext(page.next);
     setTotal(page.total);
   }
@@ -523,10 +570,32 @@ export function DatabaseGrid({
     }
   }
 
-  async function changeType(field: FieldDef, type: FieldType) {
+  /** A relation's or AI field's settings, saved (no type change). */
+  async function saveFieldOptions(field: FieldDef, options: FieldOptions): Promise<boolean> {
+    const updated = await track(updateFieldAction(orgId, field.id, { options }));
+    if (!updated) return false;
+    setFields((fs) => fs.map((f) => (f.id === field.id ? updated.field : f)));
+    if (updated.cleared > 0) {
+      toast({
+        title:
+          updated.cleared === 1
+            ? "1 value didn't fit and was cleared"
+            : `${formatCount(updated.cleared)} values didn't fit and were cleared`,
+      });
+      await reloadLoaded();
+    }
+    return true;
+  }
+
+  async function changeType(field: FieldDef, type: FieldType, options?: FieldOptions) {
     if (type === field.type) return;
+    // A relation or an AI field needs its settings first; the dialog says what happens to the values.
+    if (needsOptions(type) && !options) {
+      setSettingUp({ field, type });
+      return;
+    }
     const hasData = next !== null || records.some((r) => r.values[field.id] !== undefined);
-    if (hasData) {
+    if (hasData && !options) {
       const ok = await confirm({
         title: `Change “${field.name}” to ${FIELD_TYPE_META[type].label.toLowerCase()}?`,
         description: hasChoices(type)
@@ -536,7 +605,9 @@ export function DatabaseGrid({
       });
       if (!ok) return;
     }
-    const updated = await track(updateFieldAction(orgId, field.id, { type }));
+    const updated = await track(
+      updateFieldAction(orgId, field.id, options ? { type, options } : { type }),
+    );
     if (!updated) return;
     setFields((fs) => fs.map((f) => (f.id === field.id ? updated.field : f)));
     if (updated.cleared > 0) {
@@ -545,9 +616,12 @@ export function DatabaseGrid({
           updated.cleared === 1
             ? "1 value didn't fit and was cleared"
             : `${formatCount(updated.cleared)} values didn't fit and were cleared`,
-        description: hasChoices(type)
-          ? "A select field holds up to 100 choices, each up to 80 characters."
-          : `They couldn't be read as ${FIELD_TYPE_META[type].label.toLowerCase()}.`,
+        description:
+          type === "RELATION" || field.type === "RELATION"
+            ? "Links and typed values don't turn into each other."
+            : hasChoices(type)
+              ? "A select field holds up to 100 choices, each up to 80 characters."
+              : `They couldn't be read as ${FIELD_TYPE_META[type].label.toLowerCase()}.`,
       });
     }
     // The values were converted on the server: show them as they are now.
@@ -662,6 +736,7 @@ export function DatabaseGrid({
     // Every matching row, not just the loaded pages.
     let rows = records;
     let cursor = next;
+    const names: Record<string, RelationLabel> = { ...relations?.labels };
     if (cursor) {
       setExporting(true);
       try {
@@ -677,6 +752,7 @@ export function DatabaseGrid({
             return;
           }
           rows = mergeRows(rows, result.data.records, trash);
+          Object.assign(names, result.data.labels ?? {});
           cursor = result.data.next;
         }
       } finally {
@@ -684,8 +760,16 @@ export function DatabaseGrid({
       }
     }
     const header = fields.map((f) => f.name);
+    // Links export as the names of what they link to.
+    const cellText = (f: FieldDef, value: unknown) =>
+      f.type === "RELATION"
+        ? readRelation(value)
+            .map((ref) => names[relationKey(ref)]?.label ?? "")
+            .filter(Boolean)
+            .join("; ")
+        : displayText(f, value, memberNames);
     const lines = sortRows(rows, fields, sort, memberNames).map((r) =>
-      fields.map((f) => displayText(f, r.values[f.id], memberNames)),
+      fields.map((f) => cellText(f, r.values[f.id])),
     );
     const csv = [header, ...lines].map((row) => row.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" }));
@@ -988,6 +1072,7 @@ export function DatabaseGrid({
                             onRename={() => setRenaming(f)}
                             onRenamed={(name) => void renameField(f, name)}
                             onChoices={() => setEditingChoices(f)}
+                            onSettings={() => setSettingUp({ field: f, type: f.type })}
                             onType={(t) => void changeType(f, t)}
                             onMove={(d) => void move(f, d)}
                             onDelete={() => void removeField(f)}
@@ -1006,6 +1091,7 @@ export function DatabaseGrid({
                         onRename={() => setRenaming(f)}
                         onRenamed={(name) => void renameField(f, name)}
                         onChoices={() => setEditingChoices(f)}
+                        onSettings={() => setSettingUp({ field: f, type: f.type })}
                         onType={(t) => void changeType(f, t)}
                         onMove={(d) => void move(f, d)}
                         onDelete={() => void removeField(f)}
@@ -1016,12 +1102,12 @@ export function DatabaseGrid({
                 {database.canManage && !trash && (
                   <TableHead className="w-12 px-1">
                     <NewFieldPopover
-                      onAdd={async (name, type) => {
+                      onAdd={async (name, type, options) => {
                         const field = await track(
                           addFieldAction(orgId, database.id, {
                             name,
                             type,
-                            options: hasChoices(type) ? { choices: [] } : {},
+                            options: hasChoices(type) ? { choices: [], ...options } : options,
                           }),
                         );
                         if (field) setFields((fs) => [...fs, field]);
@@ -1141,6 +1227,10 @@ export function DatabaseGrid({
                 ))}
               </dl>
               <div className="px-6 pb-8">
+                <LinkedFromLoader
+                  orgId={orgId}
+                  refValue={{ kind: "record", id: expandedRecord.id }}
+                />
                 <LinkedLoader
                   orgId={orgId}
                   orgSlug={orgSlug}
@@ -1152,6 +1242,19 @@ export function DatabaseGrid({
         </SheetContent>
       </Sheet>
 
+      {settingUp && (
+        <FieldSettingsDialog
+          field={settingUp.field}
+          type={settingUp.type}
+          onClose={() => setSettingUp(null)}
+          onSave={async (options) => {
+            const { field, type } = settingUp;
+            if (type === field.type) return saveFieldOptions(field, options);
+            await changeType(field, type, options);
+            return true;
+          }}
+        />
+      )}
       {editingChoices && (
         <ChoicesDialog
           field={editingChoices}
@@ -1333,6 +1436,7 @@ function FieldHeader({
   onRename,
   onRenamed,
   onChoices,
+  onSettings,
   onType,
   onMove,
   onDelete,
@@ -1347,6 +1451,8 @@ function FieldHeader({
   onRename: () => void;
   onRenamed: (name: string) => void;
   onChoices: () => void;
+  /** A relation's or AI field's settings. */
+  onSettings: () => void;
   onType: (type: FieldType) => void;
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
@@ -1411,6 +1517,12 @@ function FieldHeader({
               <Pencil aria-hidden="true" />
               Rename
             </DropdownMenuItem>
+            {needsOptions(field.type) && (
+              <DropdownMenuItem onSelect={onSettings}>
+                <Settings2 aria-hidden="true" />
+                {field.type === "AI" ? "What it asks" : "What it links to"}
+              </DropdownMenuItem>
+            )}
             {hasChoices(field.type) && (
               <DropdownMenuItem onSelect={onChoices}>
                 <Shapes aria-hidden="true" />

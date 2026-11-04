@@ -63,7 +63,7 @@ export function RunwaySection({
       : `At ${rate}.`,
     idle: `Nothing spent in the last ${plural(runway.burnWindowDays, "day")}, so there is no rate to project.`,
   }[runway.status];
-  const sponsorships = `${formatCents(expectedIncomeCents)} in committed sponsorships`;
+  const sponsorships = `${formatCents(expectedIncomeCents)} in committed deals`;
   const withExpected =
     expectedIncomeCents <= 0 || runway.status === "idle"
       ? null

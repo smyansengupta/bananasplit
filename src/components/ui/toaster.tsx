@@ -154,6 +154,7 @@ export function Toaster() {
       aria-live="polite"
       role="region"
       aria-label="Notifications"
+      data-toaster=""
       className="pointer-events-none fixed inset-x-0 top-4 z-[60] mx-auto flex w-[calc(100%-2rem)] max-w-md flex-col items-center gap-2 max-md:top-auto max-md:bottom-[calc(5.75rem+env(safe-area-inset-bottom))]"
     >
       {list.map((t) => (

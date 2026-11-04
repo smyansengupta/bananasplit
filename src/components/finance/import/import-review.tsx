@@ -63,9 +63,9 @@ const CHUNK = 500;
 
 export const KIND_LABEL: Record<string, string> = {
   [TransactionKind.EXPENSE]: "Expense",
-  [TransactionKind.SPONSORSHIP]: "Sponsorship",
+  [TransactionKind.SPONSORSHIP]: "Deal",
   [TransactionKind.OTHER_INCOME]: "Income (dues, sales…)",
-  [TransactionKind.ALLOCATION]: "School funding",
+  [TransactionKind.ALLOCATION]: "Allocation",
   [TransactionKind.ADJUSTMENT]: "Adjustment",
 };
 const KINDS = Object.keys(KIND_LABEL) as TransactionKind[];

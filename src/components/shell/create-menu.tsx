@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  Building2,
   CalendarClock,
   ClipboardList,
+  Columns3,
+  UserPlus,
   CalendarPlus,
   CheckSquare,
   Loader2,
@@ -31,6 +34,9 @@ import {
 import { toast } from "@/components/ui/toaster";
 
 const ICONS: Record<string, IconComponent> = {
+  Building2,
+  Columns3,
+  UserPlus,
   CalendarClock,
   CalendarPlus,
   ClipboardList,

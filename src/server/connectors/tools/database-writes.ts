@@ -87,6 +87,11 @@ async function customDatabase(
   key: string,
 ): Promise<CustomDatabase> {
   const database = await getDatabase(ctx.db, space.id, ctx.role, key);
+  if (database.kind === "CRM_PEOPLE" || database.kind === "CRM_COMPANIES" || database.kind === "CRM_PIPELINE") {
+    throw new ConnectorInputError(
+      "The CRM's databases change through the CRM tools: crm_create_person, crm_create_company, crm_update_record, crm_move_stage and crm_log_activity.",
+    );
+  }
   if (database.kind !== "CUSTOM") {
     throw new ConnectorInputError(
       "Only databases the organization made take rows from here. The built-in ones (sessions, attendance, sign-ups, ballots, people) change on their own pages in Bananasplit.",

@@ -135,7 +135,7 @@ export const DATABASE_TEMPLATES: readonly DatabaseTemplate[] = [
   },
   {
     id: "contacts",
-    name: "Sponsors and contacts",
+    name: "Partners and contacts",
     defaultName: "Contacts",
     description: "Companies, speakers and partners, with who's talking to them.",
     icon: "Handshake",

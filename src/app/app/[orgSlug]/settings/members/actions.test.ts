@@ -13,6 +13,8 @@ vi.mock("@/server/db/context", async () =>
   (await import("@/test/fake-context")).fakeContextModule(),
 );
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
+// The CRM's handover on leaving has its own tests (src/server/crm/outreach).
+vi.mock("@/server/crm/outreach/handover", () => ({ memberLeft: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ allowed: true })),
   rateLimitKey: (...parts: string[]) => parts.join(":"),

@@ -88,7 +88,7 @@ export const FINANCE_WIDGETS: readonly FinanceWidgetMeta[] = [
   {
     type: "by-kind",
     title: "By transaction type",
-    description: "Expenses, sponsorships, income and adjustments.",
+    description: "Expenses, deals, income and adjustments.",
     group: "Charts",
     icon: "ChartBar",
     w: 2,
@@ -116,7 +116,7 @@ export const FINANCE_WIDGETS: readonly FinanceWidgetMeta[] = [
   },
   {
     type: "sponsorships",
-    title: "Sponsorships",
+    title: "Deals",
     description: "Committed vs. received.",
     group: "Budget",
     icon: "Handshake",
@@ -154,7 +154,7 @@ export const FINANCE_WIDGETS: readonly FinanceWidgetMeta[] = [
   {
     type: "income-sources",
     title: "Where money came from",
-    description: "Money in by type: dues, sponsors, school funding.",
+    description: "Money in by type: dues, deals, allocations.",
     group: "Charts",
     icon: "ChartPie",
     w: 2,

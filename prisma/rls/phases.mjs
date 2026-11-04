@@ -53,6 +53,49 @@ const GRANTS = {
   // Who a report is shared with outside the organization: its editors read,
   // add and remove them; nobody edits one.
   ReportInvite: ["SID", "SD", ""],
+  // CRM (20261105090000_crm): members add and edit people, companies and
+  // items and run outreach; core records and activity are trashed, never
+  // deleted by a member; pipelines, workflows and settings are admins' and
+  // CRM managers'; API keys and webhooks admins' alone.
+  CrmPerson: ["SIU", "SIUD", ""],
+  CrmCompany: ["SIU", "SIUD", ""],
+  CrmDeal: ["SIU", "SIUD", ""],
+  CrmPersonEmail: ["SIUD", "SIUD", ""],
+  CrmJob: ["SIUD", "SIUD", ""],
+  CrmDealPerson: ["SIUD", "SIUD", ""],
+  CrmActivityTarget: ["SIUD", "SIUD", ""],
+  CrmEmailThread: ["SIUD", "SIUD", ""],
+  CrmCampaign: ["SIUD", "SIUD", ""],
+  CrmCampaignTarget: ["SIUD", "SIUD", ""],
+  CrmEnrollment: ["SIUD", "SIUD", ""],
+  CrmDeliverable: ["SIUD", "SIUD", ""],
+  CrmQuote: ["SIUD", "SIUD", ""],
+  CrmQuoteLine: ["SIUD", "SIUD", ""],
+  CrmBookingPage: ["SIUD", "SIUD", ""],
+  CrmGuestLink: ["SIUD", "SIUD", ""],
+  CrmSequence: ["SIUD", "SIUD", ""],
+  CrmSequenceStep: ["SIUD", "SIUD", ""],
+  CrmCall: ["SIU", "SIUD", ""],
+  CrmTextMessage: ["SIU", "SIUD", ""],
+  CrmActivity: ["SIU", "SIUD", ""],
+  CrmEmailMessage: ["SIU", "SIUD", ""],
+  CrmView: ["SIUD", "SIUD", ""],
+  CrmTemplate: ["SIUD", "SIUD", ""],
+  CrmSuggestion: ["SIU", "SIUD", ""],
+  CrmFieldHistory: ["SI", "SIUD", ""],
+  CrmForecastSnapshot: ["SI", "SIUD", ""],
+  CrmSettings: ["SIU", "SIUD", ""],
+  CrmPipeline: ["SIUD", "SIUD", ""],
+  CrmStage: ["SIUD", "SIUD", ""],
+  CrmWorkflow: ["SIUD", "SIUD", ""],
+  CrmScoreRule: ["SIUD", "SIUD", ""],
+  CrmGoal: ["SIUD", "SIUD", ""],
+  CrmWorkflowRun: ["SI", "SIUD", ""],
+  CrmMemberSettings: ["SIU", "SIUD", ""],
+  CrmApiKey: ["SIU", "SIUD", ""],
+  CrmWebhook: ["SIUD", "SIUD", ""],
+  CrmWebhookDelivery: ["S", "SIUD", ""],
+  AiUsage: ["SI", "SIUD", ""],
   // Databases: members read; owners and admins make and edit them. An
   // organization's own (CUSTOM, no form) is deleted for good by owners and
   // admins, or by members who can edit it while
@@ -81,7 +124,8 @@ const GRANTS = {
   InboxItemState: ["SIuD", "SD", ""],
   // Links between things: members link and unlink; the service path reads
   // and clears links when an item goes away.
-  ItemLink: ["SID", "SD", ""],
+  // CRM workflows (20261105120000_crm_automation) link what they make, from a job.
+  ItemLink: ["SID", "SID", ""],
   // Forms: every member reads them, owners and admins make and review them
   // (row policy); the public page reads on the service path, and answers
   // arrive there. Nobody writes an answer directly.
@@ -241,6 +285,45 @@ const NEW_TENANT_TABLES = [
   "Report",
   "ReportSnapshot",
   "ReportInvite",
+  "CrmPerson",
+  "CrmCompany",
+  "CrmDeal",
+  "CrmPersonEmail",
+  "CrmJob",
+  "CrmDealPerson",
+  "CrmActivityTarget",
+  "CrmEmailThread",
+  "CrmCampaign",
+  "CrmCampaignTarget",
+  "CrmEnrollment",
+  "CrmDeliverable",
+  "CrmQuote",
+  "CrmQuoteLine",
+  "CrmBookingPage",
+  "CrmGuestLink",
+  "CrmSequence",
+  "CrmSequenceStep",
+  "CrmCall",
+  "CrmTextMessage",
+  "CrmActivity",
+  "CrmEmailMessage",
+  "CrmView",
+  "CrmTemplate",
+  "CrmSuggestion",
+  "CrmFieldHistory",
+  "CrmForecastSnapshot",
+  "CrmSettings",
+  "CrmPipeline",
+  "CrmStage",
+  "CrmWorkflow",
+  "CrmScoreRule",
+  "CrmGoal",
+  "CrmWorkflowRun",
+  "CrmMemberSettings",
+  "CrmApiKey",
+  "CrmWebhook",
+  "CrmWebhookDelivery",
+  "AiUsage",
   "Form",
   "FormResponse",
   "DatabaseField",
@@ -474,6 +557,16 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "FORM_RESPONSE",
           // A saved report on its schedule (20261102180000_report_join_schedule).
           "REPORT_SENT",
+          // The CRM (20261105090000_crm).
+          "CRM_ASSIGNED",
+          "CRM_FOLLOW_UP",
+          "CRM_REPLY",
+          "CRM_REVIEW",
+          "CRM_HANDOVER",
+          // The CRM in the Inbox (20261106090000_crm_inbox_kinds).
+          "CRM_NEW",
+          "CRM_BOOKED",
+          "CRM_DEAL",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         // Home's Decisions (20261102100000_home_widgets).
@@ -4893,7 +4986,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     {
       value: {
         extension: "public",
-        indexes: ["Membership_title_idx", "User_name_idx"],
+        indexes: ["CrmPerson_name_trgm", "Membership_title_idx", "User_name_idx"],
         plans: ["FREE", "PERSONAL_PLUS", "TRIAL", "TEAM_FREE", "CLUB", "SOCIETY"],
         task_types: ["EPIC", "STORY", "TASK"],
       },
@@ -5502,6 +5595,410 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         admin_makes_private: "42501",
         maker_archives: 1,
         other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CRM-01",
+    "CRM: members add people as themselves and never hard-delete them; pipelines and settings are admins' and CRM managers'; OWN access hides others' records; API keys are admins' alone",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.person_make = await tryq(
+        q,
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_1','org_A','Ada','u_memberA',now())`,
+      );
+      s.person_make_as_other = await tryq(
+        q,
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_x','org_A','X','u_adminA',now())`,
+      );
+      s.person_delete = await tryq(q, `DELETE FROM "CrmPerson" WHERE "id" = 'cp_1'`);
+      s.person_trash = await tryq(q, `UPDATE "CrmPerson" SET "deletedAt" = NULL WHERE "id" = 'cp_1'`);
+      s.member_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_m','org_A','M',now())`,
+      );
+      s.member_settings = await tryq(
+        q,
+        `INSERT INTO "CrmSettings" ("organizationId","updatedAt") VALUES ('org_A',now())`,
+      );
+      s.member_api_keys = await count(q, `SELECT count(*) n FROM "CrmApiKey"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_settings = await tryq(
+        q,
+        `INSERT INTO "CrmSettings" ("organizationId","memberAccess","updatedAt") VALUES ('org_A','OWN',now())`,
+      );
+      s.admin_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_a','org_A','A',now())`,
+      );
+      await q(
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_2','org_A','Grace','u_adminA',now())`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.own_mode_other_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      s.own_mode_other_edits = await rc(q, `UPDATE "CrmPerson" SET "title" = 'x'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.own_mode_maker_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      await q(`UPDATE "CrmSettings" SET "managerIds" = ARRAY['u_bothAB'] WHERE "organizationId" = 'org_A'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      s.manager_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_b','org_A','B',now())`,
+      );
+      s.manager_api_keys = await tryq(
+        q,
+        `INSERT INTO "CrmApiKey" ("id","organizationId","name","prefix","keyHash") VALUES ('k1','org_A','k','p','h')`,
+      );
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      return s;
+    },
+    {
+      value: {
+        person_make: 1,
+        person_make_as_other: "42501",
+        person_delete: "42501",
+        person_trash: 1,
+        member_pipeline: "42501",
+        member_settings: "42501",
+        member_api_keys: 0,
+        admin_settings: 1,
+        admin_pipeline: 1,
+        own_mode_other_reads: 0,
+        own_mode_other_edits: 0,
+        own_mode_maker_reads: 1,
+        manager_reads: 2,
+        manager_pipeline: 1,
+        manager_api_keys: "42501",
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CRM-02",
+    "CRM databases: their fields are DatabaseField rows but never rows of DatabaseRecord; CRM managers shape the CRM's databases and nothing else; members shape none",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_p','org_A','crm-people-t','People','CRM_PEOPLE'),
+                ('db_cu','org_A','own-t','Own','CUSTOM')`,
+      );
+      s.admin_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_1','org_A','db_crm_p','Shirt size','TEXT',now())`,
+      );
+      s.admin_row = await tryq(
+        q,
+        `INSERT INTO "DatabaseRecord" ("id","organizationId","databaseId","createdById","updatedAt")
+         VALUES ('dr_1','org_A','db_crm_p','u_adminA',now())`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_2','org_A','db_crm_p','Diet','TEXT',now())`,
+      );
+      s.member_pipeline_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_x','org_A','crm-x','X','CRM_PIPELINE')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","updatedAt")
+         VALUES ('org_A',ARRAY['u_memberA'],now())
+         ON CONFLICT ("organizationId") DO UPDATE SET "managerIds" = ARRAY['u_memberA']`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.manager_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_3','org_A','db_crm_p','Diet','TEXT',now())`,
+      );
+      s.manager_renames_field = await rc(
+        q,
+        `UPDATE "DatabaseField" SET "name" = 'Meal' WHERE "id" = 'df_3'`,
+      );
+      s.manager_custom_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_4','org_A','db_cu','Size','TEXT',now())`,
+      );
+      s.manager_pipeline_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_y','org_A','crm-y','Y','CRM_PIPELINE')`,
+      );
+      s.manager_custom_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_cu2','org_A','own-2','Own 2','CUSTOM')`,
+      );
+      s.manager_renames_custom = await rc(
+        q,
+        `UPDATE "DatabaseDefinition" SET "name" = 'Mine' WHERE "id" = 'db_cu'`,
+      );
+      s.manager_removes_field = await rc(q, `DELETE FROM "DatabaseField" WHERE "id" = 'df_3'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_fields = await count(q, `SELECT count(*) n FROM "DatabaseField" WHERE "databaseId" = 'db_crm_p'`);
+      return s;
+    },
+    {
+      value: {
+        admin_field: 1,
+        admin_row: "23514",
+        member_field: "42501",
+        member_pipeline_db: "42501",
+        manager_field: 1,
+        manager_renames_field: 1,
+        manager_custom_field: "42501",
+        manager_pipeline_db: 1,
+        manager_custom_db: "42501",
+        manager_renames_custom: 0,
+        manager_removes_field: 1,
+        other_org_fields: 0,
+      },
+    },
+  );
+  // CRM outreach (20261105110000_crm_outreach): the public links' lookups
+  // run on the service path with no org context, so their rows are
+  // committed by the owner first and removed after.
+  await clients.owner.query(
+    `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_out','org_A','Sponsors',now());
+     INSERT INTO "CrmStage" ("id","organizationId","pipelineId","name") VALUES ('st_out','org_A','pl_out','Prospect');
+     INSERT INTO "CrmDeal" ("id","organizationId","pipelineId","stageId","title","updatedAt")
+       VALUES ('dl_out','org_A','pl_out','st_out','Harbor Light',now());
+     INSERT INTO "CrmGuestLink" ("id","organizationId","dealId","tokenHash","revokedAt","expiresAt")
+       VALUES ('gl_live','org_A','dl_out','${HASH("g1")}',NULL,NULL),
+              ('gl_rev','org_A','dl_out','${HASH("g2")}',now(),NULL),
+              ('gl_old','org_A','dl_out','${HASH("g3")}',NULL,now() - interval '1 day');
+     INSERT INTO "CrmPerson" ("id","organizationId","name","selfUpdateTokenHash","updatedAt","deletedAt")
+       VALUES ('cp_self','org_A','Ada','${HASH("s1")}',now(),NULL),
+              ('cp_gone','org_A','Gone','${HASH("s2")}',now(),now());
+     INSERT INTO "CrmMemberSettings" ("id","organizationId","userId","bccToken","updatedAt")
+       VALUES ('ms_out','org_A','u_memberA','bcctok1',now());
+     INSERT INTO "CrmEmailThread" ("id","organizationId") VALUES ('th_out','org_A');
+     INSERT INTO "CrmEmailMessage" ("id","organizationId","threadId","direction","status","mailbox","fromAddress","trackingToken")
+       VALUES ('em_out','org_A','th_out','OUTBOUND','SENT','ORG_SENDER','a@example.org','trk1');
+     INSERT INTO "CrmBookingPage" ("id","organizationId","slug","title","hostIds","active","updatedAt")
+       VALUES ('bp_on','org_A','meet-ada','Meet','{u_memberA,u_memberB}',true,now()),
+              ('bp_off','org_A','meet-off','Off','{u_memberA}',false,now());
+     INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA',
+       '{"v":1,"blocks":["0-9"],"rules":[{"kind":"date","label":"Dentist","date":"2099-03-02","start":14,"end":16},{"kind":"date","label":"Trip","date":"2099-03-01","start":null,"end":null},{"kind":"date","label":"Long gone","date":"2001-01-01","start":null,"end":null},{"kind":"weekly","label":"Standup","days":[1],"start":10,"end":11}]}',
+       '{0-9}')
+       ON CONFLICT ("userId") DO UPDATE SET "rules" = EXCLUDED."rules", "busy" = '{0-9}';`,
+  );
+  try {
+    await tcase(
+      "P-CRM-03",
+      "CRM public links: the lookups answer ids only, for a live booking page, a live unexpired guest link, a person not in the trash, a BCC token and a tracking token; a booking page's busy hours (and upcoming one-off dates, without labels) come only for its hosts who are members, only in its own organization's context",
+      "app_service",
+      null,
+      async (q) => {
+        const target = async (kind, key) =>
+          (await q(`SELECT * FROM app.crm_public_target('${kind}', '${key}')`)).rows;
+        const s = {};
+        s.booking = await target("booking", "meet-ada");
+        s.booking_off = (await target("booking", "meet-off")).length;
+        s.guest = await target("guest", HASH("g1"));
+        s.guest_revoked = (await target("guest", HASH("g2"))).length;
+        s.guest_expired = (await target("guest", HASH("g3"))).length;
+        s.self = await target("self", HASH("s1"));
+        s.self_trashed = (await target("self", HASH("s2"))).length;
+        s.bcc = await target("bcc", "bcctok1");
+        s.track = await target("track", "trk1");
+        s.wrong_kind = (await target("guest", "trk1")).length;
+        s.busy_no_context = await count(q, `SELECT count(*) n FROM app.crm_booking_busy('bp_on')`);
+        await q(`SELECT app.set_context(NULL,'org_B')`);
+        s.busy_other_org = await count(q, `SELECT count(*) n FROM app.crm_booking_busy('bp_on')`);
+        await q(`SELECT app.set_context(NULL,'org_A')`);
+        s.busy = (await q(`SELECT * FROM app.crm_booking_busy('bp_on')`)).rows.map((r) => ({
+          userId: r.userId,
+          busy: r.busy,
+          // jsonb orders keys its own way; compare in a fixed order.
+          dates: r.dates.map((d) => ({ date: d.date, start: d.start, end: d.end })),
+        }));
+        return s;
+      },
+      {
+        value: {
+          booking: [{ organizationId: "org_A", id: "bp_on" }],
+          booking_off: 0,
+          guest: [{ organizationId: "org_A", id: "gl_live" }],
+          guest_revoked: 0,
+          guest_expired: 0,
+          self: [{ organizationId: "org_A", id: "cp_self" }],
+          self_trashed: 0,
+          bcc: [{ organizationId: "org_A", id: "ms_out" }],
+          track: [{ organizationId: "org_A", id: "em_out" }],
+          wrong_kind: 0,
+          busy_no_context: 0,
+          busy_other_org: 0,
+          // One-off dates come too (20261105200000_crm_booking_dates): upcoming ones only, never their labels.
+          busy: [
+            {
+              userId: "u_memberA",
+              busy: ["0-9"],
+              dates: [
+                { date: "2099-03-01", start: null, end: null },
+                { date: "2099-03-02", start: 14, end: 16 },
+              ],
+            },
+          ],
+        },
+      },
+    );
+    await tcase(
+      "P-CRM-04",
+      "members can't call the CRM's public lookups, and a CRM queue row is a key the Inbox keeps",
+      "app_user",
+      A("u_memberA"),
+      async (q) => ({
+        target: await tryv(q, `SELECT count(*) FROM app.crm_public_target('bcc', 'bcctok1')`),
+        busy: await tryv(q, `SELECT count(*) FROM app.crm_booking_busy('bp_on')`),
+        snooze: await tryq(
+          q,
+          `INSERT INTO "InboxItemState" ("userId","organizationId","itemKey","snoozedUntil","updatedAt")
+           VALUES ('u_memberA','org_A','crm:cp_self',now() + interval '1 day',now())`,
+        ),
+        bad_key: await tryq(
+          q,
+          `INSERT INTO "InboxItemState" ("userId","organizationId","itemKey","snoozedUntil","updatedAt")
+           VALUES ('u_memberA','org_A','crmx:cp_self',now() + interval '1 day',now())`,
+        ),
+      }),
+      { value: { target: "error:42501", busy: "error:42501", snooze: 1, bad_key: "23514" } },
+    );
+  } finally {
+    await clients.owner.query(
+      `DELETE FROM "InboxItemState" WHERE "itemKey" = 'crm:cp_self';
+       DELETE FROM "CrmBookingPage" WHERE "id" IN ('bp_on','bp_off');
+       DELETE FROM "CrmEmailThread" WHERE "id" = 'th_out';
+       DELETE FROM "CrmMemberSettings" WHERE "id" = 'ms_out';
+       DELETE FROM "CrmPerson" WHERE "id" IN ('cp_self','cp_gone');
+       DELETE FROM "CrmDeal" WHERE "id" = 'dl_out';
+       DELETE FROM "CrmPipeline" WHERE "id" = 'pl_out';
+       DELETE FROM "UserAvailability" WHERE "userId" = 'u_memberA';`,
+    );
+  }
+  await tcase(
+    "P-CRM-05",
+    "CRM workflows are private to the people who shape the CRM: their webhook, Slack and Discord addresses and run logs are read only by owners, admins and CRM managers; a member reads the switched-on trigger types from CrmSettings instead",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","workflowTriggers","updatedAt")
+         VALUES ('org_A',ARRAY['u_bothAB'],ARRAY['record.created'],now())`,
+      );
+      await q(
+        `INSERT INTO "CrmWorkflow" ("id","organizationId","name","status","trigger","actions","createdById","updatedAt")
+         VALUES ('wf_1','org_A','Ping','ON','{"type":"record.created"}',
+                 '[{"type":"webhook.call","params":{"url":"https://hooks.example.com/secret-token"}}]','u_adminA',now())`,
+      );
+      await q(`INSERT INTO "CrmWorkflowRun" ("id","organizationId","workflowId","status") VALUES ('wr_1','org_A','wf_1','DONE')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.admin_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.member_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      s.member_edits = await rc(q, `UPDATE "CrmWorkflow" SET "status" = 'OFF'`);
+      s.member_deletes = await rc(q, `DELETE FROM "CrmWorkflow"`);
+      s.member_reads_triggers = (await q(`SELECT "workflowTriggers" FROM "CrmSettings" WHERE "organizationId" = 'org_A'`)).rows[0]?.workflowTriggers ?? null;
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      s.manager_reads_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun"`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "CrmWorkflow"`);
+      return s;
+    },
+    {
+      value: {
+        admin_reads: 1,
+        admin_reads_runs: 1,
+        member_reads: 0,
+        member_reads_runs: 0,
+        member_edits: 0,
+        member_deletes: 0,
+        member_reads_triggers: ["record.created"],
+        manager_reads: 1,
+        manager_reads_runs: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CRM-06",
+    "the jobs (app_service) still read and run every workflow of their own organization, and nobody else's",
+    "app_service",
+    null,
+    async (q) => {
+      const s = {};
+      await q(`SELECT app.set_context(NULL,'org_A')`);
+      s.writes = await tryq(
+        q,
+        `INSERT INTO "CrmWorkflow" ("id","organizationId","name","status","trigger","updatedAt")
+         VALUES ('wf_svc','org_A','Svc','ON','{"type":"record.created"}',now())`,
+      );
+      s.own_org = await count(q, `SELECT count(*) n FROM "CrmWorkflow" WHERE "id" = 'wf_svc'`);
+      s.runs = await rc(q, `UPDATE "CrmWorkflow" SET "runCount" = "runCount" + 1 WHERE "id" = 'wf_svc'`);
+      s.logs = await tryq(q, `INSERT INTO "CrmWorkflowRun" ("id","organizationId","workflowId","status") VALUES ('wr_svc','org_A','wf_svc','DONE')`);
+      await q(`SELECT app.set_context(NULL,'org_B')`);
+      s.other_org = await count(q, `SELECT count(*) n FROM "CrmWorkflow" WHERE "id" = 'wf_svc'`);
+      s.other_org_runs = await count(q, `SELECT count(*) n FROM "CrmWorkflowRun" WHERE "id" = 'wr_svc'`);
+      return s;
+    },
+    { value: { writes: 1, own_org: 1, runs: 1, logs: 1, other_org: 0, other_org_runs: 0 } },
+  );
+  await tcase(
+    "P-CRM-07",
+    "deleting a CRM email thread (20261105190000_crm_thread_delete): members still start and update threads, but only owners, admins and CRM managers delete one, and only in their own organization",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","updatedAt")
+         VALUES ('org_A',ARRAY['u_bothAB'],now())
+         ON CONFLICT ("organizationId") DO UPDATE SET "managerIds" = ARRAY['u_bothAB']`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_starts = await tryq(
+        q,
+        `INSERT INTO "CrmEmailThread" ("id","organizationId") VALUES ('th_d1','org_A'),('th_d2','org_A'),('th_d3','org_A')`,
+      );
+      s.member_updates = await rc(q, `UPDATE "CrmEmailThread" SET "subject" = 'Hello' WHERE "id" = 'th_d1'`);
+      s.member_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" LIKE 'th_d%'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d2'`);
+      s.left = await count(q, `SELECT count(*) n FROM "CrmEmailThread" WHERE "id" LIKE 'th_d%'`);
+      return s;
+    },
+    {
+      value: {
+        member_starts: 3,
+        member_updates: 1,
+        member_deletes: 0,
+        other_org_deletes: 0,
+        manager_deletes: 1,
+        admin_deletes: 1,
+        left: 1,
       },
     },
   );

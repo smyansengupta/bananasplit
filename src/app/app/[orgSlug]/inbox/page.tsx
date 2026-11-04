@@ -43,8 +43,12 @@ import { byline, postedWhen, recapWindowStart } from "@/server/announcements/rul
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
+import { signalsFor } from "@/server/crm/signals";
+import { crmRecordHref } from "@/lib/crm/href";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadElsewhereUpdates } from "@/server/inbox/elsewhere";
+import { crmInboxItems, crmReviewRow } from "@/server/crm/outreach/inbox";
+import { rolePositions } from "@/server/crm/owners";
 import { loadInboxState } from "@/server/inbox/state";
 import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
@@ -101,6 +105,8 @@ export default async function InboxPage({
   const now = new Date();
   // The end of the week, when the composer nudges to post the recap (null other days).
   const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
+  // The CRM's follow-up queue (its positions read before the transaction).
+  const crmRoles = addOns.includes("crm") ? await rolePositions(org.id) : null;
 
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
@@ -137,6 +143,8 @@ export default async function InboxPage({
         select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
       }),
     ]);
+    // The CRM's signals for this member (stuck items, someone gone quiet...), when the CRM is added.
+    const signals = addOns.includes("crm") ? await signalsFor(db, org.id, user.id) : [];
     // Announcements, one query after the other (a transaction has one connection).
     // Just the latest: it shows until the next one goes out. None on Personal.
     const posts = personal
@@ -172,7 +180,14 @@ export default async function InboxPage({
           take: EVENT_CHOICES,
           select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
         });
+    const crm = crmRoles
+      ? await crmInboxItems(db, org.id, user.id, orgSlug, crmRoles, now).catch(() => [])
+      : [];
+    // Review suggestions assigned to them, as one row with the count.
+    const review = crmRoles ? await crmReviewRow(db, org.id, user.id, orgSlug) : null;
+    if (review) crm.unshift(review);
     return {
+      crm,
       tz,
       todayKey,
       state,
@@ -186,6 +201,7 @@ export default async function InboxPage({
       toReview,
       notifications,
       forms,
+      signals,
       nextEvent,
     };
   });
@@ -270,6 +286,8 @@ export default async function InboxPage({
       review: reviewAction(f.count),
       canWait: true,
     })),
+    // People the CRM says to reach today (replies, steps, follow-ups, new ones).
+    ...data.crm.map((c): InboxRow => ({ ...c, kind: "crm", category: "crm", peek: null })),
   ];
   // Approve all: three or more small requests with receipts, at the top of Needs you.
   const batch = smallBatch(
@@ -281,6 +299,23 @@ export default async function InboxPage({
         receipts: t._count.receipts,
         createdAt: t.createdAt,
       })),
+  );
+
+  needs.push(
+    ...data.signals.map((s): InboxRow => ({
+      key: inboxKey("signal", s.id),
+      kind: "signal",
+      id: s.id,
+      title: s.title,
+      meta: [s.label, s.summary].filter(Boolean).join(": "),
+      group: "review",
+      category: "signal",
+      href:
+        s.targetKind && s.targetId
+          ? crmRecordHref(orgSlug, s.targetKind, s.targetId)
+          : `${base}/crm`,
+      peek: null,
+    })),
   );
 
   const updates: InboxRow[] = data.notifications.map((n): InboxRow => {
@@ -480,6 +515,15 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   EVENT_CANCELLED: "meeting",
   SECURITY_ALERT: "alert",
   INTEGRATION_ERROR: "alert",
+  // The CRM's lines (src/server/crm/inbox-notify.ts) share one chip.
+  CRM_ASSIGNED: "crm",
+  CRM_FOLLOW_UP: "crm",
+  CRM_REPLY: "crm",
+  CRM_REVIEW: "crm",
+  CRM_HANDOVER: "crm",
+  CRM_NEW: "crm",
+  CRM_BOOKED: "crm",
+  CRM_DEAL: "crm",
 };
 
 /**

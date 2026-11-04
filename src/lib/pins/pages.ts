@@ -76,7 +76,9 @@ const SUBPAGES: Record<string, string> = {
   "databases/reports": "Reports",
   "finance/budget": "Budget",
   "finance/my-reimbursements": "My reimbursements",
-  "finance/sponsorships": "Sponsorships",
+  "finance/deals": "Deals",
+  // Pins saved before Sponsorships became Deals (the old URL redirects).
+  "finance/sponsorships": "Deals",
   "finance/transactions": "Transactions",
   "org-chart/import": "Import org chart",
   "org-chart/versions": "Org chart history",

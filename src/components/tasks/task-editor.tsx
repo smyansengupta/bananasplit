@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
+import { Maximize2, Trash2, UserMinus, UserPlus } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
@@ -16,6 +16,7 @@ import {
 import { PinToggle } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { DialogHead } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
@@ -547,6 +548,61 @@ export function TaskEditor({
     </div>
   );
 
+  // The same head as New task: the title, then who made it and when.
+  const headTitle = (
+    <h2 className="heading flex items-center gap-2 text-lg leading-tight">
+      {heading}
+      {task && isTaskPrivate(task) && <PrivateBadge />}
+    </h2>
+  );
+  const headSubtitle = task ? (
+    <span className="flex flex-wrap items-center gap-1.5">
+      Created by
+      <UserAvatar user={task.createdBy} size="xs" />
+      <span className="text-foreground">{task.createdBy.name ?? "a former member"}</span>
+      on {format(new Date(task.createdAt), "MMM d, yyyy")}
+    </span>
+  ) : type === "EPIC" ? (
+    "A big outcome that spans weeks. Its stories and tasks roll up into it."
+  ) : (
+    "A title is all it takes. Everything else has a sensible default."
+  );
+
+  // In the popup these sit under the black Close as outlined circles, like a CRM card's.
+  const round = mode === "dialog" ? "outline" : "ghost";
+  const headActions = task ? (
+    <>
+      <PinToggle
+        path={`/tasks/${task.id}`}
+        label={task.title}
+        className={mode === "dialog" ? "border-input size-9 border" : undefined}
+      />
+      {mode === "dialog" && (
+        <Button asChild variant={round} size="icon-sm">
+          <Link
+            href={`/app/${org.slug}/tasks/${task.id}`}
+            aria-label="Open as a page"
+            title="Open as a page"
+          >
+            <Maximize2 className="size-4" aria-hidden="true" />
+          </Link>
+        </Button>
+      )}
+      {!readOnly && isAssignee && (
+        <Button
+          variant={round}
+          size="icon-sm"
+          disabled={isPending}
+          onClick={() => selfAssign("leave")}
+          aria-label="Leave this task"
+          title="Leave this task"
+        >
+          <UserMinus className="size-4" aria-hidden="true" />
+        </Button>
+      )}
+    </>
+  ) : null;
+
   return (
     <div
       className={cn(
@@ -571,60 +627,26 @@ export function TaskEditor({
       {confirmElement}
       {confirmEl}
 
-      {/* The same head as New task, with the task's own buttons on the right. */}
-      <header className="flex shrink-0 items-start justify-between gap-3 px-6 pt-6 pb-2">
-        <div className="flex min-w-0 flex-col gap-2">
-          <h2 className="heading flex items-center gap-2 text-lg leading-tight">
-            {heading}
-            {task && isTaskPrivate(task) && <PrivateBadge />}
-          </h2>
-          <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-sm">
-            {task ? (
-              <>
-                Created by
-                <UserAvatar user={task.createdBy} size="xs" />
-                <span className="text-foreground">{task.createdBy.name ?? "a former member"}</span>
-                on {format(new Date(task.createdAt), "MMM d, yyyy")}
-              </>
-            ) : type === "EPIC" ? (
-              "A big outcome that spans weeks. Its stories and tasks roll up into it."
-            ) : (
-              "A title is all it takes. Everything else has a sensible default."
-            )}
-          </p>
-        </div>
-        <div className="-me-2 -mt-1.5 flex shrink-0 items-center gap-1">
-          {task && <PinToggle path={`/tasks/${task.id}`} label={task.title} />}
-          {task && mode === "dialog" && (
-            <Button asChild variant="ghost" size="icon-sm">
-              <Link
-                href={`/app/${org.slug}/tasks/${task.id}`}
-                aria-label="Open as a page"
-                title="Open as a page"
-              >
-                <Maximize2 className="size-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          )}
-          {task && !readOnly && isAssignee && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={isPending}
-              onClick={() => selfAssign("leave")}
-              aria-label="Leave this task"
-              title="Leave this task"
-            >
-              <UserMinus className="size-4" aria-hidden="true" />
-            </Button>
-          )}
-          {mode === "dialog" && onDone && (
-            <Button variant="ghost" size="icon-sm" onClick={onDone} aria-label="Close">
-              <X className="size-4" aria-hidden="true" />
-            </Button>
-          )}
-        </div>
-      </header>
+      {mode === "dialog" && onDone ? (
+        // The popup header every centred window shares, as on New task: the
+        // black Close in the corner, Pin, Open as a page and Leave under it.
+        <DialogHead
+          plainTitle
+          className="shrink-0 ps-6 pe-4 pt-4 pb-2"
+          title={headTitle}
+          subtitle={headSubtitle}
+          onClose={onDone}
+          actions={headActions}
+        />
+      ) : (
+        <header className="flex shrink-0 items-start justify-between gap-3 px-6 pt-6 pb-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            {headTitle}
+            <p className="text-muted-foreground text-sm">{headSubtitle}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">{headActions}</div>
+        </header>
+      )}
 
       <div
         className={cn(

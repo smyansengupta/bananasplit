@@ -629,11 +629,13 @@ export async function takeSnapshot(
       w: c.widget.w,
       h: c.widget.h,
       title: c.title,
-      // A copy never keeps anyone's address.
+      // A copy never keeps anyone's address, or the people behind every issue.
       payload:
         c.payload?.type === "stopped"
           ? { type: "stopped", data: { ...c.payload.data, emails: [] } }
-          : c.payload,
+          : c.payload?.type === "crm-top-issues"
+            ? { type: "crm-top-issues", data: { ...c.payload.data, issues: undefined } }
+            : c.payload,
     })),
   };
   const row = await v.db.reportSnapshot.create({

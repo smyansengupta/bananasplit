@@ -101,6 +101,9 @@ const CHIP: Record<LinkKind, ResolvedRef["chip"]> = {
   poll: "poll",
   decision: "decision",
   announcement: "announcement",
+  "crm-person": "person",
+  "crm-company": "database",
+  "crm-deal": "database",
 };
 
 /**
@@ -428,6 +431,31 @@ export async function resolveRefs(
     for (const a of rows) {
       put("announcement", a.id, a.title, `${base}/inbox`, `posted ${day(a.createdAt)}`);
     }
+  }
+  // The CRM's records, as the viewer may see them (OWN access hides others').
+  const crmPeople = ids("crm-person");
+  if (crmPeople.length) {
+    const rows = await db.crmPerson.findMany({
+      where: { organizationId: orgId, id: { in: crmPeople }, deletedAt: null },
+      select: { id: true, name: true, title: true },
+    });
+    for (const p of rows) put("crm-person", p.id, p.name, `${base}/crm/people/${p.id}`, p.title);
+  }
+  const crmCompanies = ids("crm-company");
+  if (crmCompanies.length) {
+    const rows = await db.crmCompany.findMany({
+      where: { organizationId: orgId, id: { in: crmCompanies }, deletedAt: null },
+      select: { id: true, name: true, domain: true },
+    });
+    for (const c of rows) put("crm-company", c.id, c.name, `${base}/crm/companies/${c.id}`, c.domain);
+  }
+  const crmDeals = ids("crm-deal");
+  if (crmDeals.length) {
+    const rows = await db.crmDeal.findMany({
+      where: { organizationId: orgId, id: { in: crmDeals }, deletedAt: null },
+      select: { id: true, title: true, stage: { select: { name: true } } },
+    });
+    for (const d of rows) put("crm-deal", d.id, d.title, `${base}/crm/items/${d.id}`, d.stage.name);
   }
   return out;
 }

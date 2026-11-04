@@ -144,7 +144,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
           organizationId: s.cbcId,
           provider: "GOOGLE_CALENDAR",
           status: "CONNECTED",
-          config: { publicCalendarId: "club@group.calendar.google.com", b7Test: true },
+          config: { publicCalendarId: "organization@group.calendar.google.com", b7Test: true },
         },
         update: {},
       });

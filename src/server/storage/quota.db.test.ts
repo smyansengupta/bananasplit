@@ -165,6 +165,11 @@ describe("Organization.storageUsedBytes", () => {
 describe("the upload gate", () => {
   it("lets a Personal Free space upload notes files, within 10 MB a file", async () => {
     if (!reachable) return;
+    // A new Personal space starts on a Personal Plus trial: end it (the owner role may).
+    await ownerDb.organization.update({
+      where: { id: personalId },
+      data: { trialEndsAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    });
     requireUserMock.mockResolvedValue(owner);
     expect(
       (await gateUpload(personalId, 5 * 1024 * 1024, { feature: "files" })).refusal,

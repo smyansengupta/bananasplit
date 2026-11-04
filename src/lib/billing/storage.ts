@@ -123,8 +123,8 @@ export interface UploadRefusal {
 }
 
 export interface UploadCheckOptions {
-  /** The feature the upload belongs to: Notes files ("files") or receipts ("finance"). */
-  feature: "files" | "finance";
+  /** The feature the upload belongs to: Notes files ("files"), receipts ("finance") or CRM audio ("crm"). */
+  feature: "files" | "finance" | "crm";
   /**
    * The route's own cap, when it is lower than the plan's largest file
    * (receipts stop at 4 MB, whatever the plan).

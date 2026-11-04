@@ -38,6 +38,7 @@ import { tags } from "@/server/cache/tags";
 import { withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { userPublicSelect, type UserPublic } from "@/server/members";
+import { chartHoldersChanging } from "@/server/crm/outreach/handover";
 
 import { BUILTIN_CONFIDENCE_THRESHOLD } from "./parse";
 import {
@@ -742,6 +743,8 @@ async function publishLocked(
     return { ok: false, error: "Fix the problems in the checklist before publishing.", issues };
   }
   const now = new Date();
+  // The CRM: relationships owned by a position follow it; tell its new holder.
+  await chartHoldersChanging(db, organizationId, rows, ctx.userId);
   await db.orgChartVersion.updateMany({
     where: { organizationId, status: OrgChartVersionStatus.PUBLISHED, id: { not: version.id } },
     data: { status: OrgChartVersionStatus.ARCHIVED },

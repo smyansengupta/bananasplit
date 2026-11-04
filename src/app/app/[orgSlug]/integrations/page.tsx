@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { AddOnCards } from "@/components/addons/addon-cards";
 import { AmbientActions } from "@/components/ambient/ambient-button";
+import { DataConnectorsSection } from "@/components/crm/ai/data-connectors-section";
 import { IntegrationDialog } from "@/components/integrations/integration-dialog";
 import { BrandMark } from "@/components/marketing/brand-mark";
 import type { Brand } from "@/components/marketing/brands";
@@ -10,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { needsReconnect, suggestGoogleCalendar } from "@/lib/ambient/integrations";
 import { can } from "@/lib/auth/permissions";
-import { ADD_ON_INFO, ADD_ONS, readAddOns } from "@/lib/addons";
+import { ADD_ON_INFO, ADD_ONS, personalAddOns, readAddOns } from "@/lib/addons";
 import { spaceIncludes } from "@/lib/billing/space";
 import { brandOr, INTEGRATION_MARKS as M } from "@/lib/integrations/marks";
 import { planGate } from "@/server/billing/plan-gate";
@@ -19,12 +20,13 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { loadIntegrations } from "@/server/integrations/service";
 
-import { isPanelApp, loadPanel } from "./panels";
+import { isPanelApp, loadPanel, ORG_ONLY_APPS } from "./panels";
+import { phoneTiles } from "./phone-panels";
 
 /**
  * Integrations and apps. First the add-ons (src/lib/addons.ts): Forms and
- * Finance, which an organization adds when it wants them, and CRM, coming
- * later; each has its own page (/integrations/forms, …). Then the apps it
+ * Finance and the CRM, which an organization adds when it wants them;
+ * each has its own page (/integrations/forms, …). Then the apps it
  * can connect: what's connected first, then what can be connected today,
  * and one line naming what's coming. Setting an app up, testing it and
  * disconnecting it happen in a window over this page (`?app=<key>`,
@@ -32,6 +34,11 @@ import { isPanelApp, loadPanel } from "./panels";
  * /integrations/<app> URLs open that window.
  *
  * Owners and admins add and connect; everyone else sees what's on.
+ *
+ * A Personal space (Personal Plus; Personal Free sees it locked) gets the
+ * same page for one person: the CRM as its one add-on, and only the apps
+ * that make sense for one person (ORG_ONLY_APPS are left out), worded for
+ * you rather than an organization.
  */
 
 type State = "connected" | "attention" | "off" | "soon";
@@ -92,34 +99,38 @@ export default async function IntegrationsPage({
   const planLock = await planGate(orgSlug, "integrations");
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org } = ctx;
-  // A Personal space has no add-ons (its sidebar is fixed); a team keeps
-  // its add-ons here even on a plan without connected apps, since Forms is
-  // on every plan.
+  const personal = org.kind === "PERSONAL";
   const usage = await loadUsage(org.id);
-  const addOns =
-    org.kind === "PERSONAL" ? null : (
-      <section className="space-y-4" aria-labelledby="int-addons">
-        <h2 id="int-addons" className="heading text-[20px]">
-          Add-ons
-        </h2>
-        <AddOnCards
-          orgId={org.id}
-          orgSlug={orgSlug}
-          added={readAddOns(ctx.settings?.addOns)}
-          canManage={can({ role: ctx.role }, "settings.general.write")}
-          formsInUse={usage.forms}
-          locked={ADD_ONS.filter((id) => !spaceIncludes(org, ADD_ON_INFO[id].feature))}
-        />
-      </section>
-    );
+  // The add-ons stay here even on a plan without connected apps (Forms is
+  // on every organization plan; the CRM shows Personal Free what Plus adds).
+  const addOns = (
+    <section className="space-y-4" aria-labelledby="int-addons">
+      <h2 id="int-addons" className="heading text-[20px]">
+        Add-ons
+      </h2>
+      <AddOnCards
+        orgId={org.id}
+        orgSlug={orgSlug}
+        added={readAddOns(ctx.settings?.addOns)}
+        canManage={can({ role: ctx.role }, "settings.general.write")}
+        formsInUse={usage.forms}
+        locked={ADD_ONS.filter((id) => !spaceIncludes(org, ADD_ON_INFO[id].feature))}
+        only={personal ? personalAddOns() : undefined}
+        personal={personal}
+      />
+    </section>
+  );
   const header = (
     <PageHeader
       title="Integrations and apps"
-      description="Add only what your organization uses. Added ones show in the sidebar under Integrations and apps. Turn one off and it's hidden; nothing is deleted."
+      description={
+        personal
+          ? "Connect the apps you already use, and add the CRM when you want it. Turn one off and it's hidden; nothing is deleted."
+          : "Add only what your organization uses. Added ones show in the sidebar under Integrations and apps. Turn one off and it's hidden; nothing is deleted."
+      }
     />
   );
   if (planLock) {
-    if (!addOns) return planLock;
     return (
       <div className="space-y-9">
         {header}
@@ -130,10 +141,11 @@ export default async function IntegrationsPage({
   }
   const canManage = can({ role: ctx.role }, "integrations.write");
 
-  const [dtos, meetings, mail] = await Promise.all([
+  const [dtos, meetings, mail, phone] = await Promise.all([
     loadIntegrations(org.id),
     loadMeetingConnections(org.id),
     resolveOrgMailRouting(org.id),
+    phoneTiles(org.id),
   ]);
   const dtoOf = (provider: string) => dtos.find((d) => d.provider === provider);
   const stateOf = (provider: string): State => {
@@ -161,7 +173,9 @@ export default async function IntegrationsPage({
           key: "imessage",
           brand: M.imessage,
           name: "iMessage",
-          body: "Text Bananasplit to add tasks, RSVP, answer polls.",
+          body: personal
+            ? "Text Bananasplit to add tasks and RSVP."
+            : "Text Bananasplit to add tasks, RSVP, answer polls.",
           state: "soon",
         },
         {
@@ -196,7 +210,9 @@ export default async function IntegrationsPage({
           key: "email",
           brand: M.email,
           name: "Email",
-          body: "Invites, reminders and form receipts from your organization's address.",
+          body: personal
+            ? "Reminders and your CRM emails from your own address."
+            : "Invites, reminders and form receipts from your organization's address.",
           // Email sends even without a sender of its own (the platform's
           // address), so it counts as connected unless it's off.
           state:
@@ -216,7 +232,9 @@ export default async function IntegrationsPage({
         stored("google-calendar", "GOOGLE_CALENDAR", {
           brand: brandOr("google-workspace"),
           name: "Google Calendar",
-          body: "Two-way sync with an organization calendar.",
+          body: personal
+            ? "Two-way sync with your own calendar."
+            : "Two-way sync with an organization calendar.",
         }),
         {
           key: "gmail",
@@ -258,6 +276,8 @@ export default async function IntegrationsPage({
         } satisfies Tile;
       }),
     },
+    // Calls and texts: the CRM's Telnyx, Twilio and Deepgram (phone-panels.tsx).
+    { name: "Calls and texts", tiles: phone },
     {
       name: "Notes, AI and data",
       tiles: [
@@ -278,13 +298,17 @@ export default async function IntegrationsPage({
         stored("claude", "CLAUDE", {
           brand: brandOr("claude"),
           name: "Claude",
-          body: "Ask about your organization's data, including form responses.",
+          body: personal
+            ? "Ask about your own tasks, notes, databases and contacts."
+            : "Ask about your organization's data, including form responses.",
         }),
         {
           key: "chatgpt",
           brand: brandOr("chatgpt"),
           name: "ChatGPT",
-          body: "The same, for organizations on ChatGPT.",
+          body: personal
+            ? "The same, if you use ChatGPT."
+            : "The same, for organizations on ChatGPT.",
           state: "soon",
         },
         stored("data-source", "SUPABASE_SOURCE", {
@@ -308,7 +332,10 @@ export default async function IntegrationsPage({
     },
   ];
 
-  const all = groups.flatMap((g) => g.tiles);
+  // One person's page leaves out team chat and the website's connections.
+  const all = groups
+    .flatMap((g) => g.tiles)
+    .filter((t) => !personal || !ORG_ONLY_APPS.includes(t.key));
   // Ambient: Reconnect what broke, and Google Calendar for an organization making events.
   for (const t of all) {
     if (t.state !== "attention" || !t.panel) continue;
@@ -333,7 +360,10 @@ export default async function IntegrationsPage({
   const soon = all.filter((t) => t.state === "soon").map((t) => t.name);
 
   // The window that's open, if any: loaded only then.
-  const app = canManage && isPanelApp(sp.app) ? sp.app : null;
+  const app =
+    canManage && isPanelApp(sp.app) && !(personal && ORG_ONLY_APPS.includes(sp.app))
+      ? sp.app
+      : null;
   const panel = app ? await loadPanel(app, orgSlug, sp) : null;
   const panelTile = app ? all.find((t) => t.key === app) : undefined;
   const base = `/app/${orgSlug}/integrations`;
@@ -350,7 +380,7 @@ export default async function IntegrationsPage({
             Integrations
           </h2>
           <span className="text-muted-foreground text-[13.5px]">
-            Other apps your organization already uses
+            {personal ? "Other apps you already use" : "Other apps your organization already uses"}
           </span>
         </div>
         <div className="grid gap-[18px] lg:grid-cols-2">
@@ -375,6 +405,8 @@ export default async function IntegrationsPage({
           </p>
         )}
       </section>
+
+      <DataConnectorsSection orgSlug={orgSlug} />
 
       {panel && (
         <IntegrationDialog

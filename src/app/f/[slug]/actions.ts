@@ -15,6 +15,7 @@ import {
   type SubmitResult,
 } from "@/server/forms/public";
 import { sendFormReceipt } from "@/server/forms/receipt";
+import { formToCrm } from "@/server/crm/outreach/intake";
 
 /**
  * The public form's two calls: send the answers, and (for a quick poll
@@ -55,6 +56,12 @@ export async function submitForm(slug: string, raw: unknown): Promise<SubmitResu
         email: session?.user.email ?? null,
       },
     );
+    // Into the CRM when the form sends its responses there; never fails the answer.
+    if (result.ok && result.responseId !== "ok") {
+      await formToCrm(target, result.responseId).catch((error) =>
+        console.error("[forms] CRM intake failed", error instanceof Error ? error.message : error),
+      );
+    }
     // A copy of their answers, when the form sends one; never fails the answer.
     if (result.ok && result.responseId !== "ok") {
       await sendFormReceipt(target, result.responseId).catch((error) =>

@@ -55,7 +55,10 @@ import {
 import { likelyDuplicates } from "@/server/databases/duplicates";
 import { fmtDate } from "@/server/databases/format";
 import { loadCustomDatabase } from "@/server/databases/custom";
-import { sourceFor } from "@/server/databases/sources";
+import { isCrmKind, loadSourceFor } from "@/server/databases/sources";
+import { CrmRowPanel } from "@/components/crm/row-panel";
+import { loadCrmRowPanel } from "@/server/crm/row-panel";
+import { crmBase } from "@/lib/crm/href";
 import {
   canViewBallotRows,
   getDatabase,
@@ -101,6 +104,9 @@ const DATE_LABELS: Record<string, string> = {
 
 /** What a row of each database is, for the summary under the title ("401 check-ins"). */
 const ROW_NOUNS: Record<string, [string, string]> = {
+  CRM_PEOPLE: ["person", "people"],
+  CRM_COMPANIES: ["company", "companies"],
+  CRM_PIPELINE: ["item", "items"],
   SESSIONS: ["session", "sessions"],
   ATTENDANCE: ["check-in", "check-ins"],
   SIGNUPS: ["signup", "signups"],
@@ -276,7 +282,25 @@ export default async function DatabaseViewPage({
   // The one primary action: adding a row, for admins where rows can be added
   // here. Setup pages and the export are in the "…" menu.
   let addRow: ReactNode = null;
-  if (admin) {
+  if (isCrmKind(kind)) {
+    // The CRM's own databases: a row is a CRM record, made in the CRM.
+    const crm = crmBase(orgSlug);
+    addRow = (
+      <Button asChild variant="create">
+        <Link
+          href={
+            kind === "CRM_PEOPLE"
+              ? `${crm}/people?new=1`
+              : kind === "CRM_COMPANIES"
+                ? `${crm}/companies?new=1`
+                : `${crm}/items/new`
+          }
+        >
+          {kind === "CRM_PEOPLE" ? "New person" : kind === "CRM_COMPANIES" ? "New company" : "New item"}
+        </Link>
+      </Button>
+    );
+  } else if (admin) {
     if (kind === "SESSIONS") {
       addRow = (
         <SessionFormDialog
@@ -520,7 +544,7 @@ async function loadPage(
     }
   }
 
-  const source = sourceFor(database.kind, sourceView);
+  const source = await loadSourceFor(db, org.id, database, sourceView);
   if (!source) return null;
   const columns = viewerColumns(source, database.columns, vctx.tier);
   const table = view === "table" ? await loadView(db, source, columns, vctx, sp) : null;
@@ -638,6 +662,20 @@ async function loadPage(
           kind: "other",
           title: "Ballot",
           node: <BallotPanel detail={detail} ctx={panelCtx} />,
+        };
+        break;
+      }
+      case "CRM_PEOPLE":
+      case "CRM_COMPANIES":
+      case "CRM_PIPELINE": {
+        // The same record as in the CRM: its fields, editable here.
+        const panel = await loadCrmRowPanel(ctx, org.slug, database.kind, rowId);
+        if (!panel) throw new NotFoundError();
+        drawer = {
+          kind: "other",
+          title: panel.title,
+          description: panel.subtitle ?? undefined,
+          node: <CrmRowPanel orgId={org.id} orgSlug={org.slug} panel={panel} />,
         };
         break;
       }

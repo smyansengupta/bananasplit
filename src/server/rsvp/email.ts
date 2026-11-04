@@ -37,6 +37,8 @@ export interface RsvpMessageInput {
   chipIn?: string | null;
   /** The event's .ics, so "Add to calendar" is one click from the email. */
   calendarUrl?: string | null;
+  /** The CRM's self-update link (/c/{token}) when they're in the organization's CRM. */
+  detailsUrl?: string | null;
 }
 
 /**
@@ -186,6 +188,16 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
       ),
     );
     text.push(`Bring friends with your link: ${input.inviteUrl}`);
+  }
+  // The CRM's "keep your details current" link (the sign-up confirmation only).
+  if (input.detailsUrl && (input.template === "registered" || input.template === "promoted")) {
+    rows.push(
+      detailRow(
+        "Your details",
+        `<a href="${safeHref(input.detailsUrl)}" style="color:${C.ink}">Moved or changed jobs? Update them</a>`,
+      ),
+    );
+    text.push(`Moved or changed jobs? Update your details: ${input.detailsUrl}`);
   }
 
   const details = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;width:100%;background:${C.page};border:1px solid ${C.line};border-radius:12px"><tr><td style="padding:12px 16px"><table role="presentation" cellpadding="0" cellspacing="0">${rows.join("")}</table></td></tr></table>`;

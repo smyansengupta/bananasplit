@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CalendarMember } from "@/components/calendar/member-picker";
 
@@ -75,6 +75,12 @@ const chosen = () =>
   );
 // The form is loaded on first open (next/dynamic), date picker included.
 const dialogOpen = () => screen.findByRole("dialog", undefined, { timeout: 5000 });
+
+// Load the form's module once up front, so the first test doesn't spend its
+// whole 5 s timeout on a cold import when the full suite keeps the machine busy.
+beforeAll(async () => {
+  await import("@/components/calendar/event-form-dialog");
+}, 30_000);
 
 beforeEach(() => {
   mocks.push.mockReset();

@@ -8,14 +8,14 @@ import { notAddedSections } from "@/server/search/viewer";
 
 describe("add-ons", () => {
   it("reads a stored list in a fixed order, dropping anything unknown", () => {
-    expect(readAddOns(["finance", "crm", "forms", "forms"])).toEqual(["forms", "finance"]);
+    expect(readAddOns(["finance", "crm", "forms", "forms", "nope"])).toEqual(["forms", "finance", "crm"]);
     expect(readAddOns(null)).toEqual([]);
     expect(isAddOn("forms")).toBe(true);
     expect(isAddOn("notes")).toBe(false);
   });
 
   it("names the plan feature behind each one", () => {
-    expect(ADD_ONS.map((id) => ADD_ON_INFO[id].feature)).toEqual(["polls", "finance"]);
+    expect(ADD_ONS.map((id) => ADD_ON_INFO[id].feature)).toEqual(["polls", "finance", "crm"]);
   });
 
   it("keeps an add-on that isn't added out of the sidebar, marked so its page can say so", () => {
@@ -52,7 +52,7 @@ describe("add-ons", () => {
   });
 
   it("lists the sections search and the AI connectors leave out for everyone", () => {
-    expect([...notAddedSections([])].sort()).toEqual(["finance", "forms"]);
-    expect([...notAddedSections(["forms", "finance"])]).toEqual([]);
+    expect([...notAddedSections([])].sort()).toEqual(["crm", "finance", "forms"]);
+    expect([...notAddedSections(["forms", "finance", "crm"])]).toEqual([]);
   });
 });

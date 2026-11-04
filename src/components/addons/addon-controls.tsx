@@ -11,7 +11,8 @@ import { ADD_ON_INFO, type AddOnId } from "@/lib/addons";
 
 /**
  * Add an add-on in one click, then go where it starts: Forms to its
- * ready-made forms, Finance to its one-screen setup.
+ * ready-made forms, Finance to its one-screen setup, the CRM to its
+ * one-step setup.
  */
 export function AddAddOnButton({
   orgId,
@@ -30,7 +31,9 @@ export function AddAddOnButton({
   const [pending, start] = useTransition();
   const name = ADD_ON_INFO[id].name;
   const next =
-    id === "forms" ? `/app/${orgSlug}/forms/new` : `/app/${orgSlug}/integrations/finance?setup=1`;
+    id === "forms"
+      ? `/app/${orgSlug}/forms/new`
+      : `/app/${orgSlug}/integrations/${id}?setup=1`;
   return (
     <Button
       type="button"

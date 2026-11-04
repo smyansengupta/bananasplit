@@ -26,9 +26,22 @@ import {
   type FieldUpdate,
   type RecordPage,
 } from "@/server/databases/custom";
+import {
+  linkedFrom,
+  relationDatabases,
+  searchRelationTargets,
+  type LinkedGroup,
+  type RelationDatabaseOption,
+  type RelationLabel,
+} from "@/server/databases/relations";
 import { AppError } from "@/server/db/errors";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
-import type { Choice, FieldDef, StoredValue } from "@/lib/databases/fields";
+import {
+  RELATION_KINDS,
+  type Choice,
+  type FieldDef,
+  type StoredValue,
+} from "@/lib/databases/fields";
 
 /** Every action here belongs to databases (withOrgAction's space check). */
 const databasesAction: typeof withOrgAction = (handler, options) =>
@@ -200,3 +213,37 @@ export const purgeRecordsAction = action(
   async (a, databaseId: string, recordIds: string[] | "all") =>
     purgeRecords(a, id.parse(databaseId), recordIds === "all" ? "all" : ids.parse(recordIds)),
 );
+
+const relationSearch = z.object({
+  kind: z.enum(RELATION_KINDS),
+  databaseId: id.optional(),
+  q: z.string().max(100).optional(),
+});
+
+/** What a RELATION cell's picker offers for what's typed. */
+export const searchRelationTargetsAction = action(
+  async (a, input: unknown): Promise<RelationLabel[]> => {
+    const parsed = relationSearch.safeParse(input);
+    if (!parsed.success) throw new DatabaseInputError("Check the search.");
+    return searchRelationTargets(a.db, a.organizationId, { ...parsed.data, take: 20 });
+  },
+);
+
+/** The databases a RELATION field can link to (club-made ones; pipelines for their items). */
+export const relationDatabasesAction = action(async (a): Promise<RelationDatabaseOption[]> =>
+  relationDatabases(a.db, a.organizationId),
+);
+
+const relationRef = z.object({ kind: z.enum(RELATION_KINDS), id });
+
+/** What links to one row (or CRM record): its "Linked from" list. */
+export const linkedFromAction = action(async (a, ref: unknown): Promise<LinkedGroup[]> => {
+  const parsed = relationRef.safeParse(ref);
+  if (!parsed.success) throw new NotFoundError();
+  const org = await a.db.organization.findUnique({
+    where: { id: a.organizationId },
+    select: { slug: true },
+  });
+  if (!org) throw new NotFoundError();
+  return linkedFrom(a.db, a.organizationId, org.slug, parsed.data);
+});

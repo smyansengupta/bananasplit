@@ -67,6 +67,27 @@ export function weeklyRowsFor(
         Prisma.sql`SELECT "firstCheckInAt" FROM public."Contact"
                     WHERE "organizationId" = ${organizationId} AND "firstCheckInAt" IS NOT NULL`,
       );
+    // The CRM's databases: records added each week.
+    case "CRM_PEOPLE":
+      return weekly(
+        db,
+        Prisma.sql`SELECT "createdAt" FROM public."CrmPerson"
+                    WHERE "organizationId" = ${organizationId} AND "deletedAt" IS NULL`,
+      );
+    case "CRM_COMPANIES":
+      return weekly(
+        db,
+        Prisma.sql`SELECT "createdAt" FROM public."CrmCompany"
+                    WHERE "organizationId" = ${organizationId} AND "deletedAt" IS NULL`,
+      );
+    case "CRM_PIPELINE":
+      return weekly(
+        db,
+        Prisma.sql`SELECT d."createdAt" FROM public."CrmDeal" d
+                    JOIN public."CrmPipeline" p ON p."id" = d."pipelineId" AND p."organizationId" = d."organizationId"
+                    WHERE d."organizationId" = ${organizationId} AND d."deletedAt" IS NULL
+                      AND p."databaseId" = ${database.id}`,
+      );
     default:
       return Promise.resolve({ weeks: Array.from({ length: HOME_WEEKS }, () => 0), thisWeek: 0 });
   }

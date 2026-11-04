@@ -375,7 +375,7 @@ function ClaudePicture() {
       </span>
       <span className="flex flex-col gap-1.5">
         <span>Done. I added 3 tasks to Fall launch:</span>
-        {["Finalize the sponsor deck, Jay", "Book the venue, Maya", "Send the press kit, Sam"].map(
+        {["Finalize the partner deck, Jay", "Book the venue, Maya", "Send the press kit, Sam"].map(
           (t) => (
             <span key={t} className="flex items-center gap-2">
               <span
@@ -542,7 +542,7 @@ function DocPicture() {
 
 function FilesPicture() {
   const files: readonly { icon: IconComponent; name: string; meta: string }[] = [
-    { icon: FileText, name: "Sponsor deck.pdf", meta: "2.4 MB" },
+    { icon: FileText, name: "Partner deck.pdf", meta: "2.4 MB" },
     { icon: FileSpreadsheet, name: "Budget FY27.xlsx", meta: "96 KB" },
   ];
   return (

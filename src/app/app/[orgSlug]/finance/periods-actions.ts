@@ -170,7 +170,7 @@ export const updateBudgetPeriod = financeAction(
 
 /**
  * Deletes a period that holds no money yet (no transactions or
- * sponsorships, voided ones included: the ledger keeps every row). Its
+ * deals, voided ones included: the ledger keeps every row). Its
  * categories go with it. Deleting the active period activates the latest
  * remaining one.
  */
@@ -192,7 +192,7 @@ export const deleteBudgetPeriod = financeAction(
     if (transactions > 0 || sponsorships > 0) {
       const what = [
         transactions > 0 ? `${transactions} transaction${transactions === 1 ? "" : "s"}` : null,
-        sponsorships > 0 ? `${sponsorships} sponsorship${sponsorships === 1 ? "" : "s"}` : null,
+        sponsorships > 0 ? `${sponsorships} deal${sponsorships === 1 ? "" : "s"}` : null,
       ]
         .filter(Boolean)
         .join(" and ");

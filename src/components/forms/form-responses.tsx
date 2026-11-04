@@ -586,7 +586,7 @@ function Review({
 
           <div className="grid gap-1.5 border-t pt-4">
             <label htmlFor={`notes-${current.id}`} className="text-[13px] font-semibold">
-              Your notes (officers only)
+              Your notes (owners and admins only)
             </label>
             <Textarea
               key={current.id}

@@ -99,7 +99,8 @@ describe("finance with nothing set up", () => {
     const periods = await withOrgTx(orgId, ({ db }) => db.budgetPeriod.findMany({ where: { organizationId: orgId } }));
     expect(periods).toHaveLength(1);
     expect(periods[0].isActive).toBe(true);
-    expect(periods[0].label).toMatch(/^\d{4}–\d{2}$/);
+    // This calendar year (src/lib/finance/periods.ts).
+    expect(periods[0].label).toBe(String(new Date().getFullYear()));
     const starter = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.count({ where: { organizationId: orgId, budgetPeriodId: periods[0].id } }),
     );
@@ -178,7 +179,7 @@ describe("finance with nothing set up", () => {
     expect(active?.id).toBe(period.id);
   });
 
-  it("sponsorships and sponsors can be deleted (a sponsor only once it has none)", async () => {
+  it("deals and partners can be deleted (a partner only once it has no deals)", async () => {
     if (!reachable) return;
     as(people.treasurer);
     const sponsor = await createSponsor(orgId, { name: `Acme ${stamp}` });
@@ -193,7 +194,7 @@ describe("finance with nothing set up", () => {
       ownerId: people.treasurer.id,
     });
     expect(deal.error).toBeUndefined();
-    expect((await deleteSponsor(orgId, sponsor.sponsorId!)).error).toMatch(/still has 1 sponsorship/);
+    expect((await deleteSponsor(orgId, sponsor.sponsorId!)).error).toMatch(/still has 1 deal[.]/);
     expect(await deleteSponsorship(orgId, deal.sponsorshipId!)).toEqual({});
     expect(await deleteSponsor(orgId, sponsor.sponsorId!)).toEqual({});
   });

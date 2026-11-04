@@ -5,6 +5,8 @@ import { FormAmbient } from "@/components/forms/form-ambient";
 import { FormDesignPanel } from "@/components/forms/form-design";
 import { FormBuilder, FormSettingsPanel, SharePanel } from "@/components/forms/form-editor";
 import { LinkedSection } from "@/components/links/linked-section";
+import { FormEmbed } from "@/components/crm/outreach/form-crm";
+import { FormCrmSection } from "@/components/crm/outreach/form-crm-section";
 import { FormPublish } from "@/components/forms/form-publish";
 import { FormResponses } from "@/components/forms/form-responses";
 import { PageTabs } from "@/components/ui/page-tabs";
@@ -221,6 +223,8 @@ export default async function FormPage({
         />
       )}
       {tab === "share" && <SharePanel link={link} open={open} title={form.title} />}
+      {tab === "share" && <FormEmbed link={link} title={form.title} />}
+      {tab === "settings" && <FormCrmSection orgId={org.id} formId={form.id} />}
       {(tab === "settings" || tab === "share") && (
         <LinkedSection
           orgId={org.id}

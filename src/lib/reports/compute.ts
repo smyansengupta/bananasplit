@@ -8,6 +8,14 @@ import {
   type ReportWidget,
   type SourceSummary,
 } from "./catalog";
+import type {
+  CrmGridPayload,
+  CrmGridWidget,
+  CrmListPayload,
+  CrmListWidget,
+  CrmStatPayload,
+  CrmStatWidget,
+} from "./crm-widgets";
 
 /**
  * What each saved-report widget shows, worked out from its source's rows.
@@ -275,7 +283,10 @@ export type WidgetPayload =
   | { type: "reach"; data: ReachPayload }
   | { type: "when"; data: WhenPayload }
   | { type: "regulars"; data: RegularsPayload }
-  | { type: "stopped"; data: StoppedPayload };
+  | { type: "stopped"; data: StoppedPayload }
+  | { type: CrmStatWidget; data: CrmStatPayload }
+  | { type: CrmListWidget; data: CrmListPayload }
+  | { type: CrmGridWidget; data: CrmGridPayload };
 
 // ---- Dates -------------------------------------------------------------------
 

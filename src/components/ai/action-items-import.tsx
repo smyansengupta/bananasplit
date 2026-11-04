@@ -69,7 +69,7 @@ interface Outcome {
 }
 
 const PLACEHOLDER = `- Sam: book the room for the fall social by Friday
-- Riley and Alex draft the sponsor deck (urgent)
+- Riley and Alex draft the partner deck (urgent)
 - Exec meeting Thursday 6pm in the student center
 - Someone order T-shirts before 10/20`;
 
