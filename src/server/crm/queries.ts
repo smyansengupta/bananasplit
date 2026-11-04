@@ -56,12 +56,18 @@ export function parseListQuery(sp: Record<string, string | string[] | undefined>
   };
 }
 
-function ownerWhere(owner: string | undefined, viewerId: string, roles: ReadonlyMap<string, RoleOwner>) {
+/**
+ * Owned by: "none", "me", a member's id, or several ids joined with commas
+ * (My team: the viewer and the people under them), each with the roles
+ * they hold.
+ */
+export function ownerWhere(owner: string | undefined, viewerId: string, roles: ReadonlyMap<string, RoleOwner>) {
   if (!owner) return {};
   if (owner === "none") return { ownerId: null, ownerRoleKey: null };
-  const id = owner === "me" ? viewerId : owner;
-  const held = rolesHeldBy(id, roles);
-  return { OR: [{ ownerId: id }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] };
+  const ids = [...new Set(owner.split(",").map((x) => (x === "me" ? viewerId : x.trim())).filter(Boolean))];
+  const held = ids.flatMap((id) => rolesHeldBy(id, roles));
+  const ownerId = ids.length === 1 ? ids[0]! : { in: ids };
+  return { OR: [{ ownerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] };
 }
 
 export interface PersonRow {
@@ -511,10 +517,12 @@ export async function todayList(
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
-  options: { mine: boolean },
+  options: { mine: boolean; team?: readonly string[] },
   now: Date = new Date(),
 ): Promise<Record<TodayItem["kind"], TodayItem[]>> {
-  const mine = options.mine ? (ownerWhere("me", viewerId, roles) as Prisma.CrmPersonWhereInput) : {};
+  const mine = options.mine
+    ? (ownerWhere(["me", ...(options.team ?? [])].join(","), viewerId, roles) as Prisma.CrmPersonWhereInput)
+    : {};
   const followups = await db.crmPerson.findMany({
     where: { organizationId, deletedAt: null, status: "ACTIVE", nextFollowUpAt: { lte: endOfToday(now) }, ...mine },
     orderBy: { nextFollowUpAt: "asc" },

@@ -87,6 +87,11 @@ export interface EnrichOutcome {
   filled: string[];
   suggested: number;
   batchId: string | null;
+  /** suggestOnly: the one suggestion holding everything found, and what it would change. */
+  suggestionId?: string | null;
+  changes?: { field: string; label: string; before: string | null; after: string }[];
+  /** Who found it, in words ("Hunter"). */
+  providerLabel?: string | null;
 }
 
 /** The order to try, from the setting (unknown steps dropped), defaulting to DEFAULT_ORDER. */
@@ -260,8 +265,17 @@ async function tryStep(
   }
 }
 
-/** Runs the waterfall on one person or company. */
-export async function enrichRecord(who: AiWho, target: TargetRef): Promise<EnrichOutcome> {
+/**
+ * Runs the waterfall on one person or company. `suggestOnly` (a member's
+ * "Find their details" on a card): nothing is written; everything found,
+ * empty fields and different values alike, becomes one suggestion that
+ * changes the record only when someone accepts it.
+ */
+export async function enrichRecord(
+  who: AiWho,
+  target: TargetRef,
+  options: { suggestOnly?: boolean } = {},
+): Promise<EnrichOutcome> {
   const { subject, order } = await loadSubject(who, target);
   const connected = await connectedDataProviders(who.organizationId);
   const steps = waterfallOrder(order).filter((s) => s === "claude" || connected.includes(s));
@@ -309,6 +323,35 @@ export async function enrichRecord(who: AiWho, target: TargetRef): Promise<Enric
   const label = provider === "claude" ? "Claude web search" : (dataProvider(provider)?.label ?? provider);
   const firstUrl = Object.values(found.urls)[0] ?? null;
   const citation: Citation = { kind: viaModel ? "web" : "connector", label, url: firstUrl };
+  outcome.providerLabel = label;
+  if (options.suggestOnly) {
+    const changes = [
+      ...fields
+        .filter((f) => f.key in fill)
+        .map((f) => ({ field: f.key, label: f.label, before: null, after: String(fill[f.key]) })),
+      ...conflicts,
+    ];
+    outcome.changes = changes;
+    outcome.suggestionId = null;
+    if (changes.length === 0) return outcome;
+    await who.tx(async (actor) => {
+      const r = await proposeChange(actor.db, {
+        organizationId: who.organizationId,
+        kind: "UPDATE_FIELD",
+        source: viaModel ? "AI" : "CONNECTOR",
+        title: `${label} found details for ${subject.name}`,
+        summary: "Nothing changes until you accept.",
+        payload: { changes },
+        target,
+        citation,
+        proposedById: who.userId,
+        assigneeId: who.userId,
+      });
+      outcome.suggestionId = r.id;
+      outcome.suggested = 1;
+    });
+    return outcome;
+  }
   await who.tx(async (actor) => {
     if (Object.keys(fill).length > 0) {
       const batchId = newBatchId();

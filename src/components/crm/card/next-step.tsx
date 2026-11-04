@@ -74,7 +74,7 @@ export function NextStepBar({
   if (stage === "set") {
     return (
       <Bar>
-        <span className="min-w-0 flex-1 truncate">
+        <span className="min-w-0 flex-1">
           <b>Next:</b> follow up {picked}
         </span>
         <AmbientButton
@@ -96,10 +96,11 @@ export function NextStepBar({
   if (stage === "next") {
     return (
       <Bar>
-        <span className="min-w-0 shrink truncate">
+        <span className="min-w-0">
           <b>Done.</b> What&apos;s next?
         </span>
-        <span className="ms-auto flex shrink-0 items-center gap-1.5">
+        <span className={SIDE}>
+          <AmbientWhy className="me-1">Keeps one next step on them</AmbientWhy>
           {offer().map((a) => (
             <AmbientButton key={a.key} action={a} />
           ))}
@@ -111,11 +112,11 @@ export function NextStepBar({
   if (!step) {
     return (
       <Bar>
-        <span className="min-w-0 shrink truncate">
+        <span className="min-w-0">
           <b>No next step</b>
         </span>
-        <span className="ms-auto flex shrink-0 items-center gap-1.5">
-          <AmbientWhy className="me-1 whitespace-nowrap">Nothing planned with them</AmbientWhy>
+        <span className={SIDE}>
+          <AmbientWhy className="me-1">Nothing planned with them</AmbientWhy>
           <AmbientButton
             action={{
               key: "add",
@@ -162,12 +163,12 @@ export function NextStepBar({
   }
   return (
     <Bar>
-      <span className="min-w-0 shrink truncate">
+      <span className="min-w-0">
         <b>Next:</b> {step.label.charAt(0).toLowerCase() + step.label.slice(1)},{" "}
         {due.words === "today" || due.words === "tomorrow" ? due.words : dayOf(new Date(step.at))}
       </span>
-      <span className="ms-auto flex shrink-0 items-center gap-1.5">
-        <AmbientWhy className="me-1 whitespace-nowrap">
+      <span className={SIDE}>
+        <AmbientWhy className="me-1">
           {due.late ? due.words.charAt(0).toUpperCase() + due.words.slice(1) : `Due ${due.words}`}
         </AmbientWhy>
         {actions.map((a) => (
@@ -178,9 +179,13 @@ export function NextStepBar({
   );
 }
 
+/** The reason and buttons: on the right, wrapping under the label when the card is narrow. */
+const SIDE = "ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5";
+
+/** The bar wraps rather than cutting the label, so the label, reason and buttons all read. */
 function Bar({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-muted flex flex-nowrap items-center gap-2 rounded-2xl px-4 py-2.5 text-[15px]">
+    <div className="bg-muted flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2xl px-4 py-2.5 text-[15px]">
       {children}
     </div>
   );

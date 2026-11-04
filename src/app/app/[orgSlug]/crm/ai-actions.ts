@@ -12,6 +12,7 @@ import { fillAiField, startColumnFill, type ColumnStart, type FillOutcome } from
 import { memberWho } from "@/server/crm/ai-tx";
 import { runFollowUpAgent, saveAgentSettings, type AgentSettings } from "@/server/crm/agents";
 import { askCrm, type AskResponse } from "@/server/crm/ask";
+import { enrichRecord, type EnrichOutcome } from "@/server/crm/enrich";
 import { tellCrm, type TellResponse } from "@/server/crm/tell";
 import { readConversation } from "@/server/crm/assist";
 import { saveDataKey, testDataKey, dataProvider, type ConnectResult, type DataProviderId } from "@/server/crm/data-connectors";
@@ -184,6 +185,33 @@ export async function followUpAgentAction(orgId: string, days?: number): Promise
   return run(async () => {
     const r = await runFollowUpAgent(await who(orgId), { days: z.number().int().min(7).max(365).optional().parse(days) });
     return { drafted: r.drafted };
+  });
+}
+
+// ---- Find their details (enrichment) ----------------------------------------------
+
+/**
+ * "Find their details" on a person's or company's card: the enrichment
+ * waterfall, and what it found as one suggestion to accept or leave. The
+ * record changes only when someone accepts.
+ */
+export async function findDetailsAction(
+  orgId: string,
+  kind: "person" | "company",
+  recordId: string,
+): Promise<AiResult<Pick<EnrichOutcome, "changes" | "suggestionId" | "providerLabel" | "tried">>> {
+  return run(async () => {
+    const r = await enrichRecord(
+      await who(orgId),
+      { kind: z.enum(["person", "company"]).parse(kind), id: id.parse(recordId) },
+      { suggestOnly: true },
+    );
+    return {
+      changes: r.changes ?? [],
+      suggestionId: r.suggestionId ?? null,
+      providerLabel: r.providerLabel ?? null,
+      tried: r.tried,
+    };
   });
 }
 

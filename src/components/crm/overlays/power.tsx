@@ -1,4 +1,4 @@
-import { todayForShell } from "@/app/app/[orgSlug]/crm/today-data";
+import { todayForShell, todayScope } from "@/app/app/[orgSlug]/crm/today-data";
 import { PowerCard, type PowerPerson } from "@/components/crm/cards/power-card";
 import { withOrgTx } from "@/server/db/context";
 
@@ -15,7 +15,7 @@ const MAX = 15;
  */
 export async function PowerOverlay({ shell, searchParams }: OverlayProps<"power">) {
   const orgId = shell.org.id;
-  const { rows } = await todayForShell(shell, searchParams.who === "all");
+  const { rows } = await todayForShell(shell, todayScope(searchParams.who));
   // People to reach, then drafts waiting for an OK (a plan's later step,
   // an automation's email), each person once.
   const seen = new Set<string>();

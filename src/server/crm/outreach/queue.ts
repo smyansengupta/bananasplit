@@ -76,6 +76,8 @@ function days(n: number): number {
 
 export interface QueueOptions {
   mine: boolean;
+  /** With `mine`: the viewer's team too (the people under them on the org chart). */
+  team?: readonly string[];
   /** Only these reasons (the Inbox takes all). */
   limit?: number;
   now?: Date;
@@ -90,9 +92,12 @@ export async function followUpQueue(
 ): Promise<QueueItem[]> {
   const now = options.now ?? new Date();
   const limit = options.limit ?? 60;
-  const held = rolesHeldBy(viewerId, roles);
+  // Whose: the viewer, or the viewer and their team (My team).
+  const who = [viewerId, ...(options.team ?? [])];
+  const whoIs = who.length === 1 ? viewerId : { in: who };
+  const held = who.flatMap((id) => rolesHeldBy(id, roles));
   const ownedBy: Prisma.CrmPersonWhereInput = options.mine
-    ? { OR: [{ ownerId: viewerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
+    ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] }
     : {};
   const reasons = new Map<string, QueueReason[]>();
   const add = (id: string, r: QueueReason) => {
@@ -108,7 +113,7 @@ export async function followUpQueue(
       direction: "INBOUND",
       status: "RECEIVED",
       createdAt: { gte: new Date(now.getTime() - days(21)) },
-      ...(options.mine ? { mailboxUserId: viewerId } : {}),
+      ...(options.mine ? { mailboxUserId: whoIs } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -151,7 +156,7 @@ export async function followUpQueue(
       deletedAt: null,
       meta: { path: ["open"], equals: true },
       occurredAt: { lte: now },
-      ...(options.mine ? { actorId: viewerId } : {}),
+      ...(options.mine ? { actorId: whoIs } : {}),
     },
     orderBy: { occurredAt: "asc" },
     take: 100,
@@ -182,7 +187,7 @@ export async function followUpQueue(
       lastContactedAt: null,
       createdAt: { gte: new Date(now.getTime() - days(7)) },
       source: { in: ["form", "forms", "booking"] },
-      ...(options.mine ? { OR: [{ ownerId: viewerId }, { ownerId: null, ownerRoleKey: null }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
+      ...(options.mine ? { OR: [{ ownerId: whoIs }, { ownerId: null, ownerRoleKey: null }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -196,7 +201,7 @@ export async function followUpQueue(
       organizationId,
       status: "TODO",
       campaign: { status: "ACTIVE" },
-      ...(options.mine ? { assigneeId: viewerId } : { assigneeId: { not: null } }),
+      ...(options.mine ? { assigneeId: whoIs } : { assigneeId: { not: null } }),
     },
     orderBy: { campaign: { dueOn: { sort: "asc", nulls: "last" } } },
     take: 150,
@@ -293,7 +298,7 @@ export async function followUpQueue(
       deletedAt: null,
       status: { not: "INACTIVE" },
       nextFollowUpAt: { lte: endOfDay(now) },
-      ...(options.mine ? { OR: [{ ownerId: viewerId }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
+      ...(options.mine ? { OR: [{ ownerId: whoIs }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] } : {}),
     },
     orderBy: { nextFollowUpAt: "asc" },
     take: 20,

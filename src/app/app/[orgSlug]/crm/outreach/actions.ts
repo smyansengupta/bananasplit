@@ -108,8 +108,8 @@ export const enrollAction = outreachAction(
     enroll(ctx, sequenceId, personIds, { confirmConflicts }),
 );
 
-export const stopEnrollmentAction = outreachAction(async (ctx, _a, enrollmentId: string) => {
-  await stopEnrollment(ctx, enrollmentId);
+export const stopEnrollmentAction = outreachAction(async (ctx, access, enrollmentId: string) => {
+  await stopEnrollment(ctx, enrollmentId, access.manager);
   return {};
 });
 

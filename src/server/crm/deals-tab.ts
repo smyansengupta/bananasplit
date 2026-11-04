@@ -97,9 +97,12 @@ export function dealFilterWhere(
   if (filters.show === "lost") and.push({ stage: { kind: "LOST" } });
   if (filters.owner === "none") and.push({ ownerId: null, ownerRoleKey: null });
   else if (filters.owner) {
-    const id = filters.owner === "me" ? viewer.id : filters.owner;
-    const held = rolesHeldBy(id, viewer.roles);
-    and.push({ OR: [{ ownerId: id }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])] });
+    // One owner, or several joined with commas (My team).
+    const ids = [...new Set(filters.owner.split(",").map((x) => (x === "me" ? viewer.id : x.trim())).filter(Boolean))];
+    const held = ids.flatMap((id) => rolesHeldBy(id, viewer.roles));
+    and.push({
+      OR: [{ ownerId: ids.length === 1 ? ids[0]! : { in: ids } }, ...(held.length ? [{ ownerRoleKey: { in: held } }] : [])],
+    });
   }
   if (filters.type) {
     // A type is a choice id per pipeline: match whichever pipelines have it.

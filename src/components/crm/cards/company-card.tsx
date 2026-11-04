@@ -9,6 +9,7 @@ import { Composer } from "@/components/crm/card/composer";
 import { CrmAvatar, CrmCard } from "@/components/crm/card/crm-card";
 import { NotesList, type NoteItem } from "@/components/crm/card/notes";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
+import { useFindDetails } from "@/components/crm/card/find-details";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
 import { EmptyState } from "@/components/empty-state";
@@ -52,12 +53,21 @@ export function CompanyCard({
   orgId,
   orgSlug,
   data,
+  canEnrich = false,
 }: {
   orgId: string;
   orgSlug: string;
   data: CompanyCardData | null;
+  /** A data connector or AI connection is set up: Find its details is offered. */
+  canEnrich?: boolean;
 }) {
   const { close, hrefFor } = useCrmOpen();
+  const details = useFindDetails({
+    orgId,
+    kind: "company",
+    id: data?.id ?? "",
+    name: data?.name ?? "",
+  });
   const pathname = usePathname() ?? "";
   const params = useSearchParams();
 
@@ -90,17 +100,21 @@ export function CompanyCard({
       }
       description={`${data.name}: overview, people, notes, deals and details`}
       actions={
-        <RecordActions
-          orgId={orgId}
-          orgSlug={orgSlug}
-          kind="company"
-          id={data.id}
-          name={data.name}
-          deleted={data.deleted}
-          history={data.history}
-          menu
-          onTrashed={close}
-        />
+        <>
+          <RecordActions
+            orgId={orgId}
+            orgSlug={orgSlug}
+            kind="company"
+            id={data.id}
+            name={data.name}
+            deleted={data.deleted}
+            history={data.history}
+            menu
+            menuItems={canEnrich && !data.deleted ? details.item : undefined}
+            onTrashed={close}
+          />
+          {details.panel}
+        </>
       }
       tabs={[
         { value: "overview", label: "Overview" },
@@ -145,11 +159,20 @@ export function CompanyCard({
                 <p className="text-muted-foreground text-sm">Nobody from {data.name} yet.</p>
               )}
               {data.people.map((p) => (
-                <Link key={p.id} href={hrefFor({ kind: "person", id: p.id })} scroll={false} className={ROW}>
+                <Link
+                  key={p.id}
+                  href={hrefFor({ kind: "person", id: p.id })}
+                  scroll={false}
+                  className={ROW}
+                >
                   <CrmAvatar name={p.name} size={36} />
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-[15px]">{p.name}</b>
-                    {p.sub && <span className="text-muted-foreground block truncate text-[13px]">{p.sub}</span>}
+                    {p.sub && (
+                      <span className="text-muted-foreground block truncate text-[13px]">
+                        {p.sub}
+                      </span>
+                    )}
                   </span>
                   <span className="text-muted-foreground shrink-0 text-[13px]">{p.last}</span>
                 </Link>
@@ -176,7 +199,12 @@ export function CompanyCard({
           ) : (
             <div className="grid gap-2">
               {data.deals.map((d) => (
-                <Link key={d.id} href={hrefFor({ kind: "deal", id: d.id })} scroll={false} className={ROW}>
+                <Link
+                  key={d.id}
+                  href={hrefFor({ kind: "deal", id: d.id })}
+                  scroll={false}
+                  className={ROW}
+                >
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -207,7 +235,9 @@ export function CompanyCard({
                 fields={data.form}
                 readOnly={data.deleted}
               />
-              {!data.deleted && <p className="text-muted-foreground text-xs">Click a value to change it.</p>}
+              {!data.deleted && (
+                <p className="text-muted-foreground text-xs">Click a value to change it.</p>
+              )}
             </div>
           );
         }

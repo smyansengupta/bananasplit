@@ -1946,6 +1946,18 @@ named by one search param (`src/lib/crm/overlay.ts`):
   as a panel over the card (its own `DialogHead`, whose Close goes back
   to the card), Merge a duplicate opens the Merge card (`merge:<id>`),
   never a side sheet or a second dialog.
+- **Panels, not second dialogs.** Anything a card asks next opens inside
+  it: `CardPanel` (`card/card-panel.tsx`, History, Add to a follow-up
+  series, Find their details) covers the card's frame, or an inline box
+  (`NeedsForm` for a stage that needs fields, the quote's link, move and
+  paid steps). Escape closes just that (`useEscapeFirst`; `CrmCard` leaves
+  Escape alone while a `[data-card-panel]` is there) and focus moves in.
+- **Speed.** The CRM has one layout (`crm/layout.tsx`), so a navigation
+  inside it never shows the app's loading skeleton: the page stays put.
+  Clicking a card's link (or `setOpen`) draws its frame at once with a
+  loading body (`CrmPendingCard`, `usePendingOpen`), and the card on
+  screen gives way to it; closing hides the card on the click, then the
+  URL catches up.
 - **On a phone** a card fills the screen: full height, no margin, rounded
   at the top only (`PHONE_FULL_SCREEN` in `ui/form-dialog.tsx`, used by
   `CrmCard`, `FormDialog` and Calendar's event detail). The header's
@@ -1959,9 +1971,15 @@ named by one search param (`src/lib/crm/overlay.ts`):
   queue, duplicates and the viewer's call steps. Each row carries at most
   two ambient buttons with the reason beside them; a done row shrinks to a
   line, with Undo where there is one (a held send, an accepted
-  suggestion). The bar is in Tasks' order: Mine and Everyone's as round
-  buttons, Filters (picks a group), then search (a Personal space has no
-  Mine and Everyone's: it's all yours). `/crm/calls` opens the Calls group
+  suggestion). The bar is Tasks' (`CrmToolbar`): Mine, My team (the
+  people under you on the org chart, `crmTeam`; only with reports) and
+  Everyone as Tasks' scope chips (M, T, E; `?who=`), Filters (picks a
+  group), then search; the filters that are on as removable chips with
+  Clear all; on a phone, Tasks' phone bar with a filters sheet (a Personal
+  space has no scope: it's all yours). People's bar adds the labelled
+  view switch (People, Companies, Board), the scope as `?owner=me|team`,
+  Owner in Filters (every member, with a search) and Report; C makes the
+  page's new record (a deal on the Board). `/crm/calls` opens the Calls group
   (`crmCallsHref`, `?show=calls`); with two or more calls due its header
   has Call them in a row, the dialer as a card (`?open=calls`). Goals, Coming up
   (meetings in the next week) and Done on its own (the latest five with

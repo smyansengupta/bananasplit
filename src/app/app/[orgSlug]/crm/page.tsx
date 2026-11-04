@@ -1,20 +1,27 @@
+import { Suspense } from "react";
 import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
 import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
+import { CrmSendingBanner } from "@/components/crm/settings/sending-paused";
 import { TodayGoals } from "@/components/crm/today/today-goals";
 import { TodayList } from "@/components/crm/today/today-list";
 import { TodayLog } from "@/components/crm/today/today-log";
 import { TodayToolbar } from "@/components/crm/today/today-toolbar";
 import { hrefWithOpen } from "@/lib/crm/overlay";
-import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/power-hour";
+import {
+  POWER_HOUR_KEY,
+  powerHourBackLabel,
+  powerHourMinutes,
+  powerHourSnoozeUntil,
+} from "@/lib/crm/power-hour";
 import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
 import { dayLabel, onItsOwn } from "@/server/crm/on-its-own";
 import { comingUp, TODAY_GROUPS, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
-import { crmMemberNames, crmShell } from "./shell";
-import { todayForShell } from "./today-data";
+import { crmMemberNames, crmShell, crmTeam } from "./shell";
+import { todayForShell, todayScope } from "./today-data";
 
 export const metadata = { title: "CRM" };
 
@@ -31,7 +38,8 @@ function one(v: string | string[] | undefined): string | undefined {
  * person at a time (?open=power). On the right: Goals, what's coming up,
  * and Done on its own (the latest few things the CRM did without asking,
  * See all opens ?open=log).
- * Yours first; everyone's with ?who=all or when nothing is yours.
+ * Yours first; your team's with ?who=team (someone with reports), everyone's
+ * with ?who=all or when nothing is yours.
  */
 export default async function CrmTodayPage({
   params,
@@ -44,7 +52,8 @@ export default async function CrmTodayPage({
   const orgId = shell.org.id;
   // A Personal space is one person's: everything is theirs, so no Mine and Everyone's.
   const personal = shell.access.personal;
-  const everyone = personal || one(sp.who) === "all";
+  const who = todayScope(one(sp.who));
+  const everyone = personal || who === "all";
   const show = one(sp.show) as TodayGroup | undefined;
   const q = one(sp.q)?.toLowerCase();
   const now = new Date();
@@ -52,7 +61,9 @@ export default async function CrmTodayPage({
   // In parallel, each in its own transaction: the list (shared with Power
   // hour, todayForShell), the right column, what's coming up (which needs
   // to know whether the list is yours) and the card open over the page.
-  const todayP = todayForShell(shell, one(sp.who) === "all");
+  const todayP = todayForShell(shell, who);
+  // My team is offered only to someone with people under them, as in Tasks.
+  const teamP = personal ? Promise.resolve([]) : crmTeam(orgId, shell.user.id);
   const sideP = withOrgTx(orgId, async ({ db }) => {
     const me = await db.user.findUnique({
       where: { id: shell.user.id },
@@ -77,11 +88,12 @@ export default async function CrmTodayPage({
       comingUp(db, orgId, shell.user.id, { everyone: everyone || !today.mine, now }),
     ),
   );
-  const [today, side, upcoming, overlay] = await Promise.all([
+  const [today, side, upcoming, overlay, team] = await Promise.all([
     todayP,
     sideP,
     upcomingP,
     CrmOverlays({ shell, orgSlug, searchParams: sp }),
+    teamP,
   ]);
   // Goals name their member only when one is set for someone.
   const names = side.goals.some((g) => g.ownerId) ? await crmMemberNames(orgId) : new Map<string, string>();
@@ -114,11 +126,18 @@ export default async function CrmTodayPage({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        toolbar={<TodayToolbar tabs={shell.tabs} personal={personal} />}
+        banner={
+          <Suspense fallback={null}>
+            <CrmSendingBanner orgId={orgId} orgSlug={orgSlug} />
+          </Suspense>
+        }
+        toolbar={<TodayToolbar tabs={shell.tabs} personal={personal} hasTeam={team.length > 0} />}
       />
       {!personal && !data.today.mine && !everyone && (
         <p className="text-muted-foreground -mt-3 mb-5 text-sm">
-          Nothing of yours today, so this is everyone&apos;s.
+          {who === "team"
+            ? "Nothing for your team today, so this is everyone's."
+            : "Nothing of yours today, so this is everyone's."}
         </p>
       )}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -131,6 +150,14 @@ export default async function CrmTodayPage({
             minutes: powerHourMinutes(powerRows.length),
             drafts: powerRows.filter((r) => r.draft).length,
             snoozed: data.snoozedUntil ? powerHourBackLabel(data.snoozedUntil, now, data.tz) : null,
+            snoozeWhy: powerHourBackLabel(powerHourSnoozeUntil(now, data.tz), now, data.tz).replace(
+              /^Power hour is back/,
+              "Snooze brings it back",
+            ),
+          }}
+          hidden={{
+            count: data.today.rows.length,
+            clearHref: hrefWithOpen(base, { ...sp, show: undefined, q: undefined }, null),
           }}
         />
         <aside className="flex min-w-0 flex-col gap-4">
@@ -166,7 +193,7 @@ export default async function CrmTodayPage({
                   mins < 60
                     ? `Starts in ${Math.max(1, mins)} min`
                     : mins < 24 * 60
-                      ? `Starts in ${Math.round(mins / 60)} hours`
+                      ? `Starts in ${Math.round(mins / 60)} ${Math.round(mins / 60) === 1 ? "hour" : "hours"}`
                       : m.at.toLocaleDateString("en-US", { weekday: "long", timeZone: data.tz });
                 return (
                   <div
