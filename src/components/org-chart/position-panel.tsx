@@ -130,7 +130,7 @@ function PanelBody({
   return (
     <div className="flex flex-col gap-5 px-4 pb-6">
       <SheetHeader className="px-0">
-        <div className="flex items-center gap-3 pr-8">
+        <div className="flex items-center gap-3">
           {node.user ? (
             <UserAvatar user={node.user} size="xl" />
           ) : (
