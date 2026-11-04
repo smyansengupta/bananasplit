@@ -14,21 +14,19 @@ import { cn } from "@/lib/utils";
  * The CRM's header row, the same on every tab, laid out like Tasks': the
  * title, then the one create (New person, with New company, New deal and
  * Import a spreadsheet in its menu) and, right of it, the round settings
- * button for whoever may change the CRM. Creating opens a card over the
- * page (?open=new:...), never a new page.
+ * button. Everyone gets it: each settings section decides who may open it
+ * (canOpenSection), and a member lands on You. Creating opens a card over
+ * the page (?open=new:...), never a new page.
  */
 const CREATE_LABEL = { person: "New person", company: "New company", deal: "New deal" } as const;
 
 export function CrmHeader({
   orgSlug,
-  settings,
   title = "CRM",
   toolbar,
   create = "person",
 }: {
   orgSlug: string;
-  /** The viewer may open CRM settings (owners, admins and CRM managers). */
-  settings: boolean;
   title?: string;
   /** The toolbar row under it (CrmToolbar). */
   toolbar?: ReactNode;
@@ -80,16 +78,14 @@ export function CrmHeader({
               </DropdownMenuItem>
             </CreateSplitButton>
           ) : null}
-          {settings && (
-            <Link
-              href={`${base}/settings`}
-              aria-label="CRM settings"
-              title="CRM settings"
-              className="bg-foreground text-background hover:bg-foreground/85 focus-glow grid size-10 shrink-0 place-items-center rounded-full transition-colors"
-            >
-              <Settings className="size-[18px]" aria-hidden="true" />
-            </Link>
-          )}
+          <Link
+            href={`${base}/settings`}
+            aria-label="CRM settings"
+            title="CRM settings"
+            className="bg-foreground text-background hover:bg-foreground/85 focus-glow grid size-10 shrink-0 place-items-center rounded-full transition-colors"
+          >
+            <Settings className="size-[18px]" aria-hidden="true" />
+          </Link>
         </div>
       </div>
       {toolbar}

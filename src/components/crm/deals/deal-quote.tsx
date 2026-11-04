@@ -1,7 +1,6 @@
 "use client";
 
 import { Download, Plus, X } from "@/components/icons";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,6 +10,7 @@ import {
   unsendDealQuoteAction,
 } from "@/app/app/[orgSlug]/crm/deal-actions";
 import { AMBIENT_BUTTON, AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
+import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { formatMoney } from "@/lib/crm/fields";
@@ -22,7 +22,9 @@ import { cn } from "@/lib/utils";
  * A deal's quote or invoice on its card's Quote tab: the lines (change a
  * description or a price in place), the total, and Send the quote. A send
  * waits ten seconds with Undo (the email doesn't go and the quote is a
- * draft again); after that it's out, tracked, and the line says so.
+ * draft again); after that it's out, tracked, and the line says so. All
+ * details opens the quote's own card (?open=quote:<id>) in the deal's place;
+ * closing it comes back here.
  */
 
 export interface DealQuoteView {
@@ -133,6 +135,7 @@ export function QuoteBlock({
   quote: DealQuoteView;
 }) {
   const router = useRouter();
+  const { hrefFor } = useCrmOpen();
   const locked = quote.status === "ACCEPTED" || quote.status === "PAID";
   const word = KIND_WORD[quote.kind];
   const [rows, setRows] = useState<Row[]>(
@@ -217,12 +220,13 @@ export function QuoteBlock({
           <Download className="size-3.5" aria-hidden="true" />
           PDF
         </a>
-        <Link
-          href={`/app/${orgSlug}/crm/quotes/${quote.id}?edit=1`}
+        <button
+          type="button"
+          onClick={() => router.push(hrefFor({ kind: "quote", id: quote.id }), { scroll: false })}
           className="text-muted-foreground hover:text-foreground text-xs font-semibold"
         >
           All details
-        </Link>
+        </button>
       </div>
       <ul className="bg-card ring-foreground/6 divide-border/60 divide-y rounded-2xl ring-1">
         {rows.map((r, i) => {

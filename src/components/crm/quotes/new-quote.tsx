@@ -7,8 +7,9 @@ import { createQuoteAction } from "@/app/app/[orgSlug]/crm/quote-actions";
 import { Plus } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
+import { crmQuoteHref } from "@/lib/crm/href";
 
-/** New quote and New invoice on a record: a draft made for it, then its editor. */
+/** New quote and New invoice on a record: a draft made for it, then its card. */
 export function NewQuoteButtons({
   orgId,
   orgSlug,
@@ -28,7 +29,7 @@ export function NewQuoteButtons({
       toast({ title: r && !r.ok ? r.error : "That didn't work.", tone: "error" });
       return;
     }
-    router.push(`/app/${orgSlug}/crm/quotes/${r.id}`);
+    router.push(crmQuoteHref(orgSlug, { id: r.id, dealId: target.dealId }));
   }
   return (
     <div className="flex flex-wrap gap-2">

@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PHONE_FULL_SCREEN } from "@/components/ui/form-dialog";
 import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
@@ -93,18 +94,27 @@ export function CrmCard({
     <Dialog open onOpenChange={(o) => !o && shut()}>
       <DialogContent
         showCloseButton={false}
-        className="bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]"
+        className={cn(
+          "bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]",
+          // On a phone the card is the whole screen, rounded at the top.
+          PHONE_FULL_SCREEN,
+        )}
         // A toast's Undo sits outside the card: clicking it mustn't close the card.
         onInteractOutside={(e) => {
           if (e.target instanceof Element && e.target.closest("[data-toaster]")) e.preventDefault();
         }}
       >
         <DialogDescription className="sr-only">{description ?? plainTitle}</DialogDescription>
-        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b ps-6 pe-4 pt-4 pb-3.5">
+        <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b ps-6 pe-4 pt-4 pb-3.5 max-sm:ps-4">
           <DialogHead
-            leading={avatar}
+            // At 375px the avatar and the title give way to the round buttons.
+            leading={
+              avatar && (
+                <div className="max-sm:[&>span]:!size-10 max-sm:[&>span]:!text-[14px]">{avatar}</div>
+              )
+            }
             title={title}
-            titleClassName="display-title truncate text-[26px] leading-tight"
+            titleClassName="display-title truncate text-[26px] leading-tight max-sm:text-[22px]"
             subtitle={subtitle && <div className="truncate">{subtitle}</div>}
             onClose={shut}
             actions={
@@ -158,11 +168,11 @@ export function CrmCard({
             </div>
           )}
         </header>
-        <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", bodyClassName)}>
+        <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5 max-sm:px-4", bodyClassName)}>
           {typeof children === "function" ? children(current) : children}
         </div>
         {foot && (
-          <footer className="border-border/60 shrink-0 border-t px-6 pt-3.5 pb-5">{foot}</footer>
+          <footer className="border-border/60 shrink-0 border-t px-6 pt-3.5 pb-5 max-sm:px-4">{foot}</footer>
         )}
       </DialogContent>
     </Dialog>

@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { chipClass } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
+import { crmRecordHref } from "@/lib/crm/href";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * Handover: hand a member's relationships to someone else (or to a
- * position, so they follow whoever holds it) in one step, and give anyone
- * left with no owner to someone.
+ * Handover (CRM settings > Team and access): hand a member's relationships
+ * to someone else (or to a position, so they follow whoever holds it) in
+ * one step, and give anyone left with no owner to someone.
  */
 
 export interface OwnerChoice {
@@ -55,7 +56,7 @@ export function HandOverCard({
     setPending(false);
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
-    toast({ title: `Handed over ${r.people} people, ${r.companies} companies, ${r.deals} items`, tone: "success" });
+    toast({ title: `Handed over ${r.people} people, ${r.companies} companies, ${r.deals} deals`, tone: "success" });
     router.refresh();
   };
   return (
@@ -114,7 +115,7 @@ export function Unowned({
               }}
               aria-label={`Pick ${r.name}`}
             />
-            <Link href={`/app/${orgSlug}/crm/people/${r.id}`} className="min-w-0 flex-1 truncate font-medium hover:underline">
+            <Link href={crmRecordHref(orgSlug, "person", r.id)} className="min-w-0 flex-1 truncate font-medium hover:underline">
               {r.name}
             </Link>
             <span className="text-muted-foreground text-sm">{r.why}</span>

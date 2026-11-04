@@ -64,6 +64,8 @@ export interface DealCardData {
   nextStepAt: string | null;
   expectedOn: string | null;
   owner: string | null;
+  /** A Personal space: one owner, so the Owner fact doesn't show. */
+  personal?: boolean;
   contact: { id: string; name: string } | null;
   finance: string | null;
   quote: DealQuoteView | null;
@@ -289,7 +291,9 @@ export function DealCard({
                 <Fact label="Expected to close">
                   {data.expectedOn ? shortDay(data.expectedOn) : <span className="text-muted-foreground">Not set</span>}
                 </Fact>
-                <Fact label="Owner">{data.owner ?? <span className="text-muted-foreground">Nobody</span>}</Fact>
+                {!data.personal && (
+                  <Fact label="Owner">{data.owner ?? <span className="text-muted-foreground">Nobody</span>}</Fact>
+                )}
                 {data.finance && <Fact label="Finance">{data.finance}</Fact>}
               </dl>
               {data.timeline.length > 0 && (

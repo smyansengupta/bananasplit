@@ -9,8 +9,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * A Personal space's CRM against the real roles and policies on the local
  * database (docs/features/crm.md, "Personal CRM"): Personal Plus sets it up
  * with its own answers and no Member type, the owner adds people and
- * deals, the CRM's databases list in Personal's Databases, and Personal
- * Free is refused. Two throwaway Personal spaces are made as the table
+ * deals, the CRM's databases list in Personal's Databases, splitting a
+ * list among members is refused, and Personal Free is refused. Two throwaway Personal spaces are made as the table
  * owner (one on Plus, one on Free) and removed in afterAll. Skipped when
  * the database is not reachable.
  */
@@ -27,6 +27,7 @@ import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { crmAccess, CrmError } from "./access";
 import { createDeal } from "./deals";
+import { createCampaign } from "./outreach/campaigns";
 import { createPerson } from "./people";
 import { listPipelines } from "./pipelines";
 import { runSetup } from "./setup";
@@ -154,6 +155,15 @@ describe("the CRM in a Personal space", () => {
     );
     const kinds = listed.map((d) => d.kind).sort();
     expect(kinds).toEqual(["CRM_COMPANIES", "CRM_PEOPLE", "CRM_PIPELINE"]);
+  });
+
+  it("refuses to split a list among members: there's only you", async () => {
+    if (!reachable) return;
+    const refused = await as(plusOwner, plusOrg, (ctx) =>
+      createCampaign(ctx, { name: "Everyone", viewId: "none", channel: "call" }, new Map()),
+    ).catch((e) => e);
+    expect(refused).toBeInstanceOf(CrmError);
+    expect((refused as CrmError).message).toMatch(/for organizations/);
   });
 
   it("refuses Personal Free, saying Personal Plus has it", async () => {

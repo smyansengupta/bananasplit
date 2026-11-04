@@ -167,8 +167,8 @@ export function OutreachSettings({
         {dailyCap}
         <p className="text-muted-foreground text-xs">
           Past it, the rest wait for tomorrow. Handing someone&apos;s relationships over is on{" "}
-          <Link href={`/app/${orgSlug}/crm/handover`} className="underline underline-offset-4">
-            Handover
+          <Link href={`/app/${orgSlug}/crm/settings/team`} className="underline underline-offset-4">
+            Team and access
           </Link>
           .
         </p>

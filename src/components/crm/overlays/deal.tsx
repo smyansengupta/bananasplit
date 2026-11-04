@@ -105,13 +105,15 @@ export async function DealOverlay({ shell, orgSlug, open }: OverlayProps<"deal">
     nextStepAt: deal.nextStepAt?.toISOString() ?? null,
     expectedOn: deal.expectedOn?.toISOString() ?? null,
     owner: ownerLabel(deal, shell.roles, names),
+    personal: shell.access.personal,
     contact: data.contact ? { id: data.contact.id, name: data.contact.name } : null,
     finance: data.loaded.sponsorship
       ? `In Finance as a deal${data.loaded.sponsorship.budgetPeriod?.label ? `, ${data.loaded.sponsorship.budgetPeriod.label}` : ""}`
       : null,
     quote: quote ? toView(quote) : null,
     invoice: invoice ? toView(invoice) : null,
-    form: data.form,
+    // A Personal space has one owner: no Owner field or fact.
+    form: shell.access.personal ? data.form.filter((f) => f.key !== "owner") : data.form,
     timeline: data.timelineItems,
     history: presentHistory(data.loaded.history, "deal", data.loaded.fields, names, stages),
     members: Object.fromEntries(names),

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { keepBothAction, mergeRecordsAction, undoMergeAction } from "@/app/app/[orgSlug]/crm/people-actions";
 import { CrmCard } from "@/components/crm/card/crm-card";
+import { CrmPicker } from "@/components/crm/crm-picker";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -203,6 +204,71 @@ export function MergeCard({ orgId, data }: { orgId: string; data: MergeCardData 
             ? `${plural(gone.activities, "activity", "activities")} and ${plural(gone.deals, "deal")} move to ${kept.name}.`
             : `Nothing to move: ${gone.name} has no activity or deals.`}{" "}
           {gone.name} goes to the trash, marked as merged, so nothing is lost.
+        </p>
+      </div>
+    </CrmCard>
+  );
+}
+
+/**
+ * Merge with one record named (?open=merge:<id>, from a card's "…"): pick
+ * the duplicate, and the card turns into the side-by-side one.
+ */
+export function MergePickCard({
+  orgId,
+  first,
+}: {
+  orgId: string;
+  first: { kind: "person" | "company"; id: string; name: string } | null;
+}) {
+  const { setOpen, hrefFor } = useCrmOpen();
+  const router = useRouter();
+  if (!first) {
+    return (
+      <CrmCard title="Merge">
+        <EmptyState
+          title="It isn't here any more"
+          description="It may have been merged already or moved to the trash."
+        />
+      </CrmCard>
+    );
+  }
+  return (
+    <CrmCard
+      title={`Merge into ${first.name}`}
+      subtitle={first.kind === "person" ? "Pick the person who's the same." : "Pick the company that's the same."}
+      description={`Merge a duplicate into ${first.name}`}
+      foot={
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.replace(hrefFor({ kind: first.kind, id: first.id }), { scroll: false })}
+          >
+            Back to {first.name}
+          </Button>
+        </div>
+      }
+    >
+      <div className="grid gap-3">
+        <CrmPicker
+          orgId={orgId}
+          kind={first.kind}
+          value={null}
+          allowClear={false}
+          autoOpen
+          placeholder={first.kind === "person" ? "Search people" : "Search companies"}
+          onPick={(hit) => {
+            if (!hit) return;
+            if (hit.id === first.id) {
+              toast({ title: "Pick someone else: that's the same record." });
+              return;
+            }
+            setOpen({ kind: "merge", ids: [first.id, hit.id] });
+          }}
+        />
+        <p className="text-muted-foreground px-1 text-sm">
+          Next you pick which name, email and phone to keep. Its timeline and deals move here, and the
+          other one goes to the trash, marked as merged.
         </p>
       </div>
     </CrmCard>

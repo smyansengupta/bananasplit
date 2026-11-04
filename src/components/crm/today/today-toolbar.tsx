@@ -9,9 +9,16 @@ import type { ResolvedCrmTab } from "@/lib/crm/nav";
 /**
  * Today's toolbar, in Tasks' order: the tabs, Mine and Everyone's as round
  * buttons, Filters (which group to show), then search on the right. Done on
- * its own lives in the right column, under Goals and Coming up.
+ * its own lives in the right column, under Goals and Coming up. A Personal
+ * space (`personal`) has no Mine and Everyone's: it's all yours.
  */
-export function TodayToolbar({ tabs }: { tabs: readonly ResolvedCrmTab[] }) {
+export function TodayToolbar({
+  tabs,
+  personal = false,
+}: {
+  tabs: readonly ResolvedCrmTab[];
+  personal?: boolean;
+}) {
   const params = useSearchParams();
   return (
     <CrmToolbar
@@ -36,10 +43,12 @@ export function TodayToolbar({ tabs }: { tabs: readonly ResolvedCrmTab[] }) {
       filterCount={params.get("show") ? 1 : 0}
       search={{ placeholder: "Search or ask" }}
     >
-      <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose">
-        <CrmRoundToggle icon={UserRound} label="Mine" param="who" value="mine" isDefault />
-        <CrmRoundToggle icon={UsersRound} label="Everyone's" param="who" value="all" />
-      </div>
+      {!personal && (
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose">
+          <CrmRoundToggle icon={UserRound} label="Mine" param="who" value="mine" isDefault />
+          <CrmRoundToggle icon={UsersRound} label="Everyone's" param="who" value="all" />
+        </div>
+      )}
     </CrmToolbar>
   );
 }

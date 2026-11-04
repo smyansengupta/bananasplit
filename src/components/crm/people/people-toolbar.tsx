@@ -51,6 +51,7 @@ export function PeopleToolbar({
   relationships,
   deals,
   reportHref,
+  personal = false,
 }: {
   tabs: readonly ResolvedCrmTab[];
   view: PeopleView;
@@ -65,6 +66,8 @@ export function PeopleToolbar({
   };
   /** The board's report (Databases > Reports), when on the board. */
   reportHref: string | null;
+  /** A Personal space: everything is yours, so no Owner filter. */
+  personal?: boolean;
 }) {
   const { params, set } = useParamSetter();
   const companies = view === "companies";
@@ -108,14 +111,18 @@ export function PeopleToolbar({
               className={cn(OPTION, !inTrash && l.id === list && "bg-muted")}
             >
               <span className="min-w-0 flex-1 truncate">{l.label}</span>
-              <span className="text-muted-foreground text-sm font-medium tabular-nums">{l.count}</span>
+              <span className="text-muted-foreground text-sm font-medium tabular-nums">
+                {l.count}
+              </span>
             </button>
           ))}
           {trash > 0 && !board && (
             <button
               type="button"
               aria-pressed={inTrash}
-              onClick={() => set({ trash: inTrash ? null : "1", list: null, page: null, open: null })}
+              onClick={() =>
+                set({ trash: inTrash ? null : "1", list: null, page: null, open: null })
+              }
               className={cn(OPTION, "text-muted-foreground font-medium", inTrash && "bg-muted")}
             >
               <span className="min-w-0 flex-1 truncate">In the trash</span>
@@ -125,29 +132,35 @@ export function PeopleToolbar({
         </div>
       ),
     },
-    {
-      name: "Owner",
-      node: (
-        <div className="flex flex-wrap !justify-start gap-1.5">
-          {[
-            { value: "", label: "Anyone" },
-            { value: "me", label: "Me" },
-            ...members.slice(0, 16).map((m) => ({ value: m.id, label: m.name.split(" ")[0] ?? m.name })),
-            { value: "none", label: "Nobody" },
-          ].map((o) => (
-            <button
-              key={o.value || "any"}
-              type="button"
-              aria-pressed={owner === o.value}
-              onClick={() => set({ owner: o.value || null, page: null })}
-              className={chip(owner === o.value)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      ),
-    },
+    ...(personal
+      ? []
+      : [
+          {
+            name: "Owner",
+            node: (
+              <div className="flex flex-wrap !justify-start gap-1.5">
+                {[
+                  { value: "", label: "Anyone" },
+                  { value: "me", label: "Me" },
+                  ...members
+                    .slice(0, 16)
+                    .map((m) => ({ value: m.id, label: m.name.split(" ")[0] ?? m.name })),
+                  { value: "none", label: "Nobody" },
+                ].map((o) => (
+                  <button
+                    key={o.value || "any"}
+                    type="button"
+                    aria-pressed={owner === o.value}
+                    onClick={() => set({ owner: o.value || null, page: null })}
+                    className={chip(owner === o.value)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            ),
+          },
+        ]),
     ...(!companies && relationships.length > 0
       ? [
           {
@@ -260,7 +273,12 @@ export function PeopleToolbar({
       search={{ placeholder: "Search people, companies and deals" }}
     >
       <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Show">
-        <ExpandChip icon={UserRound} label="People" active={view === "people"} onClick={() => show("people")} />
+        <ExpandChip
+          icon={UserRound}
+          label="People"
+          active={view === "people"}
+          onClick={() => show("people")}
+        />
         <ExpandChip
           icon={Building2}
           label="Companies"

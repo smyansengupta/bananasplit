@@ -70,7 +70,10 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
     { key: "expectedOn", label: "Expected", kind: "DATE", value: null },
     { key: "company", label: "Company", kind: "COMPANY", value: null },
     { key: "person", label: "Person", kind: "PERSON", value: null },
-    { key: "owner", label: "Owner", kind: "OWNER", value: null, options: ownerOptions },
+    // A Personal space has one owner: a stage never asks for one.
+    ...(shell.access.personal
+      ? []
+      : [{ key: "owner", label: "Owner", kind: "OWNER" as const, value: null, options: ownerOptions }]),
     { key: "closeReason", label: "Reason", kind: "LONG_TEXT", value: null },
     ...boardFields.map((f) => ({
       key: `custom.${f.id}`,
@@ -86,7 +89,6 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        settings={shell.access.manager}
         create={data.companies ? "company" : "person"}
         toolbar={
           <PeopleToolbar
@@ -98,6 +100,7 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
             relationships={relationships.map((r) => ({ id: r.id, label: r.label }))}
             deals={data.dealOptions}
             reportHref={reportHref}
+            personal={shell.access.personal}
           />
         }
       />
@@ -163,6 +166,7 @@ export default async function CrmPeoplePage({ params, searchParams }: PageProps<
           pickedLists={data.lists.filter((l) => l.picked).map((l) => ({ id: l.id, label: l.label }))}
           members={shell.members}
           series={data.series}
+          personal={shell.access.personal}
         />
       )}
       <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />

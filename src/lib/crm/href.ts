@@ -87,3 +87,22 @@ export function crmPlanHref(orgSlug: string, type: "sequence" | "campaign", id: 
 export function crmPipelineHref(orgSlug: string, pipelineId: string): string {
   return crmDealsHref(orgSlug, pipelineId);
 }
+
+/**
+ * A quote or invoice: a deal's opens on the deal card's Quote tab; one with
+ * no deal opens its own card over People (?open=quote:<id>).
+ */
+export function crmQuoteHref(orgSlug: string, quote: { id: string; dealId?: string | null }): string {
+  if (quote.dealId) {
+    return hrefWithOpen(`${crmBase(orgSlug)}/people`, "view=board&tab=quote", {
+      kind: "deal",
+      id: quote.dealId,
+    });
+  }
+  return hrefWithOpen(`${crmBase(orgSlug)}/people`, "", { kind: "quote", id: quote.id });
+}
+
+/** Calls to make: Today's Calls group (the old /crm/calls). */
+export function crmCallsHref(orgSlug: string): string {
+  return `${crmBase(orgSlug)}?show=calls`;
+}

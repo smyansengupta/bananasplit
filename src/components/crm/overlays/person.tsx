@@ -194,7 +194,8 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
     relationship: relationship?.label ?? null,
     phone: person.doNotContact ? null : person.phone,
     deleted: Boolean(person.deletedAt),
-    owner: ownerLabel(person, shell.roles, names),
+    // A Personal space has one owner: no "Owner:" line or Owner field.
+    owner: shell.access.personal ? null : ownerLabel(person, shell.roles, names),
     nextStep: data.step
       ? {
           kind: "step",
@@ -237,7 +238,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       amount: d.deal.amountCents !== null ? formatMoney(d.deal.amountCents, d.deal.currency) : null,
       pipeline: d.deal.pipeline.name,
     })),
-    form: data.form,
+    form: shell.access.personal ? data.form.filter((f) => f.key !== "owner") : data.form,
     timeline: data.timelineItems,
     notes: data.notes.map((n) => ({
       id: n.id,
