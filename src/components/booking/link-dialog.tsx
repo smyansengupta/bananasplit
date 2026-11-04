@@ -7,8 +7,14 @@ import { useId, useMemo, useState } from "react";
 import { saveBookingLinkAction } from "@/app/app/[orgSlug]/meetings/booking/actions";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHead } from "@/components/ui/dialog";
 import { FieldSelect } from "@/components/ui/field-select";
+import {
+  FormDialog,
+  FormDialogBody,
+  FormDialogFoot,
+  FormDialogHead,
+  FormRow,
+} from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { chipClass, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
@@ -29,13 +35,14 @@ import {
 } from "@/lib/booking/hours";
 import type { BookingQuestion } from "@/lib/crm/outreach/booking";
 import { runAction } from "@/lib/run-action";
+import { friendlyTimeZone } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
 import type { BookingLinkState } from "@/server/booking/view";
 
 /**
- * A booking link's editor, as the app's centered dialog (the New event
- * dialog's look: the title, then the fields that matter, the rest behind
- * More options). The heart of it is "fill in the times you're free": each
+ * A booking link's editor, in New task's window (FormDialog: a fixed header
+ * and foot, the fields scrolling between, the whole screen on a phone): the
+ * title, then the fields that matter, the rest behind More options. The heart of it is "fill in the times you're free": each
  * weekday's ranges, plus one-off dates (a day off, or other hours that day).
  * Busy times on your calendar, in every space you're in, are always left
  * out on top of these.
@@ -85,6 +92,16 @@ export function LinkDialog({
   const [hostFilter, setHostFilter] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // "Eastern Time (New York)", not "America/New_York".
+  const zoneOptions = useMemo(
+    () =>
+      (timeZones.includes(timezone) ? timeZones : [timezone, ...timeZones]).map((z) => ({
+        value: z,
+        label: friendlyTimeZone(z),
+      })),
+    [timeZones, timezone],
+  );
+
   const shownMembers = useMemo(() => {
     const q = hostFilter.trim().toLowerCase();
     const list = q ? members.filter((m) => m.name.toLowerCase().includes(q)) : members;
@@ -124,20 +141,20 @@ export function LinkDialog({
   };
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg">
-        <form
-          className="contents"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <DialogHead className="-me-2 -mt-2" title={link.personal ? "Your booking link" : "Edit booking link"}>
-            <DialogDescription className="sr-only">When people can book this link, and for how long.</DialogDescription>
-          </DialogHead>
+    <FormDialog open onOpenChange={onOpenChange}>
+      <form
+        className="flex min-h-0 flex-1 flex-col"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <FormDialogHead
+          title={link.personal ? "Your booking link" : "Edit booking link"}
+          description="When people can book it, and for how long."
+        />
 
-          <div className="space-y-4">
+        <FormDialogBody>
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-title`}>Name</Label>
               <Input id={`${id}-title`} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
@@ -145,7 +162,12 @@ export function LinkDialog({
 
             <div className="grid gap-1.5">
               <span className="text-sm leading-none font-medium">How long</span>
-              <div className={cn(segmentedTrack, "flex-wrap self-start")} role="group" aria-label="Default length">
+              {/* On a phone the six lengths wrap onto two lines, so the track grows to hold them. */}
+              <div
+                className={cn(segmentedTrack, "flex-wrap self-start max-sm:h-auto max-sm:rounded-[1.25rem]")}
+                role="group"
+                aria-label="Default length"
+              >
                 {BOOKING_DURATIONS.map((d) => (
                   <button
                     key={d}
@@ -181,7 +203,7 @@ export function LinkDialog({
             </div>
 
             <fieldset className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <legend className="text-sm font-medium">When you&apos;re free</legend>
                 {!link.personal && (
                   <div className="flex items-center gap-2">
@@ -199,10 +221,9 @@ export function LinkDialog({
                   <div className="grid gap-1.5">
                     <Label htmlFor={`${id}-tz`}>Time zone</Label>
                     <FieldSelect id={`${id}-tz`} value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full">
-                      {!timeZones.includes(timezone) && <option value={timezone}>{timezone}</option>}
-                      {timeZones.map((z) => (
-                        <option key={z} value={z}>
-                          {z}
+                      {zoneOptions.map((z) => (
+                        <option key={z.value} value={z.value}>
+                          {z.label}
                         </option>
                       ))}
                     </FieldSelect>
@@ -276,9 +297,11 @@ export function LinkDialog({
             </button>
             {more && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <FormRow>
                   <NumberField label="Gap between meetings (minutes)" value={bufferMin} min={0} max={120} onChange={setBufferMin} />
                   <NumberField label="Least notice (hours)" value={minNoticeHours} min={0} max={336} onChange={setMinNoticeHours} />
+                </FormRow>
+                <FormRow>
                   <NumberField label="How far ahead (days)" value={maxDaysAhead} min={1} max={90} onChange={setMaxDaysAhead} />
                   <NumberField
                     label="Most a day (blank for no limit)"
@@ -287,7 +310,7 @@ export function LinkDialog({
                     max={24}
                     onChange={(n) => setMaxPerDay(n || null)}
                   />
-                </div>
+                </FormRow>
                 <div className="grid gap-1.5">
                   <span className="text-sm leading-none font-medium">Reminders, to you and the guest</span>
                   <ReminderPicker value={reminders} onChange={setReminders} />
@@ -356,19 +379,18 @@ export function LinkDialog({
                 </div>
               </div>
             )}
-          </div>
+        </FormDialogBody>
 
-          <DialogFooter className="flex items-center justify-between sm:justify-between">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-            <Button type="submit" disabled={saving || !title.trim() || (!link.personal && hostIds.length === 0)}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <FormDialogFoot>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={saving || !title.trim() || (!link.personal && hostIds.length === 0)}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </FormDialogFoot>
+      </form>
+    </FormDialog>
   );
 }
 
@@ -404,6 +426,19 @@ function NumberField({
   );
 }
 
+/**
+ * One day's line in the hours: the day (and its switch) with its ranges
+ * beside it, the + at the end. On a phone the day and the + share the top
+ * line and the ranges take the full width under it, so the times never get
+ * squeezed or pushed off the screen.
+ */
+const DAY_LINE =
+  "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1.5 sm:grid-cols-[4.75rem_minmax(0,1fr)_auto]";
+const DAY_CELL = "col-start-1 row-start-1 flex min-h-8 items-center gap-2";
+const RANGES_CELL =
+  "col-span-2 row-start-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1 sm:col-start-2 sm:row-start-1";
+const END_CELL = "col-start-2 row-start-1 flex min-h-8 items-center sm:col-start-3";
+
 /** Each weekday's free ranges: a switch per day, then its ranges as from-to times. */
 function WeekEditor({ hours, onChange }: { hours: WeeklyHours; onChange: (h: WeeklyHours) => void }) {
   const set = (d: IsoDay, ranges: MinuteRange[]) => onChange({ ...hours, [d]: ranges });
@@ -412,17 +447,20 @@ function WeekEditor({ hours, onChange }: { hours: WeeklyHours; onChange: (h: Wee
       {ISO_DAYS.map((d) => {
         const ranges = hours[d];
         const on = ranges.length > 0;
+        const last = ranges.at(-1);
         return (
-          <div key={d} className="flex items-start gap-2 border-b px-3 py-2 last:border-b-0">
-            <div className="flex w-[4.75rem] shrink-0 items-center gap-2 pt-1">
+          <div key={d} className={cn(DAY_LINE, "border-b px-3 py-2 last:border-b-0")}>
+            <div className={DAY_CELL}>
               <Switch
                 checked={on}
                 aria-label={`Free on ${DAY_NAMES[d]}`}
                 onCheckedChange={(v) => set(d, v ? [[540, 1020]] : [])}
               />
               <span className="text-sm">{DAY_NAMES[d].slice(0, 3)}</span>
+              {/* A phone: "Not free" on the day's own line, not a line of its own. */}
+              {!on && <span className="text-muted-foreground text-sm sm:hidden">Not free</span>}
             </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div className={cn(RANGES_CELL, !on && "max-sm:hidden")}>
               {!on ? (
                 <span className="text-muted-foreground pt-1.5 text-sm">Not free</span>
               ) : (
@@ -433,9 +471,23 @@ function WeekEditor({ hours, onChange }: { hours: WeeklyHours; onChange: (h: Wee
                     label={DAY_NAMES[d]}
                     onChange={(next) => set(d, ranges.map((x, j) => (j === i ? next : x)))}
                     onRemove={() => set(d, ranges.filter((_, j) => j !== i))}
-                    onAdd={i === ranges.length - 1 && ranges.length < 8 ? () => set(d, [...ranges, nextRange(r)]) : undefined}
                   />
                 ))
+              )}
+            </div>
+            <div className={END_CELL}>
+              {on && last && ranges.length < 8 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Add more ${DAY_NAMES[d]} hours`}
+                  onClick={() => set(d, [...ranges, nextRange(last)])}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                </Button>
+              ) : (
+                <span aria-hidden className="size-8" />
               )}
             </div>
           </div>
@@ -450,26 +502,29 @@ function nextRange(after: MinuteRange): MinuteRange {
   return [start, Math.min(start + 120, 1440)];
 }
 
+/**
+ * From and until, then the X. The times share the width on a phone and are
+ * 8.5rem on wider screens: room for "09:00 AM" and the clock, never cut.
+ */
 function RangeRow({
   range,
   label,
   onChange,
   onRemove,
-  onAdd,
 }: {
   range: MinuteRange;
   label: string;
   onChange: (r: MinuteRange) => void;
   onRemove: () => void;
-  onAdd?: () => void;
 }) {
   const bad = range[1] <= range[0];
+  const time = "h-8 min-w-0 flex-1 px-2 sm:w-[8.5rem] sm:flex-none";
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex min-w-0 items-center gap-1.5">
       <Input
         type="time"
         step={900}
-        className="h-8 w-[6.75rem] px-2"
+        className={time}
         aria-label={`${label} from`}
         value={minuteInput(range[0])}
         onChange={(e) => {
@@ -477,11 +532,11 @@ function RangeRow({
           if (v !== null) onChange([Math.min(v, 1425), range[1]]);
         }}
       />
-      <span className="text-muted-foreground text-sm">to</span>
+      <span className="text-muted-foreground shrink-0 text-sm">to</span>
       <Input
         type="time"
         step={900}
-        className={cn("h-8 w-[6.75rem] px-2", bad && "border-destructive")}
+        className={cn(time, bad && "border-destructive")}
         aria-label={`${label} until`}
         value={minuteInput(range[1])}
         onChange={(e) => {
@@ -489,14 +544,9 @@ function RangeRow({
           if (v !== null) onChange([range[0], v === 0 ? 1440 : v]);
         }}
       />
-      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove these ${label} hours`} onClick={onRemove}>
+      <Button type="button" variant="ghost" size="icon-sm" className="shrink-0" aria-label={`Remove these ${label} hours`} onClick={onRemove}>
         <X className="size-4" aria-hidden="true" />
       </Button>
-      {onAdd && (
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Add more ${label} hours`} onClick={onAdd}>
-          <Plus className="size-4" aria-hidden="true" />
-        </Button>
-      )}
     </div>
   );
 }
@@ -518,9 +568,9 @@ function DateOverrides({ overrides, onChange }: { overrides: DateOverride[]; onC
     <div className="grid gap-2">
       <span className="text-sm leading-none font-medium">One-off dates</span>
       {upcoming.map((o) => (
-        <div key={o.date} className="flex flex-wrap items-start gap-3">
-          <span className="w-[4.75rem] shrink-0 pt-1.5 text-sm">{label(o.date)}</span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div key={o.date} className={DAY_LINE}>
+          <span className={cn(DAY_CELL, "text-sm")}>{label(o.date)}</span>
+          <div className={RANGES_CELL}>
             {o.ranges.length === 0 ? (
               <span className="text-muted-foreground pt-1.5 text-sm">Not free all day</span>
             ) : (
@@ -537,9 +587,11 @@ function DateOverrides({ overrides, onChange }: { overrides: DateOverride[]; onC
               ))
             )}
           </div>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Forget ${label(o.date)}`} onClick={() => onChange(overrides.filter((x) => x.date !== o.date))}>
-            <Trash2 className="size-4" aria-hidden="true" />
-          </Button>
+          <div className={END_CELL}>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={`Forget ${label(o.date)}`} onClick={() => onChange(overrides.filter((x) => x.date !== o.date))}>
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-2">
