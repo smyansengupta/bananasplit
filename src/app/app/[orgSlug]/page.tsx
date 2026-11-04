@@ -5,6 +5,13 @@ import { redirect } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { OrganizationsStrip } from "@/components/personal/organizations-strip";
 import { FocusTime } from "@/components/overview/focus-time";
+import {
+  OrgInbox,
+  OrgTasks,
+  Reimbursements,
+  UpForGrabs,
+  WaitingOnYourAnswer,
+} from "@/components/personal/elsewhere-widgets";
 import { KIND_META } from "@/components/calendar/kinds";
 import { CardControls, OpenLink } from "@/components/overview/bits";
 import { Insight, LinkChip, type ItemRef } from "@/components/overview/connections";
@@ -49,7 +56,7 @@ import {
 } from "@/lib/overview/insights";
 import { startedProgress } from "@/lib/overview/getting-started";
 import { todayStrip } from "@/lib/overview/today-strip";
-import { overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
+import { PERSONAL_EXTRAS, overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
 import { DEFAULT_PULSE_DAY, DEFAULT_PULSE_HOUR } from "@/lib/pulse/settings";
 import {
   addDaysToKey,
@@ -870,6 +877,27 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     data: { ...data.widgets, ...ownTx },
   });
 
+  // Personal: your organizations' tasks, Inbox, questions, grabs and money.
+  const orgTasks = (personalHome?.dueSoon ?? []).filter((t) => t.space.id !== org.id);
+  const fromOrgs = {
+    updates: personalHome?.updates ?? [],
+    invites: personalHome?.invites ?? [],
+    polls: personalHome?.pollsWaiting ?? [],
+    forms: personalHome?.formsWaiting ?? [],
+    grabs: personalHome?.grabs ?? [],
+    mine: personalHome?.reimbursements ?? [],
+    approvals: personalHome?.approvals ?? [],
+  };
+  const elsewhereResting = [
+    ...(orgTasks.length === 0 ? ["org-tasks"] : []),
+    ...(fromOrgs.updates.length === 0 ? ["org-inbox"] : []),
+    ...(fromOrgs.invites.length + fromOrgs.polls.length + fromOrgs.forms.length === 0
+      ? ["your-answer"]
+      : []),
+    ...(fromOrgs.grabs.length === 0 ? ["org-grabs"] : []),
+    ...(fromOrgs.mine.length + fromOrgs.approvals.length === 0 ? ["reimbursements"] : []),
+  ];
+
   // Ambient: widgets with nothing to show rest (their band neighbours take
   // the space), and Here now with only you in needs one column. A widget
   // whose read failed isn't resting: it says so in its card.
@@ -887,6 +915,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     // Personal: your organizations' tasks are in Up next and This week, so an
     // empty list of your own steps aside rather than saying all clear.
     ...(personal && data.myTasks.total === 0 ? ["my-tasks"] : []),
+    // Personal: what your organizations hold for you, resting when there's none.
+    ...(personal ? elsewhereResting : []),
   ];
   // From your apps, read when Ambient shows it or it's on the board.
   const apps = placed.has("apps")
@@ -1056,6 +1086,25 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ...(personalHome?.focus
       ? { "focus-time": <FocusTime orgId={org.id} data={personalHome.focus} /> }
       : {}),
+    ...(personal
+      ? {
+          "org-tasks": <OrgTasks tasks={orgTasks} todayKey={todayKey} />,
+          "org-inbox": <OrgInbox updates={fromOrgs.updates} now={now} />,
+          "your-answer": (
+            <WaitingOnYourAnswer
+              invites={fromOrgs.invites}
+              polls={fromOrgs.polls}
+              forms={fromOrgs.forms}
+              viewerZone={timeZone}
+              now={now}
+            />
+          ),
+          "org-grabs": <UpForGrabs tasks={fromOrgs.grabs} todayKey={todayKey} />,
+          reimbursements: (
+            <Reimbursements mine={fromOrgs.mine} approvals={fromOrgs.approvals} now={now} />
+          ),
+        }
+      : {}),
   };
 
   // Shown until every step is done or checked off, then gone by itself.
@@ -1159,7 +1208,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         mode={data.homeMode}
         resting={resting}
         compact={compact}
-        extras={personal ? [] : roleExtras(role, settings?.addOns)}
+        extras={personal ? PERSONAL_EXTRAS : roleExtras(role, settings?.addOns)}
         promoted={personal ? [] : rolePromoted(role, settings?.addOns)}
         scores={scores}
         night={isNight(signals.hour)}

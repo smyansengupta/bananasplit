@@ -33,7 +33,9 @@ export const BAND_COLUMNS = 8;
 /** Each widget's band, by what it's about. A type not listed joins Organization. */
 const BAND_OF: Record<string, Band> = {
   "my-tasks": "you",
+  "org-tasks": "you",
   "since-you-were-here": "you",
+  "org-inbox": "you",
   "waiting-on-you": "you",
   "waiting-on-others": "you",
   recent: "you",
@@ -45,6 +47,9 @@ const BAND_OF: Record<string, Band> = {
   votes: "now",
   deadlines: "calendar",
   events: "calendar",
+  "your-answer": "calendar",
+  "org-grabs": "organization",
+  reimbursements: "organization",
   week: "week",
   "weekly-pulse": "organization",
   apps: "organization",

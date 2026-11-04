@@ -198,6 +198,56 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     personalOnly: true,
   },
   {
+    type: "org-tasks",
+    title: "Your organizations' tasks",
+    description: "Your open tasks in every organization you're in, due soonest. Tick one here.",
+    group: "You",
+    icon: "ListChecks",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "org-inbox",
+    title: "Unread in your organizations",
+    description: "Mentions, comments and assignments you haven't opened, from every organization.",
+    group: "You",
+    icon: "Hash",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "your-answer",
+    title: "Waiting on your answer",
+    description: "Invites, polls and forms in your organizations you haven't answered.",
+    group: "You",
+    icon: "Vote",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "org-grabs",
+    title: "Up for grabs",
+    description: "Open tasks in your organizations that nobody owns yet. Take one here.",
+    group: "You",
+    icon: "Target",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
+    type: "reimbursements",
+    title: "Reimbursements",
+    description: "Yours that aren't paid back yet, and any waiting on you to approve.",
+    group: "You",
+    icon: "ReceiptText",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
     type: "pinned",
     title: "Pinned",
     description: "Your pinned pages, notes, files and more, with how each is doing.",
@@ -209,6 +259,15 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
 ];
 
 export const OVERVIEW_WIDGET_TYPES = OVERVIEW_WIDGETS.map((w) => w.type);
+
+/** Personal Home's widgets about your organizations: Ambient shows them even on a board saved before they existed. */
+export const PERSONAL_EXTRAS: BoardWidget[] = [
+  "org-tasks",
+  "org-inbox",
+  "your-answer",
+  "org-grabs",
+  "reimbursements",
+].map((type) => ({ id: type, type, w: 2, h: 1 }));
 
 /** Widgets that belong to an add-on (src/lib/addons.ts), offered only once it's added. */
 const ADD_ON_WIDGETS: Partial<Record<string, string>> = { polls: "forms" };
@@ -250,11 +309,17 @@ const DEFAULT_LAYOUT: readonly BoardWidget[] = [
 ];
 
 /**
- * A Personal space's Home: what's next for you and your week first, then
- * your free hours, meetings and events, forms and what you had open.
+ * A Personal space's Home: what's next for you and your week first (your
+ * own tasks and your organizations'), what your organizations are waiting
+ * on, then your free hours, meetings and events, forms and what you had open.
  */
 const PERSONAL_LAYOUT: readonly BoardWidget[] = [
   { id: "my-tasks", type: "my-tasks", w: 2, h: 2 },
+  { id: "org-tasks", type: "org-tasks", w: 2, h: 1 },
+  { id: "org-inbox", type: "org-inbox", w: 2, h: 1 },
+  { id: "your-answer", type: "your-answer", w: 2, h: 1 },
+  { id: "org-grabs", type: "org-grabs", w: 2, h: 1 },
+  { id: "reimbursements", type: "reimbursements", w: 2, h: 1 },
   { id: "deadlines", type: "deadlines", w: 2, h: 1 },
   { id: "focus-time", type: "focus-time", w: 2, h: 1 },
   { id: "week", type: "week", w: 4, h: null },

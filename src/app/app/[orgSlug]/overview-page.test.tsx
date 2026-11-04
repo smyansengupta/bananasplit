@@ -219,6 +219,13 @@ vi.mock("@/server/personal/home", () => ({
 // Personal Home's pieces that reach the server actions (and next-auth with them).
 vi.mock("@/app/onboarding/pending-invite-card", () => ({ PendingInviteCard: () => null }));
 vi.mock("@/components/overview/focus-time", () => ({ FocusTime: () => null }));
+vi.mock("@/components/personal/elsewhere-widgets", () => ({
+  OrgInbox: () => null,
+  OrgTasks: () => null,
+  Reimbursements: () => null,
+  UpForGrabs: () => null,
+  WaitingOnYourAnswer: () => null,
+}));
 
 const { default: OverviewPage } = await import("./page");
 
