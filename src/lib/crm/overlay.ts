@@ -10,6 +10,8 @@
  *   ?open=new:person     ?open=new:company     ?open=new:deal
  *   ?open=goal           ?open=goal:<id>
  *   ?open=merge:<idA>,<idB>   (two people, or two companies)
+ *   ?open=merge:<id>          (pick the second one in the card)
+ *   ?open=quote:<id>          (a quote or invoice, with every detail)
  *   ?open=plan:sequence:<id>    ?open=plan:campaign:<id>   (an outreach plan)
  *   ?open=plan:email     ?open=plan:split   (a new one-email or split-a-list plan)
  *
@@ -38,7 +40,8 @@ export type CrmOpen =
   | { kind: "ask" }
   | { kind: "new"; what: CrmNewKind }
   | { kind: "goal"; id: string | null }
-  | { kind: "merge"; ids: [string, string] }
+  | { kind: "merge"; ids: [string, string] | [string] }
+  | { kind: "quote"; id: string }
   | { kind: "plan"; type: CrmPlanType; id: string }
   | { kind: "plan"; type: CrmNewPlan; id: null };
 
@@ -76,6 +79,7 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
     case "person":
     case "company":
     case "deal":
+    case "quote":
       return rest && ID.test(rest) ? { kind: head, id: rest } : null;
     case "power":
     case "log":
@@ -90,6 +94,8 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
       return ID.test(rest) ? { kind: "goal", id: rest } : null;
     case "merge": {
       const ids = (rest ?? "").split(",");
+      // One id: the card asks for the second.
+      if (ids.length === 1) return ID.test(ids[0]!) ? { kind: "merge", ids: [ids[0]!] } : null;
       if (ids.length !== 2) return null;
       const [a, b] = ids as [string, string];
       return ID.test(a) && ID.test(b) && a !== b ? { kind: "merge", ids: [a, b] } : null;
@@ -107,13 +113,14 @@ export function formatOpen(open: CrmOpen): string {
     case "person":
     case "company":
     case "deal":
+    case "quote":
       return `${open.kind}:${open.id}`;
     case "new":
       return `new:${open.what}`;
     case "goal":
       return open.id ? `goal:${open.id}` : "goal";
     case "merge":
-      return `merge:${open.ids[0]},${open.ids[1]}`;
+      return `merge:${open.ids.join(",")}`;
     case "plan":
       return open.id ? `plan:${open.type}:${open.id}` : `plan:${open.type}`;
     default:

@@ -13,6 +13,7 @@ import {
   sendQuoteAction,
 } from "@/app/app/[orgSlug]/crm/quote-actions";
 import { Copy, Download, Plus, Send, Trophy, X } from "@/components/icons";
+import { useCrmRecordHref } from "@/components/crm/card/use-crm-open";
 import { CrmPicker } from "@/components/crm/crm-picker";
 import { ComposeButton } from "@/components/crm/outreach/compose";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +32,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { formatMoney } from "@/lib/crm/fields";
-import { crmRecordHref } from "@/lib/crm/href";
 import { KIND_WORD, parseCents, parseTaxBps, quoteTotals, STATUS_WORD, type QuoteKind, type QuoteStatus } from "@/lib/crm/quotes";
 
 /**
  * A quote or invoice: who it's for, its lines and totals, and what can
  * happen next (send the link, download the PDF, copy it, make an invoice,
- * move it to another item, mark it paid, move the item to won). Accepted
- * and paid ones are read-only: copy one to change it.
+ * move it to another deal, mark it paid, move the deal to won). Accepted
+ * and paid ones are read-only: copy one to change it. It's the quote card's
+ * body (?open=quote:<id>); a copy opens in its place (`onOpenQuote`).
  */
 
 export interface QuoteView {
@@ -81,14 +82,18 @@ export function QuoteEditor({
   orgSlug,
   quote,
   canBook,
+  onOpenQuote,
 }: {
   orgId: string;
   orgSlug: string;
   quote: QuoteView;
   /** A finance role, with Finance added: may book the income. */
   canBook: boolean;
+  /** Open another quote (a copy, a new invoice) in this one's place. */
+  onOpenQuote: (id: string) => void;
 }) {
   const router = useRouter();
+  const recordHref = useCrmRecordHref(orgSlug);
   const locked = quote.status === "ACCEPTED" || quote.status === "PAID";
   const word = KIND_WORD[quote.kind];
   const [title, setTitle] = useState(quote.title);
@@ -180,15 +185,15 @@ export function QuoteEditor({
           <span className="text-muted-foreground text-sm">
             For{" "}
             {quote.deal ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "deal", quote.deal.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("deal", quote.deal.id)}>
                 {quote.deal.title}
               </Link>
             ) : quote.company ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "company", quote.company.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("company", quote.company.id)}>
                 {quote.company.name}
               </Link>
             ) : quote.person ? (
-              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={crmRecordHref(orgSlug, "person", quote.person.id)}>
+              <Link className="hover:text-foreground underline-offset-2 hover:underline" href={recordHref("person", quote.person.id)}>
                 {quote.person.name}
               </Link>
             ) : null}
@@ -208,7 +213,7 @@ export function QuoteEditor({
             onClick={() =>
               void run(
                 () => duplicateQuoteAction(orgId, quote.id, {}),
-                (r) => router.push(`/app/${orgSlug}/crm/quotes/${(r as unknown as { id: string }).id}`),
+                (r) => onOpenQuote((r as unknown as { id: string }).id),
               )
             }
           >
@@ -223,7 +228,7 @@ export function QuoteEditor({
               onClick={() =>
                 void run(
                   () => duplicateQuoteAction(orgId, quote.id, { kind: "invoice" }),
-                  (r) => router.push(`/app/${orgSlug}/crm/quotes/${(r as unknown as { id: string }).id}`),
+                  (r) => onOpenQuote((r as unknown as { id: string }).id),
                 )
               }
             >
@@ -231,7 +236,7 @@ export function QuoteEditor({
             </Button>
           )}
           <Button variant="outline" size="sm" disabled={pending} onClick={() => setMoveOpen(true)}>
-            Move to another item
+            Move to another deal
           </Button>
         </div>
       </div>
@@ -367,7 +372,7 @@ export function QuoteEditor({
         {quote.status === "ACCEPTED" && quote.deal && !quote.deal.won && (
           <Button variant="outline" disabled={pending} onClick={() => void run(() => moveToWonAction(orgId, quote.id), () => toast({ title: "Moved to won." }))}>
             <Trophy className="size-4" aria-hidden="true" />
-            Move the item to won
+            Move the deal to won
           </Button>
         )}
         {(quote.status === "SENT" || quote.status === "ACCEPTED" || quote.status === "EXPIRED") && (
@@ -436,8 +441,8 @@ export function QuoteEditor({
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Move {quote.number} to another item</DialogTitle>
-            <DialogDescription>It moves with its lines and its link. The item&apos;s company and person come with it.</DialogDescription>
+            <DialogTitle>Move {quote.number} to another deal</DialogTitle>
+            <DialogDescription>It moves with its lines and its link. The deal&apos;s company and person come with it.</DialogDescription>
           </DialogHeader>
           <CrmPicker
             orgId={orgId}
@@ -445,7 +450,7 @@ export function QuoteEditor({
             value={null}
             autoOpen
             allowClear={false}
-            placeholder="Search items"
+            placeholder="Search deals"
             onPick={(hit) => {
               if (!hit) return;
               void run(

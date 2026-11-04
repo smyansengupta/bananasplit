@@ -18,11 +18,14 @@ describe("the ?open= contract", () => {
     expect(parseOpen("goal")).toEqual({ kind: "goal", id: null });
     expect(parseOpen("goal:g1")).toEqual({ kind: "goal", id: "g1" });
     expect(parseOpen("merge:a1,b2")).toEqual({ kind: "merge", ids: ["a1", "b2"] });
+    expect(parseOpen("quote:q1")).toEqual({ kind: "quote", id: "q1" });
+    expect(formatOpen({ kind: "quote", id: "q1" })).toBe("quote:q1");
   });
 
-  it("merges exactly two different records", () => {
+  it("merges two different records, or asks for the second", () => {
     expect(parseOpen("merge")).toBeNull();
-    expect(parseOpen("merge:a1")).toBeNull();
+    expect(parseOpen("merge:a1")).toEqual({ kind: "merge", ids: ["a1"] });
+    expect(formatOpen({ kind: "merge", ids: ["a1"] })).toBe("merge:a1");
     expect(parseOpen("merge:a1,a1")).toBeNull();
     expect(parseOpen("merge:a1,b2,c3")).toBeNull();
     expect(parseOpen("merge:a1,<b>")).toBeNull();

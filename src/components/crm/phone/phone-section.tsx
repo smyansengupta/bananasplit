@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Section } from "@/components/crm/record-page";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/crm/fields";
+import { crmQuoteHref } from "@/lib/crm/href";
 import { formatDuration, outcomeLabel, readConsent } from "@/lib/crm/phone";
 import { effectiveStatus, KIND_WORD, STATUS_WORD, type QuoteKind, type QuoteStatus } from "@/lib/crm/quotes";
 import { readPhoneStatus } from "@/server/crm/phone/connection";
@@ -99,7 +100,7 @@ export async function PhoneSection({ orgId, orgSlug, target }: { orgId: string; 
       },
       orderBy: { createdAt: "desc" },
       take: 8,
-      select: { id: true, kind: true, number: true, title: true, status: true, totalCents: true, currency: true, validUntil: true },
+      select: { id: true, dealId: true, kind: true, number: true, title: true, status: true, totalCents: true, currency: true, validUntil: true },
     });
     return { people, companyId, dealId, calls, texts, quotes };
   });
@@ -190,7 +191,7 @@ export async function PhoneSection({ orgId, orgSlug, target }: { orgId: string; 
               const s = effectiveStatus({ status: q.status, validUntil: q.validUntil });
               return (
                 <li key={q.id} className="flex items-center gap-2">
-                  <Link href={`/app/${orgSlug}/crm/quotes/${q.id}`} className="min-w-0 flex-1 truncate font-semibold hover:underline">
+                  <Link href={crmQuoteHref(orgSlug, q)} className="min-w-0 flex-1 truncate font-semibold hover:underline">
                     {q.number} {q.title}
                   </Link>
                   <span className="text-muted-foreground text-xs">{KIND_WORD[q.kind as QuoteKind]?.title}</span>

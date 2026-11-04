@@ -19,6 +19,7 @@ import { NewOverlay } from "./new";
 import { PlanOverlay } from "./plan";
 import { PersonOverlay } from "./person";
 import { PowerOverlay } from "./power";
+import { QuoteOverlay } from "./quote";
 
 /**
  * What's open over a CRM page (?open=, src/lib/crm/overlay.ts), loaded on
@@ -57,6 +58,7 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   goal: GoalOverlay,
   plan: PlanOverlay,
   ask: AskOverlay,
+  quote: QuoteOverlay,
 };
 
 export async function CrmOverlays({
