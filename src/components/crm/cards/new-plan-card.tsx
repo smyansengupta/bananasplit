@@ -246,7 +246,7 @@ function EmailForm({
               maxLength={300}
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. You're invited to the spring showcase"
+              placeholder="e.g. You're invited to the annual showcase"
             />
           </FormField>
 

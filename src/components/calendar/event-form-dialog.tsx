@@ -18,13 +18,6 @@ import { Button } from "@/components/ui/button";
 import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHead,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,7 +29,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ChoiceCards } from "@/components/ui/form-dialog";
+import {
+  ChoiceCards,
+  FormDialog,
+  FormDialogBody,
+  FormDialogFoot,
+  FormDialogHead,
+} from "@/components/ui/form-dialog";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey, allDaySpan } from "@/lib/calendar/dates";
 import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
@@ -164,22 +163,19 @@ interface Props {
 /** Keyed by event id so opening a different event (or switching create/edit) remounts cleanly. */
 export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...rest }: Props) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg"
-      >
-        {open && (
-          <EventForm
-            key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}`}
-            event={event}
-            defaultStart={defaultStart}
-            onOpenChange={onOpenChange}
-            {...rest}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    // New task's window: 672px, a fixed header and foot with the fields
+    // scrolling between, the whole screen on a phone.
+    <FormDialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <EventForm
+          key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}`}
+          event={event}
+          defaultStart={defaultStart}
+          onOpenChange={onOpenChange}
+          {...rest}
+        />
+      )}
+    </FormDialog>
   );
 }
 
@@ -580,521 +576,540 @@ function EventForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
-      {/* The black Close 16px in from the corner, as on every popup. */}
-      <DialogHead className="-me-2 -mt-2" title={event ? "Edit event" : `New ${noun}`}>
-        <DialogDescription className="sr-only">
-          {event ? "Change this meeting's details." : "A new meeting's details."}
-        </DialogDescription>
-      </DialogHead>
+    <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="flex min-h-0 flex-1 flex-col">
+      <FormDialogHead
+        title={event ? "Edit event" : `New ${noun}`}
+        description={
+          event
+            ? "Change what you need. Everyone invited sees the update."
+            : "A title and a time are all it takes. Everything else has a sensible default."
+        }
+      />
 
-      <div className="space-y-4">
-        {!event && <ShapePicker value={shape} onChange={chooseShape} />}
+      <FormDialogBody>
+        <div className="space-y-4">
+          {!event && <ShapePicker value={shape} onChange={chooseShape} />}
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-title">Title</Label>
-          <Input
-            id="event-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-            required
-            maxLength={200}
-            placeholder="e.g. General meeting"
-          />
-        </div>
-
-        {meetingTypes.length > 0 && (
           <div className="grid gap-1.5">
-            <Label htmlFor="event-meeting-type">Meeting type</Label>
-            <Select value={meetingType} onValueChange={chooseMeetingType}>
-              <SelectTrigger id="event-meeting-type" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_TYPE}>None</SelectItem>
-                {meetingTypes.map((t) => (
-                  <SelectItem key={t.name} value={t.name}>
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: t.color }}
-                    />
-                    {t.name}
-                  </SelectItem>
-                ))}
-                {/* A type since taken off the list still shows on its meetings. */}
-                {meetingType !== NO_TYPE && !meetingTypes.some((t) => t.name === meetingType) && (
-                  <SelectItem value={meetingType}>{meetingType}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="event-title">Title</Label>
+            <Input
+              id="event-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+              required
+              maxLength={200}
+              placeholder="e.g. General meeting"
+            />
           </div>
-        )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-          {/* One "type" question: a club with its own meeting types answers
-              that one above; the older kind is only asked without them. */}
-          {meetingTypes.length === 0 && (
+          {meetingTypes.length > 0 && (
             <div className="grid gap-1.5">
-              <Label htmlFor="event-kind">Type</Label>
-              <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
-                <SelectTrigger id="event-kind" className="w-full">
+              <Label htmlFor="event-meeting-type">Meeting type</Label>
+              <Select value={meetingType} onValueChange={chooseMeetingType}>
+                <SelectTrigger id="event-meeting-type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {KIND_ORDER.map((k) => (
-                    <SelectItem key={k} value={k}>
+                  <SelectItem value={NO_TYPE}>None</SelectItem>
+                  {meetingTypes.map((t) => (
+                    <SelectItem key={t.name} value={t.name}>
                       <span
                         aria-hidden
                         className="size-2 shrink-0 rounded-full"
-                        style={{ ...kindStyle(k), background: "var(--kind)" }}
+                        style={{ background: t.color }}
                       />
-                      {KIND_META[k].label}
+                      {t.name}
                     </SelectItem>
                   ))}
+                  {/* A type since taken off the list still shows on its meetings. */}
+                  {meetingType !== NO_TYPE && !meetingTypes.some((t) => t.name === meetingType) && (
+                    <SelectItem value={meetingType}>{meetingType}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
           )}
-          <div className="grid gap-1.5">
-            <span id="event-visibility-label" className="text-sm leading-none font-medium">
-              Visibility
-            </span>
-            <div
-              role="radiogroup"
-              aria-labelledby="event-visibility-label"
-              className={cn(segmentedTrack, "self-start")}
-            >
-              {(["INTERNAL", "PUBLIC"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  role="radio"
-                  aria-checked={visibility === v}
-                  onClick={() => setVisibility(v)}
-                  className={segmentedItem(visibility === v)}
-                >
-                  {VISIBILITY_META[v].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {isPublic && (
-          <p className="text-muted-foreground text-xs">
-            Shown on your website and public calendar. Attendees and call links stay private.
-          </p>
-        )}
-
-        <fieldset className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <legend className="text-sm font-medium">When</legend>
-            {whenMode === "pick" && (
-              <div className="flex items-center gap-2">
-                <Switch id="event-all-day" checked={allDay} onCheckedChange={toggleAllDay} />
-                <Label htmlFor="event-all-day" className="text-sm font-normal">
-                  All-day
-                </Label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+            {/* One "type" question: a club with its own meeting types answers
+              that one above; the older kind is only asked without them. */}
+            {meetingTypes.length === 0 && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="event-kind">Type</Label>
+                <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
+                  <SelectTrigger id="event-kind" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KIND_ORDER.map((k) => (
+                      <SelectItem key={k} value={k}>
+                        <span
+                          aria-hidden
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ ...kindStyle(k), background: "var(--kind)" }}
+                        />
+                        {KIND_META[k].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
+            <div className="grid gap-1.5">
+              <span id="event-visibility-label" className="text-sm leading-none font-medium">
+                Visibility
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="event-visibility-label"
+                className={cn(segmentedTrack, "self-start")}
+              >
+                {(["INTERNAL", "PUBLIC"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={visibility === v}
+                    onClick={() => setVisibility(v)}
+                    className={segmentedItem(visibility === v)}
+                  >
+                    {VISIBILITY_META[v].label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {!event && (
-            <div role="radiogroup" aria-label="When" className={segmentedTrack}>
+          {isPublic && (
+            <p className="text-muted-foreground text-xs">
+              Shown on your website and public calendar. Attendees and call links stay private.
+            </p>
+          )}
+
+          <fieldset className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <legend className="text-sm font-medium">When</legend>
+              {whenMode === "pick" && (
+                <div className="flex items-center gap-2">
+                  <Switch id="event-all-day" checked={allDay} onCheckedChange={toggleAllDay} />
+                  <Label htmlFor="event-all-day" className="text-sm font-normal">
+                    All-day
+                  </Label>
+                </div>
+              )}
+            </div>
+
+            {!event && (
+              <div role="radiogroup" aria-label="When" className={segmentedTrack}>
+                {(
+                  [
+                    ["pick", "Pick a date"],
+                    ["find", "Don't know yet, find a time"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={whenMode === value}
+                    onClick={() => setWhenMode(value)}
+                    className={segmentedItem(whenMode === value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {whenMode === "find" ? (
+              <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+                <Calendar
+                  mode="multiple"
+                  selected={findDays}
+                  onSelect={(value) => setFindDays((value ?? []).slice(0, 31))}
+                  disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                  aria-label="Days to offer"
+                  className="w-fit rounded-lg border [--cell-size:--spacing(9)]"
+                />
+                <div className="grid content-start gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="find-from">From</Label>
+                      <Input
+                        id="find-from"
+                        type="time"
+                        step={900}
+                        value={findFrom}
+                        onChange={(e) => setFindFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="find-until">Until</Label>
+                      <Input
+                        id="find-until"
+                        type="time"
+                        step={900}
+                        value={findUntil}
+                        onChange={(e) => setFindUntil(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <span id="find-length" className="text-sm leading-none font-medium">
+                      Length
+                    </span>
+                    <div role="radiogroup" aria-labelledby="find-length" className={segmentedTrack}>
+                      {[30, 45, 60, 90].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={findLength === m}
+                          onClick={() => setFindLength(m)}
+                          className={segmentedItem(findLength === m)}
+                        >
+                          {m < 60 ? `${m} min` : m === 60 ? "1 hr" : "1.5 hr"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    {findDays.length === 0
+                      ? "Pick the days to offer."
+                      : attendeeIds.length > 0
+                        ? `${attendeeIds.length} invited ${attendeeIds.length === 1 ? "person is" : "people are"} asked when they're free.`
+                        : "Share the link to ask people."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
+                    <Input
+                      id="event-start"
+                      type={allDay ? "date" : "datetime-local"}
+                      value={startValue}
+                      onChange={(e) => changeStart(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label htmlFor="event-end">{allDay ? "Last day" : "Ends"}</Label>
+                      {!allDay && (
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          {durationLabel(startValue, endValue)}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      id="event-end"
+                      type={allDay ? "date" : "datetime-local"}
+                      value={endValue}
+                      onChange={(e) => setEndValue(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                {allDay && (
+                  <p className="text-muted-foreground text-xs">Whole days in {timeZone}.</p>
+                )}
+
+                {!event && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-2">
+                      <Switch id="event-repeats" checked={repeats} onCheckedChange={setRepeats} />
+                      <Label htmlFor="event-repeats" className="text-sm font-normal">
+                        Repeats weekly
+                      </Label>
+                    </div>
+                    {repeats && (
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="event-repeat-until" className="text-sm font-normal">
+                          until
+                        </Label>
+                        <Input
+                          id="event-repeat-until"
+                          type="date"
+                          value={repeatUntil}
+                          min={startValue.slice(0, 10)}
+                          onChange={(e) => setRepeatUntil(e.target.value)}
+                          className="h-9 w-auto"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </fieldset>
+
+          {fields.place && (
+            <>
+              <div className="grid gap-1.5">
+                <Label htmlFor="event-location">
+                  {callProvider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
+                </Label>
+                <Input
+                  id="event-location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder={
+                    callProvider === ConferenceProvider.NONE
+                      ? "Room, address, or leave blank"
+                      : "Add a room too, for anyone coming in person"
+                  }
+                  maxLength={300}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="event-location-details">How to find it</Label>
+                <Textarea
+                  id="event-location-details"
+                  value={locationDetails}
+                  onChange={(e) => setLocationDetails(e.target.value)}
+                  rows={2}
+                  maxLength={1000}
+                  className="min-h-16"
+                  placeholder="e.g. Second floor, past the elevators"
+                />
+              </div>
+            </>
+          )}
+
+          {/*
+          Last, on purpose: you set the meeting up, then say where the call
+          should be. One menu, so the answer is one click and the form does
+          not open with five provider buttons across it.
+        */}
+          {fields.call && (
+            <ConferencePicker
+              connections={connections}
+              provider={provider}
+              onProviderChange={chooseProvider}
+              conferenceUrl={conferenceUrl}
+              onUrlChange={setConferenceUrl}
+              managed={event?.conferenceManaged ?? false}
+            />
+          )}
+
+          {/* The two most used: who's invited and what it's about. */}
+          <div className="grid gap-1.5">
+            <Label htmlFor="event-attendees">Invite members</Label>
+            <MemberMultiPicker
+              id="event-attendees"
+              members={members}
+              selectedIds={attendeeIds}
+              onChange={setAttendeeIds}
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="event-description">Description</Label>
+            <Textarea
+              id="event-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="What it covers, what to bring, anything the website should say."
+            />
+          </div>
+
+          <div>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 border-t pt-3 text-sm font-medium transition-colors"
+              aria-expanded={showMore}
+              aria-controls={moreId}
+              onClick={() => setShowMore((v) => !v)}
+            >
+              <ChevronDown
+                aria-hidden
+                className={cn("size-4 transition-transform", showMore && "rotate-180")}
+              />
+              {showMore ? "Fewer details" : "More details"}
+            </button>
+          </div>
+
+          {showMore && (
+            <div id={moreId} className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="event-host">Host</Label>
+                  <Select value={host} onValueChange={setHost}>
+                    <SelectTrigger id="event-host" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_HOST}>No host</SelectItem>
+                      {members.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name ?? "Member"}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={GUEST_HOST}>A guest (type a name)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {host === GUEST_HOST && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="event-host-name">Guest host</Label>
+                    <Input
+                      id="event-host-name"
+                      value={hostName}
+                      onChange={(e) => setHostName(e.target.value)}
+                      placeholder="e.g. a guest speaker"
+                      maxLength={120}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="event-rsvp">RSVP link</Label>
+                <Input
+                  id="event-rsvp"
+                  type="url"
+                  value={rsvpUrl}
+                  onChange={(e) => setRsvpUrl(e.target.value)}
+                  placeholder="https://lu.ma/…"
+                />
+              </div>
+
+              {isPublic && (
+                <fieldset className="space-y-3 rounded-md border p-3">
+                  <legend className="flex items-center gap-1 px-1 text-xs font-medium">
+                    <Globe className="size-3" aria-hidden /> On the website
+                  </legend>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="event-full"
+                        checked={capacityFull}
+                        onCheckedChange={setCapacityFull}
+                      />
+                      <Label htmlFor="event-full">Full (hide the RSVP button)</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="event-featured"
+                        checked={featured}
+                        onCheckedChange={setFeatured}
+                      />
+                      <Label htmlFor="event-featured">Featured</Label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="event-note">Public note</Label>
+                      <Input
+                        id="event-note"
+                        value={publicNote}
+                        onChange={(e) => setPublicNote(e.target.value)}
+                        placeholder="e.g. No more space"
+                        maxLength={500}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="event-stamp">Stamp card spot</Label>
+                      <Input
+                        id="event-stamp"
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={stampSlot}
+                        onChange={(e) => setStampSlot(e.target.value)}
+                        placeholder="1-12"
+                        aria-describedby="event-stamp-hint"
+                      />
+                      <p id="event-stamp-hint" className="text-muted-foreground text-xs">
+                        Which square of the website&apos;s stamp card this event fills.
+                      </p>
+                    </div>
+                  </div>
+                </fieldset>
+              )}
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="event-reminders">Reminders</Label>
+                <ReminderPicker
+                  id="event-reminders"
+                  value={reminderMinutes}
+                  onChange={setReminderMinutes}
+                />
+              </div>
+
+              {event && (
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="event-notify"
+                    className="mt-0.5"
+                    checked={notifyAttendees}
+                    onCheckedChange={(v) => setNotifyAttendees(v === true)}
+                  />
+                  <Label htmlFor="event-notify" className="text-sm leading-snug font-normal">
+                    Notify invited members if the time or place changes, or the event is cancelled
+                  </Label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <p className="text-destructive text-sm" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+
+        {inSeries && (
+          <div className="flex flex-wrap items-center gap-3 px-1">
+            <span className="text-sm font-medium" id="series-scope">
+              Repeats weekly. Change
+            </span>
+            <div role="radiogroup" aria-labelledby="series-scope" className={segmentedTrack}>
               {(
                 [
-                  ["pick", "Pick a date"],
-                  ["find", "Don't know yet, find a time"],
+                  ["one", "This meeting"],
+                  ["following", "This and later ones"],
                 ] as const
               ).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
                   role="radio"
-                  aria-checked={whenMode === value}
-                  onClick={() => setWhenMode(value)}
-                  className={segmentedItem(whenMode === value)}
+                  aria-checked={scope === value}
+                  onClick={() => setScope(value)}
+                  className={segmentedItem(scope === value)}
                 >
                   {label}
                 </button>
               ))}
             </div>
-          )}
-
-          {whenMode === "find" ? (
-            <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
-              <Calendar
-                mode="multiple"
-                selected={findDays}
-                onSelect={(value) => setFindDays((value ?? []).slice(0, 31))}
-                disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
-                aria-label="Days to offer"
-                className="w-fit rounded-lg border [--cell-size:--spacing(9)]"
-              />
-              <div className="grid content-start gap-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="find-from">From</Label>
-                    <Input
-                      id="find-from"
-                      type="time"
-                      step={900}
-                      value={findFrom}
-                      onChange={(e) => setFindFrom(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="find-until">Until</Label>
-                    <Input
-                      id="find-until"
-                      type="time"
-                      step={900}
-                      value={findUntil}
-                      onChange={(e) => setFindUntil(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-1.5">
-                  <span id="find-length" className="text-sm leading-none font-medium">
-                    Length
-                  </span>
-                  <div role="radiogroup" aria-labelledby="find-length" className={segmentedTrack}>
-                    {[30, 45, 60, 90].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        role="radio"
-                        aria-checked={findLength === m}
-                        onClick={() => setFindLength(m)}
-                        className={segmentedItem(findLength === m)}
-                      >
-                        {m < 60 ? `${m} min` : m === 60 ? "1 hr" : "1.5 hr"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  {findDays.length === 0
-                    ? "Pick the days to offer."
-                    : attendeeIds.length > 0
-                      ? `${attendeeIds.length} invited ${attendeeIds.length === 1 ? "person is" : "people are"} asked when they're free.`
-                      : "Share the link to ask people."}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
-                  <Input
-                    id="event-start"
-                    type={allDay ? "date" : "datetime-local"}
-                    value={startValue}
-                    onChange={(e) => changeStart(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Label htmlFor="event-end">{allDay ? "Last day" : "Ends"}</Label>
-                    {!allDay && (
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {durationLabel(startValue, endValue)}
-                      </span>
-                    )}
-                  </div>
-                  <Input
-                    id="event-end"
-                    type={allDay ? "date" : "datetime-local"}
-                    value={endValue}
-                    onChange={(e) => setEndValue(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              {allDay && <p className="text-muted-foreground text-xs">Whole days in {timeZone}.</p>}
-
-              {!event && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch id="event-repeats" checked={repeats} onCheckedChange={setRepeats} />
-                    <Label htmlFor="event-repeats" className="text-sm font-normal">
-                      Repeats weekly
-                    </Label>
-                  </div>
-                  {repeats && (
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="event-repeat-until" className="text-sm font-normal">
-                        until
-                      </Label>
-                      <Input
-                        id="event-repeat-until"
-                        type="date"
-                        value={repeatUntil}
-                        min={startValue.slice(0, 10)}
-                        onChange={(e) => setRepeatUntil(e.target.value)}
-                        className="h-9 w-auto"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </fieldset>
-
-        {fields.place && (
-          <>
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-location">
-                {callProvider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
-              </Label>
-              <Input
-                id="event-location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder={
-                  callProvider === ConferenceProvider.NONE
-                    ? "Room, address, or leave blank"
-                    : "Add a room too, for anyone coming in person"
-                }
-                maxLength={300}
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-location-details">How to find it</Label>
-              <Textarea
-                id="event-location-details"
-                value={locationDetails}
-                onChange={(e) => setLocationDetails(e.target.value)}
-                rows={2}
-                maxLength={1000}
-                className="min-h-16"
-                placeholder="e.g. Second floor, past the elevators"
-              />
-            </div>
-          </>
+          </div>
         )}
+      </FormDialogBody>
 
-        {/*
-          Last, on purpose: you set the meeting up, then say where the call
-          should be. One menu, so the answer is one click and the form does
-          not open with five provider buttons across it.
-        */}
-        {fields.call && (
-          <ConferencePicker
-            connections={connections}
-            provider={provider}
-            onProviderChange={chooseProvider}
-            conferenceUrl={conferenceUrl}
-            onUrlChange={setConferenceUrl}
-            managed={event?.conferenceManaged ?? false}
-          />
-        )}
-
-        {/* The two most used: who's invited and what it's about. */}
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-attendees">Invite members</Label>
-          <MemberMultiPicker
-            id="event-attendees"
-            members={members}
-            selectedIds={attendeeIds}
-            onChange={setAttendeeIds}
-          />
-        </div>
-
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-description">Description</Label>
-          <Textarea
-            id="event-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder="What it covers, what to bring, anything the website should say."
-          />
-        </div>
-
-        <div>
-          <button
+      {/* New task's foot: Cancel, then the main button; Delete on the left when editing. */}
+      <FormDialogFoot>
+        {event && (
+          <Button
             type="button"
-            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 border-t pt-3 text-sm font-medium transition-colors"
-            aria-expanded={showMore}
-            aria-controls={moreId}
-            onClick={() => setShowMore((v) => !v)}
+            variant="ghost"
+            className="sm:me-auto"
+            onClick={handleDelete}
+            disabled={isPending}
           >
-            <ChevronDown
-              aria-hidden
-              className={cn("size-4 transition-transform", showMore && "rotate-180")}
-            />
-            {showMore ? "Fewer details" : "More details"}
-          </button>
-        </div>
-
-        {showMore && (
-          <div id={moreId} className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="event-host">Host</Label>
-                <Select value={host} onValueChange={setHost}>
-                  <SelectTrigger id="event-host" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_HOST}>No host</SelectItem>
-                    {members.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name ?? "Member"}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value={GUEST_HOST}>A guest (type a name)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {host === GUEST_HOST && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="event-host-name">Guest host</Label>
-                  <Input
-                    id="event-host-name"
-                    value={hostName}
-                    onChange={(e) => setHostName(e.target.value)}
-                    placeholder="e.g. a guest speaker"
-                    maxLength={120}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-rsvp">RSVP link</Label>
-              <Input
-                id="event-rsvp"
-                type="url"
-                value={rsvpUrl}
-                onChange={(e) => setRsvpUrl(e.target.value)}
-                placeholder="https://lu.ma/…"
-              />
-            </div>
-
-            {isPublic && (
-              <fieldset className="space-y-3 rounded-md border p-3">
-                <legend className="flex items-center gap-1 px-1 text-xs font-medium">
-                  <Globe className="size-3" aria-hidden /> On the website
-                </legend>
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id="event-full"
-                      checked={capacityFull}
-                      onCheckedChange={setCapacityFull}
-                    />
-                    <Label htmlFor="event-full">Full (hide the RSVP button)</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch id="event-featured" checked={featured} onCheckedChange={setFeatured} />
-                    <Label htmlFor="event-featured">Featured</Label>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="event-note">Public note</Label>
-                    <Input
-                      id="event-note"
-                      value={publicNote}
-                      onChange={(e) => setPublicNote(e.target.value)}
-                      placeholder="e.g. No more space"
-                      maxLength={500}
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="event-stamp">Stamp card spot</Label>
-                    <Input
-                      id="event-stamp"
-                      type="number"
-                      min={1}
-                      max={12}
-                      value={stampSlot}
-                      onChange={(e) => setStampSlot(e.target.value)}
-                      placeholder="1-12"
-                      aria-describedby="event-stamp-hint"
-                    />
-                    <p id="event-stamp-hint" className="text-muted-foreground text-xs">
-                      Which square of the website&apos;s stamp card this event fills.
-                    </p>
-                  </div>
-                </div>
-              </fieldset>
-            )}
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-reminders">Reminders</Label>
-              <ReminderPicker
-                id="event-reminders"
-                value={reminderMinutes}
-                onChange={setReminderMinutes}
-              />
-            </div>
-
-            {event && (
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="event-notify"
-                  className="mt-0.5"
-                  checked={notifyAttendees}
-                  onCheckedChange={(v) => setNotifyAttendees(v === true)}
-                />
-                <Label htmlFor="event-notify" className="text-sm leading-snug font-normal">
-                  Notify invited members if the time or place changes, or the event is cancelled
-                </Label>
-              </div>
-            )}
-          </div>
-        )}
-
-        {error && (
-          <p className="text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-
-      {inSeries && (
-        <div className="flex flex-wrap items-center gap-3 px-1">
-          <span className="text-sm font-medium" id="series-scope">
-            Repeats weekly. Change
-          </span>
-          <div role="radiogroup" aria-labelledby="series-scope" className={segmentedTrack}>
-            {(
-              [
-                ["one", "This meeting"],
-                ["following", "This and later ones"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={scope === value}
-                onClick={() => setScope(value)}
-                className={segmentedItem(scope === value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <DialogFooter className="flex items-center justify-between sm:justify-between">
-        {event ? (
-          <Button type="button" variant="ghost" onClick={handleDelete} disabled={isPending}>
             Delete
           </Button>
-        ) : (
-          <span />
         )}
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
         <Button type="submit" disabled={isPending || !title.trim()}>
           {isPending
             ? "Saving…"
@@ -1106,7 +1121,7 @@ function EventForm({
                   : "Find a time"
                 : `Create ${noun}`}
         </Button>
-      </DialogFooter>
+      </FormDialogFoot>
     </form>
   );
 }

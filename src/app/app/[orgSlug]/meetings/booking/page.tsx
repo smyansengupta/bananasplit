@@ -1,7 +1,13 @@
+import Link from "next/link";
+
 import { BookingLinksView } from "@/components/booking/booking-links-view";
+import { Plus } from "@/components/icons";
 import { MeetingsTabs } from "@/components/meetings/meetings-tabs";
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
+import { spaceIncludes } from "@/lib/billing/space";
+import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { timeZoneOptions } from "@/lib/timezones";
 import { loadBookingLinks } from "@/server/booking/view";
@@ -32,7 +38,7 @@ export default async function BookingLinksPage({
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const isAdmin = can({ role }, "events.write");
   const now = new Date();
-  const { data, members, pipelines, meetingCount } = await withOrgTx(org.id, async (ctx) => {
+  const { data, members, pipelines, meetingCount, findOpen } = await withOrgTx(org.id, async (ctx) => {
     const data = await loadBookingLinks(ctx, now);
     const members = await ctx.db.membership.findMany({
       where: { organizationId: org.id },
@@ -49,7 +55,16 @@ export default async function BookingLinksPage({
     const meetingCount = await ctx.db.event.count({
       where: { AND: [meetingsWhere(org.id, user.id, isAdmin, now), { endsAt: { gt: now } }] },
     });
+    // Find a time polls still taking answers, for the tab's count (as on Meetings).
+    const findOpen = await ctx.db.availabilityPoll.count({
+      where: {
+        organizationId: org.id,
+        finalizedEventId: null,
+        OR: [{ closesAt: null }, { closesAt: { gte: now } }],
+      },
+    });
     return {
+      findOpen,
       data,
       members: members
         .map((m) => ({ id: m.userId, name: m.user.name ?? "Member" }))
@@ -67,8 +82,34 @@ export default async function BookingLinksPage({
         description={
           upcoming > 0 ? `${upcoming} booked ${upcoming === 1 ? "meeting" : "meetings"} coming up` : undefined
         }
+        // The same two as every Meetings tab: Find a time beside New meeting,
+        // which opens the create form on Meetings (?new=1).
+        actions={
+          <>
+            {spaceIncludes(org, "polls") && (
+              <Button variant={isAdmin ? "outline" : "create"} asChild>
+                <Link href={`/app/${orgSlug}/calendar/find-a-time/new`}>
+                  <Plus aria-hidden="true" />
+                  Find a time
+                </Link>
+              </Button>
+            )}
+            {isAdmin && (
+              <Button variant="create" asChild>
+                <Link href={`/app/${orgSlug}/meetings?${NEW_EVENT_PARAM}=1`}>
+                  <Plus aria-hidden="true" />
+                  New meeting
+                </Link>
+              </Button>
+            )}
+          </>
+        }
       />
-      <MeetingsTabs orgSlug={orgSlug} current="booking" counts={{ upcoming: meetingCount }} />
+      <MeetingsTabs
+        orgSlug={orgSlug}
+        current="booking"
+        counts={{ upcoming: meetingCount, find: findOpen }}
+      />
       <BookingLinksView
         orgId={org.id}
         orgSlug={orgSlug}

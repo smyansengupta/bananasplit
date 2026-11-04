@@ -23,9 +23,14 @@ import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHead } from "@/components/ui/dialog";
+import {
+  FormDialog,
+  FormDialogBody,
+  FormDialogFoot,
+  FormDialogHead,
+  FormField,
+} from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { hoursSummary } from "@/lib/booking/hours";
@@ -266,13 +271,14 @@ export function BookingLinksView({
         />
       )}
 
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent showCloseButton={false} className="gap-4 sm:max-w-lg">
-          <DialogHead className="-me-2 -mt-2" title="New booking link">
-            <DialogDescription className="sr-only">A booking link for the organization.</DialogDescription>
-          </DialogHead>
-          <div className="grid gap-1.5">
-            <Label htmlFor="new-link-title">Name</Label>
+      {/* New task's window, sized down to the one field; the whole screen on a phone. */}
+      <FormDialog open={creating} onOpenChange={setCreating} className="sm:max-w-lg">
+        <FormDialogHead
+          title="New booking link"
+          description="You host it to start. Add hosts and hours next."
+        />
+        <FormDialogBody>
+          <FormField label="Name" htmlFor="new-link-title">
             <Input
               id="new-link-title"
               value={newTitle}
@@ -284,37 +290,41 @@ export function BookingLinksView({
                 if (e.key === "Enter" && newTitle.trim()) void create();
               }}
             />
-            <p className="text-muted-foreground text-xs">You host it to start. Add hosts and hours next.</p>
-          </div>
-          <DialogFooter>
-            <Button disabled={busy || !newTitle.trim()} onClick={create}>
-              Create booking link
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </FormField>
+        </FormDialogBody>
+        <FormDialogFoot>
+          <Button variant="outline" onClick={() => setCreating(false)}>
+            Cancel
+          </Button>
+          <Button disabled={busy || !newTitle.trim()} onClick={create}>
+            Create booking link
+          </Button>
+        </FormDialogFoot>
+      </FormDialog>
 
-      <Dialog open={Boolean(cancelling)} onOpenChange={(v) => !v && setCancelling(null)}>
-        <DialogContent showCloseButton={false} className="gap-4 sm:max-w-lg">
-          <DialogHead className="-me-2 -mt-2" title={`Cancel with ${cancelling?.guestName ?? ""}?`}>
-            <DialogDescription>
-              It comes off the calendar and they get an email saying it&apos;s cancelled.
-            </DialogDescription>
-          </DialogHead>
-          <div className="grid gap-1.5">
-            <Label htmlFor="cancel-note">A note for them (optional)</Label>
+      <FormDialog
+        open={Boolean(cancelling)}
+        onOpenChange={(v) => !v && setCancelling(null)}
+        className="sm:max-w-lg"
+      >
+        <FormDialogHead
+          title={`Cancel with ${cancelling?.guestName ?? ""}?`}
+          description="It comes off the calendar and they get an email saying it's cancelled."
+        />
+        <FormDialogBody>
+          <FormField label="A note for them (optional)" htmlFor="cancel-note">
             <Textarea id="cancel-note" rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <DialogFooter className="flex items-center justify-between sm:justify-between">
-            <Button variant="ghost" onClick={() => setCancelling(null)}>
-              Keep it
-            </Button>
-            <Button variant="destructive" disabled={busy} onClick={cancel}>
-              Cancel the meeting
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </FormField>
+        </FormDialogBody>
+        <FormDialogFoot>
+          <Button variant="outline" onClick={() => setCancelling(null)}>
+            Keep it
+          </Button>
+          <Button variant="destructive" disabled={busy} onClick={cancel}>
+            Cancel the meeting
+          </Button>
+        </FormDialogFoot>
+      </FormDialog>
     </div>
   );
 }

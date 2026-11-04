@@ -248,7 +248,7 @@ function NewTaskForm({
                 required
                 maxLength={200}
                 placeholder={
-                  isEpic ? "e.g. Fall Showcase" : "e.g. Book the room (#tag, /file to link one)"
+                  isEpic ? "e.g. Annual showcase" : "e.g. Book the room (#tag, /file to link one)"
                 }
               />
               <HashTagHint title={title} />
@@ -414,12 +414,6 @@ function NewTaskForm({
                 )}
               </div>
             </div>
-
-            {error && (
-              <p className="text-destructive text-sm" role="alert">
-                {error}
-              </p>
-            )}
           </div>
 
           <div className="flex flex-col gap-4 px-6 pb-5">

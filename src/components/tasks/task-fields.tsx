@@ -330,22 +330,44 @@ export function useMemberSearch(
  * read as two different kinds of thing. The only difference is what they
  * mean: one person here, any number there.
  */
-export function OwnerField({
-  id,
-  value,
-  onChange,
-  disabled,
-  allowNone = true,
-}: {
+export function OwnerField(props: {
   id?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   disabled?: boolean;
   allowNone?: boolean;
 }) {
-  const { members, memberById } = useTasks();
+  const { members } = useTasks();
+  return (
+    <MemberOwnerField {...props} members={members} hint={(m) => <MemberHint member={m} />} />
+  );
+}
+
+/**
+ * OwnerField without Tasks around it: the same well, menu and keyboard for
+ * any list of members (the CRM's New person, company and deal use it, so an
+ * owner is picked the same way everywhere). `hint` is the quiet line at the
+ * end of a row; by default the member's title.
+ */
+export function MemberOwnerField({
+  id,
+  value,
+  onChange,
+  disabled,
+  allowNone = true,
+  members,
+  hint,
+}: {
+  id?: string;
+  value: string | null;
+  onChange: (id: string | null) => void;
+  disabled?: boolean;
+  allowNone?: boolean;
+  members: MemberOption[];
+  hint?: (member: MemberOption) => ReactNode;
+}) {
   const [open, setOpen] = useState(false);
-  const owner = value ? memberById.get(value) : undefined;
+  const owner = value ? members.find((m) => m.id === value) : undefined;
   const search = useMemberSearch(members, {
     always: true,
     onPick: (m) => {
@@ -432,8 +454,14 @@ export function OwnerField({
                 <span className="truncate">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+                ) : hint ? (
+                  hint(m)
                 ) : (
-                  <MemberHint member={m} />
+                  m.title && (
+                    <small className="text-muted-foreground ms-auto max-w-28 shrink-0 truncate text-xs font-normal">
+                      {m.title}
+                    </small>
+                  )
                 )}
               </button>
             );

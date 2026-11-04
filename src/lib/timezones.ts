@@ -29,3 +29,23 @@ export function isValidTimeZone(tz: string): boolean {
     return false;
   }
 }
+
+/**
+ * A zone as people say it: "Eastern Time (New York)" for America/New_York,
+ * "Central European Time (Berlin)" for Europe/Berlin, "UTC" for UTC. Falls
+ * back to the place's name when the runtime has no friendly name for it.
+ */
+export function friendlyTimeZone(tz: string, at: Date = new Date()): string {
+  if (tz === "UTC" || tz === "Etc/UTC") return "UTC";
+  const city = (tz.split("/").pop() ?? tz).replace(/_/g, " ");
+  let name: string | undefined;
+  try {
+    name = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "longGeneric" })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value;
+  } catch {
+    name = undefined;
+  }
+  if (!name || name === city) return city;
+  return `${name} (${city})`;
+}

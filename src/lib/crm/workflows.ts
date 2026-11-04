@@ -613,7 +613,7 @@ export function fewestPick(candidates: readonly string[], openCounts: ReadonlyMa
  */
 export const WORKFLOW_MERGE_FIELDS = [
   { key: "name", label: "Name", example: "Ada Lovelace", hint: "the person or company; for a deal, its main person" },
-  { key: "title", label: "Title", example: "Spring partnership", hint: "a deal's title; a person's job title" },
+  { key: "title", label: "Title", example: "Annual partnership", hint: "a deal's title; a person's job title" },
   { key: "company", label: "Company", example: "Harbor Light", hint: "" },
   { key: "stage", label: "Stage", example: "Committed", hint: "" },
   { key: "pipeline", label: "Pipeline", example: "Deals", hint: "" },

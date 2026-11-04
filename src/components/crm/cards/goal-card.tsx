@@ -16,6 +16,13 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { FieldSelect } from "@/components/ui/field-select";
+import {
+  FormDialog,
+  FormDialogBody,
+  FormDialogFoot,
+  FormDialogHead,
+  keepOpenForToasts,
+} from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
 import { chipClass } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
@@ -33,13 +40,14 @@ import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * A goal as a card (?open=goal, ?open=goal:<id>): what it counts, whose,
- * when, the target, and a live line saying where the pace lands by the end
- * (black is so far, grey is the pace). Save keeps it with Undo; "…"
- * deletes it, with Undo too. CRM managers set goals; every other member
- * gets the same card read-only (the facts in words, the pace, and who can
- * change it), and a new goal tells them who sets goals. A Personal space
- * has no Who: every goal is yours.
+ * A goal as a card (?open=goal:<id>): what it counts, whose, when, the
+ * target, and a live line saying where the pace lands by the end (the bold
+ * bar is so far, the faint one the pace). Save keeps it with Undo; "…"
+ * deletes it, with Undo too. A new goal (?open=goal) is a create dialog
+ * like New task: the same fields, then Cancel and Create goal. CRM
+ * managers set goals; every other member gets the card read-only (the
+ * facts in words, the pace, and who can change it), and a new goal tells
+ * them who sets goals. A Personal space has no Who: every goal is yours.
  */
 
 export interface GoalCardData {
@@ -175,6 +183,45 @@ export function GoalCard({ orgId, data }: { orgId: string; data: GoalCardData | 
     router.refresh();
   };
 
+  /** A new goal: save it, say so (with Undo), and close. */
+  const create = async () => {
+    if (target === null) {
+      toast({ title: "Give it a target above zero.", tone: "error" });
+      return;
+    }
+    setBusy(true);
+    const r = await runAction(() =>
+      saveGoalAction(orgId, {
+        id: null,
+        metric,
+        ownerId: owner,
+        periodKey,
+        target,
+        name: GOAL_WHAT[metric].label,
+      }),
+    );
+    setBusy(false);
+    if (!r) return;
+    if (!r.ok) {
+      toast({ title: r.error, tone: "error" });
+      return;
+    }
+    const madeId = r.id;
+    toast({
+      title: `${title}: set. Today shows its score.`,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const u = await runAction(() => deleteGoalAction(orgId, madeId));
+          if (u && !u.ok) toast({ title: u.error, tone: "error" });
+          router.refresh();
+        },
+      },
+    });
+    close();
+    router.refresh();
+  };
+
   const remove = async () => {
     if (!id) return;
     const keep = {
@@ -203,6 +250,112 @@ export function GoalCard({ orgId, data }: { orgId: string; data: GoalCardData | 
     router.refresh();
   };
 
+  // The goal's fields, for the new goal's dialog and an existing goal's card.
+  const fields = (
+    <div className="space-y-5">
+      <Row label="What">
+        {GOAL_WHATS.map((m) => (
+          <Chip
+            key={m}
+            on={metric === m}
+            disabled={!edit}
+            onClick={() => {
+              change(setMetric)(m);
+              // Money and counts read differently: "$5,000" or "5000".
+              if (target !== null) setText(fmtTarget(m, target));
+            }}
+          >
+            {GOAL_WHAT[m].label}
+          </Chip>
+        ))}
+      </Row>
+      {!data.personal && (
+        <Row label="Who">
+          <Chip on={owner === null} disabled={!edit} onClick={() => change(setOwner)(null)}>
+            Whole team
+          </Chip>
+          <Chip
+            on={owner === data.viewerId}
+            disabled={!edit}
+            onClick={() => change(setOwner)(data.viewerId)}
+          >
+            Me
+          </Chip>
+          {others.length > 0 && (
+            <FieldSelect
+              aria-label="Someone else"
+              disabled={!edit}
+              value={owner && owner !== data.viewerId ? owner : ""}
+              onChange={(e) => change(setOwner)(e.target.value || null)}
+              className="h-10 w-48 rounded-full"
+            >
+              <option value="">Someone else</option>
+              {others.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </FieldSelect>
+          )}
+        </Row>
+      )}
+      <Row label="When">
+        {periods.map((p) => (
+          <Chip
+            key={p.key}
+            on={periodKey === p.key}
+            disabled={!edit}
+            onClick={() => change(setPeriodKey)(p.key)}
+          >
+            {p.label}
+          </Chip>
+        ))}
+      </Row>
+      <Row label="Target">
+        <Input
+          aria-label="Target"
+          inputMode="decimal"
+          value={text}
+          disabled={!edit}
+          placeholder={isMoney(metric) ? "$25,000" : "10"}
+          onChange={(e) => change(setText)(e.target.value)}
+          onBlur={() => target !== null && setText(fmtTarget(metric, target))}
+          className="h-10 w-40 text-[15px] font-semibold tabular-nums"
+        />
+        <span className="text-muted-foreground text-sm">{GOAL_WHAT[metric].unit}</span>
+      </Row>
+      <Pace words={words} />
+    </div>
+  );
+
+  if (!data.id) {
+    return (
+      <FormDialog open onOpenChange={(o) => !o && close()} onInteractOutside={keepOpenForToasts}>
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void create();
+          }}
+        >
+          <FormDialogHead
+            title="New goal"
+            description="What it counts, whose, when, and its target. Today shows its score."
+          />
+          <FormDialogBody>{fields}</FormDialogBody>
+          <FormDialogFoot>
+            <Button type="button" variant="outline" onClick={() => close()}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || target === null}>
+              {busy ? "Creating…" : "Create goal"}
+            </Button>
+          </FormDialogFoot>
+        </form>
+      </FormDialog>
+    );
+  }
+
   return (
     <CrmCard
       title={title}
@@ -222,7 +375,7 @@ export function GoalCard({ orgId, data }: { orgId: string; data: GoalCardData | 
               ? "Only CRM managers change goals. Ask one to change this."
               : saved
                 ? "Saved. Today shows the new target."
-                : "Black is so far, grey is where the pace lands."}
+                : "The bold bar is so far, the faint one is where the pace lands."}
           </span>
           {saved && (
             <button
@@ -267,86 +420,13 @@ export function GoalCard({ orgId, data }: { orgId: string; data: GoalCardData | 
           <Pace words={words} />
         </div>
       ) : (
-        <div className="space-y-5">
-          <Row label="What">
-            {GOAL_WHATS.map((m) => (
-              <Chip
-                key={m}
-                on={metric === m}
-                disabled={!edit}
-                onClick={() => {
-                  change(setMetric)(m);
-                  // Money and counts read differently: "$5,000" or "5000".
-                  if (target !== null) setText(fmtTarget(m, target));
-                }}
-              >
-                {GOAL_WHAT[m].label}
-              </Chip>
-            ))}
-          </Row>
-          {!data.personal && (
-            <Row label="Who">
-              <Chip on={owner === null} disabled={!edit} onClick={() => change(setOwner)(null)}>
-                Whole team
-              </Chip>
-              <Chip
-                on={owner === data.viewerId}
-                disabled={!edit}
-                onClick={() => change(setOwner)(data.viewerId)}
-              >
-                Me
-              </Chip>
-              {others.length > 0 && (
-                <FieldSelect
-                  aria-label="Someone else"
-                  disabled={!edit}
-                  value={owner && owner !== data.viewerId ? owner : ""}
-                  onChange={(e) => change(setOwner)(e.target.value || null)}
-                  className="h-10 w-48 rounded-full"
-                >
-                  <option value="">Someone else</option>
-                  {others.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </FieldSelect>
-              )}
-            </Row>
-          )}
-          <Row label="When">
-            {periods.map((p) => (
-              <Chip
-                key={p.key}
-                on={periodKey === p.key}
-                disabled={!edit}
-                onClick={() => change(setPeriodKey)(p.key)}
-              >
-                {p.label}
-              </Chip>
-            ))}
-          </Row>
-          <Row label="Target">
-            <Input
-              aria-label="Target"
-              inputMode="decimal"
-              value={text}
-              disabled={!edit}
-              placeholder={isMoney(metric) ? "$25,000" : "10"}
-              onChange={(e) => change(setText)(e.target.value)}
-              onBlur={() => target !== null && setText(fmtTarget(metric, target))}
-              className="h-10 w-40 text-[15px] font-semibold tabular-nums"
-            />
-            <span className="text-muted-foreground text-sm">{GOAL_WHAT[metric].unit}</span>
-          </Row>
-          <Pace words={words} />
-        </div>
+        fields
       )}
     </CrmCard>
   );
 }
 
-/** Where the pace lands: black is so far, grey is the pace by the end. */
+/** Where the pace lands: the bold bar is so far, the faint one the pace by the end. */
 function Pace({ words }: { words: ReturnType<typeof paceWords> }) {
   return (
     <div className="bg-muted space-y-2.5 rounded-2xl px-4 py-3.5">
