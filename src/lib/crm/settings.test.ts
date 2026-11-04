@@ -12,6 +12,7 @@ import {
   sendingIsSet,
   sendingPauses,
   sendingWindow,
+  TRUST_ITEMS,
   unsubscribeFooter,
 } from "./settings-prefs";
 import {
@@ -127,22 +128,25 @@ describe("Sending prefs", () => {
 describe("How much it may do alone", () => {
   it("fills each item's fallback", () => {
     expect(readAutonomy(undefined)).toEqual({
-      emails: "tell",
+      emails: "suggest",
       merges: "tell",
       signatures: "suggest",
       stages: "suggest",
     });
-    expect(readAutonomy({ emails: "auto", stages: "maybe" })).toMatchObject({
-      emails: "auto",
+    expect(readAutonomy({ merges: "auto", stages: "maybe" })).toMatchObject({
+      merges: "auto",
       stages: "suggest",
     });
   });
 
-  it("drafts automation email for review when the step or the organization says so", () => {
-    const a = readAutonomy({});
-    expect(automationEmailReview(false, a)).toBe(false);
-    expect(automationEmailReview(true, a)).toBe(true);
-    expect(automationEmailReview(false, { ...a, emails: "suggest" })).toBe(true);
+  it("never lets plans or automations email or text on their own, whatever was stored", () => {
+    for (const stored of ["auto", "tell", "suggest", "nonsense", undefined]) {
+      expect(readAutonomy({ emails: stored }).emails).toBe("suggest");
+    }
+    expect(automationEmailReview()).toBe(true);
+    const emails = TRUST_ITEMS.find((t) => t.id === "emails");
+    expect(emails?.locked?.level).toBe("suggest");
+    expect(emails?.locked?.why).toMatch(/nothing goes out until a person sends it/);
   });
 });
 

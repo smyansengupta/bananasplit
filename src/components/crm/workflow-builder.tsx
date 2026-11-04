@@ -572,20 +572,9 @@ function ActionEditor({
       return (
         <div className="space-y-2">
           {pick(ctx.templates, action.params.templateId, (x) => x.name, (id) => onChange({ ...action, params: { ...action.params, templateId: id } }), "No email templates yet.")}
-          <Chips
-            label="How it goes"
-            options={[
-              { value: "send", label: "Send it" },
-              { value: "review", label: "Owner reviews first" },
-            ]}
-            value={action.params.review ? "review" : "send"}
-            onPick={(v) => onChange({ ...action, params: { ...action.params, review: v === "review" ? true : undefined } })}
-          />
           <p className="text-muted-foreground text-xs">
-            {action.params.review
-              ? "It waits in Review as a draft for the owner to send."
-              : "It goes from the owner's name between 8 AM and 9 PM, within the daily send limit."}{" "}
-            Never to anyone who unsubscribed or asked not to be contacted.
+            It waits as a draft for the owner to send, in Today&apos;s To approve and their Inbox. Nothing goes out on its
+            own, and never to anyone who unsubscribed or asked not to be contacted.
           </p>
         </div>
       );
@@ -595,16 +584,9 @@ function ActionEditor({
       return (
         <div className="space-y-2">
           {pick(ctx.events, action.params.eventId, (x) => x.title, (id) => onChange({ ...action, params: { ...action.params, eventId: id } }), "No upcoming events.")}
-          <Chips
-            label="People outside the organization"
-            options={[
-              { value: "send", label: "Email the invite" },
-              { value: "review", label: "Owner reviews first" },
-            ]}
-            value={action.params.review ? "review" : "send"}
-            onPick={(v) => onChange({ ...action, params: { ...action.params, review: v === "review" ? true : undefined } })}
-          />
-          <p className="text-muted-foreground text-xs">Members join the event&apos;s invitees. Anyone else gets its RSVP link by email.</p>
+          <p className="text-muted-foreground text-xs">
+            Members join the event&apos;s invitees. Anyone else gets a draft with its RSVP link for the owner to send.
+          </p>
         </div>
       );
     case "notify": {

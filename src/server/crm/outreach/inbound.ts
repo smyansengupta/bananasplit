@@ -1,5 +1,6 @@
 import type { CrmMailbox, Prisma } from "@/generated/prisma/client";
 import { normalizeEmail, workDomain } from "@/lib/crm/dedupe";
+import { crmRecordHref } from "@/lib/crm/href";
 import {
   addressList,
   autoReplyOf,
@@ -120,12 +121,30 @@ export async function stopEnrollments(
       });
     }
   }
-  // Their queued sequence mail goes nowhere now.
+  // Their queued sequence mail goes nowhere now, and a step's draft waiting
+  // for someone's OK is withdrawn (with its To approve row).
   if (status !== "PAUSED" && rows.length) {
+    const ids = rows.map((r) => r.id);
     await db.crmEmailMessage.updateMany({
-      where: { organizationId, status: "QUEUED", enrollmentId: { in: rows.map((r) => r.id) } },
+      where: { organizationId, status: "QUEUED", enrollmentId: { in: ids } },
       data: { status: "FAILED", error: `stopped: ${reason}` },
     });
+    const drafts = await db.crmEmailMessage.findMany({
+      where: { organizationId, status: "DRAFT", enrollmentId: { in: ids } },
+      select: { id: true },
+    });
+    if (drafts.length) {
+      await db.crmEmailMessage.updateMany({
+        where: { organizationId, id: { in: drafts.map((d) => d.id) } },
+        data: { status: "FAILED", error: "discarded" },
+      });
+      for (const d of drafts) {
+        await db.crmSuggestion.updateMany({
+          where: { organizationId, kind: "DRAFT_EMAIL", status: "PENDING", payload: { path: ["draftId"], equals: d.id } },
+          data: { status: "EXPIRED" },
+        });
+      }
+    }
   }
   return rows.length;
 }
@@ -400,7 +419,7 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
           type: "CRM_REPLY",
           title: `${person?.name ?? "Someone"} replied: ${m.subject}`.slice(0, 300),
           body: text.slice(0, 1800) || null,
-          linkUrl: org ? `/app/${org.slug}/crm/people/${peopleIds[0]}` : null,
+          linkUrl: org ? crmRecordHref(org.slug, "person", peopleIds[0]) : null,
           dedupeKey: `crm-reply:${m.messageId ?? messageId ?? now.getTime()}`,
         });
       }

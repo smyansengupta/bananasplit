@@ -1,4 +1,5 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
+import { crmRecordHref } from "@/lib/crm/href";
 import { renderMerge } from "@/lib/crm/outreach/merge";
 import { readExtras, withExtras } from "@/lib/crm/outreach/plans";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
@@ -13,8 +14,9 @@ import { CrmError, requireMember, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { emitCrmEvent } from "../events";
 import { queueText } from "../phone/texts";
+import { proposeChange } from "../review";
 import { actAs } from "../system-actor";
-import { conflictFor, contactable, mergeValuesFor, queueEmail, sentToday } from "./send";
+import { conflictFor, contactable, mergeValuesFor, queueEmail, saveDraft, sentToday } from "./send";
 
 /**
  * Sequences (docs/features/crm.md, module 5): timed steps (an email, a
@@ -202,7 +204,16 @@ export async function enroll(
   actor: CrmActor,
   sequenceId: string,
   personIds: readonly string[],
-  options: { senderId?: string; campaignId?: string | null; confirmConflicts?: boolean } = {},
+  options: {
+    senderId?: string;
+    campaignId?: string | null;
+    confirmConflicts?: boolean;
+    /**
+     * Put in by an automation, not by a person pressing Start: even the
+     * first email waits for the sender's OK (enrolledById stays empty).
+     */
+    byAutomation?: boolean;
+  } = {},
   now: Date = new Date(),
 ): Promise<EnrollResult> {
   const { db, organizationId, userId } = actor;
@@ -250,7 +261,15 @@ export async function enroll(
     }
     const runAt = nextInWindow(new Date(now.getTime() + delayMs(first)), window, tz);
     const e = await db.crmEnrollment.create({
-      data: { organizationId, sequenceId: seq.id, personId: p.id, senderId, enrolledById: userId, nextStep: 0, nextRunAt: runAt },
+      data: {
+        organizationId,
+        sequenceId: seq.id,
+        personId: p.id,
+        senderId,
+        enrolledById: options.byAutomation ? null : userId,
+        nextStep: 0,
+        nextRunAt: runAt,
+      },
       select: { id: true },
     });
     await enqueueJob(db, {
@@ -289,6 +308,58 @@ export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Pro
 
 type StepOutcome = "done" | "skipped" | "later" | "finished";
 
+const TEXT_WAITS = "text-waits";
+
+/**
+ * Only the first step goes out on its own, and only when a person put them
+ * in (Start, Enroll, their campaign share): pressing it was the OK for that
+ * first message. Every later email or text, and everything an automation
+ * enrolled, waits for the sender (docs/features/crm.md, "Nothing sends
+ * unapproved").
+ */
+export function approvedByStart(e: { enrolledById: string | null }, stepIndex: number): boolean {
+  return stepIndex === 0 && e.enrolledById !== null;
+}
+
+/** A step's email as a draft in the sender's compose, with a To approve row (and their Inbox line). */
+async function draftStep(
+  db: TxClient,
+  organizationId: string,
+  e: { id: string; senderId: string; sequence: { id: string; name: string } },
+  stepIndex: number,
+  person: { id: string; name: string; primaryEmail: string | null },
+  mail: { subject: string; body: string; templateId: string | null },
+): Promise<void> {
+  const draft = await saveDraft(db, {
+    organizationId,
+    ownerId: e.senderId,
+    personId: person.id,
+    subject: mail.subject,
+    body: mail.body,
+    createdById: null,
+    enrollmentId: e.id,
+    templateId: mail.templateId,
+  });
+  await proposeChange(db, {
+    organizationId,
+    kind: "DRAFT_EMAIL",
+    source: "AUTOMATION",
+    title: `Email ${person.name}: step ${stepIndex + 1} of ${e.sequence.name}`,
+    summary: mail.subject,
+    payload: {
+      to: person.primaryEmail ? [person.primaryEmail] : [],
+      subject: mail.subject,
+      body: mail.body,
+      why: `Step ${stepIndex + 1} of "${e.sequence.name}". It goes out when you send it.`,
+      draftId: draft.draftId,
+    },
+    target: { kind: "person", id: person.id },
+    citation: { kind: "automation", id: e.sequence.id, label: e.sequence.name },
+    assigneeId: e.senderId,
+    proposedById: null,
+  });
+}
+
 async function runStep(sys: SystemContext, organizationId: string, enrollmentId: string, stepIndex: number, now: Date): Promise<StepOutcome> {
   const db = sys.db;
   const e = await db.crmEnrollment.findFirst({
@@ -299,6 +370,7 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
       nextStep: true,
       nextRunAt: true,
       senderId: true,
+      enrolledById: true,
       personId: true,
       sequence: {
         select: {
@@ -336,7 +408,24 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
   };
   // Switched off: wait, checking again tomorrow.
   if (e.sequence.status !== "ON") return reschedule(new Date(now.getTime() + 86_400_000));
+  // An earlier step's draft still waits for the sender's OK: the rest waits with it.
+  const waiting = await db.crmEmailMessage.findFirst({
+    where: { organizationId, enrollmentId: e.id, status: "DRAFT" },
+    select: { id: true },
+  });
+  if (waiting) return reschedule(new Date(now.getTime() + 6 * 3_600_000));
   const step = e.sequence.steps[stepIndex];
+  // The last email went out when a person sent it, maybe days after it was
+  // drafted: this step's wait counts from then.
+  if (step && stepIndex > 0) {
+    const last = await db.crmEmailMessage.findFirst({
+      where: { organizationId, enrollmentId: e.id, status: { in: ["SENT", "QUEUED"] }, createdById: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, sentAt: true },
+    });
+    const due = last ? new Date((last.sentAt ?? last.createdAt).getTime() + delayMs(step)) : null;
+    if (due && due.getTime() > now.getTime() + 60_000) return reschedule(due);
+  }
   if (!step) {
     await finish(db, organizationId, e.id, e.personId);
     return "finished";
@@ -393,18 +482,24 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         ? `Re: ${prior.subject.replace(/^re:\s*/i, "")}`
         : renderMerge(`Hello from {{organization}}`, values).text;
     const body = renderMerge(step.body?.trim() ? step.body : (template?.body ?? ""), values).text;
-    await queueEmail(db, {
-      organizationId,
-      senderId: e.senderId,
-      createdById: null,
-      personId: person.id,
-      subject,
-      body,
-      templateId: step.templateId,
-      enrollmentId: e.id,
-      threadId: prior?.threadId ?? null,
-      inReplyTo: prior?.messageIdHeader ?? null,
-    });
+    if (approvedByStart(e, stepIndex)) {
+      await queueEmail(db, {
+        organizationId,
+        senderId: e.senderId,
+        createdById: null,
+        personId: person.id,
+        subject,
+        body,
+        templateId: step.templateId,
+        enrollmentId: e.id,
+        threadId: prior?.threadId ?? null,
+        inReplyTo: prior?.messageIdHeader ?? null,
+      });
+    } else {
+      // Nothing goes out without a person: the step's email waits as a draft
+      // in the sender's To approve (Today, Power hour, their Inbox).
+      await draftStep(db, organizationId, e, stepIndex, person, { subject, body, templateId: step.templateId });
+    }
   } else {
     // A to-do becomes a real Task (made the way a workflow makes one: as the
     // sequence's maker, else the sender, for the sender, linked to the
@@ -447,6 +542,9 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
           note = made.error ?? "the task couldn't be made";
         }
       }
+    } else if (step.kind === "TEXT" && step.body?.trim() && !approvedByStart(e, stepIndex)) {
+      // A later text waits for the sender, its words ready in their queue.
+      note = TEXT_WAITS;
     } else if (step.kind === "TEXT" && step.body?.trim()) {
       const sender = await actAs(sys, organizationId, e.senderId);
       if (sender) {
@@ -473,7 +571,7 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         organizationId,
         kind: "SEQUENCE_STEP",
         subject: what,
-        body: note ? `It couldn't happen on its own: ${note}` : null,
+        body: note === TEXT_WAITS ? "Nothing is texted without you. Send it from their card." : note ? `It couldn't happen on its own: ${note}` : null,
         targets: [{ kind: "person", id: person.id }],
         actorId: e.senderId,
         // The sender may close it from their queue (activity edits are their maker's).
@@ -495,7 +593,7 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
         title: what,
         body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
         // A call waits on the dialer; anything else on their page.
-        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : `/app/${org.slug}/crm/people/${person.id}`) : null,
+        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : crmRecordHref(org.slug, "person", person.id)) : null,
         dedupeKey: `crm-step:${e.id}:${stepIndex}`,
       });
     }
@@ -506,6 +604,25 @@ async function runStep(sys: SystemContext, organizationId: string, enrollmentId:
   });
   const next = e.sequence.steps[stepIndex + 1];
   if (!next) {
+    // The last email waits for its OK: the enrollment stays open (a reply
+    // still withdraws the draft) and finishes once it has gone.
+    const pending = await db.crmEmailMessage.findFirst({
+      where: { organizationId, enrollmentId: e.id, status: "DRAFT" },
+      select: { id: true },
+    });
+    if (pending) {
+      const at = new Date(now.getTime() + 6 * 3_600_000);
+      await db.crmEnrollment.update({ where: { id: e.id }, data: { nextRunAt: at } });
+      await enqueueJob(db, {
+        orgId: organizationId,
+        kind: "crm-sequence",
+        key: `${e.id}:${stepIndex + 1}:${at.getTime().toString(36)}`,
+        payload: { enrollmentId: e.id, step: stepIndex + 1 },
+        runAt: at,
+        noKick: true,
+      });
+      return "done";
+    }
     await finish(db, organizationId, e.id, e.personId);
     return "finished";
   }

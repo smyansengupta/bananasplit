@@ -10,6 +10,7 @@ import { EmailConfigError } from "@/server/email/transport";
 
 import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
+import { crmHeldBack, crmSendingPaused } from "../inbox-notify";
 import { costOf, meterUseIn, underCap } from "../spend";
 import { messageIdFor, replyAddress, sendFromMailbox, type MailPurpose, type SentEmail } from "./mailbox";
 import { clickUrl, mailToken, oneClickUrl, pixelUrl, unsubscribeUrl } from "./tokens";
@@ -356,7 +357,18 @@ export interface DraftView {
  */
 export async function saveDraft(
   db: TxClient,
-  input: { organizationId: string; ownerId: string; personId: string; subject: string; body: string; createdById: string | null },
+  input: {
+    organizationId: string;
+    ownerId: string;
+    personId: string;
+    subject: string;
+    body: string;
+    createdById: string | null;
+    /** A sequence step's or an automation's draft: sending it keeps it theirs (thread, footer, cap). */
+    enrollmentId?: string | null;
+    workflowId?: string | null;
+    templateId?: string | null;
+  },
 ): Promise<{ draftId: string; threadId: string }> {
   const person = await db.crmPerson.findFirst({
     where: { id: input.personId, organizationId: input.organizationId },
@@ -382,6 +394,9 @@ export async function saveDraft(
       bodyText: input.body.trim().slice(0, 50_000),
       personId: person.id,
       createdById: input.createdById,
+      enrollmentId: input.enrollmentId ?? null,
+      workflowId: input.workflowId ?? null,
+      templateId: input.templateId ?? null,
     },
     select: { id: true },
   });
@@ -461,6 +476,24 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     const deal = await db.crmDeal.findFirst({ where: { id: input.dealId, organizationId }, select: { id: true } });
     if (deal) extra.push({ kind: "deal", id: deal.id });
   }
+  // A sequence step's or an automation's draft stays theirs once a person
+  // sends it: the same thread as the sequence's first email, its footer and
+  // its daily cap, and the sequence carries on from here.
+  const draft = input.draftId
+    ? await db.crmEmailMessage.findFirst({
+        where: { id: input.draftId, organizationId, status: "DRAFT" },
+        select: { enrollmentId: true, workflowId: true, templateId: true },
+      })
+    : null;
+  if (draft?.enrollmentId && !threadId) {
+    const first = await db.crmEmailMessage.findFirst({
+      where: { organizationId, enrollmentId: draft.enrollmentId, status: { in: ["SENT", "QUEUED"] } },
+      orderBy: { createdAt: "asc" },
+      select: { threadId: true, messageIdHeader: true },
+    });
+    threadId = first?.threadId ?? null;
+    inReplyTo = first?.messageIdHeader ?? null;
+  }
   let sendAt: Date | null = null;
   if (input.sendAt) {
     sendAt = new Date(input.sendAt);
@@ -474,7 +507,9 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     personId: input.personId,
     subject: rendered.subject,
     body: rendered.body,
-    templateId: input.templateId ?? null,
+    templateId: input.templateId ?? draft?.templateId ?? null,
+    enrollmentId: draft?.enrollmentId ?? null,
+    workflowId: draft?.workflowId ?? null,
     extraTargets: extra,
     threadId,
     inReplyTo,
@@ -748,10 +783,21 @@ async function markSent(
   }
 }
 
-async function markFailed(db: TxClient, organizationId: string, messageId: string, reason: string): Promise<void> {
+/**
+ * Marks a waiting message as not sent and tells its sender in the Inbox:
+ * "paused" when nothing can go for now (the spending cap, no sender), else
+ * one "didn't send" line (a burst of them folds into one row).
+ */
+async function markFailed(
+  db: TxClient,
+  organizationId: string,
+  messageId: string,
+  reason: string,
+  kind: "held" | "paused" = "held",
+): Promise<void> {
   const m = await db.crmEmailMessage.findFirst({
     where: { id: messageId, organizationId, status: "QUEUED" },
-    select: { activityId: true, subject: true },
+    select: { activityId: true, subject: true, mailboxUserId: true, personId: true, toAddresses: true },
   });
   if (!m) return;
   await db.crmEmailMessage.update({ where: { id: messageId }, data: { status: "FAILED", error: reason.slice(0, 300) } });
@@ -761,6 +807,18 @@ async function markFailed(db: TxClient, organizationId: string, messageId: strin
       data: { subject: `Not sent: ${m.subject ?? "email"} (${reason.slice(0, 120)})`, meta: { status: "failed" } },
     });
   }
+  if (kind === "paused") {
+    await crmSendingPaused(db, organizationId, m.mailboxUserId, reason);
+    return;
+  }
+  const person = m.personId
+    ? await db.crmPerson.findFirst({ where: { id: m.personId, organizationId }, select: { name: true } })
+    : null;
+  await crmHeldBack(db, organizationId, [m.mailboxUserId], {
+    title: `Didn't send "${(m.subject ?? "an email").slice(0, 80)}" to ${person?.name ?? m.toAddresses[0] ?? "someone"}`,
+    why: reason.replace(/\.?$/, "."),
+    key: `mail-${messageId}`,
+  });
 }
 
 /** Sends one queued message; returns what happened. Used by crm-send and crm-bulk. */
@@ -796,7 +854,9 @@ export async function deliver(
   // Bulk mail is volume on the organization's own Resend account: past the
   // monthly spending cap it stops (one-to-one mail still goes).
   if (p.purpose === "bulk" && !(await underCap(organizationId, costOf("email.sent")))) {
-    await withSystemOrgTx(organizationId, ({ db }) => markFailed(db, organizationId, messageId, "This month's spending cap is reached"));
+    await withSystemOrgTx(organizationId, ({ db }) =>
+      markFailed(db, organizationId, messageId, "This month's spending cap is reached", "paused"),
+    );
     return "failed";
   }
   try {
@@ -818,7 +878,7 @@ export async function deliver(
     return "sent";
   } catch (error) {
     if (error instanceof EmailConfigError) {
-      await withSystemOrgTx(organizationId, ({ db }) => markFailed(db, organizationId, messageId, error.message));
+      await withSystemOrgTx(organizationId, ({ db }) => markFailed(db, organizationId, messageId, error.message, "paused"));
       return "failed";
     }
     throw error;

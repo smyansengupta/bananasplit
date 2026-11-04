@@ -111,6 +111,34 @@ function reasonText(item: QueueItem, r: QueueReason): string {
   }
 }
 
+/** The people waiting drafts are for, who can still be emailed (Send works; Power hour can work them). */
+async function draftRecipients(
+  db: TxClient,
+  organizationId: string,
+  suggestions: readonly { kind: string; target: { kind: string; id: string } | null }[],
+): Promise<Map<string, { id: string; phone: string | null }>> {
+  const ids = [
+    ...new Set(
+      suggestions
+        .filter((s) => s.kind === "DRAFT_EMAIL" && s.target?.kind === "person")
+        .map((s) => s.target!.id),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const people = await db.crmPerson.findMany({
+    where: {
+      organizationId,
+      id: { in: ids },
+      deletedAt: null,
+      doNotContact: false,
+      unsubscribedAt: null,
+      primaryEmail: { not: null },
+    },
+    select: { id: true, phone: true },
+  });
+  return new Map(people.map((p) => [p.id, p]));
+}
+
 export interface TodayData {
   rows: TodayRow[];
   /** Showing the viewer's own (false: everyone's, asked for or because nothing is theirs). */
@@ -164,8 +192,18 @@ export async function todayRows(
         select: { id: true, personId: true, subject: true, bodyText: true },
       })
     : [];
+  // The viewer's waiting drafts and changes (To approve). A draft that has a
+  // To approve row is sent from there, not offered again on the person's row.
+  const suggestions = await listQueue(db, organizationId, viewerId, { mine: true, take: 25 });
+  const approving = new Set(
+    suggestions
+      .map((s) => (s.kind === "DRAFT_EMAIL" ? (s.payload as { draftId?: unknown }).draftId : null))
+      .filter((x): x is string => typeof x === "string"),
+  );
   const draftFor = new Map<string, (typeof drafts)[number]>();
-  for (const d of drafts) if (d.personId && !draftFor.has(d.personId)) draftFor.set(d.personId, d);
+  for (const d of drafts) {
+    if (d.personId && !approving.has(d.id) && !draftFor.has(d.personId)) draftFor.set(d.personId, d);
+  }
   const callSteps = await openCallSteps(db, organizationId, viewerId);
 
   const rows: TodayRow[] = [];
@@ -299,10 +337,43 @@ export async function todayRows(
     });
   }
 
-  // To approve: AI and automation changes, people found in mail, duplicates.
-  const suggestions = await listQueue(db, organizationId, viewerId, { mine: true, take: 25 });
+  // To approve: drafts that wait for a person to send them (automations,
+  // a plan's later steps, the follow-up agent), AI and automation changes,
+  // people found in mail, duplicates.
+  const draftPeople = await draftRecipients(db, organizationId, suggestions);
   for (const s of suggestions) {
     const row = s.rows[0];
+    const payload = s.payload as { draftId?: unknown; subject?: unknown; body?: unknown };
+    const recipient = s.kind === "DRAFT_EMAIL" && s.target?.kind === "person" ? draftPeople.get(s.target.id) : undefined;
+    if (recipient && typeof payload.draftId === "string") {
+      // Send is the person's OK: it goes through compose with this draft (ten seconds to Undo).
+      rows.push({
+        key: `suggestion:${s.id}`,
+        group: "approve",
+        open: `person:${recipient.id}`,
+        name: s.target!.name,
+        tag: KIND_LABELS[s.kind],
+        text: s.title,
+        draft: typeof payload.body === "string" ? payload.body.trim() || null : null,
+        change: null,
+        warn: null,
+        why: s.citation?.label ? `From ${s.citation.label}` : `Drafted ${ago(s.createdAt, now)}`,
+        actions: [
+          {
+            type: "send-draft",
+            label: "Send",
+            draftId: payload.draftId,
+            personId: recipient.id,
+            subject: typeof payload.subject === "string" ? payload.subject : "",
+            body: typeof payload.body === "string" ? payload.body : "",
+            replyTo: null,
+          },
+          { type: "reject", suggestionId: s.id, label: "Don't send" },
+        ],
+        person: { id: recipient.id, email: true, phone: recipient.phone, reply: null },
+      });
+      continue;
+    }
     rows.push({
       key: `suggestion:${s.id}`,
       group: "approve",
@@ -321,8 +392,10 @@ export async function todayRows(
         {
           type: "accept",
           suggestionId: s.id,
+          // A draft that can't be sent from here (no address, asked not to be
+          // contacted) stays in compose: accepting never sends anything.
           label:
-            s.kind === "DRAFT_EMAIL" ? "Send" : s.kind === "CREATE_PERSON" ? "Add them" : "Accept",
+            s.kind === "DRAFT_EMAIL" ? "Keep the draft" : s.kind === "CREATE_PERSON" ? "Add them" : "Accept",
         },
         {
           type: "reject",

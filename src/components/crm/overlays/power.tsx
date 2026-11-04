@@ -22,7 +22,12 @@ export async function PowerOverlay({ shell, searchParams }: OverlayProps<"power"
       everyone,
       relationships,
     });
-    const queue = rows.filter((r) => r.group !== "approve" && r.person).slice(0, MAX);
+    // People to reach, then drafts waiting for an OK (a plan's later step,
+    // an automation's email), each person once.
+    const seen = new Set<string>();
+    const queue = [...rows.filter((r) => r.group !== "approve"), ...rows.filter((r) => r.group === "approve")]
+      .filter((r) => r.person && !seen.has(r.person.id) && seen.add(r.person.id))
+      .slice(0, MAX);
     const ids = queue.map((r) => r.person!.id);
     const details = ids.length
       ? await db.crmPerson.findMany({
@@ -65,7 +70,11 @@ export async function PowerOverlay({ shell, searchParams }: OverlayProps<"power"
             select: { subject: true, kind: true, occurredAt: true },
           })
         : [];
-      const draft = drafts.find((d) => d.personId === id);
+      // The draft this row is about (a waiting step's), else their latest.
+      const own = r.actions.find((a) => a.type === "send-draft");
+      const draft =
+        (own?.type === "send-draft" ? drafts.find((d) => d.id === own.draftId) : undefined) ??
+        drafts.find((d) => d.personId === id);
       const d = byId.get(id);
       out.push({
         id,

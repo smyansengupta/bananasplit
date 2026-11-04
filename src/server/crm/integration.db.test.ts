@@ -139,7 +139,7 @@ afterAll(async () => {
 });
 
 describe("the CRM's phases together", () => {
-  it("sends a workflow's template through outreach, and drafts it for review when set to", async () => {
+  it("drafts a workflow's template for its owner to send, and sends nothing until they do", async () => {
     if (!reachable) return;
     const welcome = await as(owner, (ctx) =>
       createTemplate(ctx, { name: "Welcome", category: "welcome", subject: "Welcome, {{first_name|friend}}", body: "Hi {{first_name|there}},\n\n{{my_first_name}}" }),
@@ -161,13 +161,29 @@ describe("the CRM's phases together", () => {
 
     const ada = await as(member, (ctx) => createPerson(ctx, { name: "Ada Lovelace", primaryEmail: `ada-${tag}@harbor.org` }));
     await drainEvents();
-    const queued = await ownerDb.crmEmailMessage.findFirstOrThrow({ where: { organizationId: org, workflowId: wf.id } });
-    // From the record's owner (the member who added her), merged by outreach's renderer.
-    expect(queued).toMatchObject({ status: "QUEUED", personId: ada.id, mailboxUserId: member.id, subject: "Welcome, Ada", bodyText: "Hi Ada,\n\nMax" });
+    // Nothing queued or sent: a draft from the record's owner (the member who
+    // added her), merged by outreach's renderer, waiting in To approve.
+    expect(
+      await ownerDb.crmEmailMessage.count({ where: { organizationId: org, personId: ada.id, status: { in: ["QUEUED", "SENT"] } } }),
+    ).toBe(0);
+    const adaDraft = await ownerDb.crmEmailMessage.findFirstOrThrow({ where: { organizationId: org, workflowId: wf.id, personId: ada.id } });
+    expect(adaDraft).toMatchObject({ status: "DRAFT", mailboxUserId: member.id, subject: "Welcome, Ada", bodyText: "Hi Ada,\n\nMax" });
+    const adaAsk = await ownerDb.crmSuggestion.findFirstOrThrow({ where: { organizationId: org, kind: "DRAFT_EMAIL", targetId: ada.id } });
+    expect(adaAsk).toMatchObject({ status: "PENDING", assigneeId: member.id });
+    // Their Inbox says so, linked to Today's To approve with her card open.
+    const told = await ownerDb.notification.findFirstOrThrow({ where: { organizationId: org, userId: member.id, type: "CRM_REVIEW" } });
+    expect(told.linkUrl).toContain(`open=person%3A${ada.id}`);
+    // The member presses Send: it goes as the automation's (footer, cap), from their mailbox.
+    const adaSent = await as(member, (ctx) =>
+      composeEmail(ctx, { personId: ada.id, subject: adaDraft.subject!, body: adaDraft.bodyText!, draftId: adaDraft.id, confirmConflict: true }),
+    );
+    if (!("messageId" in adaSent)) throw new Error("expected a send");
+    const queued = await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: adaSent.messageId } });
+    expect(queued).toMatchObject({ status: "QUEUED", workflowId: wf.id, createdById: member.id });
     expect(await deliver(org, queued.id, undefined, queued.scheduledFor ?? new Date())).toBe("sent");
-    expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: queued.id } })).status).toBe("SENT");
+    expect((await ownerDb.crmSuggestion.findUniqueOrThrow({ where: { id: adaAsk.id } })).status).toBe("ACCEPTED");
 
-    // Set to "owner reviews first": an unsent draft and a Review suggestion; sending it from compose closes both.
+    // The old "owner reviews first" switch: the same draft and suggestion; sending it from compose closes both.
     await as(owner, (ctx) => setWorkflowStatus(ctx, wf.id, "OFF"));
     const review = await as(owner, (ctx) =>
       saveWorkflow(ctx, {
@@ -254,11 +270,12 @@ describe("the CRM's phases together", () => {
     const task = await ownerDb.task.findUniqueOrThrow({ where: { id: link.fromId } });
     expect(task).toMatchObject({ title: "Send Lin the deck", ownerId: member.id, createdById: member.id });
 
-    // No phone provider here: the text waits in the member's queue, saying why.
+    // A later text never goes on its own: it waits in the member's queue with its words.
     await crmSequenceJob(run({ enrollmentId: e.id, step: 1 }));
     const textStep = await ownerDb.crmActivity.findFirstOrThrow({ where: { organizationId: org, kind: "SEQUENCE_STEP", sourceId: `${e.id}-1` } });
     expect(textStep.subject).toBe("Text Lin Park");
-    expect(textStep.body).toMatch(/Telnyx or Twilio/);
+    expect(textStep.body).toMatch(/Nothing is texted without you/);
+    expect((textStep.meta as { text?: string }).text).toBe("Hi Lin, it's Max");
 
     await crmSequenceJob(run({ enrollmentId: e.id, step: 2 }));
     const steps = await withSystemOrgTx(org, ({ db }) => openCallSteps(db, org, member.id));
