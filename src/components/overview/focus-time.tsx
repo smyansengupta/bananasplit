@@ -97,8 +97,8 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
   const firstDue = tasks[0]?.dueKey;
   return (
     <div className="@container">
-      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:gap-8">
-        <div className="shrink-0 @2xl:w-44">
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:gap-6 @4xl:gap-8">
+        <div className="shrink-0 @2xl:w-40 @4xl:w-44">
           <p className="text-[17px] leading-snug font-semibold">
             {best ? dayWordOfKey(best.key, todayKey) : "No free hours"}
           </p>
@@ -110,7 +110,7 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
         </div>
 
         <ol
-          className="grid grid-cols-7 gap-1 @2xl:w-full @2xl:max-w-80 @2xl:shrink-0"
+          className="grid grid-cols-7 gap-1 @2xl:max-w-80 @2xl:min-w-36 @2xl:flex-1"
           aria-label="Free hours each day"
         >
           {week.days.map((d) => {
@@ -148,7 +148,7 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
           })}
         </ol>
 
-        <div className="min-w-0 space-y-1 @2xl:flex-1">
+        <div className="min-w-0 space-y-1 @2xl:min-w-44 @2xl:flex-1">
           {tasks.length > 0 && (
             <p className="text-muted-foreground text-[13px] leading-snug">
               {tasks.length === 1 ? "Next task due" : `Next ${tasks.length} due`}{" "}
