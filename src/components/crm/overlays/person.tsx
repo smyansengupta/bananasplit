@@ -150,10 +150,13 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       }
     }
 
-    const booking = await db.crmBookingPage.findFirst({
-      where: { organizationId: orgId, active: true, hostIds: { has: viewerId } },
+    // The "/" menu's booking links: your own first, then the organization's
+    // (Meetings > Booking links; docs/features/booking.md).
+    const bookingLinks = await db.crmBookingPage.findMany({
+      where: { organizationId: orgId, active: true, OR: [{ ownerUserId: viewerId }, { ownerUserId: null }] },
       orderBy: { createdAt: "asc" },
-      select: { slug: true },
+      select: { slug: true, title: true, ownerUserId: true },
+      take: 20,
     });
     return {
       loaded,
@@ -165,7 +168,13 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       conflict: conflict ? { name: conflictName!, what: conflict.what, at: conflict.at } : null,
       step,
       money,
-      booking: booking ? `${appOrigin()}/book/${booking.slug}` : null,
+      booking: [
+        ...bookingLinks.filter((b) => b.ownerUserId === viewerId),
+        ...bookingLinks.filter((b) => b.ownerUserId !== viewerId),
+      ].map((b) => ({
+        label: b.ownerUserId ? "my booking link" : b.title,
+        url: `${appOrigin()}/book/${b.slug}`,
+      })),
       templates: await composeTemplates(db, orgId),
       series: await db.crmSequence.findMany({
         where: { organizationId: orgId, archivedAt: null, status: "ON" },

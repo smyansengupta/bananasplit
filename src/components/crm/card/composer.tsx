@@ -26,7 +26,8 @@ import { TaskPreview } from "./task-preview";
  * and make with Create task (docs/features/crm.md, "Notes and tasks"). Sending
  * waits ten seconds with Undo: an email is queued to go then (Undo cancels
  * it), a text or a note is held here (Undo drops it; closing the card sends
- * it right away). `/` lists templates, your booking link and a voice note.
+ * it right away). `/` lists templates, your booking link (and the
+ * organization's) and a voice note.
  * A red line says when someone else in the organization reached them lately.
  *
  * Uses outreach's compose, the phone's texts, the timeline's log and the
@@ -70,7 +71,8 @@ export function Composer({
   /** "Kristine emailed them Oct 30", shown in red while on Email. */
   conflict: string | null;
   templates: readonly { id: string; name: string; subject: string | null; body: string }[];
-  booking: string | null;
+  /** Booking links to drop in: yours first, then the organization's (Meetings > Booking links). */
+  booking: readonly { label: string; url: string }[];
   seed?: ComposerSeed | null;
   /** Notes also go on these (their company). */
   alsoOn?: { kind: "company" | "deal"; id: string }[];
@@ -267,7 +269,7 @@ export function Composer({
           {conflict}
         </span>
       )}
-      {slash && (picks.length > 0 || booking || channel === "note") && (
+      {slash && (picks.length > 0 || booking.length > 0 || channel === "note") && (
         <div className="bg-popover ring-foreground/10 absolute right-0 bottom-full left-0 mb-2 grid max-h-64 gap-px overflow-y-auto rounded-2xl p-1.5 shadow-lg ring-1">
           {picks.map((t) => (
             <button
@@ -286,19 +288,24 @@ export function Composer({
               <span className="min-w-0 flex-1 truncate">{t.name}</span>
             </button>
           ))}
-          {booking && (
+          {booking.map((b) => (
             <button
+              key={b.url}
               type="button"
               className="hover:bg-muted flex items-center gap-2 rounded-xl px-2.5 py-2 text-start text-sm"
               onClick={() => {
-                setBody(`Here's my booking link if it's easier to pick a time: ${booking}`);
+                setBody(
+                  b.label === "my booking link"
+                    ? `Here's my booking link if it's easier to pick a time: ${b.url}`
+                    : `Here's a link to pick a time (${b.label}): ${b.url}`,
+                );
                 input.current?.focus();
               }}
             >
               <Link2 className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-              Insert my booking link
+              <span className="min-w-0 flex-1 truncate">Insert {b.label}</span>
             </button>
-          )}
+          ))}
           <div className="px-1 py-1">
             <VoiceNoteButton
               orgId={orgId}

@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
-/** One booking page now opens under CRM settings > Booking link. */
+import { bookingLinksHref } from "@/lib/crm/settings-sections";
+
+/** One booking page opens in Meetings > Booking links, its editor open (docs/features/booking.md). */
 export default async function BookingPageEditor({
   params,
 }: PageProps<"/app/[orgSlug]/crm/outreach/booking/[pageId]">) {
   const { orgSlug, pageId } = await params;
-  redirect(`/app/${orgSlug}/crm/settings/booking/${encodeURIComponent(pageId)}`);
+  redirect(bookingLinksHref(orgSlug, pageId));
 }

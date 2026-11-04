@@ -14,7 +14,7 @@ import { readUnsubscribeToken, sha256, TOKEN_RE } from "./tokens";
  * organization's context.
  */
 
-export type PublicKind = "booking" | "guest" | "self" | "bcc" | "track";
+export type PublicKind = "booking" | "booking-guest" | "guest" | "self" | "bcc" | "track";
 
 export interface PublicTarget {
   organizationId: string;

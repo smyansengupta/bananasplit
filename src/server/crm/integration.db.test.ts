@@ -400,7 +400,7 @@ describe("the CRM's phases together", () => {
     const page = await as(member, (ctx) => createBookingPage(ctx, "Intro call"));
     await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30 }));
     const loaded = await loadBooking(page.slug, now);
-    const slots = loaded!.slots;
+    const slots = loaded!.slots[30]!.map((s) => ({ start: new Date(s) }));
     const day = (d: Date) => localDateKey(d, tz);
     const hour = (d: Date) => Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(d));
     expect(slots.length).toBeGreaterThan(0);

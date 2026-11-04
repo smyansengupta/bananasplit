@@ -126,6 +126,7 @@ model User {
   crmPeopleOwned         CrmPerson[]          @relation("CrmPersonOwner")
   crmCompaniesOwned      CrmCompany[]         @relation("CrmCompanyOwner")
   crmDealsOwned          CrmDeal[]            @relation("CrmDealOwner")
+  bookingLinks           CrmBookingPage[]     @relation("BookingLinkOwner")
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -478,6 +479,7 @@ model Organization {
   crmScoreRules     CrmScoreRule[]
   crmQuotes         CrmQuote[]
   crmBookingPages   CrmBookingPage[]
+  bookings          Booking[]
   crmSuggestions    CrmSuggestion[]
   crmApiKeys        CrmApiKey[]
   crmWebhooks       CrmWebhook[]
@@ -545,6 +547,8 @@ enum NotificationType {
   CRM_NEW
   CRM_BOOKED
   CRM_DEAL
+  // Booking links (docs/features/booking.md): booked, moved or cancelled
+  MEETING_BOOKED
 }
 
 model Notification {
@@ -4188,6 +4192,7 @@ model CrmBookingPage {
   slug           String   @unique
   title          String
   description    String?
+  /// The default length; `durations` are the others a guest may pick.
   durationMin    Int      @default(30)
   bufferMin      Int      @default(0)
   /// Whose calendars it books; several means round-robin.
@@ -4203,9 +4208,90 @@ model CrmBookingPage {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Booking links (docs/features/booking.md). A link is the organization's
+  // (ownerUserId NULL: shared, round-robin or one named host, CRM add-on) or
+  // one member's own (ownerUserId set, one per member per space, any plan).
+  /// The member whose personal link this is; NULL for an organization link.
+  ownerUserId     String?
+  /// The zone its hours are in; NULL is the organization's.
+  timezone        String?
+  /// When it can be booked, each week: {"1": [[540, 720], ...], ... "7": [...]},
+  /// ISO weekday to minute ranges in `timezone`. NULL: the hosts' availability
+  /// (the Find a time grid), or weekdays 9 to 5 for a host who never set it.
+  hours           Json?
+  /// One-off dates: [{date: "YYYY-MM-DD", ranges: [[start, end], ...]}]. An
+  /// empty `ranges` is a day off; otherwise those ranges replace the week's.
+  dateOverrides   Json    @default("[]")
+  /// The other lengths a guest may pick, in minutes (durationMin is first).
+  durations       Int[]   @default([])
+  /// An online meeting: the organization's connected video account makes the link.
+  video           Boolean @default(true)
+  /// An address, or a link (a standing video room) when there is no account.
+  location        String?
+  /// Reminders to the host and the guest, in minutes before the start.
+  reminderMinutes Int[]   @default([1440, 60])
+  /// The most meetings it takes on one day (per host), NULL for no limit.
+  maxPerDay       Int?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?        @relation("BookingLinkOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
 
   @@unique([organizationId, id])
+  @@unique([organizationId, ownerUserId])
+}
+
+enum BookingStatus {
+  BOOKED
+  CANCELLED
+}
+
+/// One meeting booked on a booking link (docs/features/booking.md): the
+/// guest, their answers and the calendar event it made. It holds an email,
+/// so in the app only the host and owners and admins read it (RLS); the
+/// public page and the jobs write it on the service path.
+model Booking {
+  id              String        @id @default(cuid())
+  organizationId  String
+  pageId          String
+  /// The calendar event (Meetings, the host's calendar).
+  eventId         String        @unique
+  hostUserId      String
+  guestName       String
+  /// Lowercased.
+  guestEmail      String
+  /// The zone the guest picked the time in, for their emails.
+  guestTimeZone   String?
+  /// [{q, a}] as asked when they booked.
+  answers         Json          @default("[]")
+  startsAt        DateTime
+  endsAt          DateTime
+  status          BookingStatus @default(BOOKED)
+  /// They opened the link we emailed and said it's them. Until then nothing
+  /// in the CRM changes (no contact matched, no follow-ups stopped).
+  verifiedAt      DateTime?
+  /// sha256 of the guest's manage link token (/book/m/{token}).
+  tokenHash       String        @unique
+  cancelledAt     DateTime?
+  /// guest | host | system
+  cancelledBy     String?
+  cancelReason    String?
+  /// The CRM person it's on, once verified with the CRM on.
+  personId        String?
+  /// Their host left the organization and nobody else could take it.
+  needsHost       Boolean       @default(false)
+  /// Guest reminders already sent for the current start, in minutes before it.
+  remindedOffsets Int[]         @default([])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         CrmBookingPage @relation(fields: [organizationId, pageId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, pageId, createdAt])
+  @@index([organizationId, hostUserId, startsAt])
+  @@index([organizationId, guestEmail])
 }
 
 /// The review queue: anything AI, an automation, a connected app or

@@ -119,7 +119,7 @@ export function CompanyCard({
             channels={{ email: false, text: false }}
             conflict={null}
             templates={[]}
-            booking={null}
+            booking={[]}
           />
         )
       }

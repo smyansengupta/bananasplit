@@ -343,6 +343,52 @@ export const JOB_KINDS = {
     description:
       "One RSVP email to a guest (confirmation, waitlist, a spot opened, a reminder with a text, cancelled); key rsvp-email:{registrationId}:{template}[...], a reminder's rsvp-email:{registrationId}:reminder:r{offsetMinutes}:{startMinute}. A reminder is claimed as an EventReminderSend row before it is sent and released if the send fails.",
   }),
+  // ---- Booking links (docs/features/booking.md) ----
+  "booking-email": kind({
+    payload: z
+      .object({
+        bookingId: id,
+        template: z.enum(["booked", "moved", "cancelled", "reminder", "host-changed"]),
+        /** The start it was queued for (a moved booking skips the old time's). */
+        startsAt: isoInstant,
+        /** "reminder": how many minutes before the start. */
+        offsetMinutes: reminderOffset.optional(),
+      })
+      .strict()
+      .refine((p) => p.template !== "reminder" || p.offsetMinutes !== undefined, "a reminder names its offset"),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    sendsEmail: true,
+    maxAttempts: 8,
+    handler: () => import("@/server/booking/jobs").then((m) => m.bookingEmailJob),
+    description:
+      "One email to a booking's guest (booked with Confirm it's me, moved, cancelled, a reminder, a new host); key booking-email:{bookingId}:{template}[:r{offset}]:{startMinute}. Sends only what is still true; a reminder is claimed in Booking.remindedOffsets before it is sent and released if the send fails. From the organization's verified sender, else the platform's own.",
+  }),
+  "booking-sync": kind({
+    payload: z.object({ eventId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/booking/jobs").then((m) => m.bookingSyncJob),
+    description:
+      "A booked meeting was moved or deleted outside the booking code (the calendar, the meeting page, an import): move or cancel the booking with it and tell the guest; key booking-sync:{eventId}:{syncVersion}.",
+  }),
+  "booking-host-left": kind({
+    payload: z.object({ userId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/booking/jobs").then((m) => m.bookingHostLeftJob),
+    description:
+      "A member left: each of their upcoming bookings goes to another free host of the same organization link, or is flagged Needs a host with every owner and admin told; key booking-host-left:{userId}:{ms}.",
+  }),
   "rsvp-fanout": kind({
     payload: z
       .object({

@@ -80,7 +80,7 @@ export const CRM_SETTINGS_SECTIONS: readonly CrmSettingsSection[] = [
   {
     id: "booking",
     label: "Booking link",
-    description: "A page where people pick a time with you. It checks your calendar first.",
+    description: "Booking links live in Meetings now: yours and the organization's.",
     icon: "CalendarClock",
     who: "member",
   },
@@ -161,5 +161,14 @@ export function defaultSection(viewer: SettingsViewer): CrmSettingsSectionId {
 }
 
 export function crmSettingsHref(orgSlug: string, section: CrmSettingsSectionId, rest = ""): string {
+  // Booking links moved to Meetings > Booking links (docs/features/booking.md);
+  // the entry stays in CRM settings as a link there ("/{id}" opens that link's editor).
+  if (section === "booking") return bookingLinksHref(orgSlug, rest.replace(/^\//, "") || null);
   return `/app/${orgSlug}/crm/settings/${section}${rest}`;
+}
+
+/** Meetings > Booking links, optionally opening one link's editor. */
+export function bookingLinksHref(orgSlug: string, editId: string | null = null): string {
+  const base = `/app/${orgSlug}/meetings/booking`;
+  return editId ? `${base}?edit=${encodeURIComponent(editId)}` : base;
 }

@@ -2097,6 +2097,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "blob_get",
         "blob_list",
         "blob_put",
+        // Booking links: a link's hosts' busy times (times only) from
+        // every space they're in, in the link's own org context.
+        "booking_host_busy",
         // C4: reads "Task"/"TaskAssignee" without RLS so the task-visibility
         // policies cannot recurse into themselves. Answers only about
         // app.user_id().
@@ -2501,6 +2504,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // CRM outreach (20261105110000_crm_outreach): the public links' lookups.
       crm_public_target: "s",
       crm_booking_busy: "s",
+      // Booking links (20261107090000_booking_links).
+      booking_host_busy: "s",
       is_finance: "us",
       is_crm_manager: "us",
       // CRM databases (20261105100000_crm_databases): may CRM managers shape it?

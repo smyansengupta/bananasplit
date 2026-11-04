@@ -236,10 +236,16 @@ describe("reaching out against the local database", () => {
     const page = await as(owner, (ctx) => createBookingPage(ctx, "Coffee"));
     await as(owner, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 14 }));
     const loaded = await loadBooking(page.slug);
-    expect(loaded?.slots.length).toBeGreaterThan(0);
-    const slot = loaded!.slots[0]!;
+    expect(loaded?.slots[30]?.length).toBeGreaterThan(0);
+    const slot = { start: new Date(loaded!.slots[30]![0]!) };
     const r = await book(page.slug, { start: slot.start.toISOString(), name: "Kai Booker", email: `kai-${tag}@example.org`, answers: {} });
     expect(r.ok).toBe(true);
+    // Nothing goes into the CRM until the guest says the address is theirs.
+    expect(await ownerDb.crmPersonEmail.findFirst({ where: { organizationId: org, email: `kai-${tag}@example.org` } })).toBeNull();
+    const booked = await ownerDb.booking.findFirstOrThrow({ where: { organizationId: org, guestEmail: `kai-${tag}@example.org` } });
+    const { verifyBooking } = await import("@/server/booking/book");
+    const { bookingToken } = await import("@/server/booking/token");
+    expect(await verifyBooking(bookingToken(booked.id))).toBe(true);
     const person = await ownerDb.crmPersonEmail.findFirstOrThrow({ where: { organizationId: org, email: `kai-${tag}@example.org` } });
     const meeting = await ownerDb.crmActivity.findFirstOrThrow({
       where: { organizationId: org, kind: "MEETING", targets: { some: { targetId: person.personId } } },

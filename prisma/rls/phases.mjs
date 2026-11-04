@@ -72,6 +72,10 @@ const GRANTS = {
   CrmQuote: ["SIUD", "SIUD", ""],
   CrmQuoteLine: ["SIUD", "SIUD", ""],
   CrmBookingPage: ["SIUD", "SIUD", ""],
+  // Booking links (20261107090000_booking_links): a booking holds the
+  // guest's email, so members read only the ones they host (owners and
+  // admins all); every write is the service path's.
+  Booking: ["S", "SIUD", ""],
   CrmGuestLink: ["SIUD", "SIUD", ""],
   CrmSequence: ["SIUD", "SIUD", ""],
   CrmSequenceStep: ["SIUD", "SIUD", ""],
@@ -300,6 +304,7 @@ const NEW_TENANT_TABLES = [
   "CrmQuote",
   "CrmQuoteLine",
   "CrmBookingPage",
+  "Booking",
   "CrmGuestLink",
   "CrmSequence",
   "CrmSequenceStep",
@@ -567,6 +572,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "CRM_NEW",
           "CRM_BOOKED",
           "CRM_DEAL",
+          // Booking links (20261107090000_booking_links).
+          "MEETING_BOOKED",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         // Home's Decisions (20261102100000_home_widgets).
@@ -6255,6 +6262,110 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
     { value: { own: 1, move: 1, other_moves: 0, other_reads: ["Inbox"] } },
   );
+
+  // ======================= Booking links (20261107090000) =======================
+  // Rows the lookups need are committed by the owner first and removed after.
+  await clients.owner.query(
+    `INSERT INTO "Organization" ("id","name","slug","kind","personalOwnerId")
+       VALUES ('org_BKP','A personal space','bk-personal','PERSONAL','u_memberA');
+     INSERT INTO "Membership" ("id","userId","organizationId","role") VALUES ('m_bkp','u_memberA','org_BKP','OWNER');
+     INSERT INTO "CrmBookingPage" ("id","organizationId","slug","title","hostIds","ownerUserId","active","updatedAt")
+       VALUES ('bk_page','org_A','bk-member-a','Meet Member A','{u_memberA}','u_memberA',true,now());
+     INSERT INTO "Event" ("id","organizationId","title","startsAt","endsAt","createdById","hostUserId","updatedAt")
+       VALUES ('bk_ev','org_A','Guest: Meet','2099-05-04 15:00','2099-05-04 15:30','u_memberA','u_memberA',now()),
+              ('bk_home','org_BKP','Dentist','2099-05-04 17:00','2099-05-04 18:00','u_memberA',NULL,now()),
+              ('bk_otherorg','org_B','Their meeting','2099-05-04 19:00','2099-05-04 19:30','u_memberB','u_memberB',now());
+     INSERT INTO "Booking" ("id","organizationId","pageId","eventId","hostUserId","guestName","guestEmail","startsAt","endsAt","tokenHash","updatedAt")
+       VALUES ('bk_1','org_A','bk_page','bk_ev','u_memberA','Sam Guest','sam@example.org','2099-05-04 15:00','2099-05-04 15:30','${HASH("bk1")}',now());`,
+  );
+  try {
+    await tcase(
+      "P-BOOK-01",
+      "Booking: the host reads their own bookings, owners and admins read all of the organization's, other members and other organizations none; members write none of them",
+      "app_user",
+      A("u_memberA"),
+      async (q) => {
+        const s = {};
+        s.host_reads = await count(q, `SELECT count(*) n FROM "Booking" WHERE "id" = 'bk_1'`);
+        s.host_updates = await tryq(q, `UPDATE "Booking" SET "status" = 'CANCELLED' WHERE "id" = 'bk_1'`);
+        s.host_inserts = await tryq(
+          q,
+          `INSERT INTO "Booking" ("id","organizationId","pageId","eventId","hostUserId","guestName","guestEmail","startsAt","endsAt","tokenHash","updatedAt")
+           VALUES ('bk_2','org_A','bk_page','bk_ev2','u_memberA','X','x@example.org','2099-05-05 15:00','2099-05-05 15:30','h2',now())`,
+        );
+        await q(`SELECT app.set_context('u_treasA','org_A')`);
+        s.other_member_reads = await count(q, `SELECT count(*) n FROM "Booking"`);
+        await q(`SELECT app.set_context('u_adminA','org_A')`);
+        s.admin_reads = await count(q, `SELECT count(*) n FROM "Booking" WHERE "id" = 'bk_1'`);
+        s.admin_deletes = await tryq(q, `DELETE FROM "Booking" WHERE "id" = 'bk_1'`);
+        await q(`SELECT app.set_context('u_bothAB','org_B')`);
+        s.other_org_reads = await count(q, `SELECT count(*) n FROM "Booking"`);
+        s.call_busy = await tryv(
+          q,
+          `SELECT count(*) FROM app.booking_host_busy('bk_page', now()::timestamp, now()::timestamp + interval '1 day', NULL)`,
+        );
+        return s;
+      },
+      {
+        value: {
+          host_reads: 1,
+          host_updates: "42501",
+          host_inserts: "42501",
+          other_member_reads: 0,
+          admin_reads: 1,
+          admin_deletes: "42501",
+          other_org_reads: 0,
+          call_busy: "error:42501",
+        },
+      },
+    );
+    await tcase(
+      "P-BOOK-02",
+      "booking links' public lookups: a booking by its guest token's hash (ids only); the hosts' busy times (times only) from every space they're in, their Personal calendar included, only in the link's own organization's context, never another person's",
+      "app_service",
+      null,
+      async (q) => {
+        const s = {};
+        s.guest = (await q(`SELECT * FROM app.crm_public_target('booking-guest', '${HASH("bk1")}')`)).rows;
+        s.guest_wrong = (await q(`SELECT * FROM app.crm_public_target('booking-guest', '${HASH("nope")}')`))
+          .rows.length;
+        const busy = (except) =>
+          `SELECT "userId", to_char("startsAt", 'HH24:MI') s, to_char("endsAt", 'HH24:MI') e
+             FROM app.booking_host_busy('bk_page', '2099-05-04 00:00', '2099-05-05 00:00', ${except}) ORDER BY 2`;
+        s.no_context = (await q(busy("NULL"))).rows.length;
+        await q(`SELECT app.set_context(NULL,'org_B')`);
+        s.other_org = (await q(busy("NULL"))).rows.length;
+        await q(`SELECT app.set_context(NULL,'org_A')`);
+        s.busy = (await q(busy("NULL"))).rows;
+        s.except_own = (await q(busy("'bk_ev'"))).rows.map((r) => r.s);
+        s.columns = (
+          await q(`SELECT * FROM app.booking_host_busy('bk_page', '2099-05-04', '2099-05-05', NULL) LIMIT 1`)
+        ).fields.map((f) => f.name);
+        return s;
+      },
+      {
+        value: {
+          guest: [{ organizationId: "org_A", id: "bk_1" }],
+          guest_wrong: 0,
+          no_context: 0,
+          other_org: 0,
+          busy: [
+            { userId: "u_memberA", s: "15:00", e: "15:30" },
+            { userId: "u_memberA", s: "17:00", e: "18:00" },
+          ],
+          except_own: ["17:00"],
+          columns: ["userId", "startsAt", "endsAt"],
+        },
+      },
+    );
+  } finally {
+    await clients.owner.query(
+      `DELETE FROM "Booking" WHERE "id" IN ('bk_1','bk_2');
+       DELETE FROM "Event" WHERE "id" IN ('bk_ev','bk_home','bk_otherorg');
+       DELETE FROM "CrmBookingPage" WHERE "id" = 'bk_page';
+       DELETE FROM "Organization" WHERE "id" = 'org_BKP';`,
+    );
+  }
 
   // ======================= Deleting a database (20261103130000) =======================
   await tcase(
