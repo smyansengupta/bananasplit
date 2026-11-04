@@ -1588,8 +1588,7 @@ everyone's, less what the viewer snoozed. It is the first card on the CRM's
 home (`QueueSection`), with email, text (disabled until Telnyx or Twilio is
 connected; then an `sms:` link), call (`tel:`, then the log dialog), log and
 snooze; and the member's Inbox rows (kind `crm`, `inbox.ts`; cold and
-cadence rows stay on the home). Keep in touch per person (the person page)
-or for a whole list (Campaigns, with Undo). The daily `crm-outreach-daily`
+cadence rows stay on the home). Keep in touch is set per person. The daily `crm-outreach-daily`
 job (`daily.ts`, queued by `/api/cron/task-digest`) brings lapsed cadences
 back by setting their follow-up to today, writes campaign conversions and
 expires old mail suggestions.
@@ -1612,7 +1611,7 @@ expires old mail suggestions.
   each (`CRM_ASSIGNED`), and count contacted, replied, booked and converted
   (an RSVP to its event, an answer to its form, or an item won). Members
   preview and edit each message of their share and send from their own
-  mailbox; anyone moves people between members or splits what's left again.
+  mailbox.
 - Bulk email (`bulk-email.ts`): owners, admins and CRM managers; the sender
   check (the organization's own domain verified in Resend, which means SPF
   and DKIM) must pass; up to 2,000 a send, merged per person at send time,
@@ -1656,7 +1655,7 @@ expires old mail suggestions.
 - Self-update (`self-update.ts`, `/c/{token}`): name, email, title,
   workplace and phone, written to field history; offered in RSVP
   confirmations (`registered`, `promoted`) and form receipts when the person
-  is in the CRM; members turn it on or off on the person page.
+  is in the CRM. The link switches on the first time it is offered.
 - Giving (`giving.ts`): Finance income whose counterparty is the person or
   their company (finance roles only, as in Finance), won items in donor,
   grant and deal pipelines, recurring when the same payer gives at a

@@ -14,7 +14,7 @@ import { selfUpdateToken, selfUpdateUrl, sha256 } from "./tokens";
  * confirmation and in form receipts, so records stay fresh without paying
  * for enrichment. The token is derived from the person (tokens.ts), its
  * hash stored on CrmPerson.selfUpdateTokenHash when the link is first
- * offered; members can turn it off from the person's page.
+ * offered.
  */
 
 /** The person's link, switched on if it wasn't (call in the organization's transaction). */
@@ -45,10 +45,6 @@ export async function selfUpdateLinkFor(db: TxClient, organizationId: string, em
     select: { personId: true },
   });
   return row ? ensureSelfUpdateLink(db, organizationId, row.personId) : null;
-}
-
-export async function turnOffSelfUpdate(db: TxClient, organizationId: string, personId: string): Promise<void> {
-  await db.crmPerson.updateMany({ where: { id: personId, organizationId }, data: { selfUpdateTokenHash: null } });
 }
 
 export interface SelfUpdateView {

@@ -220,7 +220,7 @@ function FieldRow({
 }
 
 /** One field's editor; saves on blur, on Enter, or when something is picked. */
-export function FieldEditor({
+function FieldEditor({
   f,
   orgId,
   orgSlug,

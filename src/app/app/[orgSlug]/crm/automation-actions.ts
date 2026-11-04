@@ -16,7 +16,7 @@ import { describeContext, describeRequest } from "@/server/crm/describe";
 import { deleteGoal, saveGoal } from "@/server/crm/goals";
 import { deleteScoreRule, saveScoreRule } from "@/server/crm/scoring";
 import { dryRunWorkflow, type DryRunResult } from "@/server/crm/workflow-engine";
-import { deleteWorkflow, enableRecipe, parseWorkflowInput, saveWorkflow, setWorkflowStatus } from "@/server/crm/workflows";
+import { deleteWorkflow, enableRecipe, saveWorkflow, setWorkflowStatus } from "@/server/crm/workflows";
 import { AppError } from "@/server/db/errors";
 import { SpaceRefusedError, withOrgAction, withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
@@ -85,12 +85,6 @@ export const dryRunAction = crmAction(
     return { result: await dryRunWorkflow(ctx, workflowId, pick ?? null) };
   },
 );
-
-/** Checks a draft without saving it (the builder's live check). */
-export const checkWorkflowAction = crmAction(async (_ctx, workflow: unknown) => {
-  parseWorkflowInput(workflow);
-  return {};
-});
 
 // ---- Describe it in words ----------------------------------------------------------
 

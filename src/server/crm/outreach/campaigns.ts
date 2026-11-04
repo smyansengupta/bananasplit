@@ -168,33 +168,6 @@ export async function refreshFromList(actor: CrmActor, campaignId: string, roles
   return added;
 }
 
-/** Gives these people to another member (or splits them among several). */
-export async function reassign(actor: CrmActor, campaignId: string, targetIds: readonly string[], memberIds: readonly string[]): Promise<void> {
-  const { db, organizationId, userId } = actor;
-  if (memberIds.length === 0) throw new CrmError("Pick who takes them.");
-  for (const m of memberIds) await requireMember(db, organizationId, m);
-  const targets = await db.crmCampaignTarget.findMany({
-    where: { organizationId, campaignId, id: { in: [...targetIds] } },
-    select: { id: true, personId: true },
-  });
-  if (targets.length === 0) throw new CrmError("Pick who to move.");
-  const split = splitAmong(targets.map((t) => ({ id: t.id })), memberIds);
-  for (const t of targets) {
-    await db.crmCampaignTarget.update({ where: { id: t.id }, data: { assigneeId: split.get(t.id) ?? memberIds[0]! } });
-  }
-  const c = await db.crmCampaign.findFirst({ where: { id: campaignId, organizationId }, select: { name: true } });
-  await tellAssignees(db, organizationId, campaignId, c?.name ?? "a campaign", userId);
-}
-
-/** Splits everyone not reached yet evenly among these members again. */
-export async function rebalance(actor: CrmActor, campaignId: string, memberIds: readonly string[]): Promise<void> {
-  const todo = await actor.db.crmCampaignTarget.findMany({
-    where: { organizationId: actor.organizationId, campaignId, status: "TODO" },
-    select: { id: true },
-  });
-  if (todo.length) await reassign(actor, campaignId, todo.map((t) => t.id), memberIds);
-}
-
 export async function setTargetStatus(actor: CrmActor, targetId: string, status: CrmTargetStatus): Promise<void> {
   const res = await actor.db.crmCampaignTarget.updateMany({
     where: { id: targetId, organizationId: actor.organizationId },
