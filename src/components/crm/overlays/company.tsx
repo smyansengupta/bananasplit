@@ -151,7 +151,10 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
             },
           ]
         : []),
-      { label: "Owner", value: ownerLabel(company, shell.roles, names) ?? "Nobody" },
+      // A Personal space has one owner: no Owner fact, field or intro to ask a member for.
+      ...(shell.access.personal
+        ? []
+        : [{ label: "Owner", value: ownerLabel(company, shell.roles, names) ?? "Nobody" }]),
     ],
     openDeal: firstOpen
       ? {
@@ -162,7 +165,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
         }
       : null,
     intro:
-      quiet && best
+      quiet && best && !shell.access.personal
         ? {
             quiet: quiet.name,
             best: { id: best.id, name: best.name },
@@ -184,7 +187,7 @@ export async function CompanyOverlay({ shell, orgSlug, open }: OverlayProps<"com
       stage: d.closedAt ? `${d.stage.name} ${shortDate(d.closedAt)}` : d.stage.name,
       amount: d.amountCents !== null ? formatMoney(d.amountCents, d.currency) : null,
     })),
-    form: data.form,
+    form: shell.access.personal ? data.form.filter((f) => f.key !== "owner") : data.form,
     history: presentHistory(data.history, "company", data.fields, names),
     notes: data.notes.map((n) => {
       const author = data.authors.get(n.id) ?? null;

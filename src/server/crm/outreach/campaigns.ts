@@ -51,6 +51,11 @@ export async function createCampaign(
   roles: ReadonlyMap<string, RoleOwner>,
 ): Promise<{ id: string; people: number }> {
   const { db, organizationId, userId } = actor;
+  // Splitting a list among members needs members: a Personal space has one.
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { kind: true } });
+  if (org?.kind === "PERSONAL") {
+    throw new CrmError("Splitting a list is for organizations. Here it's just you: email them instead.");
+  }
   const name = input.name.trim().slice(0, 120);
   if (!name) throw new CrmError("Give the campaign a name.", ["name"]);
   const dueOn = input.dueOn ? new Date(`${input.dueOn}T12:00:00Z`) : null;

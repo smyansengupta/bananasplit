@@ -150,7 +150,13 @@ export async function todayRows(
   organizationId: string,
   viewerId: string,
   roles: ReadonlyMap<string, RoleOwner>,
-  options: { everyone: boolean; relationships: ReadonlyMap<string, string>; now?: Date },
+  options: {
+    everyone: boolean;
+    relationships: ReadonlyMap<string, string>;
+    now?: Date;
+    /** A Personal space: no shares of a list split among members. */
+    personal?: boolean;
+  },
 ): Promise<TodayData> {
   const now = options.now ?? new Date();
   let items = await followUpQueue(db, organizationId, viewerId, roles, {
@@ -208,6 +214,7 @@ export async function todayRows(
 
   const rows: TodayRow[] = [];
   for (const item of items) {
+    if (options.personal && item.reasons.every((r) => r.kind === "campaign")) continue;
     const first = item.reasons[0]!;
     const reply = item.reasons.find((r) => r.kind === "reply");
     const step = item.reasons.find((r) => r.kind === "step");

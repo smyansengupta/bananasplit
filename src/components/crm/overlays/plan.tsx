@@ -101,6 +101,8 @@ export async function PlanOverlay({ shell, orgSlug, open, searchParams }: Overla
   const relTypes = shell.access.settings?.relationshipTypes ?? [];
   const relationships = new Map(relTypes.map((t) => [t.id, t.label]));
   const me = members.get(viewerId) ?? "You";
+  // Splitting a list among members needs members (the server refuses it too).
+  if (open.type === "split" && shell.access.personal) return null;
 
   if (open.id === null) {
     const sender =

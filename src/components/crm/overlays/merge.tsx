@@ -117,7 +117,8 @@ export async function MergeOverlay({ shell, open }: OverlayProps<"merge">) {
               primaryEmail: p.primaryEmail,
               phone: p.phone,
               companyId: p.company?.name ?? null,
-              ownerId: ownerLabel(p, shell.roles, names),
+              // A Personal space has one owner: no Owner row to pick.
+              ownerId: shell.access.personal ? null : ownerLabel(p, shell.roles, names),
             },
           };
         }),

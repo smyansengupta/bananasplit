@@ -124,6 +124,7 @@ export function PeopleTable({
   pickedLists,
   members,
   series,
+  personal = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -143,6 +144,8 @@ export function PeopleTable({
   members: { id: string; name: string }[];
   /** Follow-up series that are on. */
   series: { id: string; name: string }[];
+  /** A Personal space: one person owns everything, so no Owner column or Change owner. */
+  personal?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
@@ -326,6 +329,7 @@ export function PeopleTable({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              {!personal && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="rounded-full">
@@ -344,6 +348,7 @@ export function PeopleTable({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              )}
               {!companies && (
                 <Button
                   size="sm"
@@ -440,8 +445,8 @@ export function PeopleTable({
                 <th className="px-3 py-3 font-semibold max-md:hidden">Last talked</th>
                 <th className="px-3 py-3 font-semibold max-xl:hidden">Stage</th>
                 <th className="px-3 py-3 text-right font-semibold max-xl:hidden">Deal value</th>
-                <th className="px-3 py-3 font-semibold max-sm:hidden">Next step</th>
-                <th className="px-3 py-3 pe-5 font-semibold max-lg:hidden">Owner</th>
+                <th className={cn("px-3 py-3 font-semibold max-sm:hidden", personal && "pe-5")}>Next step</th>
+                {!personal && <th className="px-3 py-3 pe-5 font-semibold max-lg:hidden">Owner</th>}
               </tr>
             </thead>
             <tbody>
@@ -551,16 +556,18 @@ export function PeopleTable({
                         disabled={trash || r.deleted}
                       />
                     </td>
-                    <td className="px-3 py-3 pe-5 max-lg:hidden">
-                      {r.owner ? (
-                        <span title={r.owner} className="inline-flex">
-                          <CrmAvatar name={r.owner} size={30} />
-                          <span className="sr-only">{r.owner}</span>
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Nobody</span>
-                      )}
-                    </td>
+                    {!personal && (
+                      <td className="px-3 py-3 pe-5 max-lg:hidden">
+                        {r.owner ? (
+                          <span title={r.owner} className="inline-flex">
+                            <CrmAvatar name={r.owner} size={30} />
+                            <span className="sr-only">{r.owner}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Nobody</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

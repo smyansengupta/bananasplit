@@ -94,10 +94,15 @@ export async function AutomationsSection({ shell, orgSlug, sp }: SectionProps) {
       >
         <SeriesList orgId={orgId} rows={series} empty="None yet. A series is who it's for, the steps and who sends." />
       </SettingsCard>
+      {/* A Personal space has nobody to split a list with: only its group emails. */}
       <SettingsCard
-        title="Split lists and group emails"
-        description="A list split among members to reach from their own mailbox, and the emails sent to many people from People."
-        action={<SplitListButton />}
+        title={shell.access.personal ? "Group emails" : "Split lists and group emails"}
+        description={
+          shell.access.personal
+            ? "The emails you sent to many people at once from People."
+            : "A list split among members to reach from their own mailbox, and the emails sent to many people from People."
+        }
+        action={shell.access.personal ? undefined : <SplitListButton />}
       >
         <SeriesList orgId={orgId} rows={lists} empty="None yet. To email a few people at once, pick them on People and press Email them." />
       </SettingsCard>

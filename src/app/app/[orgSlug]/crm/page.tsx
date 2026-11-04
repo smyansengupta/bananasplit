@@ -41,7 +41,9 @@ export default async function CrmTodayPage({
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const orgId = shell.org.id;
-  const everyone = one(sp.who) === "all";
+  // A Personal space is one person's: everything is theirs, so no Mine and Everyone's.
+  const personal = shell.access.personal;
+  const everyone = personal || one(sp.who) === "all";
   const show = one(sp.show) as TodayGroup | undefined;
   const q = one(sp.q)?.toLowerCase();
   const now = new Date();
@@ -59,6 +61,7 @@ export default async function CrmTodayPage({
       everyone,
       relationships,
       now,
+      personal,
     });
     const goals = await listGoals(db, orgId, localDateKey(now, tz), { current: true, take: 4 });
     const upcoming = await comingUp(db, orgId, shell.user.id, {
@@ -113,9 +116,9 @@ export default async function CrmTodayPage({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
-        toolbar={<TodayToolbar tabs={shell.tabs} />}
+        toolbar={<TodayToolbar tabs={shell.tabs} personal={personal} />}
       />
-      {!data.today.mine && !everyone && (
+      {!personal && !data.today.mine && !everyone && (
         <p className="text-muted-foreground -mt-3 mb-5 text-sm">
           Nothing of yours today, so this is everyone&apos;s.
         </p>
