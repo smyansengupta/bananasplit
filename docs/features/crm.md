@@ -2692,3 +2692,52 @@ Built 2026-11-04 on `claude/crm-cleanup`.
 - **Import:** an import's skipped rows show on `/crm/import` for whoever
   ran it, and the Inbox line for a file with skipped rows opens that page
   (it opened CRM settings > Import and export, which members can't open).
+
+## Second audit (security and adversarial)
+
+What the second round of audits found and how it's closed. Tests:
+`safety.db.test.ts`, `route.db.test.ts`, `booking.db.test.ts`,
+`emails.test.ts`, RLS `P-CRM-01`.
+
+- **Start approves only your own mailbox.** Pressing Start (or Enroll) is
+  the OK for a plan's first email only when it goes from the mailbox of
+  whoever pressed it, or they're an owner, admin or CRM manager. Making the
+  plan no longer counts: anyone can make one. Otherwise it's a draft for
+  the sender (`startMayApprove`).
+- **A plan that has run stays its maker's.** Once a plan has been on or has
+  anyone in it, only its maker, owners, admins and CRM managers may change
+  it, switch it off or on, or archive it (`assertMayEditPlan`; switching it
+  off no longer makes it anyone's). A first email goes on Start only as
+  Start froze it; with nothing frozen (the plan changed since) it's a draft.
+- **An email goes only where it was approved to.** The send job sends to
+  the address the message was approved for, and only while that address
+  is still the person's; a changed or merged address holds it as a draft
+  for a new OK.
+- **Calling off and stopping are theirs.** Cancelling a queued email: its
+  sender, whoever queued or approved it, or a CRM manager. Taking someone
+  out of a series: its sender, whoever added them, the series' maker, or a
+  CRM manager. Group mail is checked at send time against someone who still
+  runs the CRM. Untracked mail no longer counts as approved ("receipt").
+- **Inbound senders are read one way.** The Worker and the app both read
+  the From line's single address (angle brackets first) and treat a line
+  naming two addresses as unverified; DMARC's answer wins when there is
+  one; the app also requires the Worker's checked domain to be that
+  address's domain (`singleSender`, `fromAddress`, `verifiedSender`).
+- **Addresses follow the person.** With own-records access, a member reads,
+  changes or removes only the addresses of people they can see
+  (migration `20261108090000_crm_person_email_visibility`); adding an
+  address someone else holds says so in words.
+- **Drafts follow visibility.** Done on its own lists a held draft only to
+  someone who can see who it's to.
+- **Every paid call is held against the cap** while it runs (describing an
+  automation, Claude web research, enrichment, AI field batches, call
+  summaries: `holdForCall`, `reserveUnderCap`).
+- **Merge Undo keeps later changes.** Fields changed since the merge stay;
+  an address goes back only if it's still on the kept person; a plan that
+  was running comes back paused.
+- **Bookings** (docs/features/booking.md): guest details live on the
+  Booking, not the event; only admins and CRM managers add other people as
+  hosts, and the person is told; personal links start off; guest emails
+  carry no link the link's maker typed; one booking per link at a time;
+  moving or cancelling a booking moves or removes the meeting on the CRM
+  timeline and the deal's next-step date.
