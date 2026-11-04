@@ -449,8 +449,20 @@ export async function peoplePage(
   // ---- The board: one pipeline's deals, narrowed through their people by
   // the list and relationship picked; Owner is the deal's owner.
   if (onBoard) {
-    const pipeline =
-      covered.length === 1 ? covered[0]! : (defaultDealPipeline(dealF.stage ? covered : pipelines) ?? null);
+    // With no pipeline picked, the board opens on the one with the most open
+    // deals (an empty Deals pipeline next to a busy one would look like nothing's there).
+    const choices = dealF.stage ? covered : pipelines;
+    let busiest: (typeof choices)[number] | null = null;
+    if (covered.length !== 1 && choices.length > 1) {
+      const open = await db.crmDeal.groupBy({
+        by: ["pipelineId"],
+        where: { organizationId, deletedAt: null, closedAt: null, pipelineId: { in: choices.map((p) => p.id) } },
+        _count: { _all: true },
+      });
+      const top = open.sort((a, b) => b._count._all - a._count._all)[0];
+      busiest = top ? (choices.find((p) => p.id === top.pipelineId) ?? null) : null;
+    }
+    const pipeline = covered.length === 1 ? covered[0]! : (busiest ?? defaultDealPipeline(choices) ?? null);
     let board: PeopleBoard | null = null;
     let money: PeoplePageData["money"] = null;
     if (pipeline) {
