@@ -1,16 +1,20 @@
 "use client";
 
+import { useState } from "react";
+
 import { Mail, MessageCircle, Send, Users } from "@/components/icons";
 
 import { sendMemberNoteAction } from "@/app/app/[orgSlug]/people/actions";
 import { resendInvitation } from "@/app/app/[orgSlug]/settings/members/actions";
 import { AmbientActions } from "@/components/ambient/ambient-button";
+import { DismissNewcomer } from "@/components/overview/dismiss-newcomer";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 
 /**
  * People's ambient rows, over the list (Buttons canvas, People): someone
- * who joined this week, with Say hi and Add to a team, and an invite left
- * three days, with Resend invite. Gone once there's nothing to do.
+ * who joined this week, with Say hi and Add to a team and an x to dismiss
+ * them, and an invite left three days, with Resend invite. Gone once there's
+ * nothing to do.
  */
 
 export interface Newcomer {
@@ -42,14 +46,16 @@ export function PeopleAmbient({
   newcomers: Newcomer[];
   invites: WaitingInvite[];
 }) {
-  if (newcomers.length === 0 && invites.length === 0) return null;
+  const [gone, setGone] = useState<string[]>([]);
+  const shown = newcomers.filter((p) => !gone.includes(p.id));
+  if (shown.length === 0 && invites.length === 0) return null;
   const row = "flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5";
   return (
     <section
       aria-label="New and invited"
       className="bg-card edge rounded-card divide-border/70 divide-y px-[18px] py-1.5 sm:px-6"
     >
-      {newcomers.map((p) => {
+      {shown.map((p) => {
         const first = p.name?.trim().split(/\s+/)[0] ?? "them";
         return (
           <div key={p.id} className={row}>
@@ -79,6 +85,13 @@ export function PeopleAmbient({
                   href: `/app/${encodeURIComponent(orgSlug)}/people?view=chart`,
                 },
               ]}
+            />
+            <DismissNewcomer
+              orgId={orgId}
+              personId={p.id}
+              name={first}
+              onGone={() => setGone((ids) => [...ids, p.id])}
+              onBack={() => setGone((ids) => ids.filter((id) => id !== p.id))}
             />
           </div>
         );

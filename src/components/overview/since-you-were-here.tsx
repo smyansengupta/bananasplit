@@ -15,6 +15,7 @@ import { runAction } from "@/lib/run-action";
 import type { SinceYouWereHereData } from "@/server/overview/since-you-were-here";
 
 import { Insight, LinkChips } from "./connections";
+import { DismissNewcomer } from "./dismiss-newcomer";
 import { Arrive, useUnseen } from "./fresh";
 
 /**
@@ -31,6 +32,7 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
   const router = useRouter();
   const [pending, start] = useTransition();
   const [mine, setMine] = useState(false);
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const unseen = useUnseen(
     `bs.since:${orgId}`,
     data.rows.map((r) => r.id),
@@ -43,12 +45,13 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
       </p>
     );
   }
-  if (data.rows.length === 0) {
+  const left = data.rows.filter((r) => !r.newcomerId || !dismissed.includes(r.newcomerId));
+  if (left.length === 0) {
     return <p className="text-muted-foreground text-sm">Nothing new since {data.sinceLabel}.</p>;
   }
 
-  const rows = mine ? data.rows.filter((r) => r.forMe) : data.rows;
-  const anyForMe = data.rows.some((r) => r.forMe);
+  const rows = mine ? left.filter((r) => r.forMe) : left;
+  const anyForMe = left.some((r) => r.forMe);
 
   const seen = () =>
     start(async () => {
@@ -116,16 +119,29 @@ export function SinceYouWereHere({ orgId, data }: { orgId: string; data: SinceYo
                       {row.isNew ? (
                         <Badge variant="info">New</Badge>
                       ) : row.group === "people" && row.face && row.chips[0] ? (
-                        // Ambient: someone new joined. Say hi on their page.
-                        <AmbientButton
-                          action={{
-                            key: "say-hi",
-                            label: "Say hi",
-                            icon: MessageCircle,
-                            reason: "Joined since you were here",
-                            href: row.chips[0].href,
-                          }}
-                        />
+                        // Ambient: someone new joined. Say hi on their page, or dismiss it.
+                        <span className="flex shrink-0 items-center gap-1">
+                          <AmbientButton
+                            action={{
+                              key: "say-hi",
+                              label: "Say hi",
+                              icon: MessageCircle,
+                              reason: "Joined since you were here",
+                              href: row.chips[0].href,
+                            }}
+                          />
+                          {row.newcomerId && (
+                            <DismissNewcomer
+                              orgId={orgId}
+                              personId={row.newcomerId}
+                              name={row.chips[0].label}
+                              onGone={() => setDismissed((ids) => [...ids, row.newcomerId!])}
+                              onBack={() =>
+                                setDismissed((ids) => ids.filter((id) => id !== row.newcomerId))
+                              }
+                            />
+                          )}
+                        </span>
                       ) : (
                         <LinkChips
                           items={row.chips.slice(0, 2)}

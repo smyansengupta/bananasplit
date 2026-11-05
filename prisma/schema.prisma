@@ -1479,7 +1479,8 @@ model EventReminderSend {
 model UpNextDismissal {
   organizationId String
   userId         String
-  /// task | meeting | event | rsvp | poll
+  /// task | meeting | event | rsvp | poll, or newcomer: a "joined" row
+  /// dismissed from People and Since you were here (refId is the member)
   kind           String
   refId          String
   createdAt      DateTime @default(now())

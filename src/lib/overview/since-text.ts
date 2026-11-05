@@ -103,6 +103,8 @@ export interface SinceRow {
   group: SinceGroup;
   /** Whose change it was; null shows `count` in the face's place. */
   face: PersonFace | null;
+  /** One person joined: who, so the row can be dismissed. */
+  newcomerId?: string;
   count?: number;
   title: string;
   sub: string | null;
@@ -283,6 +285,7 @@ export function buildSince(f: SinceFacts): SinceYouWereHere {
       id: "people",
       group: "people",
       face: people.length === 1 ? people[0] : null,
+      newcomerId: people.length === 1 ? people[0].id : undefined,
       count: people.length,
       title:
         people.length === 1

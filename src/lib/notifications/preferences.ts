@@ -216,7 +216,7 @@ export const NOTIFICATION_TYPE_META: Record<
 > = {
   TASK_ASSIGNED: { label: "A task is assigned to me", group: "tasks" },
   TASK_MENTIONED: { label: "Someone @mentions me in a task or comment", group: "tasks" },
-  TASK_COMMENTED: { label: "Someone comments on a task I own", group: "tasks" },
+  TASK_COMMENTED: { label: "Someone comments on a task I'm on", group: "tasks" },
   TASK_DUE_REMINDER: { label: "A reminder before one of my tasks is due", group: "tasks" },
   TASK_DUE_TODAY: { label: "One of my tasks is due today", group: "tasks" },
   TASK_OVERDUE: { label: "One of my tasks is overdue", group: "tasks" },

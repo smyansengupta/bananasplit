@@ -52,9 +52,11 @@ const ACT =
   "relative z-10 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold ring-1 ring-current/25 transition-[box-shadow,transform] hover:ring-current/60 active:scale-[0.97] disabled:opacity-60";
 
 /**
- * A card's last row: its action buttons, then (right-aligned) its figure in
- * words ("12 going", "2 of 3 subtasks done") and its avatars. Every kind
- * uses it, so the cards keep one shape and stay short.
+ * A card's foot, the same on every kind: its action buttons on the last line
+ * at the left, its avatars at the right. A figure in words ("12 going", "2 of
+ * 3 subtasks done") sits on its own line above the buttons, or beside the
+ * avatars on a card with no buttons. When a narrow card can't fit the line,
+ * the avatars lift above it, so Done stays in the same spot on every card.
  */
 function FootRow({
   actions,
@@ -70,18 +72,22 @@ function FootRow({
   total: number;
 }) {
   if (!actions && figure === undefined && people.length === 0 && total === 0) return null;
+  const words = figure !== undefined && (
+    <span className="text-[13px] font-medium text-(--meta)">
+      <b className="text-current">{figure}</b>
+      {figureLabel ? ` ${figureLabel}` : ""}
+    </span>
+  );
   return (
-    <div className="relative z-10 mt-auto flex flex-wrap items-center gap-2 pt-3.5">
-      {actions}
-      <span className="ms-auto flex min-w-0 items-center gap-2.5">
-        {figure !== undefined && (
-          <span className="text-[13px] font-medium text-(--meta)">
-            <b className="text-current">{figure}</b>
-            {figureLabel ? ` ${figureLabel}` : ""}
-          </span>
-        )}
-        <FaceStack people={people} total={total} />
-      </span>
+    <div className="relative z-10 mt-auto pt-3.5">
+      {actions && words && <p className="mb-2.5">{words}</p>}
+      <div className="flex flex-wrap-reverse items-center gap-2">
+        {actions && <span className="flex min-w-0 flex-wrap items-center gap-2">{actions}</span>}
+        <span className="ms-auto flex min-w-0 items-center gap-2.5">
+          {!actions && words}
+          <FaceStack people={people} total={total} />
+        </span>
+      </div>
     </div>
   );
 }

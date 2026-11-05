@@ -10,6 +10,7 @@ import { parseDirectoryQuery } from "@/components/profile/directory-query";
 import { PeopleDirectory } from "@/components/profile/people-directory";
 import { Button } from "@/components/ui/button";
 import {
+  NEWCOMER_DISMISSAL,
   inviteReason,
   joinedThisWeek,
   newcomerReason,
@@ -40,10 +41,11 @@ function ambientRows(
   people: DirectoryPerson[],
   invites: { id: string; email: string; expiresAt: Date }[],
   viewerId: string,
+  dismissed: ReadonlySet<string>,
 ): { newcomers: Newcomer[]; waiting: WaitingInvite[] } {
   const now = new Date();
   const newcomers = people
-    .filter((p) => p.id !== viewerId && joinedThisWeek(p.joinedAt, now))
+    .filter((p) => p.id !== viewerId && !dismissed.has(p.id) && joinedThisWeek(p.joinedAt, now))
     .slice(0, AMBIENT_ROWS)
     .map((p) => ({
       id: p.id,
@@ -86,7 +88,7 @@ export default async function PeoplePage({
   const orgId = organization.id;
   const canInvite = can({ role }, "members.invite");
 
-  const [directory, joinCode, chart, invites] = await Promise.all([
+  const [directory, joinCode, chart, invites, dismissals] = await Promise.all([
     loadDirectory(orgId, organization.timezone),
     canInvite
       ? withOrgTx(orgId, ({ db }) => getOrCreateJoinCode(db, orgId, user.id))
@@ -108,6 +110,13 @@ export default async function PeoplePage({
           }),
         )
       : Promise.resolve([]),
+    // The newcomers this member dismissed (own-row RLS).
+    withOrgTx(orgId, ({ db }) =>
+      db.upNextDismissal.findMany({
+        where: { organizationId: orgId, userId: user.id, kind: NEWCOMER_DISMISSAL },
+        select: { refId: true },
+      }),
+    ),
   ]);
   const initialSheet = query.person
     ? await getPersonSheet(
@@ -120,7 +129,7 @@ export default async function PeoplePage({
   const initial = initialSheet || !query.person ? query : { ...query, person: null };
 
   const { total, teams, people } = directory;
-  const rows = ambientRows(people, invites, user.id);
+  const rows = ambientRows(people, invites, user.id, new Set(dismissals.map((d) => d.refId)));
   // Said hi already, and on a team: nothing left to do for them.
   const greeted = await saidHiTo(
     organization.id,

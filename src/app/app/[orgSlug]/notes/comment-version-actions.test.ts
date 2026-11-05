@@ -99,6 +99,8 @@ beforeEach(() => {
   actAs(ME, Role.MEMBER);
   db.noteComment.findMany.mockResolvedValue([]);
   db.noteVersion.findMany.mockResolvedValue([]);
+  db.noteShare.findMany.mockResolvedValue([]);
+  db.membership.findMany.mockResolvedValue([]);
   db.organization.findUnique.mockResolvedValue({ slug: "robotics" });
 });
 
@@ -145,6 +147,38 @@ describe("comments", () => {
       where: { id: "reply_9", noteId: "note_1", organizationId: "org_1", threadId: null },
       select: { id: true, authorId: true },
     });
+  });
+
+  it("tells the note's author about a new comment, in their Inbox", async () => {
+    db.note.findFirst.mockResolvedValue(note({ authorId: "u_author" }));
+    db.noteComment.create.mockResolvedValue({ id: "c1" });
+    db.noteShare.findMany.mockResolvedValue([]);
+    db.membership.findMany.mockResolvedValue([{ userId: "u_author" }]);
+    await addNoteComment("org_1", "note_1", { body: "Looks good" });
+    expect(notifyUsers).toHaveBeenCalledWith(
+      db,
+      "org_1",
+      ["u_author"],
+      expect.objectContaining({
+        type: NotificationType.TASK_COMMENTED,
+        linkUrl: "/app/robotics/notes/note_1?comment=c1",
+      }),
+    );
+  });
+
+  it("tells whoever a private note is shared with, not the commenter", async () => {
+    db.note.findFirst.mockResolvedValue(note({ visibility: NoteVisibility.PRIVATE, authorId: ME }));
+    db.noteComment.create.mockResolvedValue({ id: "c1" });
+    db.noteShare.findMany.mockResolvedValue([{ userId: "u_shared" }]);
+    db.membership.findMany.mockResolvedValue([{ userId: "u_shared" }]);
+    await addNoteComment("org_1", "note_1", { body: "Noted" });
+    expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers).toHaveBeenCalledWith(
+      db,
+      "org_1",
+      ["u_shared"],
+      expect.objectContaining({ type: NotificationType.TASK_COMMENTED }),
+    );
   });
 
   it("tells @mentioned members who can read the note, and nobody else", async () => {

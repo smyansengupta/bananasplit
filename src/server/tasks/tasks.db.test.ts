@@ -395,6 +395,37 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
     expect(second).toEqual([{ userId: p.alex.id }, { userId: p.smyan.id }]);
   });
 
+  it("a comment reaches everyone on the task, but never past a private task's audience", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "Inbox test: comments",
+      ownerId: p.alex.id,
+      dueDate: due(12),
+    });
+    const told = async () =>
+      (
+        await read(({ db }) =>
+          db.notification.findMany({
+            where: { taskId: id, type: NotificationType.TASK_COMMENTED },
+            select: { userId: true },
+          }),
+        )
+      )
+        .map((n) => n.userId)
+        .sort();
+
+    // The owner and whoever made it hear about it; the commenter doesn't.
+    as(p.kristine);
+    await act(svc.addComment)(s.cbcId, id, "First");
+    expect(await told()).toEqual([p.alex.id, p.oliver.id].sort());
+
+    // Made private, it stops reaching the earlier commenter outside it.
+    as(p.oliver);
+    await act(svc.updateTask)(s.cbcId, id, { visibility: TaskVisibility.PRIVATE });
+    await act(svc.addComment)(s.cbcId, id, "Second");
+    expect(await told()).toEqual([p.alex.id, p.alex.id, p.oliver.id].sort());
+  });
+
   it("a task left for anyone tells everyone who can see it, once", async () => {
     const id = await create({
       title: "B6 test: up for grabs",
