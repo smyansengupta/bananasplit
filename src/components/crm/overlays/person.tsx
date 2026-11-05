@@ -9,7 +9,7 @@ import { ownerLabel } from "@/server/crm/owners";
 import { phoneStatus } from "@/server/crm/phone/connection";
 import { timeline } from "@/server/crm/activity";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
-import { loadPerson } from "@/server/crm/records";
+import { extras, loadPersonCore } from "@/server/crm/records";
 import { conflictFor, contactable } from "@/server/crm/outreach/send";
 import { canStopEnrollment } from "@/server/crm/outreach/sequences";
 import { composeTemplates } from "@/server/crm/outreach/view";
@@ -36,12 +36,12 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
   const viewerId = shell.user.id;
   const now = new Date();
   const personId = open.id;
-  // Three reads at once, each in its own transaction (one transaction runs
-  // one query at a time): the person and what hangs off their record; what
-  // the card offers around them (their unanswered mail, a waiting step, the
-  // composer's templates, the series, the booking link); and the members.
-  // Whatever the viewer can't see stays out of the first, and the card shows
-  // nothing then.
+  // Reads at once, each in its own transaction (one transaction runs one
+  // query at a time): the form's context, the person, their timeline and
+  // history, what's been learned about them, what the card offers around
+  // them (their unanswered mail, a waiting step, the composer's templates,
+  // the series, the meeting link), and the members. Whatever the viewer can't
+  // see stays out of the person, and the card shows nothing then.
   const statusP = phoneStatus(orgId).catch(() => null);
   const membersP = crmMembers(orgId);
   const aroundP = withOrgTx(orgId, async ({ db }) => {
@@ -94,8 +94,8 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       orderBy: { occurredAt: "asc" },
       select: { id: true, subject: true, occurredAt: true },
     });
-    // The "/" menu's booking links: your own first, then the organization's
-    // (Meetings > Booking links; docs/features/booking.md).
+    // The "/" menu's meeting links: your own first, then the organization's
+    // (Meetings > Meeting links; docs/features/booking.md).
     const bookingLinks = await db.crmBookingPage.findMany({
       where: { organizationId: orgId, active: true, OR: [{ ownerUserId: viewerId }, { ownerUserId: null }] },
       orderBy: { createdAt: "asc" },
@@ -109,7 +109,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
         ...bookingLinks.filter((b) => b.ownerUserId === viewerId),
         ...bookingLinks.filter((b) => b.ownerUserId !== viewerId),
       ].map((b) => ({
-        label: b.ownerUserId ? "my booking link" : b.title,
+        label: b.ownerUserId ? "my meeting link" : b.title,
         url: `${appOrigin()}/book/${b.slug}`,
       })),
       templates: await composeTemplates(db, orgId),
@@ -139,10 +139,7 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
       })),
     };
   });
-  const recordP = withOrgTx(orgId, async ({ db }) => {
-    const loaded = await loadPerson(db, orgId, orgSlug, personId);
-    if (!loaded) return null;
-    const { person } = loaded;
+  const formP = withOrgTx(orgId, async ({ db }) => {
     const ids = await crmDatabaseIds(db, orgId);
     const def = ids.people
       ? await db.databaseDefinition.findFirst({
@@ -150,16 +147,17 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
           select: { columns: true },
         })
       : null;
-    const fctx = await formContext(db, orgId, shell.roles);
-    const form = await withRelationLabels(
-      db,
-      orgId,
-      personForm(person, loaded.fields, fctx, def?.columns),
-    );
-    const enrichment = await readEnrichment(db, orgId, { kind: "person", id: person.id });
+    return { columns: def?.columns, fctx: await formContext(db, orgId, shell.roles) };
+  });
+  const historyP = withOrgTx(orgId, async ({ db }) => {
+    const more = await extras(db, orgId, orgSlug, "person", personId);
+    return { more, timelineItems: await presentTimeline(db, orgId, more.timeline) };
+  });
+  const learnedP = withOrgTx(orgId, async ({ db }) => {
+    const enrichment = await readEnrichment(db, orgId, { kind: "person", id: personId });
     const summary = summaryOf(enrichment);
     // Their notes (the NOTE entries of the timeline), and their biggest issue with what it came from.
-    const notes = await timeline(db, orgId, { kind: "person", id: person.id }, { kinds: ["NOTE"], take: 100 });
+    const notes = await timeline(db, orgId, { kind: "person", id: personId }, { kinds: ["NOTE"], take: 100 });
     const issue = readIssue(enrichment);
     const issueKinds = issue?.sources.length
       ? await db.crmActivity.findMany({
@@ -167,8 +165,19 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
           select: { kind: true, direction: true },
         })
       : [];
-
-    const conflict = await conflictFor(db, orgId, person.id, viewerId, now);
+    return {
+      summary,
+      notes,
+      issue: issue ? { ...issue, from: issueSourceLabel(issue, issueKinds) } : null,
+      conflict: await conflictFor(db, orgId, personId, viewerId, now),
+    };
+  });
+  // Last of the reads: it waits on them while it holds its connection, and
+  // the pool hands connections out in order, so theirs come first.
+  const recordP = withOrgTx(orgId, async ({ db }) => {
+    const core = await loadPersonCore(db, orgId, personId);
+    if (!core) return null;
+    const { person } = core;
 
     // Money: what their company pledged through Finance and what came in.
     let money: PersonCardData["money"] = null;
@@ -195,26 +204,20 @@ export async function PersonOverlay({ shell, orgSlug, open }: OverlayProps<"pers
         };
     }
 
-    return {
-      loaded,
-      form,
-      summary,
-      notes,
-      issue: issue ? { ...issue, from: issueSourceLabel(issue, issueKinds) } : null,
-      conflict,
-      money,
-      timelineItems: await presentTimeline(db, orgId, loaded.timeline),
-    };
+    const [{ columns, fctx }, { more, timelineItems }] = await Promise.all([formP, historyP]);
+    const form = await withRelationLabels(db, orgId, personForm(person, more.fields, fctx, columns));
+    return { loaded: { ...core, ...more }, form, money, timelineItems };
   });
-  const [status, record, around, members, canEnrich] = await Promise.all([
+  const [status, record, learned, around, members, canEnrich] = await Promise.all([
     statusP,
     recordP,
+    learnedP,
     aroundP,
     membersP,
     crmCanEnrich(orgId),
   ]);
   if (!record) return <PersonCard orgId={orgId} orgSlug={orgSlug} data={null} />;
-  const data = { ...record, ...around };
+  const data = { ...record, ...learned, ...around };
   const { person } = data.loaded;
   const names = new Map(members.map((m) => [m.id, m.name]));
   const conflictName = data.conflict ? (names.get(data.conflict.userId) ?? "Another member") : null;

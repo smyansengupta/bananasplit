@@ -3,11 +3,12 @@
 import { Building2, Handshake, ImageUp, Loader2, User, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { searchCrmAction, type PickerHit } from "@/app/app/[orgSlug]/crm/actions";
 import {
   likelyExistingAction,
+  newCardStartAction,
   newCompanyAction,
   newDealAction,
   newPersonAction,
@@ -15,7 +16,7 @@ import {
 } from "@/app/app/[orgSlug]/crm/people-actions";
 import { AMBIENT_BUTTON, AmbientWhy } from "@/components/ambient/ambient-button";
 import { IMAGE_ACCEPT, sendImage, shrinkImage } from "@/components/crm/ai/image";
-import { useCrmOpen } from "@/components/crm/card/use-crm-open";
+import { setPendingOpen, useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { CrmPicker } from "@/components/crm/crm-picker";
 import { MemberOwnerField } from "@/components/tasks/task-fields";
 import { Button } from "@/components/ui/button";
@@ -24,13 +25,13 @@ import {
   FormDialogBody,
   FormDialogFoot,
   FormDialogHead,
+  FormDialogSwitch,
   FormError,
   FormField,
   FormRow,
   keepOpenForToasts,
 } from "@/components/ui/form-dialog";
 import { Input } from "@/components/ui/input";
-import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -59,12 +60,12 @@ import type { OrgMemberOption } from "@/server/members";
  * typed, a company still being typed included. Create opens the new card
  * in its place. Owner is New task's member picker; in a Personal space
  * there's nobody else to own it, so Owner isn't asked.
+ *
+ * It opens at once from what the page holds (CrmCreateHost), never waiting
+ * on the server. `?with=` brings what it starts with, a company (Add a
+ * person here) or the people or companies picked on People (Start a deal):
+ * read in the background, and it never overwrites what's been typed.
  */
-
-export interface NewCardWith {
-  company: { id: string; label: string } | null;
-  people: { id: string; label: string }[];
-}
 
 type Company = { id: string | null; label: string } | null;
 type Snapshot = {
@@ -115,7 +116,6 @@ const NO_RELATIONSHIP = "__none";
 export function NewCard({
   orgId,
   what: startWhat,
-  start,
   viewerId,
   members,
   pipelines,
@@ -124,7 +124,6 @@ export function NewCard({
 }: {
   orgId: string;
   what: CrmNewKind;
-  start: NewCardWith;
   viewerId: string;
   /** Everyone here, for Owner (New task's picker; you start as the owner). */
   members: OrgMemberOption[];
@@ -145,10 +144,10 @@ export function NewCard({
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
-  const [company, setCompany] = useState<Company>(start.company);
+  const [company, setCompany] = useState<Company>(null);
   // What's in the company box, picked or not: typed and never added, it still counts.
-  const [companyText, setCompanyText] = useState(start.company?.label ?? "");
-  const [people, setPeople] = useState(start.people);
+  const [companyText, setCompanyText] = useState("");
+  const [people, setPeople] = useState<{ id: string; label: string }[]>([]);
   const [relationship, setRelationship] = useState("");
   const [owner, setOwner] = useState<string | null>(viewerId);
   const [pipelineId, setPipelineId] = useState(pipelines[0]?.id ?? "");
@@ -161,6 +160,28 @@ export function NewCard({
   const [match, setMatch] = useState<Match>(null);
   // Bumped by Undo, so the company box starts over too.
   const [round, setRound] = useState(0);
+  // Left: it hides on the click, whether the URL or the next card follows.
+  const [left, setLeft] = useState(false);
+  const companyTouched = useRef(false);
+
+  const startsWith = params.get("with");
+  useEffect(() => {
+    if (!startsWith) return;
+    let live = true;
+    void newCardStartAction(orgId, startsWith)
+      .then((r) => {
+        if (!live || !r.ok) return;
+        if (r.company && !companyTouched.current) {
+          setCompany(r.company);
+          setCompanyText(r.company.label);
+        }
+        setPeople((now) => (now.length ? now : r.people));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [orgId, startsWith]);
 
   const snapshot = (): Snapshot => ({
     name,
@@ -181,11 +202,22 @@ export function NewCard({
     setCompanyText(s.companyText);
   };
 
-  /** Leaves the card: `open` (and what it started with) off the URL, or another card in its place. */
+  /**
+   * Leaves the card: `open` (and what it started with) off the URL, with no
+   * trip to the server, or another card in its place, its frame showing
+   * until it comes.
+   */
   const leave = (next: string | null) => {
     const p = new URLSearchParams(params.toString());
     p.delete("with");
-    router.replace(hrefWithOpen(pathname, p, next), { scroll: false });
+    const href = hrefWithOpen(pathname, p, next);
+    setLeft(true);
+    if (!next) {
+      window.history.replaceState(null, "", href);
+      return;
+    }
+    setPendingOpen(next);
+    router.replace(href, { scroll: false });
   };
 
   /**
@@ -245,6 +277,7 @@ export function NewCard({
     if (r.phone) setPhone(r.phone);
     if (r.title) setTitle(r.title);
     if (r.company) {
+      companyTouched.current = true;
       setCompany({ id: null, label: r.company });
       setCompanyText(r.company);
     }
@@ -382,7 +415,10 @@ export function NewCard({
         orgId={orgId}
         value={company}
         text={companyText}
-        onText={setCompanyText}
+        onText={(text) => {
+          companyTouched.current = true;
+          setCompanyText(text);
+        }}
         onChange={setCompany}
       />
     </FormField>
@@ -414,7 +450,12 @@ export function NewCard({
       .length === 3;
 
   return (
-    <FormDialog open onOpenChange={(o) => !o && leave(null)} onInteractOutside={keepOpenForToasts}>
+    <FormDialog
+      open={!left}
+      motion={left ? "none" : "full"}
+      onOpenChange={(o) => !o && leave(null)}
+      onInteractOutside={keepOpenForToasts}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -429,7 +470,7 @@ export function NewCard({
         className="flex min-h-0 flex-1 flex-col"
       >
         <FormDialogHead title={TITLES[what]} description={DESCRIPTIONS[what]}>
-          <KindSwitch value={what} onChange={pickKind} />
+          <FormDialogSwitch label="What to add" options={KINDS} value={what} onChange={pickKind} />
         </FormDialogHead>
 
         <FormDialogBody>
@@ -679,64 +720,6 @@ export function NewCard({
 
 const OUTLINE =
   "bg-transparent text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-current/8";
-
-/**
- * Person, Company or Deal: a small switch under the header's line, out of
- * the way of the fields (the name is the first of those). A radio group's
- * keyboard: Tab reaches the chosen one, the arrows move the choice.
- */
-function KindSwitch({
-  value,
-  onChange,
-}: {
-  value: CrmNewKind;
-  onChange: (next: CrmNewKind) => void;
-}) {
-  const buttons = useRef<Partial<Record<CrmNewKind, HTMLButtonElement | null>>>({});
-  const onKeyDown = (e: KeyboardEvent, index: number) => {
-    const step =
-      e.key === "ArrowRight" || e.key === "ArrowDown"
-        ? 1
-        : e.key === "ArrowLeft" || e.key === "ArrowUp"
-          ? -1
-          : 0;
-    if (step === 0 || e.altKey || e.ctrlKey || e.metaKey) return;
-    e.preventDefault();
-    const next = KINDS[(index + step + KINDS.length) % KINDS.length]!.value;
-    onChange(next);
-    buttons.current[next]?.focus();
-  };
-  return (
-    <div
-      role="radiogroup"
-      aria-label="What to add"
-      className={cn(segmentedTrack, "mt-3 h-9 self-start [&>button]:h-7")}
-    >
-      {KINDS.map((k, index) => {
-        const on = k.value === value;
-        const Icon = k.icon;
-        return (
-          <button
-            key={k.value}
-            ref={(node) => {
-              buttons.current[k.value] = node;
-            }}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            tabIndex={on ? 0 : -1}
-            onClick={() => onChange(k.value)}
-            onKeyDown={(e) => onKeyDown(e, index)}
-            className={cn(segmentedItem(on), "px-3")}
-          >
-            <Icon aria-hidden="true" className="max-sm:hidden" />
-            {k.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /**
  * Paste an email signature or a card photo here (or drop the photo, or

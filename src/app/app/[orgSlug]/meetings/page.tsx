@@ -28,6 +28,7 @@ import { conferenceStatus } from "@/lib/meetings/conference-status";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
+import { coHostedEventIds } from "@/server/booking/co-hosted";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
 import { meetingsWhere } from "@/server/meetings/where";
@@ -102,21 +103,22 @@ export default async function MeetingsPage({
   // Connecting a video account is the same right as any other integration:
   // owners and admins, not everyone who can make an event.
   const canConnectVideo = can(ctx, "integrations.write");
-  // Switching a provider on is platform setup, not club setup: only the
-  // people who run Bananasplit are told what is missing.
-  const platformAdmin = isPlatformAdmin(await getUserIdentity(user.id));
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
+  // Meetings booked on links they share that went to someone else.
+  const coHosted = canManage ? [] : await coHostedEventIds(org.id, user.id, now);
 
   const [
-    { events, counts, attendees, notes, meetingTypes, findOpen, reminded },
+    { events, counts, attendees, notes, reminded },
+    { meetingTypes, findOpen },
     registrations,
     connections,
     members,
+    identity,
   ] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
-        where: meetingsWhere(org.id, user.id, canManage, now),
+        where: meetingsWhere(org.id, user.id, canManage, now, coHosted),
         orderBy: { startsAt: "asc" },
         select: {
           id: true,
@@ -178,18 +180,6 @@ export default async function MeetingsPage({
               select: { id: true, eventId: true, title: true },
             })
           : [];
-      // A new meeting of a type starts where the last one was.
-      const meetingTypes = canManage
-        ? await getMeetingTypeDefaults(db, org.id, typeList)
-        : typeList;
-      // Find a time polls still taking answers, for the tab's count.
-      const findOpen = await db.availabilityPoll.count({
-        where: {
-          organizationId: org.id,
-          finalizedEventId: null,
-          OR: [{ closesAt: null }, { closesAt: { gte: now } }],
-        },
-      });
       // Which upcoming ones members were already reminded about (hosts read the audit log).
       const reminded = canManage
         ? await db.orgAuditLog.findMany({
@@ -206,16 +196,30 @@ export default async function MeetingsPage({
         counts,
         attendees,
         notes,
-        meetingTypes,
-        findOpen,
         reminded: new Set(reminded.map((r) => r.targetId)),
       };
     }),
+    withOrgTx(org.id, async ({ db }) => ({
+      // A new meeting of a type starts where the last one was.
+      meetingTypes: canManage ? await getMeetingTypeDefaults(db, org.id, typeList) : typeList,
+      // Find a time polls still taking answers, for the tab's count.
+      findOpen: await db.availabilityPoll.count({
+        where: {
+          organizationId: org.id,
+          finalizedEventId: null,
+          OR: [{ closesAt: null }, { closesAt: { gte: now } }],
+        },
+      }),
+    })),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
     // The create form's host and invite pickers, for whoever can make a meeting.
     canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
+    getUserIdentity(user.id),
   ]);
+  // Switching a provider on is platform setup, not club setup: only the
+  // people who run Bananasplit are told what is missing.
+  const platformAdmin = isPlatformAdmin(identity);
 
   const countOf = (eventId: string, status: string) =>
     counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;

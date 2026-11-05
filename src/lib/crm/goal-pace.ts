@@ -81,9 +81,6 @@ export interface PaceWords {
   pace: string;
   /** "So far $18,500. About $3,700 short of the $25,000 target." */
   sub: string;
-  /** For the two bars: so far and the pace, each as a share of the larger of target and pace. */
-  soFarShare: number;
-  paceShare: number;
 }
 
 /** The live pace line under the target (money in cents). */
@@ -99,7 +96,6 @@ export function paceWords(
   const pace = Math.max(actual, round(projected));
   const ended = Date.parse(today) > Date.parse(period.end);
   const short = target - (ended ? actual : pace);
-  const max = Math.max(target, pace, 1);
   return {
     pace: ended
       ? `It ended at ${formatGoal(metric, actual)}.`
@@ -111,9 +107,33 @@ export function paceWords(
         : short > 0
           ? `About ${formatGoal(metric, short)} short of the ${formatGoal(metric, target)} target.`
           : `That clears the ${formatGoal(metric, target)} target.`),
-    soFarShare: Math.min(1, actual / max),
-    paceShare: Math.min(1, pace / max),
   };
+}
+
+export type GoalStanding = "won" | "ahead" | "on-pace" | "behind";
+
+/** Hit, ahead, on pace or behind, from where it is against where it should be by now. */
+export function goalStanding(a: { share: number; pace: number; onTrack: boolean }): GoalStanding {
+  if (a.share >= 1) return "won";
+  if (!a.onTrack) return "behind";
+  return a.share >= a.pace * 1.1 ? "ahead" : "on-pace";
+}
+
+/** A goal's standing in a few words: "Goal hit", "On pace", "About $3,000 behind pace". */
+export function standingWords(
+  metric: GoalMetric,
+  a: { target: number; actual: number; share: number; pace: number; onTrack: boolean },
+): string {
+  const standing = goalStanding(a);
+  if (standing === "won") {
+    const over = Math.round((a.share - 1) * 100);
+    return over >= 1 ? `Goal hit, ${over}% over` : "Goal hit";
+  }
+  if (standing === "ahead") return "Ahead of pace";
+  if (standing === "on-pace") return "On pace";
+  const gap = a.target * a.pace - a.actual;
+  const rounded = isMoney(metric) ? Math.max(100, Math.round(gap / 100) * 100) : Math.max(1, Math.ceil(gap));
+  return `About ${formatGoal(metric, rounded)} behind pace`;
 }
 
 /** The card's title: "Money won this quarter", "Kristine's replies this year". */

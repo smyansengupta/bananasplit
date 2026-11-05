@@ -10,7 +10,7 @@ import { createHash, createHmac, randomBytes } from "node:crypto";
 
 function secret(): string {
   const value = process.env.AUTH_SECRET;
-  if (!value) throw new Error("AUTH_SECRET is required to sign booking links");
+  if (!value) throw new Error("AUTH_SECRET is required to sign meeting links");
   return value;
 }
 

@@ -105,17 +105,29 @@ function gridDay(key: string): number {
   return (weekdayOfKey(key) + 6) % 7;
 }
 
+/** One formatter per zone: making one costs far more than using it, and every slot asks several times. */
+const clocks = new Map<string, Intl.DateTimeFormat>();
+
+function clockIn(tz: string): Intl.DateTimeFormat {
+  let clock = clocks.get(tz);
+  if (!clock) {
+    clock = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    clocks.set(tz, clock);
+  }
+  return clock;
+}
+
 /** The local date key and minutes since local midnight of `instant` in `tz`. */
 export function wallClock(instant: Date, tz: string): { key: string; min: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(instant);
+  const parts = clockIn(tz).formatToParts(instant);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
   return { key: `${get("year")}-${get("month")}-${get("day")}`, min: Number(get("hour")) * 60 + Number(get("minute")) };
 }

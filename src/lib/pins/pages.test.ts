@@ -165,7 +165,7 @@ describe("the CRM's pages", () => {
     // Old pages that only redirect now (deals, calls, forecast, handover) aren't pages to pin.
     expect(describePath("cbc", "/app/cbc/crm/deals")).toBeNull();
     expect(describePath("cbc", "/app/cbc/crm/settings/automations")).toMatchObject({
-      label: "CRM settings, Automations",
+      label: "CRM settings, Automations and sending",
     });
     // A record's old page redirects to its card: nothing to pin or list.
     expect(describePath("cbc", "/app/cbc/crm/people/abc123")).toBeNull();

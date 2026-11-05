@@ -20,6 +20,7 @@ import { peopleListCounts } from "@/server/crm/people-view";
 import { listPipelines } from "@/server/crm/pipelines";
 import { createPerson, findCompanyByName, updatePerson } from "@/server/crm/people";
 import { enqueueJob } from "@/server/jobs/enqueue";
+import { getOrgMembersForPicker } from "@/server/members";
 
 import { checkInput, crmAction, toResult } from "./run";
 
@@ -213,6 +214,54 @@ export const keepBothAction = crmAction(async (ctx, _a, kind: "person" | "compan
     },
   });
   return {};
+});
+
+const NEW_CARD_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * What the New card starts with (`?with=`): a company (`company:<id>`) or the
+ * people picked on People (`person:<id>,<id>`), with their company when they
+ * share one. Read after the card is open, so it never waits on this.
+ */
+/** The create dialogs' people (Owner, Who): read when one opens, not with every CRM page. */
+export const pickerMembersAction = crmAction(async (ctx) => ({
+  members: await getOrgMembersForPicker(ctx.organizationId),
+}));
+
+export const newCardStartAction = crmAction(async (ctx, _a, raw: string) => {
+  const orgId = ctx.organizationId;
+  const none = {
+    company: null as { id: string; label: string } | null,
+    people: [] as { id: string; label: string }[],
+  };
+  const text = typeof raw === "string" ? raw.slice(0, 1400) : "";
+  const [head, rest] = text.split(":", 2) as [string, string | undefined];
+  const ids = (rest ?? "")
+    .split(",")
+    .filter((v) => NEW_CARD_ID.test(v))
+    .slice(0, 20);
+  if (!ids.length) return none;
+  if (head === "company") {
+    const c = await ctx.db.crmCompany.findFirst({
+      where: { organizationId: orgId, id: ids[0], deletedAt: null },
+      select: { id: true, name: true },
+    });
+    return { ...none, company: c ? { id: c.id, label: c.name } : null };
+  }
+  if (head !== "person") return none;
+  const rows = await ctx.db.crmPerson.findMany({
+    where: { organizationId: orgId, id: { in: ids }, deletedAt: null },
+    select: { id: true, name: true, company: { select: { id: true, name: true } } },
+  });
+  const people = ids
+    .map((id) => rows.find((r) => r.id === id))
+    .filter((r): r is (typeof rows)[number] => Boolean(r));
+  const companies = new Set(people.map((p) => p.company?.id).filter(Boolean));
+  const only = companies.size === 1 ? people.find((p) => p.company)?.company : null;
+  return {
+    company: only ? { id: only.id, label: only.name } : null,
+    people: people.map((p) => ({ id: p.id, label: p.name })),
+  };
 });
 
 /** The New card's "already here" line, as the name, address, number or website is typed. */

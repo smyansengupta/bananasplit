@@ -1,19 +1,24 @@
 "use client";
 
-import { Plus } from "@/components/icons";
+import { CircleCheck, Plus, Target } from "@/components/icons";
 import Link from "next/link";
 
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
+import { IconChip } from "@/components/ui/stat";
 import { formatMoney } from "@/lib/crm/fields";
 import type { GoalMetric } from "@/lib/crm/forecast";
+import { goalStanding, standingWords } from "@/lib/crm/goal-pace";
 import { cn } from "@/lib/utils";
 
+import { GoalGauge } from "./goal-gauge";
+
 /**
- * Goals on Today's right: each goal's progress, and a click on one opens
- * its card (?open=goal:<id>): to change it for whoever sets goals,
- * read-only for everyone else. Hovering the block shows a round
- * + in its corner for a new goal (always there when there are none yet, for
- * whoever may set them).
+ * Goals on Today's right, as a score: each goal a ring with the big number
+ * and where it stands against the pace, and a goal hit fills in green with
+ * its check. A click on one opens its card (?open=goal:<id>): to change it
+ * for whoever sets goals, read-only for everyone else. Hovering the block
+ * shows a round + in its corner for a new goal (always there when there
+ * are none yet, for whoever may set them).
  */
 
 export interface TodayGoal {
@@ -25,17 +30,25 @@ export interface TodayGoal {
   actual: number;
   target: number;
   share: number;
+  /** Where it should be by now, 0 to 1. */
+  pace: number;
   onTrack: boolean;
 }
 
 export function TodayGoals({ goals, canEdit }: { goals: TodayGoal[]; canEdit: boolean }) {
   const { hrefFor } = useCrmOpen();
   if (goals.length === 0 && !canEdit) return null;
+  const hit = goals.filter((g) => g.share >= 1).length;
   return (
-    <section className="group/goals bg-card ring-foreground/6 relative space-y-4 rounded-[22px] p-5 ring-1">
+    <section className="group/goals bg-card ring-foreground/6 relative space-y-3 rounded-[22px] p-5 ring-1">
       <div className="flex items-center gap-2">
         <h2 className="heading min-w-0 flex-1 text-base">Goals this quarter</h2>
-        {canEdit && (
+        {hit > 0 && (
+          <span className="text-muted-foreground text-sm tabular-nums">
+            {hit} of {goals.length} hit
+          </span>
+        )}
+        {canEdit && goals.length > 0 && (
           <Link
             href={hrefFor("goal")}
             scroll={false}
@@ -43,8 +56,7 @@ export function TodayGoals({ goals, canEdit }: { goals: TodayGoal[]; canEdit: bo
             title="Add a goal"
             className={cn(
               "bg-muted hover:bg-foreground/10 focus-glow grid size-7 place-items-center rounded-full transition-opacity outline-none",
-              goals.length > 0 &&
-                "opacity-0 group-focus-within/goals:opacity-100 group-hover/goals:opacity-100",
+              "opacity-0 group-focus-within/goals:opacity-100 group-hover/goals:opacity-100",
             )}
           >
             <Plus className="size-3.5" aria-hidden="true" />
@@ -52,36 +64,61 @@ export function TodayGoals({ goals, canEdit }: { goals: TodayGoal[]; canEdit: bo
         )}
       </div>
       {goals.length === 0 && (
-        <p className="text-muted-foreground text-sm">No goals yet. Set one and Today keeps the score.</p>
+        <Link
+          href={hrefFor("goal")}
+          scroll={false}
+          className="hover:bg-muted/60 focus-glow -mx-2 flex items-center gap-3 rounded-2xl p-2 outline-none"
+        >
+          <IconChip icon={Target} />
+          <span className="min-w-0 flex-1 text-sm">Set a goal and watch it fill up here.</span>
+        </Link>
       )}
-      {goals.map((g) => {
-        const fmt = (n: number) => (g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US"));
-        return (
-          <Link
-            key={g.id}
-            href={hrefFor({ kind: "goal", id: g.id })}
-            scroll={false}
-            title={canEdit ? "Change this goal" : "See this goal"}
-            className="hover:bg-muted/60 focus-glow -mx-2 block space-y-1.5 rounded-xl px-2 py-1 outline-none"
-          >
-            <div className="flex items-baseline gap-2 text-sm">
-              <span className="min-w-0 flex-1 truncate font-semibold">
-                {g.name || g.metricLabel}
-                {g.who && <span className="text-muted-foreground font-normal">, {g.who}</span>}
-              </span>
-              <span className="text-muted-foreground shrink-0 tabular-nums">
-                {fmt(g.actual)} of {fmt(g.target)}
-              </span>
-            </div>
-            <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-              <div
-                className={g.onTrack ? "bg-foreground h-full rounded-full" : "h-full rounded-full bg-(--attention)"}
-                style={{ width: `${Math.min(100, Math.round(g.share * 100))}%` }}
-              />
-            </div>
-          </Link>
-        );
-      })}
+      {goals.map((g) => (
+        <GoalRow key={g.id} goal={g} href={hrefFor({ kind: "goal", id: g.id })} canEdit={canEdit} />
+      ))}
     </section>
+  );
+}
+
+function GoalRow({ goal: g, href, canEdit }: { goal: TodayGoal; href: string; canEdit: boolean }) {
+  const fmt = (n: number) => (g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US"));
+  const won = goalStanding(g) === "won";
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      title={canEdit ? "Change this goal" : "See this goal"}
+      className={cn(
+        "focus-glow -mx-2 flex items-center gap-3.5 rounded-2xl p-2 outline-none",
+        won ? "bg-tint-success" : "hover:bg-muted/60",
+      )}
+    >
+      <GoalGauge
+        share={g.share}
+        pace={g.pace}
+        onTrack={g.onTrack}
+        size={76}
+        label={`${fmt(g.actual)} of ${fmt(g.target)}`}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">
+          {g.name || g.metricLabel}
+          {g.who && <span className="font-normal opacity-70">, {g.who}</span>}
+        </span>
+        <span className="mt-1 flex items-baseline gap-1.5">
+          <b className="numeral min-w-0 truncate text-[24px]">{fmt(g.actual)}</b>
+          <span className="shrink-0 text-xs opacity-70">of {fmt(g.target)}</span>
+        </span>
+        <span
+          className={cn(
+            "mt-1 flex items-center gap-1 text-xs",
+            won ? "text-tint-success-foreground font-semibold" : "text-muted-foreground",
+          )}
+        >
+          {won && <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />}
+          <span className="truncate">{standingWords(g.metric, g)}</span>
+        </span>
+      </span>
+    </Link>
   );
 }

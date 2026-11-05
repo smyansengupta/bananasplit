@@ -48,10 +48,10 @@ describe("the org keys catalog", () => {
   });
 
   it("says what to do in plain words", () => {
-    expect(NO_AI_KEY_MESSAGE).toContain("CRM settings > AI");
-    expect(missingKeyMessage("Telnyx or Twilio")).toBe("Add your Telnyx or Twilio key in CRM settings > AI first.");
+    expect(NO_AI_KEY_MESSAGE).toContain("CRM settings > Connections");
+    expect(missingKeyMessage("Telnyx or Twilio")).toBe("Add your Telnyx or Twilio key in CRM settings > Connections first.");
     expect(capReachedMessage(2500)).toBe(
-      "Your organization has reached this month's spending cap of $25. An owner or admin can raise it in CRM settings > AI.",
+      "Your organization has reached this month's spending cap of $25. An owner or admin can raise it in CRM settings > Connections.",
     );
     expect(capReachedMessage(1999)).toContain("$19.99");
     const copy = JSON.stringify([ORG_KEYS, ORG_KEY_GROUPS, NO_AI_KEY_MESSAGE]);

@@ -1,6 +1,7 @@
 import type { Role } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import { withSystemOrgTx, type MemberContext, type TxClient } from "@/server/db/context";
+import { ConflictError } from "@/server/db/errors";
 import { updateEvent } from "@/server/events/service";
 
 import { cancelBooking, moveBooking } from "./book";
@@ -45,11 +46,17 @@ export async function hostCancel(ctx: MemberContext, bookingId: string, note: st
 export async function takeBooking(ctx: MemberContext, bookingId: string): Promise<void> {
   await readable(ctx, bookingId);
   if (!can(ctx, "settings.general.write")) throw new BookingActionError("Owners and admins hand bookings over.");
-  await withSystemOrgTx(ctx.organizationId, { userId: ctx.userId }, async ({ db }) => {
-    const b = await db.booking.findFirst({ where: { id: bookingId, organizationId: ctx.organizationId }, include: { page: true } });
-    if (!b || b.status !== "BOOKED") return;
-    await reassign(db, b, ctx.userId, ctx.role);
-  });
+  try {
+    await withSystemOrgTx(ctx.organizationId, { userId: ctx.userId }, async ({ db }) => {
+      const b = await db.booking.findFirst({ where: { id: bookingId, organizationId: ctx.organizationId }, include: { page: true } });
+      if (!b || b.status !== "BOOKED") return;
+      await reassign(db, b, ctx.userId, ctx.role);
+    });
+  } catch (error) {
+    // The unique (host, start) index: they already have a booked meeting then.
+    if (error instanceof ConflictError) throw new BookingActionError("You already have a meeting booked at that time.");
+    throw error;
+  }
 }
 
 async function reassign(
@@ -99,7 +106,7 @@ export async function syncBookingToEvent(organizationId: string, eventId: string
  * booking-host-left:{userId}: a member left. Each of their upcoming
  * bookings goes to another host of the same organization link who is free
  * then (round-robin's first pick), with the guest told who they'll meet;
- * a booking nobody can take is flagged "Needs a host" in Booking links and
+ * a booking nobody can take is flagged "Needs a host" in Meeting links and
  * every owner and admin is told in their Inbox. Nothing is left without
  * someone seeing it.
  */
@@ -120,8 +127,8 @@ export async function bookingHostLeft(organizationId: string, userId: string, no
     ).map((m) => m.userId);
     for (const b of upcoming) {
       let moved = false;
+      const tz = pageTimeZone(b.page, org?.timezone ?? "UTC");
       if (!b.page.ownerUserId && b.page.hostIds.length > 0) {
-        const tz = pageTimeZone(b.page, org?.timezone ?? "UTC");
         const durationMin = Math.round((b.endsAt.getTime() - b.startsAt.getTime()) / 60_000);
         const slot = (
           // Notice and how far ahead were for the guest; covering a booked meeting ignores them.
@@ -149,7 +156,7 @@ export async function bookingHostLeft(organizationId: string, userId: string, no
         await db.booking.update({ where: { id: b.id }, data: { needsHost: true } });
         await tellHosts(db, organizationId, admins, {
           title: `${b.guestName}'s meeting needs a host`,
-          body: `${b.page.title}, ${whenText(b.startsAt, org?.timezone ?? "UTC")}. Its host left the organization. Take it or cancel it in Booking links.`,
+          body: `${b.page.title}, ${whenText(b.startsAt, tz)}. Its host left the organization. Take it or cancel it in Meeting links.`,
           eventId: null,
           key: `${b.id}:needs-host`,
         });

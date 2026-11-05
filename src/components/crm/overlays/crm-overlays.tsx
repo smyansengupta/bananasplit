@@ -1,22 +1,26 @@
 import { Fragment, type ReactNode } from "react";
 
 import type { CrmShell } from "@/app/app/[orgSlug]/crm/shell";
+import { periodOf } from "@/lib/crm/forecast";
 import {
   formatOpen,
   OPEN_PARAM,
+  opensInstantly,
   parseOpen,
   type CrmOpen,
   type CrmOpenKind,
 } from "@/lib/crm/overlay";
+import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 
+import { AutomationOverlay, RecipesOverlay, ScoringOverlay } from "./automation";
 import { CompanyOverlay } from "./company";
+import { CrmCreateHost, type CrmCreateData } from "./create-host";
 import { DealOverlay } from "./deal";
 import { GoalOverlay } from "./goal";
 import { AskOverlay } from "./ask";
 import { CallsOverlay } from "./calls";
 import { LogOverlay } from "./log";
 import { MergeOverlay } from "./merge";
-import { NewOverlay } from "./new";
 import { PlanOverlay } from "./plan";
 import { PersonOverlay } from "./person";
 import { PowerOverlay } from "./power";
@@ -35,6 +39,11 @@ import { TextOverlay } from "./text";
  * on CrmCard), then put it in CRM_CARDS below under its `open` kind. A kind
  * with no entry opens nothing. The card is keyed by its `open` value, so
  * switching from one person to another starts the card fresh.
+ *
+ * The create dialogs (New person, company and deal, a new goal) aren't here:
+ * what they need comes with every page, for CrmCreateHost, so `?open=` for
+ * one opens it at once with no trip to the server. Only their people pickers
+ * fill in after (the members aren't read on every page).
  */
 
 export interface OverlayProps<K extends CrmOpenKind = CrmOpenKind> {
@@ -55,7 +64,6 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   deal: DealOverlay,
   power: PowerOverlay,
   log: LogOverlay,
-  new: NewOverlay,
   merge: MergeOverlay,
   goal: GoalOverlay,
   plan: PlanOverlay,
@@ -63,7 +71,37 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   quote: QuoteOverlay,
   calls: CallsOverlay,
   text: TextOverlay,
+  automation: AutomationOverlay,
+  recipes: RecipesOverlay,
+  scoring: ScoringOverlay,
 };
+
+/** What the create dialogs open from: small, and the same for every page. */
+function createData(shell: CrmShell): CrmCreateData {
+  const today = localDateKey(new Date(), effectiveTimezone(null, shell.org));
+  return {
+    orgId: shell.org.id,
+    viewerId: shell.user.id,
+    personal: shell.access.personal,
+    canSetGoals: shell.access.manager,
+    viewerName: shell.user.name,
+    viewerRole: shell.role,
+    pipelines: shell.pipelines.map((p) => ({
+      id: p.id,
+      name: p.name,
+      stages: p.stages.filter((s) => s.kind !== "LOST").map((s) => ({ id: s.id, name: s.name })),
+    })),
+    relationships: (shell.access.settings?.relationshipTypes ?? []).map((t) => ({
+      id: t.id,
+      label: t.label,
+    })),
+    goal: {
+      metric: shell.pipelines.some((p) => p.hasAmount) ? "amount_won" : "items_won",
+      periodKey: periodOf("quarter", today).key,
+      today,
+    },
+  };
+}
 
 export async function CrmOverlays({
   shell,
@@ -75,9 +113,17 @@ export async function CrmOverlays({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const open = parseOpen(searchParams[OPEN_PARAM]);
-  if (!open) return null;
-  const load = CRM_CARDS[open.kind] as OverlayLoader<typeof open.kind> | undefined;
-  if (!load) return null;
-  const card = await load({ shell, orgSlug, open, searchParams } as OverlayProps<typeof open.kind>);
-  return <Fragment key={formatOpen(open)}>{card}</Fragment>;
+  const load =
+    open && !opensInstantly(open)
+      ? (CRM_CARDS[open.kind] as OverlayLoader<typeof open.kind> | undefined)
+      : undefined;
+  const card = load
+    ? await load({ shell, orgSlug, open, searchParams } as OverlayProps<NonNullable<typeof open>["kind"]>)
+    : null;
+  return (
+    <>
+      <CrmCreateHost data={createData(shell)} />
+      {open && card ? <Fragment key={formatOpen(open)}>{card}</Fragment> : null}
+    </>
+  );
 }

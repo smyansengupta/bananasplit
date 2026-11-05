@@ -16,7 +16,7 @@ import { CrmCard } from "@/components/crm/card/crm-card";
 import { dueWords } from "@/components/crm/card/next-step";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { QuoteBlock, SentLine, useQuoteSend, type DealQuoteView } from "@/components/crm/deals/deal-quote";
-import { TypeTag } from "@/components/crm/pipeline-view";
+import { TypeTag } from "@/components/crm/deal-type-tag";
 import { RecordActions, type HistoryItem } from "@/components/crm/record-actions";
 import { NeedsForm, RecordFields } from "@/components/crm/record-fields";
 import { Timeline, type TimelineItem } from "@/components/crm/timeline";

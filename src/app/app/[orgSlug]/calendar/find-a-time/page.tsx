@@ -13,6 +13,7 @@ import { FIND_A_TIME_KEEP_DAYS } from "@/lib/polls/expiry";
 import { responsesLite, summarizePoll } from "@/lib/polls/poll-summary";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { coHostedEventIds } from "@/server/booking/co-hosted";
 import { meetingsWhere } from "@/server/meetings/where";
 import { planGate } from "@/server/billing/plan-gate";
 
@@ -37,6 +38,7 @@ export default async function FindATimePage({
   const personal = org.kind === "PERSONAL";
   const isAdmin = can({ role }, "events.write");
   const now = new Date();
+  const coHosted = isAdmin ? [] : await coHostedEventIds(org.id, user.id, now);
   const { polls, results, questionCount, meetingCount } = await withOrgTx(
     org.id,
     async ({ db }) => {
@@ -44,7 +46,9 @@ export default async function FindATimePage({
       return {
         // The Meetings tab's count: the meetings still to come, as Meetings counts them.
         meetingCount: await db.event.count({
-          where: { AND: [meetingsWhere(org.id, user.id, isAdmin, now), { endsAt: { gt: now } }] },
+          where: {
+            AND: [meetingsWhere(org.id, user.id, isAdmin, now, coHosted), { endsAt: { gt: now } }],
+          },
         }),
         polls,
         results: await getPollResults(

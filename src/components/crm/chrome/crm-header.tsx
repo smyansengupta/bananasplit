@@ -7,6 +7,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
 import { useCrmKeys } from "@/components/crm/chrome/crm-toolbar";
 import { PHONE_SMALL_CREATE } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { TASK_KEYS } from "@/lib/shortcuts";
@@ -87,14 +88,12 @@ export function CrmHeader({
               </DropdownMenuItem>
             </CreateSplitButton>
           ) : null}
-          <Link
-            href={`${base}/settings`}
-            aria-label="CRM settings"
-            title="CRM settings"
-            className="bg-foreground text-background hover:bg-foreground/85 focus-glow grid size-10 shrink-0 place-items-center rounded-full transition-colors"
-          >
-            <Settings className="size-[18px]" aria-hidden="true" />
-          </Link>
+          {/* The same button as the create beside it, in every theme. */}
+          <Button asChild variant="create" size="icon">
+            <Link href={`${base}/settings`} aria-label="CRM settings" title="CRM settings">
+              <Settings className="size-[18px]" aria-hidden="true" />
+            </Link>
+          </Button>
         </div>
       </div>
       {toolbar}

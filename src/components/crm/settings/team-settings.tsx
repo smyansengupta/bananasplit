@@ -7,6 +7,7 @@ import { saveRoutingAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { SettingsCard, SettingsStatus } from "@/app/app/[orgSlug]/settings/settings-card";
 import { CrmAvatar } from "@/components/crm/card/crm-card";
 import { Plus, Trash2 } from "@/components/icons";
+import { SavedMark } from "@/components/ui/autosave";
 import { Button } from "@/components/ui/button";
 import { FieldSelect } from "@/components/ui/field-select";
 import { Input } from "@/components/ui/input";
@@ -15,12 +16,13 @@ import { Switch } from "@/components/ui/switch";
 import type { Routing, RoutingRule } from "@/lib/crm/outreach/assign";
 import { cn } from "@/lib/utils";
 
-import { useSave } from "./use-save";
+import { useAutoSave, useSave } from "./use-save";
 
 /**
- * CRM settings > Team and access (owners and admins; not in a Personal
- * space): what members see, who runs the CRM with them, and who new
- * people go to. Roles and invites stay in the Admin panel's Members.
+ * CRM settings > Team (not in a Personal space): what members see, who
+ * runs the CRM with them, and who new people go to, each saved as it
+ * changes, except rules, which are written first and then saved. Roles and
+ * invites stay in the Admin panel's Members.
  */
 
 export interface TeamMember {
@@ -33,38 +35,28 @@ export interface TeamMember {
 
 export function AccessCard({ orgId, initial }: { orgId: string; initial: "ALL" | "OWN" }) {
   const [mode, setMode] = useState(initial);
-  const { pending, status, save } = useSave();
+  const auto = useAutoSave((next: "ALL" | "OWN") => setAccessAction(orgId, next));
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        save(() => setAccessAction(orgId, mode));
-      }}
+    <SettingsCard
+      title="Who sees what"
+      action={<SavedMark status={auto.status} error={auto.error} />}
     >
-      <SettingsCard
-        title="Who sees what"
-        description="Owners, admins and CRM managers always see everyone."
-        status={<SettingsStatus status={status} />}
-        footer={
-          <Button type="submit" disabled={pending}>
-            Save
-          </Button>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <b className="flex-[1_1_12rem] text-[15px] font-semibold">Members see</b>
-          <Segmented
-            label="Members see"
-            value={mode}
-            onSelect={(v) => setMode(v as "ALL" | "OWN")}
-            options={[
-              { value: "ALL", label: "Everyone" },
-              { value: "OWN", label: "Only their own people" },
-            ]}
-          />
-        </div>
-      </SettingsCard>
-    </form>
+      <div className="flex flex-wrap items-center gap-3">
+        <b className="flex-[1_1_12rem] text-[15px] font-semibold">Members see</b>
+        <Segmented
+          label="Members see"
+          value={mode}
+          onSelect={(v) => {
+            setMode(v as "ALL" | "OWN");
+            void auto.save(v as "ALL" | "OWN");
+          }}
+          options={[
+            { value: "ALL", label: "Everyone" },
+            { value: "OWN", label: "Only their own people" },
+          ]}
+        />
+      </div>
+    </SettingsCard>
   );
 }
 
@@ -80,70 +72,54 @@ export function ManagersCard({
   membersHref: string;
 }) {
   const [ids, setIds] = useState(new Set(initial));
-  const { pending, status, save } = useSave();
+  const auto = useAutoSave((next: string[]) => setManagersAction(orgId, next));
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        save(() => setManagersAction(orgId, [...ids]));
-      }}
+    <SettingsCard
+      title="CRM managers"
+      description="They set up stages, fields and automations without being admins."
+      action={<SavedMark status={auto.status} error={auto.error} />}
+      status={
+        <a
+          href={membersHref}
+          className="text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline"
+        >
+          Roles and invites are in Admin, Members
+        </a>
+      }
     >
-      <SettingsCard
-        title="CRM managers"
-        description="They set up stages, fields and automations without being admins."
-        status={
-          status ? (
-            <SettingsStatus status={status} />
-          ) : (
-            <a
-              href={membersHref}
-              className="text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline"
-            >
-              Roles and invites are in Admin, Members
-            </a>
-          )
-        }
-        footer={
-          <Button type="submit" disabled={pending}>
-            Save
-          </Button>
-        }
-      >
-        <ul className="divide-border divide-y">
-          {members.map((m) => {
-            const on = m.admin || ids.has(m.id);
-            return (
-              <li key={m.id} className="flex items-center gap-3 py-2.5">
-                <CrmAvatar name={m.name} size={34} />
-                <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[15px] font-semibold">{m.name}</b>
-                  <span className="text-muted-foreground text-sm">
-                    {m.admin
-                      ? "Owner or admin"
-                      : m.owns
-                        ? `Looks after ${m.owns.toLocaleString("en-US")} people`
-                        : "Looks after nobody yet"}
-                  </span>
+      <ul className="divide-border divide-y">
+        {members.map((m) => {
+          const on = m.admin || ids.has(m.id);
+          return (
+            <li key={m.id} className="flex items-center gap-3 py-2.5">
+              <CrmAvatar name={m.name} size={34} />
+              <span className="min-w-0 flex-1">
+                <b className="block truncate text-[15px] font-semibold">{m.name}</b>
+                <span className="text-muted-foreground text-sm">
+                  {m.admin
+                    ? "Owner or admin"
+                    : m.owns
+                      ? `Looks after ${m.owns.toLocaleString("en-US")} people`
+                      : "Looks after nobody yet"}
                 </span>
-                <Switch
-                  checked={on}
-                  disabled={m.admin}
-                  aria-label={`${m.name} runs the CRM`}
-                  onCheckedChange={(v) =>
-                    setIds((cur) => {
-                      const next = new Set(cur);
-                      if (v) next.add(m.id);
-                      else next.delete(m.id);
-                      return next;
-                    })
-                  }
-                />
-              </li>
-            );
-          })}
-        </ul>
-      </SettingsCard>
-    </form>
+              </span>
+              <Switch
+                checked={on}
+                disabled={m.admin}
+                aria-label={`${m.name} runs the CRM`}
+                onCheckedChange={(v) => {
+                  const next = new Set(ids);
+                  if (v) next.add(m.id);
+                  else next.delete(m.id);
+                  setIds(next);
+                  void auto.save([...next]);
+                }}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </SettingsCard>
   );
 }
 
@@ -169,6 +145,11 @@ export function RoutingCard({
 }) {
   const [routing, setRouting] = useState(initial);
   const { pending, status, save } = useSave();
+  /** Off and In turn save as they change. Rules wait for Save: one's half-written until then. */
+  const change = (next: Routing) => {
+    setRouting(next);
+    if (next.mode !== "rules") save(() => saveRoutingAction(orgId, next));
+  };
   const setRule = (i: number, patch: Partial<RoutingRule>) =>
     setRouting({
       ...routing,
@@ -182,12 +163,11 @@ export function RoutingCard({
       }}
     >
       <SettingsCard
-        title="New people get an owner"
-        description="For people from forms and booking links. They're told, and it's in their Inbox."
+        title="Who new people go to"
         status={<SettingsStatus status={status} />}
         footer={
-          <>
-            {routing.mode === "rules" && (
+          routing.mode !== "rules" ? undefined : (
+            <>
               <Button
                 type="button"
                 variant="ghost"
@@ -205,17 +185,17 @@ export function RoutingCard({
                 <Plus className="size-4" aria-hidden="true" />
                 Add a rule
               </Button>
-            )}
-            <Button type="submit" disabled={pending}>
-              Save
-            </Button>
-          </>
+              <Button type="submit" disabled={pending}>
+                Save
+              </Button>
+            </>
+          )
         }
       >
         <Segmented
           label="Who new people go to"
           value={routing.mode}
-          onSelect={(v) => setRouting({ ...routing, mode: v as Routing["mode"] })}
+          onSelect={(v) => change({ ...routing, mode: v as Routing["mode"] })}
           options={[
             { value: "off", label: "Nobody yet" },
             { value: "round-robin", label: "In turn" },
@@ -297,7 +277,7 @@ export function RoutingCard({
                   aria-pressed={routing.pool.includes(m.id)}
                   className={cn(chipClass(routing.pool.includes(m.id)), "h-8 px-3")}
                   onClick={() =>
-                    setRouting({
+                    change({
                       ...routing,
                       pool: routing.pool.includes(m.id)
                         ? routing.pool.filter((x) => x !== m.id)

@@ -109,15 +109,17 @@ export function WorkspaceHeader({
   }, [ws, newTask, inEpic, teamwork, inDestination, router, org.slug]);
 
   // `c` pressed elsewhere in the app lands here with ?new=1: start the task,
-  // then drop the param so a reload or Back doesn't start another.
+  // then drop the param so a reload or Back doesn't start another. Shallowly:
+  // a navigation would swap the page for its loading skeleton behind the dialog.
   const startNew = searchParams.get(NEW_TASK_PARAM) === "1";
   useEffect(() => {
     if (!startNew) return;
     newTask(inEpic);
     const params = new URLSearchParams(searchParams.toString());
     params.delete(NEW_TASK_PARAM);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [startNew, newTask, inEpic, searchParams, router, pathname]);
+    const search = params.toString();
+    window.history.replaceState(null, "", search ? `${pathname}?${search}` : pathname);
+  }, [startNew, newTask, inEpic, searchParams, pathname]);
 
   return (
     <div className="mb-[30px] space-y-[30px] max-md:mb-5 max-md:space-y-4">

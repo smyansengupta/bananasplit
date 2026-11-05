@@ -23,6 +23,8 @@ interface FakeClient {
   role: (user: string, org: string) => string | null;
   /** The org row withOrgAction's space check reads. */
   space: FakeSpace;
+  /** What app.resolve_org_slug answers, for a slug's first statement. */
+  slug: { organizationId: string; canonicalSlug: string; isRetired: boolean } | null;
   failStarts: number;
   $transaction: ReturnType<typeof vi.fn>;
 }
@@ -33,6 +35,7 @@ const { makeClient, requireUserMock } = vi.hoisted(() => {
       log: [],
       role: () => "MEMBER",
       space: { kind: "CLUB", plan: "SOCIETY", trialEndsAt: null },
+      slug: null,
       failStarts: 0,
       $transaction: vi.fn(),
     };
@@ -47,7 +50,11 @@ const { makeClient, requireUserMock } = vi.hoisted(() => {
         c.log.push(`${name}:BEGIN ${JSON.stringify(opts)}`);
         const tx = {
           name,
-          $queryRaw: vi.fn(async (_strings: TemplateStringsArray, user: string, org: string) => {
+          $queryRaw: vi.fn(async (strings: TemplateStringsArray, user: string, org: string) => {
+            if (strings.join("").includes("resolve_org_slug")) {
+              c.log.push(`${name}:set_context_by_slug(${user},${org})`);
+              return c.slug ? [{ ...c.slug, role: c.role(user, c.slug.organizationId) }] : [];
+            }
             c.log.push(`${name}:set_context(${user},${org})`);
             return [{ role: c.role(user, org) }];
           }),
@@ -80,6 +87,7 @@ import {
   currentTx,
   SpaceRefusedError,
   withOrgAction,
+  withOrgSlugTx,
   withOrgTx,
   withSystemOrgTx,
   withUserTx,
@@ -92,6 +100,7 @@ beforeEach(() => {
     c.log.length = 0;
     c.role = () => "MEMBER";
     c.space = { kind: "CLUB", plan: "SOCIETY", trialEndsAt: null };
+    c.slug = null;
     c.failStarts = 0;
     c.$transaction.mockClear();
   }
@@ -158,6 +167,41 @@ describe("withOrgAction: the space check", () => {
   });
 });
 
+describe("withOrgSlugTx", () => {
+  it("resolves the slug and sets the context in the first statement", async () => {
+    app.slug = { organizationId: "org1", canonicalSlug: "acme", isRetired: false };
+    await expect(
+      withOrgSlugTx("acme", async (ctx) => `${ctx.organizationId}:${ctx.role}:${ctx.kind}`),
+    ).resolves.toBe("org1:MEMBER:page");
+    expect(app.log.slice(1)).toEqual(["app:set_context_by_slug(u1,acme)", "app:COMMIT"]);
+  });
+
+  it("refuses a slug that doesn't resolve, before running the handler", async () => {
+    const handler = vi.fn();
+    await expect(withOrgSlugTx("nope", handler)).rejects.toBeInstanceOf(NotFoundError);
+    expect(handler).not.toHaveBeenCalled();
+    expect(app.log.at(-1)).toBe("app:ROLLBACK");
+  });
+
+  it("refuses someone who isn't a member, before running the handler", async () => {
+    app.slug = { organizationId: "org1", canonicalSlug: "acme", isRetired: false };
+    app.role = () => null;
+    const handler = vi.fn();
+    await expect(withOrgSlugTx("acme", handler)).rejects.toBeInstanceOf(NotFoundError);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("sends a retired slug to the current one, member or not", async () => {
+    app.slug = { organizationId: "org1", canonicalSlug: "acme-2", isRetired: true };
+    app.role = () => null;
+    const handler = vi.fn();
+    await expect(withOrgSlugTx("acme", handler)).rejects.toMatchObject({
+      digest: expect.stringContaining("/app/acme-2"),
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
 describe("withOrgAction", () => {
   it("sets the context first, passes ctx and args, and commits", async () => {
     const action = withOrgAction(async (ctx, a: number, b: string) => {
@@ -166,7 +210,7 @@ describe("withOrgAction", () => {
     });
     await expect(action("org1", 2, "x")).resolves.toBe("u1:org1:MEMBER:action:2:x");
     expect(app.log).toEqual([
-      'app:BEGIN {"maxWait":10000,"timeout":10000,"isolationLevel":"ReadCommitted"}',
+      'app:BEGIN {"maxWait":10000,"timeout":10000}',
       "app:set_context(u1,org1)",
       "app:COMMIT",
     ]);

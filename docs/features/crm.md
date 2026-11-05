@@ -10,7 +10,7 @@ Tavily and email permissions.
 How it is laid out now: the CRM has two tabs, **Today** and **People**;
 People's view switch is People, Companies and Board. Settings is the
 round button in the header. Reports live in Databases › Reports, booking
-links in Meetings › Booking links (docs/features/booking.md). The phase
+links in Meetings › Meeting links (docs/features/booking.md). The phase
 sections below record what was built at the time, so they name tabs that
 have since gone (Outreach, Deals, Forecast, Reports, Review, Automations,
 Calls, Quotes); "Redesign" and "One list" say where each went.
@@ -139,7 +139,7 @@ separate decision for those features.
 | Partners and a deals pipeline (Finance › Deals) | `Sponsor`, `Sponsorship` (Prospect to Received), linked to Finance | Finance |
 | People we've met | `Contact` + `ContactEmail` (check-ins, sign-ups, unsubscribes) | website sync |
 | Tasks, notes, meetings, files | Tasks, Notes, Meetings/Events, Files, plus `ItemLink` to link any two | `ItemLink` |
-| Booking links | Availability (`UserAvailability`), Find a time, RSVP pages | Meetings |
+| Meeting links | Availability (`UserAvailability`), Find a time, RSVP pages | Meetings |
 | Background work | `Job` queue drained by `/api/cron/jobs` | `src/server/jobs` |
 | Reports and dashboards | Reports on any database, a Pipeline widget, schedules, snapshots | `src/lib/reports`, `src/server/reports` |
 | AI with the org's key | `CLAUDE` and `OPENAI_COMPATIBLE` integrations, encrypted `OrgSecret` | `src/server/ai`, `src/lib/ai/vendors.ts` |
@@ -331,7 +331,7 @@ every member and every channel.
 | 1:1 email | Compose on any record; templates with merge fields; sends from the member's own connected Gmail or Outlook (from the coming email connections), or the org's Resend sender until then; open and click tracking with our own pixel and redirect | $0 | $0 |
 | Sequences | Timed steps (email, task, call reminder, LinkedIn reminder) run by the job queue; stop on reply, on meeting booked or on unsubscribe; daily send caps per mailbox | $0 | $0 |
 | Bulk email | Segments from any saved view; one-click unsubscribe header; sends through the org's Resend (or SES) key, never ours, so a bad list never hurts our sending reputation | $0 | Resend or SES rates |
-| Booking links | Built on availability and Find a time; booked meetings land in Meetings and on the timeline; round-robin for teams | $0 | $0 |
+| Meeting links | Built on availability and Find a time; booked meetings land in Meetings and on the timeline; round-robin for teams | $0 | $0 |
 | Calls | Click-to-call (`tel:` links) and a call log on day one; later a browser softphone and power dialer through the org's Telnyx or Twilio key, with recording consent built in | $0 | Telnyx about $0.007 a minute |
 | Texting | Two-way SMS through the org's Telnyx or Twilio key on the existing SMS module, logged to the timeline, STOP handled | $0 | carrier rates |
 | AI drafts and agents | Draft an email, a follow-up or a research brief on a person; a person always approves before anything sends | $0 | on their key |
@@ -652,7 +652,7 @@ day those land, it gets much better with no rework:
   sequence steps go out from the member's connected mailbox, appear in
   their Sent folder, and land on the timeline.
 - **Calendar alongside.** The same connection's calendar fills the timeline
-  with meetings and powers booking links without a second sign-in.
+  with meetings and powers meeting links without a second sign-in.
 - **Attachments** go to Files, linked to the person and the pipeline item.
 
 Until then, everything above works in a smaller way through the BCC address
@@ -700,7 +700,7 @@ is cut; this is only the order.
 2. **Reaching out.** The follow-up queue, keep-in-touch cadences, lists and
    campaigns split among members, templates and mail merge, 1:1 email
    (member's own mailbox when connected, the org's sender until then),
-   tracking, invites to events and forms, booking links, sequences with
+   tracking, invites to events and forms, meeting links, sequences with
    stop-on-reply, bulk email with unsubscribe and sender checks, Forms to
    CRM, embeds, owner routing, the BCC logging address, handover when
    members change roles, people updating their own details through RSVP
@@ -1620,7 +1620,7 @@ expires old mail suggestions.
 
 ### Booking, forms, handover, self-update
 
-- Booking links moved to Meetings > Booking links (docs/features/booking.md):
+- Meeting links moved to Meetings > Meeting links (docs/features/booking.md):
   organization links are the CRM's, every member has a personal one, and the
   CRM side of a booking waits for the guest to confirm their email. What
   follows is how they first worked.
@@ -1669,7 +1669,7 @@ owns them, who talked to them last, and the warning.
 Built as Outreach (Templates, Sequences, Booking pages, Bulk email, Your
 mail), Campaigns and Handover pages. Today the CRM has two tabs, Today and
 People: templates and Your mail are in CRM settings (Templates, You),
-plans in Automations, booking links in Meetings › Booking links, one email
+plans in Automations, meeting links in Meetings › Meeting links, one email
 to many is People's Email them, and Handover is a CRM settings section
 (see "One list" and "Settings and setup"). Public `/book`, `/c` and `/u` (unsubscribe, one button;
 `/api/crm/u/{token}` takes the one-click POST). Every public route finds its
@@ -1957,7 +1957,22 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Clicking a card's link (or `setOpen`) draws its frame at once with a
   loading body (`CrmPendingCard`, `usePendingOpen`), and the card on
   screen gives way to it; closing hides the card on the click, then the
-  URL catches up.
+  URL catches up. The frame is the shape of what's coming: the 680px card,
+  or New person's window for Done on its own, a goal and a new plan. One
+  popup takes the other's place with no fade between them
+  (`useCardPresence`, `motion` on `DialogContent`), so nothing shows
+  behind the card.
+- **Create dialogs open at once.** New person, New company, New deal and a
+  new goal never wait on the server and have no frame. What they need
+  (members, pipelines, relationship types, the viewer) comes with every
+  page that takes `?open=` (`CrmOverlays` hands it to `CrmCreateHost`), and
+  `opensInstantly` marks them: `setOpen` and `close` change the URL with
+  `history.pushState` and `replaceState`, and `CrmPendingCard` catches a
+  click on a link to one in the capture phase, so the link doesn't navigate.
+  A direct visit to the URL opens the same dialog. `?with=` is read after the
+  dialog is open (`newCardStartAction`) and never overwrites what's typed; a
+  new goal reads what it has reached the same way. A create opened over a
+  card hides that card (`useCardPresence`), since the page isn't replaced.
 - **On a phone** a card fills the screen: full height, no margin, rounded
   at the top only (`PHONE_FULL_SCREEN` in `ui/form-dialog.tsx`, used by
   `CrmCard`, `FormDialog` and Calendar's event detail). The header's
@@ -1981,14 +1996,16 @@ named by one search param (`src/lib/crm/overlay.ts`):
   Owner in Filters (every member, with a search) and Report; C makes the
   page's new record (a deal on the Board). `/crm/calls` opens the Calls group
   (`crmCallsHref`, `?show=calls`); with two or more calls due its header
-  has Call them in a row, the dialer as a card (`?open=calls`). Goals, Coming up
-  (meetings in the next week) and Done on its own (the latest five with
-  when, the week's count, See all opens `?open=log`;
+  has Call them in a row, the dialer as a card (`?open=calls`). Goals (a ring
+  per goal with the big number, a notch for the pace, and a filled check on
+  green with a few sparks when one is hit), Coming up (meetings in the next
+  week) and Done on its own (the week's figure, a bar for each of seven days,
+  the latest four by kind, See all opens `?open=log`;
   `src/components/crm/today/today-log.tsx`) sit on the right. Power hour
   is one light strip; Snooze hides it
   until 2 PM, or 8 AM the next day, where the member is
   (`src/lib/crm/power-hour.ts`, an `InboxItemState` row keyed
-  `crm-power-hour`), with Undo.
+  `crm:power-hour`), with Undo.
 - **Person card**: header with Call (when there's a number) and "…",
   tabs Overview (the next step with Done and Push, then two likely next
   steps; the kept brief; the latest thing with Reply when they wrote and
@@ -2007,7 +2024,10 @@ named by one search param (`src/lib/crm/overlay.ts`):
   the system changed (Undo puts the record back, while nothing changed it
   since), an automation's other steps, and what was held back (Send anyway
   for a draft an automation held for review). Kinds with no real undo show
-  no button.
+  no button. The full list (`?open=log`, `cards/log-card.tsx`) is New
+  person's window. `onItsOwnWeek` counts the seven days ending today, where
+  the member is: sent and changed are done, held back is counted apart. It
+  shows no time saved: nothing records how long any of it would have taken.
 - **People** (`/crm/people`, `src/server/crm/people-view.ts`,
   `src/components/crm/people/`, pure parts in `src/lib/crm/people-view.ts`):
   People and Companies are round buttons (`?view=companies`; the old
@@ -2111,36 +2131,64 @@ named by one search param (`src/lib/crm/overlay.ts`):
 
 ### Settings and setup
 
-- **CRM settings** is one page per section, `/crm/settings/{section}`
-  (`src/lib/crm/settings-sections.ts`): the CRM header titled "CRM
-  settings" with no create button, the Admin panel's list card on the left
-  (`CrmSettingsNav`) and the section's `SettingsCard`s on the right
-  (`CrmSettingsFrame`). Sections are server components in
-  `src/components/crm/settings/sections/`. You and Templates are every
-  member's (Booking link is a link to Meetings › Booking links,
-  docs/features/booking.md); Automations, Sending, Deal stages and types, Fields,
-  Hand people over, AI and Import and export are for owners, admins and CRM
-  managers; Phone and texts, Team and access and API and webhooks for owners
-  and admins.
-  `/crm/settings` opens Automations (or You). The settings button is in
-  every member's header; a section they can't open sends them to the one
-  they can. A Personal space has no Team and access (so no who sees what,
-  CRM managers or lead routing; `/crm/handover` goes to People) and is
-  offered its own ready-made pipelines.
+- **CRM settings** is five pages, `/crm/settings/{section}`
+  (`src/lib/crm/settings-sections.ts`), in order of use: You, Automations
+  and sending, Deals and fields, Team, Connections. `CrmSettingsFrame` draws
+  the title, the Admin panel's list card on the left (`CrmSettingsNav`; no
+  list when there's one section to open) and the section's `SettingsCard`s
+  on the right. Sections are server components in
+  `src/components/crm/settings/sections/`. You is every member's own; the
+  rest are for owners, admins and CRM managers, and a section hides the cards
+  only owners and admins may touch (Team's access and routing; Connections'
+  keys, phone and API). `/crm/settings` opens Automations and sending (or
+  You). A section they can't open sends a member to the one they can. A
+  Personal space has no Team (`/crm/handover` goes to People) and is offered
+  its own ready-made pipelines.
+- **What's in each**: You has your mail (signature, logging address, what
+  it shares), your meeting link, Templates, "Handed to you", and under More
+  what's never logged, a new address and your recent calls. Automations and
+  sending has the list with its describe box, Follow-up series, Split lists
+  and group emails, the Sending card (who it's from, daily cap, hours,
+  weekends, SPF and DKIM), Didn't send (only when something didn't), and
+  under More how much it may do alone, the unsubscribe line and Scores. Deals
+  and fields has one switch, each pipeline then People and Companies
+  (`?for=`): a pipeline's stages, types and fields, or People's and
+  Companies' fields and People's relationship types; renaming a pipeline and
+  adding another are under More. Team has who sees what, who new people go
+  to, and Handover, with CRM managers under More. Connections has Bring
+  people in (who Bananasplit knows, a spreadsheet, rows to fix, duplicates),
+  the AI key, calls and texts, bulk email with the monthly cap, and under More
+  export, research keys, AI use, enrichment, agents, AI fields, recording,
+  hours, voicemail, the API and webhooks.
+- **Saving and More**: settings save as they change (`useAutoSave` in
+  `use-save.ts`, with `SavedMark` in the card's corner, or the status line);
+  a text field saves when it loses focus. Only lists you edit in several
+  steps keep a Save: stages, deal types, relationship types and routing rules.
+  `SettingsMore` is the one folded section at the bottom of a page; it opens
+  itself when the URL's #anchor is a card inside it.
+- **Close**: a round black Close (`SettingsCloseFloat`,
+  `src/components/settings-close.tsx`) stays in view at the top right of CRM
+  settings and the Admin panel. `BeforeSettings`, in the app's layout, keeps
+  the last page that wasn't settings in the tab's sessionStorage, so Close
+  goes back there however many sections you looked at; with none it goes to
+  Today, or Home from the Admin panel.
 - **Handover** (`sections/handover.tsx`; it was `/crm/handover`, which
-  redirects): Hand people over (`/crm/settings/handover`, owners, admins
-  and CRM managers, not in a Personal space) holds members who left, people
-  with no owner and handing a member's people over; You holds "Handed to
-  you", the brief on each person handed to you in the last 90 days, or what
-  a position you hold looks after (`?role=`). The Inbox lines from
-  `handover.ts` link there. Whoever can't open Hand people over lands on
-  You.
-- **Pages under a section**: one automation at
-  `/crm/settings/automations/{id}` (`new?describe=` fills the steps from
-  the describe box's sentence). `/crm/settings/booking` and
-  `/crm/settings/booking/{id}` redirect to Meetings › Booking links (the
-  latter opening that link's editor). `/crm/automations` and the old
-  `/crm/settings/webhooks` redirect.
+  redirects): Team (`#handover`, owners, admins and CRM managers, not in a
+  Personal space) holds members who left, people with no owner and handing a
+  member's people over; You holds "Handed to you", the brief on each person
+  handed to you in the last 90 days, or what a position you hold looks after
+  (`?role=`). The Inbox lines from `handover.ts` link there. Whoever can't
+  open Team lands on You.
+- **Nothing lives under a section**: an automation opens in place as the
+  app's dialog (`?open=automation:<id>`, `?open=automation` for a new one,
+  `&describe=` filling the steps from the describe box's sentence;
+  `overlays/automation.tsx`), with what it did under the builder; Recipes
+  and Scores too (`?open=recipes`, `?open=scoring`). Old URLs redirect:
+  `/crm/settings/automations/{id}`, `?view=recipes`, `?view=scoring`,
+  `/crm/automations`, and each old section through `CRM_SETTINGS_ALIASES`
+  (`crmSettingsAliasHref` keeps the query and adds the card's anchor).
+  `/crm/settings/booking` and `/crm/settings/booking/{id}` redirect to
+  Meetings › Meeting links (the latter opening that link's editor).
 - **Import** (`/crm/import`) stays a page: matching a sheet's columns needs
   the room. It wears the CRM header (titled Import, no create) and the tab
   switch, with People lit; what you bring in is People, Companies or Deals.
@@ -2155,24 +2203,65 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Sending is paused** (`SendingPausedBanner` in
   `src/components/crm/settings/sending-paused.tsx`, one line on any page):
   the spending cap reached, or bulk email with no verified sender; a
-  warning when a week's group email bounces 5% or more. Sending lists what
+  warning when a week's group email bounces 5% or more. Didn't send lists what
   bounced or didn't go in the last two weeks.
-- **Import and export**: a dropped spreadsheet shows its column matches
-  and comes in with one button; a finished import keeps its skipped rows,
-  and each is fixed in place (an email added) or left out
-  (`fixImportRow`, `letRowGo`). The same rows show on `/crm/import` for
+- **Bringing people in, and export** (Connections): a dropped spreadsheet
+  shows its column matches and comes in with one button; a finished import
+  keeps its skipped rows, and each is fixed in place (an email added) or left
+  out (`fixImportRow`, `letRowGo`). The same rows show on `/crm/import` for
   whoever ran the import, since any member can import and this section is
   for managers; the Inbox line for a file with skipped rows opens
   `/crm/import`. Export everything is one zip
   (`/crm/export?kind=all`, `&notes=1` adds the timeline).
-- **First-time setup** (`/crm/setup`, `src/components/crm/setup.tsx`):
-  what you mostly reach out to (picked for you), then 1 Bring people in (a
-  spreadsheet beside members, event guests and form answers; in a Personal
-  space only the people who RSVP'd), 2 Who looks after them (Split evenly,
-  By relationship, Leave them for now: `planOwners` in
-  `src/lib/crm/setup-owners.ts`, which also sets the routing for new
-  people; not in a Personal space), 3 Connect, if you like (opens AI or
-  Phone after setup). The summary pill sits next to Set up the CRM.
+- **Getting started** (`src/components/crm/today/crm-started.tsx`, read by
+  `src/server/crm/started.ts`, logic in `src/lib/crm/started.ts`): "Get your
+  CRM started", one strip across the top of Today in the goal block colour,
+  asking one question at a time. There is no setup page: `/crm/setup` redirects
+  to Today. The strip shows the next step only, as a plain question with its
+  controls and a default picked, so one click usually answers it. In order:
+  who you mostly reach out to (chips picked for you, then Set up the CRM), who
+  to bring in (one button for everyone Bananasplit knows, or a spreadsheet
+  dropped beside it), who looks after new people (`planOwners` in
+  `src/lib/crm/setup-owners.ts`, which also sets the routing for new people;
+  Leave them for now is the step's skip), your meeting link (made and turned on
+  in one click, its address shown beside the button; "…" stands for the part
+  that's made when it's turned on), your goal this quarter (a number of people
+  to reach, filled in; any other goal is set on its card), and what your emails
+  end with (your signature, filled in from your name and the organization's).
+  The AI key and calls and texts aren't steps: they're in settings under
+  Connections.
+  The right edge has "Step 2 of 6", a segment per step (filled when done, faint
+  when skipped; clicking one jumps there, and a finished step offers Change it,
+  its place in settings) and Skip, the step's "not needed". Hide, in the corner,
+  checks off the rest with Undo in the toast.
+  An answer moves on at once, with a short slide that respects reduced motion:
+  the saves run behind the strip one after another, because the first answer
+  makes the CRM the others are saved in, and the page refreshes when the last is
+  in. One that fails brings its question back with the reason, and whatever
+  followed it waits to be answered again. The next step is the one after the
+  step answered, coming back round to any left behind (`nextCrmStep`).
+  A step is done when the thing exists, read fresh each time. Once every step is
+  done or checked off, the strip says "Your CRM is ready" and leaves. It stays
+  mounted for that (`CrmStartedSection` always renders it, and it draws nothing
+  when there's nothing left), and the page's two branches keep it in the same
+  place, so the first answer doesn't remount it. A Personal space has no owner
+  step; members who aren't owners or admins get only their meeting link and
+  signature. What's checked off: the organization's steps in
+  `OrgSettings.startedSkipped` as `crm:<step>`, beside Home's, which is why
+  Home's Hide and Undo keep those entries; a member's own in their
+  `InboxItemState` rows as `crm:started-<step>` (a check constraint only takes
+  `crm:<id>` shaped keys there), since only owners and admins
+  can write OrgSettings. A step keeps its key when its wording changes; entries
+  for steps that left the list (`crm:ai`, `crm:phone`) are ignored and left
+  alone. No migration.
+  **Before the CRM's settings exist:** Today lets an owner or admin through
+  (`crmShell(slug, { setup: true })`) and shows only the header and the strip
+  on its first question, with no Skip or Hide and the other segments shut,
+  because that answer makes the settings row (`runSetupAction`) the other steps
+  work in. Nothing is written on the page load. Everyone else, and every other CRM page,
+  gets the gate, which links to Today. Sharing people out covers anyone with
+  no owner since setup, and people you brought in over the last two hours
+  (`shareOutOwners`), since this step can come days after bringing them in.
 
 - **Plans** (`src/server/crm/outreach/plans.ts`,
   `src/lib/crm/outreach/plans.ts`): a sequence (steps over days), a
@@ -2213,10 +2302,9 @@ named by one search param (`src/lib/crm/overlay.ts`):
 - **Public booking page** (`/book/<slug>`): the organization's name and
   logo, then one card with who you're meeting and how long, a month
   calendar of open days, that day's times, a short form, Book, and a
-  booked state with Pick again. Booking links are set up in Meetings ›
-  Booking links (docs/features/booking.md is current); CRM settings >
-  Booking link, `/crm/settings/booking` and `/crm/outreach/booking`
-  redirect there.
+  booked state with Pick again. Meeting links are set up in Meetings ›
+  Meeting links (docs/features/booking.md is current);
+  `/crm/settings/booking` and `/crm/outreach/booking` redirect there.
 
 ## One list
 
@@ -2270,7 +2358,7 @@ the one list of everyone you deal with.
 | A plan's link (`crmPlanHref`, `/crm/outreach?open=plan:...`, `/crm/outreach/sequences/<id>`, `/crm/campaigns/<id>`) | `/crm/settings/automations?open=plan:<type>:<id>`; a member who can't open Automations gets the card over People instead |
 | One email to many (`/crm/outreach/bulk?list=`, `plan:email`) | People's Email them: the same one-email card over People (`?open=plan:email&to=<list>`), approval rules unchanged |
 | Putting someone in a sequence | Add to a follow-up series: the person card's "…" and the selection bar's "…" (`src/components/crm/people/series-dialog.tsx`, `enroll`) |
-| Outreach's Templates, Your mail | CRM settings > Templates, > You (`?view=templates`, `?view=mail` and `/crm/outreach/mail` redirect there) |
+| Outreach's Templates, Your mail | CRM settings > You (`?view=templates`, `?view=mail` and `/crm/outreach/mail` redirect there) |
 | `/crm/outreach`, `/crm/outreach/sequences`, `/crm/campaigns` | People; the two lists go to Automations |
 
 CRM settings sections render the CRM's cards now (`CrmSettingsFrame`'s
@@ -2317,13 +2405,15 @@ Deals live in People (see "One list"); this is what a deal is on screen.
   board and `/crm/quotes/<id>` to the deal's Quote tab, or to the quote
   card when it has no deal (`crmQuoteHref`); `?edit=1` opens the card.
 - **Goals** (`?open=goal`, `?open=goal:<id>`, `cards/goal-card.tsx`;
-  `src/server/crm/goals.ts`): what it counts (deals won, money won and so
-  on), whose (the whole team, you or a member; not asked in a Personal
-  space), the quarter or year, and the target, with a line saying where
-  the pace lands. Today's right column shows each goal's score. CRM
-  managers set and change goals (`saveGoal` requires a manager); every
-  other member opens the same card read-only, with the facts in words and
-  who can change it, and a new goal tells them who sets goals.
+  `src/server/crm/goals.ts`): New person's window, with what it counts
+  (deals won, money won and so on), whose (the whole team, you or a member;
+  not asked in a Personal space), the quarter or year, and the target, then
+  its score: the ring (`GoalGauge`), the number so far and where the pace
+  lands. Save and Delete close it with Undo in the toast. Today's right
+  column shows each goal's score: hit, ahead, on pace or behind
+  (`goalStanding`, `standingWords`). CRM managers set and change goals
+  (`saveGoal` requires a manager); every other member opens the same window
+  read-only, and a new goal tells them who sets goals.
 
 ## Personal CRM
 
@@ -2683,7 +2773,7 @@ Built 2026-11-04 on `claude/crm-cleanup`.
   `CrmForecastSnapshot` tables stay; the handover brief still lists open
   deliverables already stored.
 - **Pins and overlays:** `/crm/deals`, `/crm/calls`, `/crm/forecast`,
-  `/crm/handover` and `/crm/settings` only redirect, so they have no pin
+  `/crm/handover`, `/crm/setup` and `/crm/settings` only redirect, so they have no pin
   label (an old pin keeps the label it was saved with); `/crm/companies`
   and `/crm/pipelines/<id>` no longer count as overlay pages.
 - **Notifications:** the profile's "Someone books a meeting with me"

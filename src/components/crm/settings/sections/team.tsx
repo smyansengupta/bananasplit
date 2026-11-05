@@ -1,18 +1,20 @@
 import { readOrgRouting } from "@/server/crm/outreach/intake";
 import { withOrgTx } from "@/server/db/context";
 
+import { SettingsMore } from "../settings-more";
 import { AccessCard, ManagersCard, RoutingCard } from "../team-settings";
+import { HandoverCards, preloadHandover } from "./handover";
 import type { SectionProps } from "./types";
 
 /**
- * Team and access (owners and admins; never in a Personal space, where
- * the page doesn't offer it): who sees what, the CRM managers and who new
- * people go to. Handing someone's people over is its own section (Hand
- * people over), which CRM managers open too.
+ * Team (never in a Personal space, where the page doesn't offer it): who
+ * sees what and who new people go to, for owners and admins; handing people
+ * over, which CRM managers do too; and the CRM managers, under More.
  */
 export async function TeamSection({ shell, orgSlug }: SectionProps) {
   const orgId = shell.org.id;
-  const data = await withOrgTx(orgId, async ({ db }) => {
+  if (!shell.access.admin) return <HandoverCards shell={shell} orgSlug={orgSlug} />;
+  const dataP = withOrgTx(orgId, async ({ db }) => {
     const roles = await db.membership.findMany({
       where: { organizationId: orgId },
       select: { userId: true, role: true },
@@ -25,6 +27,8 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
     });
     return { roles, owns, routing: await readOrgRouting(db, orgId) };
   });
+  preloadHandover(shell);
+  const data = await dataP;
   const adminIds = new Set(
     data.roles.filter((r) => r.role === "OWNER" || r.role === "ADMIN").map((r) => r.userId),
   );
@@ -37,18 +41,21 @@ export async function TeamSection({ shell, orgSlug }: SectionProps) {
   return (
     <>
       <AccessCard orgId={orgId} initial={shell.access.settings?.memberAccess ?? "ALL"} />
-      <ManagersCard
-        orgId={orgId}
-        members={members}
-        initial={shell.access.settings?.managerIds ?? []}
-        membersHref={`/app/${orgSlug}/settings/members`}
-      />
       <RoutingCard
         orgId={orgId}
         initial={data.routing}
         members={shell.members}
         relationshipTypes={shell.access.settings?.relationshipTypes ?? []}
       />
+      <HandoverCards shell={shell} orgSlug={orgSlug} />
+      <SettingsMore>
+        <ManagersCard
+          orgId={orgId}
+          members={members}
+          initial={shell.access.settings?.managerIds ?? []}
+          membersHref={`/app/${orgSlug}/settings/members`}
+        />
+      </SettingsMore>
     </>
   );
 }

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type { SendingHealth } from "@/lib/crm/settings-prefs";
 import { withOrgTx } from "@/server/db/context";
 
@@ -7,7 +9,7 @@ import { checkSender, type SenderCheck } from "./outreach/mailbox";
 import { underCap } from "./spend";
 
 /**
- * Whether the CRM's sending is healthy (CRM settings > Sending, and the
+ * Whether the CRM's sending is healthy (CRM settings > Automations and sending, and the
  * "Sending is paused" banner): the organization's sender, the spending
  * cap, last week's bounces, and the sends that didn't go. Call outside a
  * transaction (the sender check and the cap open their own).
@@ -28,18 +30,10 @@ export interface FailedSend {
   at: string;
 }
 
-export async function loadSendingHealth(
+/** Once per request: Today starts it early and its banner reads the same answer. */
+export const loadSendingHealth = cache(async (
   organizationId: string,
-): Promise<{ health: SendingHealth; sender: SenderCheck }> {
-  const [sender, room] = await Promise.all([
-    checkSender(organizationId).catch((): SenderCheck => ({
-      ok: false,
-      from: null,
-      domain: null,
-      problem: "We couldn't check your sender just now.",
-    })),
-    underCap(organizationId).catch(() => true),
-  ]);
+): Promise<{ health: SendingHealth; sender: SenderCheck }> => {
   const since = new Date(Date.now() - WEEK);
   const group = {
     OR: [
@@ -48,26 +42,30 @@ export async function loadSendingHealth(
       { workflowId: { not: null } },
     ],
   };
-  const counts = await withOrgTx(organizationId, async ({ db }) => ({
-    sent: await db.crmEmailMessage.count({
-      where: {
-        organizationId,
-        direction: "OUTBOUND",
-        status: { in: ["SENT", "BOUNCED"] },
-        sentAt: { gte: since },
-        ...group,
-      },
-    }),
-    bounced: await db.crmEmailMessage.count({
-      where: {
-        organizationId,
-        direction: "OUTBOUND",
-        status: "BOUNCED",
-        sentAt: { gte: since },
-        ...group,
-      },
-    }),
-  }));
+  const [sender, room, byStatus] = await Promise.all([
+    checkSender(organizationId).catch((): SenderCheck => ({
+      ok: false,
+      from: null,
+      domain: null,
+      problem: "We couldn't check your sender just now.",
+    })),
+    underCap(organizationId).catch(() => true),
+    withOrgTx(organizationId, ({ db }) =>
+      db.crmEmailMessage.groupBy({
+        by: ["status"],
+        where: {
+          organizationId,
+          direction: "OUTBOUND",
+          status: { in: ["SENT", "BOUNCED"] },
+          sentAt: { gte: since },
+          ...group,
+        },
+        _count: { _all: true },
+      }),
+    ),
+  ]);
+  const bounced = byStatus.find((s) => s.status === "BOUNCED")?._count._all ?? 0;
+  const counts = { sent: byStatus.reduce((n, s) => n + s._count._all, 0), bounced };
   return {
     sender,
     health: {
@@ -78,7 +76,7 @@ export async function loadSendingHealth(
       bouncedLastWeek: counts.bounced,
     },
   };
-}
+});
 
 /** Email and texts from the last two weeks that bounced or didn't go, newest first (as the viewer sees them). */
 export async function failedSends(organizationId: string, take = 12): Promise<FailedSend[]> {

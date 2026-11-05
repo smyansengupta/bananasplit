@@ -12,7 +12,7 @@ import { withOrgTx, withUserTx } from "@/server/db/context";
  * CSV export of the CRM (docs/features/crm.md: "Export to CSV anytime",
  * timeline included): ?kind=people | companies | items (&pipeline=) |
  * timeline, and &ids= (comma-separated) for only the picked people or
- * companies, or ?kind=all (CRM settings > Import and export): people,
+ * companies, or ?kind=all (CRM settings > Connections): people,
  * companies and each pipeline's deals as one zip, the timeline too with
  * &notes=1. Read as the viewer through RLS, so OWN access exports only
  * what the member can see. Formula-safe (src/lib/csv.ts) and rate-limited.

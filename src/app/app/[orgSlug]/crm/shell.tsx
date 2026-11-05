@@ -10,7 +10,12 @@ import { planGate } from "@/server/billing/plan-gate";
 import { crmAccessOf, readCrmSettings, type CrmAccess } from "@/server/crm/access";
 import { rolePositions, type RoleOwner } from "@/server/crm/owners";
 import { listPipelines, type PipelineView } from "@/server/crm/pipelines";
-import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/db/context";
+import {
+  getOrgContextBySlug,
+  withOrgSlugTx,
+  withOrgTx,
+  type OrgContextBySlug,
+} from "@/server/db/context";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
 import { crmConnectionLabel } from "@/server/crm/ai";
 import { connectedDataProviders } from "@/server/crm/data-connectors";
@@ -19,13 +24,14 @@ import { connectedDataProviders } from "@/server/crm/data-connectors";
  * Every CRM page starts here: the plan (Team Advanced), the add-on (added
  * on Integrations and apps) and the one-step setup, then the pipelines for
  * the tabs. `gate` is what to show instead of the page when one of those
- * isn't there yet.
+ * isn't there yet. Today passes `setup`: an owner or admin gets through
+ * before the CRM's settings exist, to answer "Get your CRM started".
  *
  * Deduped per request (React cache()), so a page and the card open over it
  * share one shell. The space and its add-ons come from the org context the
- * layout already read; the org chart's positions (a cached read) load beside
- * the CRM's settings and pipelines. Members load only where a page or card
- * asks for them (crmMembers).
+ * layout already read; the CRM's settings and pipelines load beside it, in
+ * their own transaction, and the org chart's positions (a cached read) after
+ * it. Members load only where a page or card asks for them (crmMembers).
  */
 
 export interface CrmShell {
@@ -101,26 +107,32 @@ export interface CrmSettingsShell extends CrmShell {
 export async function crmSettingsShell(
   orgSlug: string,
 ): Promise<{ gate: ReactNode; shell: null } | { gate: null; shell: CrmSettingsShell }> {
-  const loaded = await crmShell(orgSlug);
+  const shellP = crmShell(orgSlug);
+  const { organization } = await getOrgContextBySlug(orgSlug);
+  const [loaded, members] = await Promise.all([shellP, crmMembers(organization.id)]);
   if (!loaded.shell) return loaded;
-  return { gate: null, shell: { ...loaded.shell, members: await crmMembers(loaded.shell.org.id) } };
+  return { gate: null, shell: { ...loaded.shell, members } };
 }
 
+/** Before the org context is here, so before anyone knows the plan or the add-on: reads only. */
+const readShell = cache((orgSlug: string) =>
+  withOrgSlugTx(orgSlug, async ({ db, organizationId }) => {
+    const settings = await readCrmSettings(db, organizationId);
+    return { settings, pipelines: settings ? await listPipelines(db, organizationId) : [] };
+  }),
+);
+
 const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellResult> => {
+  const readP = readShell(orgSlug);
+  // Whichever way the page turns out, nobody is left waiting on this.
+  readP.catch(() => null);
   const locked = await planGate(orgSlug, "crm", { title: "CRM" });
   if (locked) return { gate: locked, shell: null };
   const { organization: org, user, role, settings: orgSettings } = await getOrgContextBySlug(orgSlug);
   const base = `/app/${orgSlug}`;
-  const [loaded, roles] = await Promise.all([
-    withOrgTx(org.id, async ({ db }) => {
-      const settings = await readCrmSettings(db, org.id);
-      const access = crmAccessOf({ role, userId: user.id }, org, orgSettings?.addOns, settings);
-      const pipelines = access.added && settings ? await listPipelines(db, org.id) : [];
-      return { access, pipelines };
-    }),
-    rolePositions(org.id),
-  ]);
-  const { access } = loaded;
+  const [{ settings, pipelines }, roles] = await Promise.all([readP, rolePositions(org.id)]);
+  const access = crmAccessOf({ role, userId: user.id }, org, orgSettings?.addOns, settings);
+  const loaded = { pipelines: access.added ? pipelines : [] };
   if (!access.added) {
     return {
       gate: (
@@ -146,7 +158,7 @@ const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellRe
       shell: null,
     };
   }
-  if (!access.settings && !setup) {
+  if (!access.settings && !(setup && access.admin)) {
     return {
       gate: (
         <Card>
@@ -155,13 +167,13 @@ const loadShell = cache(async (orgSlug: string, setup: boolean): Promise<ShellRe
             title="Set up the CRM"
             description={
               access.admin
-                ? "Say what you mostly reach out to, and it makes the pipelines and lists for you."
+                ? "Pick what you mostly reach out to on Today. It makes your pipelines and lists."
                 : "An owner or admin sets it up first. It takes a minute."
             }
             action={
               access.admin ? (
                 <Button asChild>
-                  <Link href={`${base}/crm/setup`}>Set it up</Link>
+                  <Link href={`${base}/crm`}>Set it up</Link>
                 </Button>
               ) : undefined
             }

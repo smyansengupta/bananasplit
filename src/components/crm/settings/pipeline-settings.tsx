@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
 import { useSave } from "./use-save";
 
 /**
- * CRM settings > Deal stages and types, for one pipeline: the stages (drag
+ * CRM settings > Deals and fields, for one pipeline: the stages (drag
  * to reorder, won and lost always last), the deal types (a Type choice on
  * the pipeline, so reports split by it), the pipeline's names, and a new
  * pipeline. Each card has its one Save.
@@ -373,7 +373,6 @@ export function TypesCard({
     >
       <SettingsCard
         title="Types"
-        description="Pick one when you make a deal. Reports can split by type."
         status={<SettingsStatus status={status} />}
         footer={
           <Button type="submit" disabled={pending || (!types.fieldId && choices.length === 0)}>
@@ -510,7 +509,6 @@ export function NewPipelineCard({ orgId, templates }: { orgId: string; templates
     >
       <SettingsCard
         title="Another pipeline"
-        description="For a different kind of deal, with its own stages."
         status={<SettingsStatus status={status} />}
         footer={
           <Button type="submit" disabled={pending || !name.trim()}>

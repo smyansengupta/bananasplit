@@ -141,9 +141,9 @@
   --accent-foreground:#0a0a0a;
   --brand-accent:#737373;
   --brand-accent-foreground:#ffffff;
-  /* Create buttons: white in light, lit by the glow (derive.ts says why). */
-  --create:#737373;
-  --create-foreground:#ffffff;
+  /* Create buttons: a blank plain button, white with a hairline (derive.ts says why). */
+  --create:#ffffff;
+  --create-foreground:#0a0a0a;
   --destructive:#db0018;
   --destructive-foreground:#ffffff;
   --success:#007e3f;
@@ -264,7 +264,7 @@
   --accent-foreground:#fafafa;
   --brand-accent:#a3a3a3;
   --brand-accent-foreground:#0a0a0a;
-  --create:#a3a3a3;
+  --create:#ffffff;
   --create-foreground:#0a0a0a;
   --destructive:#ff655a;
   --destructive-foreground:#000000;
@@ -423,7 +423,7 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* The glow as a halo (create buttons, the active item, the today circle). */
+/* The glow as a halo (the active item, the today circle, the marketing pill). */
 @utility glow-halo {
   box-shadow:
     0 0 0 1px color-mix(in oklab, var(--glow) 35%, transparent),
@@ -548,6 +548,48 @@
   background: currentColor;
   animation: live-breathe 2.4s ease-in-out infinite;
 }
+/*
+ * A goal hit (GoalGauge): the check pops once and a few sparks leave the
+ * ring. With reduced motion the check is simply there and no sparks show.
+ */
+@keyframes goal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes goal-spark {
+  from {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(0) scale(0.5);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: rotate(var(--spark-angle)) translateY(calc(var(--spark-reach) * -1)) scale(1);
+  }
+}
+.goal-spark {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .goal-pop {
+    animation: goal-pop 420ms var(--ease-ink, ease-out) both;
+  }
+  .goal-spark {
+    animation: goal-spark 720ms ease-out 140ms both;
+  }
+}
+
 @keyframes live-breathe {
   0%,
   100% {

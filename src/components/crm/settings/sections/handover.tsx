@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cache } from "react";
 
 import { SettingsCard } from "@/app/app/[orgSlug]/settings/settings-card";
 import type { CrmSettingsShell } from "@/app/app/[orgSlug]/crm/shell";
@@ -7,12 +8,10 @@ import { crmRecordHref } from "@/lib/crm/href";
 import { briefs, departedOwners, unowned } from "@/server/crm/outreach/handover";
 import { withOrgTx } from "@/server/db/context";
 
-import type { SectionProps } from "./types";
-
 /**
  * Handover, in CRM settings (it was its own page, /crm/handover, which
- * redirects here). Hand people over (owners, admins and CRM managers) holds
- * members who left, anyone with no owner, and members changing roles. You holds the
+ * redirects here). Team holds members who left, anyone with no owner, and
+ * members changing roles (owners, admins and CRM managers). You holds the
  * brief on each person handed to you lately, or that a position you hold
  * looks after (?role=). Never in a Personal space.
  */
@@ -31,16 +30,11 @@ function ownerChoices(shell: CrmSettingsShell): OwnerChoice[] {
   ];
 }
 
-/** Hand people over (owners, admins and CRM managers; not in a Personal space). */
-export async function HandoverSection({ shell, orgSlug }: SectionProps) {
-  return <HandoverCards shell={shell} orgSlug={orgSlug} />;
-}
-
-/** Members who left, people with no owner, and handing a member's people over. */
-export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
+/** Once per request: Team starts it beside its own reads, so the cards aren't read after them. */
+const loadHandover = cache((shell: CrmSettingsShell) => {
   const orgId = shell.org.id;
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
-  const data = await withOrgTx(orgId, async ({ db }) => {
+  return withOrgTx(orgId, async ({ db }) => {
     const left = await departedOwners(db, orgId);
     const counts = await db.crmPerson.groupBy({
       by: ["ownerId"],
@@ -61,14 +55,21 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
       unowned: await unowned(db, orgId, shell.roles),
     };
   });
+});
+
+export function preloadHandover(shell: CrmSettingsShell) {
+  void loadHandover(shell).catch(() => null);
+}
+
+/** Members who left, people with no owner, and handing a member's people over. */
+export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShell; orgSlug: string }) {
+  const orgId = shell.org.id;
+  const data = await loadHandover(shell);
   const choices = ownerChoices(shell);
   return (
-    <>
+    <div id="handover" className="scroll-mt-24 space-y-4.5">
       {data.left.length > 0 && (
-        <SettingsCard
-          title="Members who left"
-          description="Give everyone they looked after to someone else in one step."
-        >
+        <SettingsCard title="Members who left">
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {data.left.map((l) => (
               <HandOverCard key={l.userId} orgId={orgId} from={{ ...l, left: true }} choices={choices} />
@@ -76,17 +77,13 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
           </ul>
         </SettingsCard>
       )}
-      <SettingsCard
-        title="No owner"
-        description="People nobody looks after. Pick some and give them to someone."
-      >
-        <Unowned orgId={orgId} orgSlug={orgSlug} rows={data.unowned} choices={choices} />
-      </SettingsCard>
+      {data.unowned.length > 0 && (
+        <SettingsCard title="No owner">
+          <Unowned orgId={orgId} orgSlug={orgSlug} rows={data.unowned} choices={choices} />
+        </SettingsCard>
+      )}
       {data.members.length > 0 && (
-        <SettingsCard
-          title="Hand people over"
-          description="When someone steps back or changes role, hand their relationships to whoever takes over, or to a position so they follow it."
-        >
+        <SettingsCard title="Hand people over">
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {data.members.map((m) => (
               <HandOverCard key={m.userId} orgId={orgId} from={{ ...m, left: false }} choices={choices} />
@@ -94,25 +91,14 @@ export async function HandoverCards({ shell, orgSlug }: { shell: CrmSettingsShel
           </ul>
         </SettingsCard>
       )}
-    </>
+    </div>
   );
 }
 
 /** You: the brief on each person handed to you (or your position's, with ?role=). */
-export async function HandedToYou({
-  shell,
-  orgSlug,
-  role: asked,
-}: {
-  shell: CrmSettingsShell;
-  orgSlug: string;
-  role?: string;
-}) {
-  if (shell.access.personal) return null;
-  const orgId = shell.org.id;
-  const userId = shell.user.id;
-  const role = asked && shell.roles.has(asked) ? asked : null;
-  const rows = await withOrgTx(orgId, async ({ db }) => {
+/** Once per request: You starts it beside its own reads. */
+const loadHanded = cache((orgId: string, userId: string, role: string | null) =>
+  withOrgTx(orgId, async ({ db }) => {
     if (role) return briefs(db, orgId, { ownerRoleKey: role });
     // People handed to me in the last 90 days (field history) that I still own.
     const handed = await db.crmFieldHistory.findMany({
@@ -128,7 +114,32 @@ export async function HandedToYou({
     });
     if (handed.length === 0) return [];
     return briefs(db, orgId, { id: { in: [...new Set(handed.map((h) => h.targetId))] }, ownerId: userId });
-  });
+  }),
+);
+
+function askedRole(shell: CrmSettingsShell, asked?: string): string | null {
+  return asked && shell.roles.has(asked) ? asked : null;
+}
+
+export function preloadHanded(shell: CrmSettingsShell, asked?: string) {
+  if (shell.access.personal) return;
+  void loadHanded(shell.org.id, shell.user.id, askedRole(shell, asked)).catch(() => null);
+}
+
+export async function HandedToYou({
+  shell,
+  orgSlug,
+  role: asked,
+}: {
+  shell: CrmSettingsShell;
+  orgSlug: string;
+  role?: string;
+}) {
+  if (shell.access.personal) return null;
+  const orgId = shell.org.id;
+  const userId = shell.user.id;
+  const role = askedRole(shell, asked);
+  const rows = await loadHanded(orgId, userId, role);
   // Nothing handed over lately: no card, unless a link asked for a position's.
   if (rows.length === 0 && !role) return null;
   const title = role

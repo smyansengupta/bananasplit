@@ -8,7 +8,7 @@ import { getClientIp } from "@/lib/request-ip";
 import { book, type BookResult } from "@/server/booking/book";
 
 /**
- * Booking a time on a public booking link: anyone may, with a honeypot,
+ * Booking a time on a public meeting link: anyone may, with a honeypot,
  * input limits and three rate limits (docs/features/booking.md, "Spam and
  * abuse"): per visitor's address, per guest email address, and the link's
  * own caps in book(). The link's organization is found from its slug and

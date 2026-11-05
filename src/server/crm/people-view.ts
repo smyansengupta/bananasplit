@@ -392,7 +392,8 @@ export async function peoplePage(
   roles: ReadonlyMap<string, RoleOwner>,
   sp: Search,
   options: {
-    names: ReadonlyMap<string, string>;
+    /** Needed only at the end, so still loading is fine (already asked for, in its own transaction). */
+    names: PromiseLike<ReadonlyMap<string, string>>;
     relationships: readonly { id: string; label: string; color: string }[];
     pipelines: readonly PipelineView[];
     now?: Date;
@@ -488,7 +489,7 @@ export async function peoplePage(
         organizationId,
         pipelines,
         { ...dealF, pipeline: pipeline.id },
-        { id: viewerId, roles, names: options.names },
+        { id: viewerId, roles, names: await options.names },
         now,
         extra,
       );
@@ -523,6 +524,7 @@ export async function peoplePage(
     total = data.total;
     const deals = await dealsByRow(db, rowDealWhere, true, data.rows.map((c) => c.id), pipelines, now);
     const tasks = await taskSteps(db, organizationId, "company", data.rows.map((c) => c.id));
+    const names = await options.names;
     rows = data.rows.map((c) => {
       const deal = rowDealView(deals.get(c.id));
       return {
@@ -546,7 +548,7 @@ export async function peoplePage(
           now,
         ),
         mergeWith: null,
-        owner: ownerLabel(c, roles, options.names),
+        owner: ownerLabel(c, roles, names),
         deleted: Boolean(c.deletedAt),
         deal: deal.view,
       };
@@ -566,6 +568,7 @@ export async function peoplePage(
     const wrote = await unanswered(db, organizationId, ids, now);
     const deals = await dealsByRow(db, rowDealWhere, false, ids, pipelines, now);
     const tasks = await taskSteps(db, organizationId, "person", ids);
+    const names = await options.names;
     rows = data.rows.map((p) => {
       const dup = dupes.get(p.id) ?? null;
       const type = p.relationship ? tones.get(p.relationship) : null;
@@ -593,7 +596,7 @@ export async function peoplePage(
           now,
         ),
         mergeWith: dup?.otherId ?? null,
-        owner: ownerLabel(p, roles, options.names),
+        owner: ownerLabel(p, roles, names),
         deleted: Boolean(p.deletedAt),
         deal: deal.view,
       };

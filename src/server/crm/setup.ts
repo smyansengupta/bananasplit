@@ -156,11 +156,21 @@ export async function shareOutOwners(
   if (access.personal) return { shared: 0 };
   if (mode !== "split" && mode !== "rel" && mode !== "none") throw new CrmError("Pick who looks after them.");
   const { db, organizationId, userId } = actor;
-  // Setup is minutes, not days: an old or odd `since` is clamped to the last two hours.
+  // People you brought in are yours only for the last two hours: anything older you
+  // may have made by hand, and it stays yours. Anyone with no owner is fair game
+  // since the CRM began, because "Get your CRM started" can be days after bringing them in.
   const floor = new Date(Date.now() - 2 * 3_600_000);
   const from = Number.isFinite(since.getTime()) && since > floor ? since : floor;
+  const begun = access.settings?.setupDoneAt ?? from;
   const people = await db.crmPerson.findMany({
-    where: { organizationId, deletedAt: null, createdAt: { gte: from }, OR: [{ ownerId: userId }, { ownerId: null }] },
+    where: {
+      organizationId,
+      deletedAt: null,
+      OR: [
+        { ownerId: userId, createdAt: { gte: from } },
+        { ownerId: null, createdAt: { gte: begun < from ? begun : from } },
+      ],
+    },
     select: { id: true, relationship: true, userId: true },
     take: SHARE_OUT_MAX,
   });

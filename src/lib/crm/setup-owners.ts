@@ -2,11 +2,11 @@ import { splitAmong, type Routing, type RoutingRule } from "./outreach/assign";
 import { setupKindsFor, type SetupKind } from "./templates";
 
 /**
- * First-time setup, step 2, "Who looks after them?" (docs/features/crm.md,
- * "Redesign", Setup): split the people just brought in evenly among the
- * members, give each relationship type to one member, or leave them with
- * nobody for now. The same choice becomes the routing for people who come
- * in later (CRM settings > Team and access). Pure.
+ * "Who looks after new people?" in Get your CRM started (docs/features/crm.md,
+ * "Getting started"): split the people brought in evenly among the members,
+ * give each relationship type to one member, or leave them with nobody for
+ * now. The same choice becomes the routing for people who come in later
+ * (CRM settings > Team). Pure.
  */
 
 export type OwnerMode = "split" | "rel" | "none";
@@ -19,7 +19,7 @@ export const OWNER_MODES: readonly { id: OwnerMode; title: string; text: string 
   },
   {
     id: "rel",
-    title: "By relationship",
+    title: "By type of person",
     text: "Clients to one person, partners to another. Change it later in settings.",
   },
   {
@@ -85,18 +85,6 @@ export function planOwners(
   }
   for (const [id, owner] of splitAmong(loose, pool, load)) assign.set(id, owner);
   return { assign, routing: { mode: "rules", pool, rules } };
-}
-
-/** "About 214 people, owners split evenly." */
-export function setupSummary(people: number, mode: OwnerMode | null): string {
-  const who = `About ${people.toLocaleString("en-US")} ${people === 1 ? "person" : "people"}`;
-  if (!mode) return `${who}.`;
-  const words = {
-    split: "owners split evenly",
-    rel: "owners by relationship",
-    none: "no owners yet",
-  }[mode];
-  return `${who}, ${words}.`;
 }
 
 /**

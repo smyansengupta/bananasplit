@@ -2,10 +2,20 @@
 import { describe, expect, it } from "vitest";
 
 import { crmRecordHref } from "./href";
-import { formatOpen, hrefWithOpen, parseOpen, rendersOverlays } from "./overlay";
+import { formatOpen, hrefWithOpen, opensInstantly, parseOpen, rendersOverlays } from "./overlay";
 import { powerHourBackLabel, powerHourMinutes, powerHourSnoozeUntil } from "./power-hour";
 
 describe("the ?open= contract", () => {
+  it("opens the create dialogs from the page, and everything else from the server", () => {
+    for (const raw of ["new:person", "new:company", "new:deal", "goal"]) {
+      expect(opensInstantly(parseOpen(raw))).toBe(true);
+    }
+    for (const raw of ["person:p1", "goal:g1", "log", "plan:email", "power"]) {
+      expect(opensInstantly(parseOpen(raw))).toBe(false);
+    }
+    expect(opensInstantly(null)).toBe(false);
+  });
+
   it("reads every card kind", () => {
     expect(parseOpen("person:abc123")).toEqual({ kind: "person", id: "abc123" });
     expect(parseOpen("company:c_1")).toEqual({ kind: "company", id: "c_1" });
@@ -14,6 +24,13 @@ describe("the ?open= contract", () => {
     expect(parseOpen("log")).toEqual({ kind: "log" });
     expect(parseOpen("ask")).toEqual({ kind: "ask" });
     expect(parseOpen("calls")).toEqual({ kind: "calls" });
+    expect(parseOpen("recipes")).toEqual({ kind: "recipes" });
+    expect(parseOpen("scoring")).toEqual({ kind: "scoring" });
+    expect(parseOpen("automation")).toEqual({ kind: "automation", id: null });
+    expect(parseOpen("automation:w1")).toEqual({ kind: "automation", id: "w1" });
+    expect(parseOpen("automation:no spaces")).toBeNull();
+    expect(formatOpen({ kind: "automation", id: "w1" })).toBe("automation:w1");
+    expect(formatOpen({ kind: "automation", id: null })).toBe("automation");
     expect(parseOpen("text:t_1")).toEqual({ kind: "text", id: "t_1" });
     expect(parseOpen("new:person")).toEqual({ kind: "new", what: "person" });
     expect(parseOpen("new:deal")).toEqual({ kind: "new", what: "deal" });

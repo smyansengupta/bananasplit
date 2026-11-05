@@ -34,7 +34,7 @@ export type BodyFontOption = (typeof BODY_FONT_OPTIONS)[number];
 export interface ThemeStyle {
   /** Replaces the palette's accent in both modes; null keeps the palette's own. */
   accent: string | null;
-  /** The glow (the light behind the page, halos on create and focus); null keeps the preset's, else the accent. */
+  /** The glow (the light behind the page, halos on the active item and focus); null keeps the preset's, else the accent. */
   glow: string | null;
   radius: RadiusOption;
   textSize: TextSizeOption;

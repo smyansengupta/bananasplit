@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { SpaceBanner } from "@/components/billing/space-banner";
 import { TrialEndedDialog } from "@/components/billing/trial-ended-dialog";
+import { BeforeSettings } from "@/components/settings-close";
 import { AppShell } from "@/components/shell/app-shell";
 import { navSections } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
@@ -144,12 +146,18 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
     })),
   ];
 
-  // Name and picture from the database, not the session token (Profiles).
-  const shellUser = await getShellUser(ctx.user.id, ctx.user.email);
+  // Each in its own transaction, side by side. Name and picture from the
+  // database, not the session token (Profiles); prefs share that read.
+  const [shellUser, prefs, pins] = await Promise.all([
+    getShellUser(ctx.user.id, ctx.user.email),
+    getViewerPrefs(ctx.user.id),
+    withOrgTx(ctx.organization.id, ({ db }) =>
+      listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
+    ),
+  ]);
+
   // Someone who joined through an emailed invite before finishing profile
   // setup finishes it first (the flowchart's "Profile complete?").
-  const prefs = await getViewerPrefs(ctx.user.id);
-
   if (!prefs.onboardedAt) redirect("/onboarding");
   // The org's OrgTheme row rides along with the per-request org context
   // (React cache()), resolved and re-validated as strict hex before render;
@@ -159,29 +167,31 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
     resolveTheme(spaceIncludes(ctx.organization, "themes") ? ctx.theme : null),
     parsePersonalTheme(prefs.themePreference),
   );
-  const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
-    listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
-  );
   // The small counts beside Inbox, Forms and Finance (src/server/inbox/counts.ts),
-  // with the CRM's rows when it's added (its role owners read before the transaction).
-  const crmRoles = readAddOns(ctx.settings?.addOns).includes("crm")
-    ? await rolePositions(ctx.organization.id).catch(() => null)
-    : null;
-  const counts = await withOrgTx(ctx.organization.id, ({ db }) =>
-    sidebarCounts(db, {
-      orgId: ctx.organization.id,
-      userId: ctx.user.id,
-      org: ctx.organization,
-      // An add-on that isn't added keeps its rows out of Inbox and the badge.
-      canReviewFinance:
-        can({ role: ctx.role }, "finance.manage") &&
-        readAddOns(ctx.settings?.addOns).includes("finance"),
-      canReviewForms:
-        can({ role: ctx.role }, "databases.write") &&
-        readAddOns(ctx.settings?.addOns).includes("forms"),
-      crm: crmRoles ? { orgSlug: ctx.organization.slug, roles: crmRoles } : null,
-    }),
-  ).catch(() => null);
+  // with the CRM's rows when it's added (its role owners read before the
+  // transaction). The slowest read here and only badges, so nothing waits for
+  // it: the shell fills them in when they land.
+  const addOns = readAddOns(ctx.settings?.addOns);
+  const counts = (
+    addOns.includes("crm")
+      ? rolePositions(ctx.organization.id).catch(() => null)
+      : Promise.resolve(null)
+  )
+    .then((crmRoles) =>
+      withOrgTx(ctx.organization.id, ({ db }) =>
+        sidebarCounts(db, {
+          orgId: ctx.organization.id,
+          userId: ctx.user.id,
+          org: ctx.organization,
+          // An add-on that isn't added keeps its rows out of Inbox and the badge.
+          canReviewFinance: can({ role: ctx.role }, "finance.manage") && addOns.includes("finance"),
+          canReviewForms: can({ role: ctx.role }, "databases.write") && addOns.includes("forms"),
+          crm: crmRoles ? { orgSlug: ctx.organization.slug, roles: crmRoles } : null,
+        }),
+      ),
+    )
+    .then((c): Record<string, number> => ({ inbox: c.inbox, forms: c.forms, finance: c.finance }))
+    .catch((): Record<string, number> => ({}));
   // Docked or rail, as the member left it, so the first paint is right.
   const sidebarMode = await getSidebarMode(ctx.user.id);
   // Your own order and hidden rows, on top of the organization's sidebar.
@@ -195,7 +205,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgs={orgs}
         user={shellUser}
         pins={pins}
-        counts={counts ? { inbox: counts.inbox, forms: counts.forms, finance: counts.finance } : {}}
+        counts={counts}
         sections={navSections(
           ctx.organization.slug,
           visibleSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? []),
@@ -261,6 +271,9 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
           />
         }
       >
+        <Suspense fallback={null}>
+          <BeforeSettings />
+        </Suspense>
         {children}
       </AppShell>
     </OrgThemeRoot>

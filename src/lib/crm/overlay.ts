@@ -16,6 +16,9 @@
  *   ?open=quote:<id>          (a quote or invoice, with every detail)
  *   ?open=plan:sequence:<id>    ?open=plan:campaign:<id>   (an outreach plan)
  *   ?open=plan:email     ?open=plan:split   (a new one-email or split-a-list plan)
+ *   ?open=automation     ?open=automation:<id>   (an automation, in CRM settings;
+ *                        a new one reads ?describe= for a sentence to start from)
+ *   ?open=recipes        ?open=scoring      (ready-made automations, the score rules)
  *
  * Pure, so the server (CrmOverlays) and the client (useCrmOpen) read and
  * write it the same way.
@@ -47,7 +50,10 @@ export type CrmOpen =
   | { kind: "merge"; ids: [string, string] | [string] }
   | { kind: "quote"; id: string }
   | { kind: "plan"; type: CrmPlanType; id: string }
-  | { kind: "plan"; type: CrmNewPlan; id: null };
+  | { kind: "plan"; type: CrmNewPlan; id: null }
+  | { kind: "automation"; id: string | null }
+  | { kind: "recipes" }
+  | { kind: "scoring" };
 
 export type CrmOpenKind = CrmOpen["kind"];
 
@@ -90,14 +96,17 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
     case "log":
     case "ask":
     case "calls":
+    case "recipes":
+    case "scoring":
       return rest === null ? { kind: head } : null;
     case "new":
       return rest && (NEW_KINDS as readonly string[]).includes(rest)
         ? { kind: "new", what: rest as CrmNewKind }
         : null;
     case "goal":
-      if (rest === null) return { kind: "goal", id: null };
-      return ID.test(rest) ? { kind: "goal", id: rest } : null;
+    case "automation":
+      if (rest === null) return { kind: head, id: null };
+      return ID.test(rest) ? { kind: head, id: rest } : null;
     case "merge": {
       const ids = (rest ?? "").split(",");
       // One id: the card asks for the second.
@@ -113,6 +122,15 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
   }
 }
 
+/**
+ * The create dialogs: they open from what the page already holds
+ * (CrmCreateHost), so `?open=` for one changes the URL shallowly and never
+ * asks the server. Everything else loads on the server (CrmOverlays).
+ */
+export function opensInstantly(open: CrmOpen | null): boolean {
+  return open?.kind === "new" || (open?.kind === "goal" && open.id === null);
+}
+
 /** A CrmOpen as the `?open=` value. */
 export function formatOpen(open: CrmOpen): string {
   switch (open.kind) {
@@ -125,7 +143,8 @@ export function formatOpen(open: CrmOpen): string {
     case "new":
       return `new:${open.what}`;
     case "goal":
-      return open.id ? `goal:${open.id}` : "goal";
+    case "automation":
+      return open.id ? `${open.kind}:${open.id}` : open.kind;
     case "merge":
       return `merge:${open.ids.join(",")}`;
     case "plan":

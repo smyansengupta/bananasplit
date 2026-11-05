@@ -9,7 +9,7 @@ export type MeetingsView = "upcoming" | "find" | "booking";
  * Finance's pages): the meetings themselves (coming up, with what's past in
  * a list right under them), Find a time, which lives under Meetings now
  * (it is how a meeting gets its date), so its pages show this bar too, and
- * Booking links (your own link and the organization's; docs/features/booking.md).
+ * Meeting links (your own link and the organization's; docs/features/booking.md).
  */
 export function MeetingsTabs({
   orgSlug,
@@ -30,16 +30,18 @@ export function MeetingsTabs({
           label: "Meetings",
           count: counts?.upcoming,
           active: current === "upcoming",
+          warm: true,
         },
         {
           href: `${base}/calendar/find-a-time`,
           label: "Find a time",
           count: counts?.find,
           active: current === "find",
+          warm: true,
         },
         {
           href: `${base}/meetings/booking`,
-          label: "Booking links",
+          label: "Meeting links",
           count: counts?.booking,
           active: current === "booking",
         },

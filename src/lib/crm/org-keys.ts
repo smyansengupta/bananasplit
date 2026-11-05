@@ -9,7 +9,7 @@ import { AI_VENDORS } from "@/lib/ai/vendors";
  */
 
 /** Where an owner or admin adds and changes the organization's keys. */
-export const ORG_KEYS_PLACE = "CRM settings > AI";
+export const ORG_KEYS_PLACE = "CRM settings > Connections";
 
 export type OrgKeyId =
   | "anthropic"

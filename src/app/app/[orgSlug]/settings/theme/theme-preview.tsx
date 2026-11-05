@@ -117,7 +117,7 @@ export function ThemePreview({
                 <p className="page-title text-[30px]">Good afternoon</p>
                 <p className="text-muted-foreground mt-1.5 text-[13px]">3 things need you today</p>
               </div>
-              <span className={buttonVariants({ variant: "create", size: "sm" })}>
+              <span className={cn(buttonVariants({ variant: "create", size: "sm" }))}>
                 <Plus aria-hidden="true" />
                 New task
               </span>

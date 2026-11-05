@@ -1,7 +1,39 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { formatGoal, goalPeriods, goalTitle, paceWords, parseTarget, projectPace } from "./goal-pace";
+import {
+  formatGoal,
+  goalPeriods,
+  goalStanding,
+  goalTitle,
+  paceWords,
+  parseTarget,
+  projectPace,
+  standingWords,
+} from "./goal-pace";
+
+describe("where a goal stands", () => {
+  const at = (actual: number, target: number, pace: number) => {
+    const share = actual / target;
+    return { actual, target, share, pace, onTrack: share >= pace * 0.9 };
+  };
+
+  it("is hit at the target, whatever the pace", () => {
+    expect(goalStanding(at(10, 10, 0.2))).toBe("won");
+    expect(standingWords("items_won", at(10, 10, 0.2))).toBe("Goal hit");
+    expect(standingWords("items_won", at(12, 10, 0.2))).toBe("Goal hit, 20% over");
+  });
+
+  it("says ahead and on pace plainly", () => {
+    expect(standingWords("items_won", at(8, 10, 0.5))).toBe("Ahead of pace");
+    expect(standingWords("items_won", at(5, 10, 0.5))).toBe("On pace");
+  });
+
+  it("says how far behind, calmly, in the goal's own units", () => {
+    expect(standingWords("items_won", at(2, 10, 0.5))).toBe("About 3 deals behind pace");
+    expect(standingWords("amount_won", at(100_000, 1_000_000, 0.5))).toBe("About $4,000 behind pace");
+  });
+});
 
 describe("a goal's pace", () => {
   const q4 = { start: "2026-10-01", end: "2026-12-31" };
@@ -17,7 +49,6 @@ describe("a goal's pace", () => {
     const w = paceWords("items_won", 5, 12, q4, "2026-11-15");
     expect(w.pace).toBe("At this pace you'll reach 10 deals by Dec 31.");
     expect(w.sub).toBe("So far 5 deals. About 2 deals short of the 12 deals target.");
-    expect(w.soFarShare).toBeCloseTo(5 / 12);
     const clear = paceWords("amount_won", 1_850_000, 1_000_000, q4, "2026-11-15");
     expect(clear.sub).toBe("So far $18,500. That clears the $10,000 target.");
     expect(paceWords("replies", 3, 10, q4, "2027-01-05").pace).toBe("It ended at 3 replies.");

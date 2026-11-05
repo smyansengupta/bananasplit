@@ -3,7 +3,7 @@
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { Plus } from "@/components/icons";
 import dynamic from "next/dynamic";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { CalendarMember } from "@/components/calendar/member-picker";
@@ -57,7 +57,6 @@ export function NewMeetingButton({
   /** `create` in the header, the quieter `secondary` where an empty page repeats it. */
   variant?: "create" | "secondary";
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const params = useParams<{ orgSlug?: string }>();
@@ -67,23 +66,26 @@ export function NewMeetingButton({
   // A link followed while Meetings is already on screen (the + menu) asks
   // again with the same button still mounted. The state is adjusted while
   // rendering, as the Calendar's is, so it opens on that very render.
-  const [wasAsked, setWasAsked] = useState(startOpen);
-  if (startOpen !== wasAsked) {
-    setWasAsked(startOpen);
-    if (startOpen) {
+  const asked = startOpen && searchParams.has(NEW_EVENT_PARAM);
+  const [wasAsked, setWasAsked] = useState(asked);
+  if (asked !== wasAsked) {
+    setWasAsked(asked);
+    if (asked) {
       setShape(initialShape);
       setOpen(true);
     }
   }
 
   // Then drop the param, keeping the rest of the query (a connect notice).
+  // Only the address changes: a router navigation would swap the page for
+  // its loading skeleton behind the open dialog.
   useEffect(() => {
-    if (!startOpen || !searchParams.has(NEW_EVENT_PARAM)) return;
+    if (!asked) return;
     const next = new URLSearchParams(searchParams.toString());
     next.delete(NEW_EVENT_PARAM);
     const search = next.toString();
-    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-  }, [startOpen, searchParams, router, pathname]);
+    window.history.replaceState(null, "", search ? `${pathname}?${search}` : pathname);
+  }, [asked, searchParams, pathname]);
 
   return (
     <>
