@@ -115,6 +115,7 @@ import { onlineNow } from "@/server/presence";
 import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
 import { otherSpacesUpNext } from "@/lib/personal/up-next";
+import { UP_NEXT_KINDS } from "@/lib/overview/up-next";
 import { getMyOpenTasks, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
@@ -298,7 +299,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const polls = shared.upNextPolls;
     // Cards this member hid from their own Up next (own-row RLS).
     const dismissed = await db.upNextDismissal.findMany({
-      where: { organizationId: org.id, userId: user.id },
+      where: { organizationId: org.id, userId: user.id, kind: { in: [...UP_NEXT_KINDS] } },
       select: { kind: true, refId: true },
     });
     const upcomingSend = upcomingPulseSend(now, orgZone, pulseDay, pulseHour);

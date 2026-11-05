@@ -27,6 +27,7 @@ vi.mock("@/server/db/context", () => ({
       db: {
         membership: { findMany: async () => [] },
         invitation: { findMany: async () => [] },
+        upNextDismissal: { findMany: async () => [] },
       },
     }),
   withOrgAction: (fn: unknown) => fn,

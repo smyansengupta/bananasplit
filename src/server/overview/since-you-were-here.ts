@@ -1,4 +1,5 @@
 import type { Role } from "@/generated/prisma/enums";
+import { NEWCOMER_DISMISSAL } from "@/lib/ambient/people";
 import { can } from "@/lib/auth/permissions";
 import {
   buildSince,
@@ -213,8 +214,17 @@ export async function loadSinceFacts(
   ];
 
   // People who joined, and the next event most of them said yes to.
+  // Not anyone this member already dismissed (People's x, or the one here).
+  const dismissed = await db.upNextDismissal.findMany({
+    where: { organizationId, userId: me, kind: NEWCOMER_DISMISSAL },
+    select: { refId: true },
+  });
   const joinedRows = await db.membership.findMany({
-    where: { organizationId, joinedAt: after, userId: { not: me } },
+    where: {
+      organizationId,
+      joinedAt: after,
+      userId: { not: me, notIn: dismissed.map((d) => d.refId) },
+    },
     select: { user: { select: userPublicSelect } },
     orderBy: { joinedAt: "asc" },
     take: 40,

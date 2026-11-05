@@ -1551,7 +1551,11 @@ export interface CommentResult {
   droppedMentions?: string[];
 }
 
-/** Any member may comment on a task they can see. Mentions notify; the owner and collaborators get a comment notice. */
+/**
+ * Any member may comment on a task they can see. Mentions notify; everyone
+ * else on the task (its owner, collaborators, whoever made it and whoever
+ * commented before) gets a comment notice in their Inbox.
+ */
 /**
  * What an ambient ask on a task is (src/components/tasks/task-ambient.tsx):
  * the person mentioned gets it in their Inbox in these words.
@@ -1580,12 +1584,25 @@ export async function addComment(
   });
   await writeActivity(env, s.id, [{ type: "COMMENTED", diffJson: { commentId: comment.id } }]);
   const mentions = await syncMentions(env, { ...s, ...visibilityOf(s) }, comment.id, body, ask);
-  // The owner and the collaborators are inside a private task's audience by
-  // definition, so this notice never needs its own filter.
+  const earlier = await db.taskComment.findMany({
+    where: { organizationId, taskId: s.id, deletedAt: null },
+    select: { authorId: true },
+    distinct: ["authorId"],
+  });
+  // A past commenter may have left, or lost sight of a task made private since.
+  const audience = mentionAudience(env, visibilityOf(s));
   const watchers = uniq([
     ...(s.ownerId ? [s.ownerId] : []),
     ...s.assignees.map((a) => a.userId),
-  ]).filter((id) => id !== env.actor.userId && !mentions.notified.includes(id));
+    s.createdById,
+    ...earlier.map((c) => c.authorId),
+  ]).filter(
+    (id) =>
+      id !== env.actor.userId &&
+      !mentions.notified.includes(id) &&
+      env.memberIds.has(id) &&
+      (!audience || audience.has(id)),
+  );
   if (watchers.length > 0) {
     await notifyUsers(db, organizationId, watchers, {
       type: NotificationType.TASK_COMMENTED,

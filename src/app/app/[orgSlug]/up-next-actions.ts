@@ -58,7 +58,11 @@ export const hideUpNextCard = withOrgAction(
 export const showHiddenUpNextCards = withOrgAction(
   async (ctx): Promise<{ ok: boolean; restored: number }> => {
     const gone = await ctx.db.upNextDismissal.deleteMany({
-      where: { userId: ctx.userId, organizationId: ctx.organizationId },
+      where: {
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        kind: { in: [...UP_NEXT_KINDS] },
+      },
     });
     return { ok: true, restored: gone.count };
   },

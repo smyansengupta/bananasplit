@@ -42,6 +42,9 @@ export function newcomerReason(joinedAt: string, hasTeam: boolean, now: Date): s
   return hasTeam ? when : `${when}, no team yet`;
 }
 
+/** UpNextDismissal.kind for "stop showing me this newcomer" (refId: their user id). */
+export const NEWCOMER_DISMISSAL = "newcomer";
+
 /** The hello Say hi sends. */
 export function sayHiText(orgName: string): string {
   return `Welcome to ${orgName}! Glad you're here. Shout if you need anything.`;

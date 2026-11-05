@@ -18,10 +18,10 @@ import { notifyUsers } from "@/server/notifications";
  * it (a thread's first comment takes its replies with it).
  *
  * @mentions notify (TASK_MENTIONED, "Someone @mentions me in a task or
- * comment"), and a reply tells the thread's earlier commenters
- * (TASK_COMMENTED): the existing notification types, so the bell, email
- * and preferences need nothing new. Only people who can see the note are
- * told.
+ * comment"). Any comment tells the note's author and the people it's shared
+ * with, and a reply also tells the thread's earlier commenters
+ * (TASK_COMMENTED): the existing notification types, so the Inbox, email and
+ * preferences need nothing new. Only people who can see the note are told.
  */
 
 const filesAction: typeof withOrgAction = (handler, options) =>
@@ -133,24 +133,31 @@ export const addNoteComment = filesAction(
         actorId: ctx.userId,
       });
     }
-    if (thread) {
-      const earlier = await ctx.db.noteComment.findMany({
-        where: { organizationId: ctx.organizationId, noteId, threadId: thread.id },
-        select: { authorId: true },
+    const shares = await ctx.db.noteShare.findMany({
+      where: { organizationId: ctx.organizationId, noteId },
+      select: { userId: true },
+    });
+    const earlier = thread
+      ? await ctx.db.noteComment.findMany({
+          where: { organizationId: ctx.organizationId, noteId, threadId: thread.id },
+          select: { authorId: true },
+        })
+      : [];
+    const onTheNote = [
+      note.authorId,
+      ...shares.map((s) => s.userId),
+      thread?.authorId,
+      ...earlier.map((c) => c.authorId),
+    ].filter((id): id is string => Boolean(id) && !mentioned.includes(id!));
+    const told = await readersAmong(ctx, note, onTheNote);
+    if (told.length > 0) {
+      await notifyUsers(ctx.db, ctx.organizationId, told, {
+        type: NotificationType.TASK_COMMENTED,
+        title: thread ? `${name} replied in “${title}”` : `${name} commented on “${title}”`,
+        body: body.slice(0, 300),
+        linkUrl: link,
+        actorId: ctx.userId,
       });
-      const participants = [thread.authorId, ...earlier.map((c) => c.authorId)].filter(
-        (id): id is string => Boolean(id) && !mentioned.includes(id!),
-      );
-      const told = await readersAmong(ctx, note, participants);
-      if (told.length > 0) {
-        await notifyUsers(ctx.db, ctx.organizationId, told, {
-          type: NotificationType.TASK_COMMENTED,
-          title: `${name} replied in “${title}”`,
-          body: body.slice(0, 300),
-          linkUrl: link,
-          actorId: ctx.userId,
-        });
-      }
     }
     return { commentId: comment.id, comments: await freshList(ctx, noteId) };
   },

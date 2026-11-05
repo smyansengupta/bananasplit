@@ -6277,6 +6277,26 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
     { value: { own: 1, move: 1, other_moves: 0, other_reads: ["Inbox"] } },
   );
+  await tcase(
+    "P-HOME-04",
+    "dismissing someone new (20261109090000_newcomer_dismissal): a member keeps their own dismissal, for nobody else, and the kinds stay a closed list",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const dismiss = (userId, kind) =>
+        tryq(
+          q,
+          `INSERT INTO "UpNextDismissal" ("organizationId","userId","kind","refId")
+           VALUES ('org_A','${userId}','${kind}','u_bothAB')`,
+        );
+      return {
+        own: await dismiss("u_memberA", "newcomer"),
+        for_someone_else: await dismiss("u_bothAB", "newcomer"),
+        unknown_kind: await dismiss("u_memberA", "stranger"),
+      };
+    },
+    { value: { own: 1, for_someone_else: "42501", unknown_kind: "23514" } },
+  );
 
   // ======================= Booking links (20261107090000) =======================
   // Rows the lookups need are committed by the owner first and removed after.
