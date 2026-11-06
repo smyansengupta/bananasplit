@@ -36,9 +36,10 @@ checked 2026-10-21.
     and whether it is revoked.
   - WorkOS holds the OAuth machinery: client registration (CIMD and DCR),
     PKCE, the consent screen and refresh tokens.
-- **Tools.** 15 read tools for every grant; nine write tools only for a
-  grant the member allowed to make changes. No tool sends anything outside
-  the app.
+- **Tools.** 20 read tools for every grant; 17 write tools only for a
+  grant the member allowed to make changes. 13 of them (5 read, 8 write) are
+  the CRM's, in a space that added it ([`crm.md`](crm.md), "Your own Claude
+  (MCP)"). No tool sends anything outside the app.
 
 ## How a connection works
 
@@ -355,8 +356,9 @@ organization at once; nothing is revoked, so on restores access. Audited as
 
 ## Tools
 
-24 tools: 15 read tools every grant gets, and nine write tools a WRITE grant
-gets after them.
+37 tools: 20 read tools every grant gets, and 17 write tools a WRITE grant
+gets after them. The 13 CRM tools (`crm_*`) are described in
+[`crm.md`](crm.md), "Your own Claude (MCP)"; the rest are below.
 
 ### Rules every tool follows
 

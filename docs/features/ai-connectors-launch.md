@@ -11,8 +11,8 @@ here changes with it (it must equal `NEXT_PUBLIC_APP_URL` plus `/api/mcp`).
 
 **Already in the repository (2026-11-01):**
 
-- 24 tools, each with a title and all four hints, pinned by
-  `src/server/connectors/server.test.ts`.
+- 37 tools (13 of them the CRM's), each with a title, all four hints and
+  every argument described, pinned by `src/server/connectors/server.test.ts`.
 - `/.well-known/openai-apps-challenge`, serving `OPENAI_APPS_CHALLENGE`.
 - `server.json` for the MCP Registry, validated against the `2025-12-11`
   schema.

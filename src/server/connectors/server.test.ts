@@ -69,7 +69,7 @@ async function listTools(access: ResolvedGrant["access"]): Promise<ListedTool[]>
 describe("every connector tool, as the directories review it", () => {
   it("has a title, a description and all four hints explicit", async () => {
     const tools = await listTools("WRITE");
-    expect(tools.length).toBe(24);
+    expect(tools.length).toBe(37);
     for (const tool of tools) {
       expect(tool.name, tool.name).toMatch(/^[a-z][a-z_]{1,63}$/);
       expect(tool.title?.trim(), tool.name).toBeTruthy();
@@ -97,7 +97,7 @@ describe("every connector tool, as the directories review it", () => {
   it("gives a READ grant only read-only tools, and marks every one of them so", async () => {
     const read = await listTools("READ");
     const write = await listTools("WRITE");
-    expect(read.length).toBe(15);
+    expect(read.length).toBe(20);
     for (const tool of read) {
       expect(tool.annotations, tool.name).toMatchObject({
         readOnlyHint: true,
