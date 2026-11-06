@@ -16,8 +16,8 @@ import type { ConnectorSession } from "./shared";
 
 /**
  * Every read tool opens its space here: withConnectorOrgTx (the grant's
- * scope, membership, the club switch, the plan's `feature`), reads allowed
- * while a club is paused, then the space as the tool needs it. A section
+ * scope, membership, the club switch, the plan's `feature`), then the
+ * space as the tool needs it. A section
  * the club hid in Settings › Sidebar is refused to members, as search
  * leaves it out of theirs; owners and admins still read it.
  */
@@ -48,7 +48,7 @@ export interface ToolSpace {
   admin: boolean;
   /** An absolute link into the space: url("/tasks/abc"). */
   url(path?: string): string;
-  /** The plan includes `feature` (a paused club still reads everything). */
+  /** The plan includes `feature`. */
   includes(feature: PlanFeature): boolean;
   /** Whether this member may read `section` (it isn't hidden, or they're an admin). */
   opens(section: SectionId): boolean;

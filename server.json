@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "fyi.bananasplit/bananasplit",
+  "title": "Bananasplit",
+  "description": "Tasks, events, notes, databases and polls from your Bananasplit Personal space and organizations.",
+  "version": "1.0.0",
+  "websiteUrl": "https://bananasplit.fyi",
+  "icons": [
+    {
+      "src": "https://bananasplit.fyi/brand/bananasplit-app-icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    },
+    {
+      "src": "https://bananasplit.fyi/apple-icon.png",
+      "mimeType": "image/png",
+      "sizes": ["180x180"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://bananasplit.fyi/api/mcp"
+    }
+  ]
+}

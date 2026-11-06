@@ -255,7 +255,12 @@ function Cards({ mode, signedIn }: { mode: PriceMode; signedIn: boolean }) {
 
 /** A cell in the comparison: included, not included, or a value ("100 GB"). */
 type Mark = boolean | string;
-type Row = { feature: string; marks: readonly [Mark, Mark, Mark, Mark] };
+type Row = {
+  feature: string;
+  marks: readonly [Mark, Mark, Mark, Mark];
+  /** Shown only while AI connectors are on (src/server/connectors/config.ts). */
+  connectors?: true;
+};
 
 const ALL: Row["marks"] = [true, true, true, true];
 const TEAM_UP: Row["marks"] = [false, true, true, true];
@@ -296,6 +301,11 @@ const SECTIONS: readonly { title: string; rows: readonly Row[] }[] = [
       { feature: "Event pages, waitlists and QR check-in", marks: ALL },
       { feature: "Guests RSVP and answer polls without an account", marks: ALL },
       { feature: "Member directory and roles", marks: ALL },
+      {
+        feature: "AI connectors: Claude, ChatGPT and other AI apps",
+        marks: ALL,
+        connectors: true,
+      },
     ],
   },
   {
@@ -345,7 +355,7 @@ function MarkCell({ mark }: { mark: Mark }) {
 }
 
 /** The comparison table; on phones it scrolls sideways with the feature column pinned. */
-function Compare() {
+function Compare({ connectors }: { connectors: boolean }) {
   return (
     <section id="compare" className="flex scroll-mt-24 flex-col gap-8">
       <SectionTitle className="text-center text-[clamp(30px,3.6vw,44px)]">
@@ -377,21 +387,23 @@ function Compare() {
                     {section.title}
                   </th>
                 </tr>
-                {section.rows.map((row) => (
-                  <tr key={row.feature} className="border-border border-t">
-                    <th
-                      scope="row"
-                      className="bg-card sticky left-0 px-5 py-3.5 text-left font-normal"
-                    >
-                      {row.feature}
-                    </th>
-                    {row.marks.map((mark, i) => (
-                      <td key={COLUMNS[i]} className="px-5 py-3.5 text-center">
-                        <MarkCell mark={mark} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {section.rows
+                  .filter((row) => connectors || !row.connectors)
+                  .map((row) => (
+                    <tr key={row.feature} className="border-border border-t">
+                      <th
+                        scope="row"
+                        className="bg-card sticky left-0 px-5 py-3.5 text-left font-normal"
+                      >
+                        {row.feature}
+                      </th>
+                      {row.marks.map((mark, i) => (
+                        <td key={COLUMNS[i]} className="px-5 py-3.5 text-center">
+                          <MarkCell mark={mark} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
               </Fragment>
             ))}
           </tbody>
@@ -406,7 +418,14 @@ function Compare() {
  * personal cards, the student note, then the comparison. Prices come from
  * src/lib/billing/plans.ts (TEAM_PRICES).
  */
-export function PricingPlans({ signedIn = false }: { signedIn?: boolean }) {
+export function PricingPlans({
+  signedIn = false,
+  connectors = false,
+}: {
+  signedIn?: boolean;
+  /** Whether AI connectors are on, so the comparison lists them. */
+  connectors?: boolean;
+}) {
   return (
     <section className={cn(CONTAINER, "flex flex-col gap-16 pt-[clamp(56px,8vw,96px)] sm:gap-24")}>
       <div className="flex flex-col gap-10">
@@ -426,7 +445,7 @@ export function PricingPlans({ signedIn = false }: { signedIn?: boolean }) {
         />
       </div>
       <span id="custom" className="-mt-16 scroll-mt-24 sm:-mt-24" aria-hidden="true" />
-      <Compare />
+      <Compare connectors={connectors} />
     </section>
   );
 }

@@ -1039,8 +1039,10 @@ know if you have any questions" closers, no em dashes, no stacked threes, no
 significance claims or vague praise, plain text, short. `withEmailStyle`
 appends them to a prompt; it is used by `draftSystemPrompt` (the record's
 Draft a follow-up and the follow-up agent's check-ins, both through
-`draftFollowUp`) and by the `crm_draft_email` tool's description, so a
-member's own Claude gets the same rules.
+`draftFollowUp`). The `crm_draft_email` tool's description doesn't carry
+them: both connector directories reject tool descriptions that direct the
+model, so it says only that drafts are checked, and the post-check below is
+what a member's own Claude hears.
 
 The post-check is `emailTells`: a short list of the most obvious tells
 (dashes, the opener and closer phrases, "reaching out", "don't hesitate",

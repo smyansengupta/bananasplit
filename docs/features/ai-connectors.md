@@ -1,14 +1,23 @@
-# AI connectors (MCP): implementation plan
+# AI connectors (MCP)
 
-Status: Phase 1 (foundations) built 2026-10-25, and Phase 2 (read tools)
-and Phase 3 (write tools) 2026-10-26, behind `CONNECTORS_ENABLED` (see
-each phase's "as built"). Phase 0's WorkOS checks have not run yet, so
-nothing has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
-serves a remote MCP server, so members can use their Personal space and clubs
-from Claude, ChatGPT, Cursor, VS Code and other MCP clients. WorkOS AuthKit
-Standalone Connect issues the OAuth tokens. Auth.js stays the only way to
-sign in. The research behind this covered the MCP 2026-07-28 spec, the
-TypeScript SDK v2 and the WorkOS Connect docs, all checked 2026-10-21.
+Members use their Personal space and organizations from Claude, ChatGPT,
+Cursor, VS Code and other MCP clients. Bananasplit serves a remote MCP
+server at `/api/mcp`; WorkOS AuthKit Standalone Connect issues the OAuth
+tokens; Auth.js stays the only way to sign in.
+
+**Status (2026-11-01).** Built and on `main`, off unless configured
+(`CONNECTORS_ENABLED`, below): foundations and `list_spaces` (PR #66,
+2026-10-25), 14 read tools (PR #68, 2026-10-26) and nine write tools (PR
+#71, 2026-10-26, merged to `main` through #74 and #77). Phase 4 added the
+launch material: the tool audit test, ChatGPT's domain check, the MCP
+Registry entry and the reviewer account. **No real client has connected
+yet:** the WorkOS staging checks (Phase 0, `ai-connectors-spike.md`) have
+not run, and tests use a local RS256 key set. The steps only the owner can
+take, in order, are in [`ai-connectors-launch.md`](ai-connectors-launch.md).
+
+The design rests on the MCP 2026-07-28 spec, the TypeScript SDK v2
+(`@modelcontextprotocol/server` 2.3) and the WorkOS Connect docs, all
+checked 2026-10-21.
 
 ## Summary
 
@@ -27,8 +36,10 @@ TypeScript SDK v2 and the WorkOS Connect docs, all checked 2026-10-21.
     and whether it is revoked.
   - WorkOS holds the OAuth machinery: client registration (CIMD and DCR),
     PKCE, the consent screen and refresh tokens.
-- **What ships when.** Read tools ship first and write tools follow. No
-  tool sends anything outside the club.
+- **Tools.** 20 read tools for every grant; 17 write tools only for a
+  grant the member allowed to make changes. 13 of them (5 read, 8 write) are
+  the CRM's, in a space that added it ([`crm.md`](crm.md), "Your own Claude
+  (MCP)"). No tool sends anything outside the app.
 
 ## How a connection works
 
@@ -79,6 +90,8 @@ TypeScript SDK v2 and the WorkOS Connect docs, all checked 2026-10-21.
 | `sid` | the consent id (`app_consent_…`) | tells a new consent from an old one |
 | `urn:bananasplit:space`, `urn:bananasplit:access` | `user_consent_options` | the member's choices at consent |
 
+A token must carry `urn:bananasplit:uid`, `client_id`, `sid` and `sub`.
+
 The audience check fails closed. With no Resource Indicator registered,
 WorkOS ignores `resource` and sets `aud` to the environment's client id,
 which our check rejects.
@@ -88,102 +101,66 @@ We don't use `scope`. Self-registered clients only get
 set an environment-wide default. So "read" versus "read and change" is the
 grant's `access`, chosen at consent.
 
-## Decisions (confirmed 2026-10-22, as proposed)
+## Decisions (confirmed 2026-10-22)
 
-1. **Which plans get connectors.**
-   - Every plan (`connectors: "FREE"` in `PLAN_FEATURES`), as Notion and
-     Linear do.
+1. **Every plan gets connectors** (`connectors: "FREE"` in
+   `PLAN_FEATURES`), as Notion and Linear do.
    - Why: the member's own AI app pays for the model, and the ChatGPT
      directory rejects in-app upsells.
-   - Paused clubs: reads keep working and writes are refused, as for
-     everything else.
-2. **The club switch's default.** The switch lives at Admin panel › Privacy
-   › AI connectors, for owners and admins (`privacy.write`). On, for new
-   and existing clubs.
+   - Each tool still needs its own plan feature: finance needs Team, and
+     Personal has no people, weekly updates or finance. Since the homepage
+     redesign (#72) nothing pauses: a trial that ends drops to Team Free,
+     and its locked features are refused to reads and writes alike.
+2. **The club switch is on by default**, for new and existing
+   organizations. It lives at Admin panel › Privacy › AI connectors, for
+   owners and admins (`privacy.write`).
 3. **The consent choices.** AuthKit allows enums only, one choice each.
-   - Space: "Personal and all my clubs", or one space.
+   - Space: "Personal and all my organizations", or one space.
    - Access: "Read only" (listed first, the default) or "Read and make
      changes".
-4. **An AuthKit custom domain.** This would be `auth.<domain>`, $99/mo,
-   production only. The issuer and the JWKS URL change with it, so it is
-   set up before launch: yes, at launch.
-5. **The URL.** `/api/mcp` on the app's own domain, rather than an `mcp.`
+4. **An AuthKit custom domain** (`auth.<domain>`, $99 a month, production
+   only), set up before launch: the issuer and the JWKS URL change with it.
+5. **The URL** is `/api/mcp` on the app's own domain, not an `mcp.`
    subdomain.
+6. **Write tools are hidden from a READ grant** (Phase 3). A model can't
+   try what it can't see, and both directories review the tool list. A
+   READ grant's `instructions` add one factual sentence instead: the
+   connection reads only, and making changes needs the app connected again
+   with Read and make changes. The write wrapper still refuses a READ
+   grant, as a second check.
 
-## Phase 0: WorkOS staging spike (before any app code)
+## Configuration
 
-Use a WorkOS staging environment, Claude Code against localhost and the MCP
-Inspector. Confirm what the docs leave open, and write the answers into
-this doc. The harness and its 13 checks are on `claude/mcp-spike` (commit
-`8474061`, runbook `docs/features/ai-connectors-spike.md`); run them there,
-since Phase 1 replaced the spike's `whoami` tool, which shows the token's
-claims. Not run yet (it waits on a WorkOS staging environment and a local
-database).
-
-- **The user-id claim.** `urn:bananasplit:uid` appears in access tokens
-  issued to both CIMD and DCR clients.
-- **Localhost as a resource.** A Resource Indicator for
-  `http://localhost:3000/api/mcp` is accepted in staging and becomes `aud`.
-  If not, use a tunnel.
-- **Consent choices.**
-  - The consent-option claims appear in the access token and survive a
-    refresh.
-  - A repeat authorization of the same client either skips consent or
-    doesn't, and either keeps `sid` or doesn't.
-  - If the claims don't survive a refresh, the grant row keeps the first
-    choice. That is the design anyway.
-- **Refresh tokens.** They rotate, and deleting the user's authorized
-  application kills them.
-- **Failure paths.**
-  - What AuthKit's Cancel does.
-  - How long an `external_auth_id` lives.
-  - What `complete` returns for an expired one. The WorkOS emulator uses
-    10 minutes, and 404 for unknown or expired ids.
-  - Whether our page can abort the flow. Nothing documents this; the
-    fallback is a page telling the member to close the window.
-- **Questions for WorkOS.**
-  - Custom scopes for self-registered clients.
-  - RFC 9207 `iss` in authorization responses (not advertised today).
-    ChatGPT uses its stable redirect URI only with it.
-  - A client allowlist.
-
-## Phase 1: foundations
-
-### Configuration
-
-- **Env vars.**
-  - `CONNECTORS_ENABLED`, `WORKOS_API_KEY` and `WORKOS_AUTHKIT_DOMAIN`.
-  - The feature is off unless all three are set, like `COLLAB_ENABLED`.
-  - The MCP URL is `appUrl("/api/mcp")` (`src/lib/app-url.ts`). It must
-    equal the Resource Indicator in WorkOS.
-- **Setup and health.**
-  - Update `.env.example`.
-  - Add a RUNBOOK step for the WorkOS production environment. It needs
-    billing on file and CIMD and DCR on. Set the External Sign-in URI to
-    `https://<app>/connect` and the default Resource Indicator to
-    `https://<app>/api/mcp`. Add the JWT template and branding.
-  - In production with the flag on, `/api/health` checks that the WorkOS
-    variables are set.
+- **Env vars.** `CONNECTORS_ENABLED="true"`, `WORKOS_API_KEY` and
+  `WORKOS_AUTHKIT_DOMAIN` (an https origin; http only on localhost, for
+  the WorkOS emulator). The feature is off unless all three are set, like
+  `COLLAB_ENABLED` (`src/server/connectors/config.ts`). The MCP URL is
+  `appUrl("/api/mcp")`, and it must equal the Resource Indicator in
+  WorkOS. `OPENAI_APPS_CHALLENGE` is separate: ChatGPT's domain check
+  (below).
+- **Off** means: `/api/mcp` and the metadata answer 404, `/connect` says
+  so on load, the profile card, the club switch and the pricing row are
+  hidden, Settings › Plan doesn't list "AI connectors", and the CSP leaves
+  AuthKit out of `form-action`.
+- **Health.** In production with the flag on, `/api/health` checks that the
+  WorkOS variables are set and usable (`production:connectors`).
 - **Environments.**
-  - Production uses WorkOS production.
+  - Production uses WorkOS production (RUNBOOK, "AI connectors").
   - Each developer gets their own WorkOS staging environment, or uses
-    `workos/emulate` for flows without consent.
-    - Why: WorkOS refuses a second external id for an email it already
-      knows.
-    - Every local seed has `alice@example.edu` under a different id.
+    `workos/emulate` for flows without consent. WorkOS refuses a second
+    external id for an email it already knows, and every local seed has
+    `alice@example.edu` under a different id.
   - Previews stay off: WorkOS allows only one External Sign-in URI per
     environment.
-- **Packages.**
-  - Add `@modelcontextprotocol/server@^2.3`; its zod `^4.2` peer matches.
-  - Add `jose` as a direct dependency (it is already installed through
-    Auth.js).
-  - Don't use `mcp-handler`. It doesn't hand the request's auth to the
-    server factory, so the tool list can't follow the grant, and the part
-    of it we need is about 40 lines.
-  - Never import the v1 `@modelcontextprotocol/sdk` that shadcn puts in
-    `node_modules`.
+- **Packages.** `@modelcontextprotocol/server` 2.3 (its zod `^4.2` peer
+  matches) and `jose`. Not `mcp-handler`: it doesn't hand the request's
+  auth to the server factory, so the tool list couldn't follow the grant.
+  Never import the v1 `@modelcontextprotocol/sdk` that shadcn puts in
+  `node_modules`.
 
-### Schema (one migration)
+## Schema and RLS
+
+Migration `20261025120000_connector_grants`:
 
 ```prisma
 enum ConnectorAccess {
@@ -191,679 +168,394 @@ enum ConnectorAccess {
   WRITE
 }
 
-/// An AI app a user connected (docs/features/ai-connectors.md): one per
-/// user and OAuth client. Our record of the grant; WorkOS issues the tokens.
+/// An AI app a user connected: one per user and OAuth client. Our record
+/// of the grant; WorkOS issues the tokens.
 model ConnectorGrant {
   id             String          @id @default(cuid())
   userId         String
-  /// The OAuth client the tokens were issued to (a CIMD URL or a DCR id).
-  clientId       String
-  /// Looked up from WorkOS after the first call; null until then.
-  clientName     String?
-  /// The token's sub, for revoking the grant at WorkOS.
-  workosUserId   String
-  /// The consent the current tokens belong to (the token's sid).
-  consentId      String
+  clientId       String          // a CIMD URL or a DCR id
+  clientName     String?         // looked up from WorkOS after the first call
+  workosUserId   String          // the token's sub, for revoking at WorkOS
+  consentId      String          // the token's sid
   access         ConnectorAccess @default(READ)
-  /// Null: Personal and every club the user is in. Else that one space.
-  organizationId String?
+  organizationId String?         // null: Personal and every organization
   createdAt      DateTime        @default(now())
   lastUsedAt     DateTime        @default(now())
-  /// Set by Disconnect, a password reset or the Google sign-in gate; every
-  /// call with this consent is refused until the member connects again.
-  revokedAt      DateTime?
-
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  revokedAt      DateTime?       // Disconnect, a password reset or the Google gate
 
   @@unique([userId, clientId])
 }
 ```
 
-- **The club switch column.** `OrgSettings.connectorsEnabled Boolean
-  @default(true)`. Its update is already admin-only.
-- **RLS, in the same migration.**
-  - Policies for `app_user`: `SELECT`, `INSERT`, `UPDATE` and `DELETE`
-    where `"userId" = app.user_id()`.
-  - No service policy unless a job ends up needing one.
-  - Add the explicit GRANTs and the row in the grant matrix in
-    `prisma/rls/phases.mjs`.
-  - The policies test the user, as `Pin`'s do. Check that
-    `app.security_manifest()` stays empty.
+- **The club switch** is `OrgSettings.connectorsEnabled Boolean
+  @default(true)`; its update was already admin-only.
+- **Policies.** `SELECT`, `INSERT`, `UPDATE` and `DELETE` for `app_user`
+  where `"userId" = app.user_id()`, as `Pin`'s are; no service policy. The
+  explicit GRANTs and the grant matrix row (`["SIUD", "", ""]`) are in
+  `prisma/rls/phases.mjs`, and the three own-row write policies are on the
+  manifest's tenant-only-write allowlist.
+- **Two definer functions**, both in the reviewed lists (`tests.mjs` T27c,
+  T27f):
+  - `app.connector_spaces()`, for `app_user`: the caller's spaces with each
+    organization's switch. `OrgSettings` is readable only in the current
+    org, and both `list_spaces` and `/connect`'s consent choices need every
+    organization's.
+  - `app.revoke_connector_grants(user)`, for `app_auth` only: the password
+    reset and the Google gate run on the identity plane, without a member
+    context, and revoke in their own transaction. It returns what WorkOS
+    should forget.
+- **The manifest.** The migration rebuilt `app.security_manifest()` from
+  `20261024120000_meetings`. Any later migration that re-creates it must
+  start from the latest one.
 
-### Identity and the RLS wrappers
+## Identity and the wrappers
 
-- **`src/server/connectors/token.ts`.** `verifyConnectorToken(token)` uses
-  `jose` `jwtVerify`:
-  - The key set is `createRemoteJWKSet(<domain>/oauth2/jwks)`, kept at
-    module scope.
-  - It requires `issuer`, `audience` = the MCP URL, `algorithms: ["RS256"]`
-    and a 30-second clock tolerance.
-  - The token must also carry `urn:bananasplit:uid`, `client_id` and `sid`.
-  - It returns a `VerifiedConnector`: a branded type built only here, from
-    a unique symbol the module doesn't export. A failure throws the SDK's
-    `OAuthError(InvalidToken)`.
-- **Two new wrappers in `src/server/db/context.ts`.**
-  - `withConnectorUserTx(connector, fn)` is the member's own rows, as
+- **`src/server/connectors/token.ts`.** `verifyConnectorToken` runs `jose`
+  `jwtVerify` against `createRemoteJWKSet(<domain>/oauth2/jwks)` (kept at
+  module scope), requiring the issuer, the MCP URL as audience,
+  `algorithms: ["RS256"]` and a 30-second clock tolerance. It returns a
+  `VerifiedConnector`, a branded type built only there from a unique
+  symbol the module doesn't export. A failure throws the SDK's
+  `OAuthError(InvalidToken)`.
+- **Two wrappers in `src/server/db/context.ts`.**
+  - `withConnectorUserTx(connector, fn)`: the member's own rows, as
     `withUserTx`.
-  - `withConnectorOrgTx(connector, grant, organizationId, options, fn)`
-    runs `runInTx` the way `withOrgTxAs` does, then:
-    - loads the member's `User` name and email into `ctx.user`, so services
-      that take an `OrgContext` work (`loadTaskEnv` reads `ctx.user.name`);
-    - runs `checkSpace` with `feature: "connectors"` plus the tool's own
-      feature and `whenPaused`;
-    - refuses when `OrgSettings.connectorsEnabled` is off, or when the
-      grant is scoped to a different space;
-    - hands the handler an `OrgContext`.
-- **ESLint.**
-  - A `CONNECTORS = ["src/server/connectors/**"]` block may import the two
-    wrappers. Everyone else is restricted, as with `AS_USER_TX`.
-  - `src/server/**` keeps its navigation ban, so no `redirect` or
-    `notFound` in tools.
-  - Adding a path is a security review item.
+  - `withConnectorOrgTx(connector, grant, organizationId, options, fn)`:
+    `withOrgAction` for a token instead of a session. It refuses, in order:
+    a grant scoped to another space (checked before any query); a
+    non-member or a space scheduled for deletion (`NotFoundError`); the
+    club switch; then `checkSpace` with `connectors` and the tool's own
+    feature. The scope and switch refusals are a `ConnectorRefusedError`
+    (an `AppError`, 403) whose message the tool passes on. The handler gets
+    an `OrgContext` whose `user` is the member's own row, so services that
+    read `ctx.user` (`loadTaskEnv`) work unchanged.
+- **ESLint.** The `CONNECTORS = ["src/server/connectors/**"]` block may
+  import the two wrappers; everyone else is restricted, as with
+  `AS_USER_TX`. `src/server/**` keeps its navigation ban, so no `redirect`
+  or `notFound` in tools. Adding a path is a security review item.
 - **Grant resolution on every request (`src/server/connectors/grant.ts`).**
-  It runs in `withConnectorUserTx` and looks up `(userId, clientId)`:
+  In `withConnectorUserTx`, by `(userId, clientId)`:
   - **No row:** create one from the consent claims. Without them the
     defaults are READ and every space. A space claim naming a space the
     member is no longer in is refused with the same 401, never widened to
     every space.
-  - **`consentId` differs from `sid`:** this is a new consent. Take its
-    claims and clear `revokedAt`.
-  - **`revokedAt` set and the same `sid`:** refuse with `401
-    invalid_token`. The client signs in again and gets a new consent.
-  - **Bookkeeping:** update `lastUsedAt` at most every 15 minutes. After
-    the response (`after()`), look up `clientName` once from WorkOS's
-    authorized applications.
+  - **`consentId` differs from `sid`:** a new consent. Take its claims and
+    clear `revokedAt`.
+  - **`revokedAt` set and the same `sid`:** `401 invalid_token`. The client
+    signs in again and gets a new consent.
+  - **Bookkeeping:** `lastUsedAt` at most every 15 minutes. `clientName` is
+    looked up from WorkOS's authorized applications after the response
+    (`after()`) when the grant is created or renewed, or at a `lastUsedAt`
+    write while it is still empty.
 
-### The endpoint
+## The endpoint
 
-- **The route.** `src/app/api/mcp/route.ts` exports POST with
-  `maxDuration = 60` and `dynamic = "force-dynamic"`. The SDK answers GET
-  and DELETE with 405. Each POST runs these steps:
-  1. **Origin check.** `originValidationResponse`: an `Origin` header that
-     isn't the app's own origin gets a 403. Browsers send one; MCP clients
-     don't.
-  2. **Bearer check.** A missing or invalid token gets a real `401` with
-     the `resource_metadata` challenge; Claude ignores the header on any
-     other status.
-  3. **Grant.** Resolve the grant (above).
-  4. **Rate limit.** `checkRateLimit(rateLimitKey("connector.call",
-     grant.id), 600, 3600)`. It fails open, like every limit.
-  5. **Server.** `createMcpHandler(({ authInfo }) => buildServer(grant),
-     { responseMode: "json", maxSubscriptions: 0 })`. Write tools are
-     registered only for WRITE grants.
-- **Server info and `instructions`.** The name is `bananasplit` and the
-  title "Bananasplit". The `instructions` are short and factual:
-  - what Personal and clubs are;
-  - that ids come from `list_spaces` and `search`;
-  - which fields hold text club members wrote.
-- **Protected resource metadata.**
-  - Served at `src/app/.well-known/oauth-protected-resource/api/mcp/route.ts`
-    (path-suffixed) and at the root
-    `src/app/.well-known/oauth-protected-resource/route.ts`.
-  - Body: `{ resource, authorization_servers: [<authkit domain>],
-    bearer_methods_supported: ["header"], resource_name: "Bananasplit" }`.
-  - No `scopes_supported`, since WorkOS custom scopes are unavailable.
-  - GET and OPTIONS with `Access-Control-Allow-Origin: *`. Neither path is
-    in the proxy matcher, so they get the static CSP, which is fine for
-    JSON.
-- **Error mapping (`src/server/connectors/errors.ts`).** Every failure is
-  an `isError: true` tool result, never a protocol error, and never echoes
-  the input. This follows the 2025-11-25 rule for input errors.
+`src/app/api/mcp/route.ts` exports POST (`maxDuration = 60`,
+`dynamic = "force-dynamic"`); the SDK answers GET and DELETE with 405. Each
+POST runs:
+
+1. **Origin.** `originValidationResponse`: an `Origin` that isn't the app's
+   own gets 403. Browsers send one; MCP clients don't.
+2. **Bearer.** A missing or invalid token gets a real `401` with the
+   `resource_metadata` challenge; Claude ignores the header on any other
+   status.
+3. **Grant.** Resolved as above.
+4. **Rate limit.** `connector.call`, 600 an hour per grant. It answers 429
+   with `Retry-After` and a JSON-RPC error body, before the MCP server
+   runs, and fails open like every limit.
+5. **Server.** `createMcpHandler(() => buildConnectorServer(session),
+   { responseMode: "json", maxSubscriptions: 0 })`, built fresh per request
+   so the tool list follows the grant.
+
+- **Server info and `instructions`** (`src/server/connectors/server.ts`).
+  Name `bananasplit`, title "Bananasplit". The instructions are four
+  factual sentences: what Personal and organizations are, that space ids
+  come from `list_spaces` and item ids from `search` and the list tools,
+  and which fields hold text members wrote. A READ grant's add the
+  read-only sentence (decision 6).
+- **Protected resource metadata** at the path-suffixed
+  `/.well-known/oauth-protected-resource/api/mcp` (named by the 401) and
+  the root `/.well-known/oauth-protected-resource`: `{ resource,
+  authorization_servers: [<authkit domain>], bearer_methods_supported:
+  ["header"], resource_name: "Bananasplit" }`, no `scopes_supported`. GET
+  and OPTIONS with `Access-Control-Allow-Origin: *`.
+- **Outside the nonce CSP.** `/api/mcp`, both metadata URLs and
+  `/.well-known/openai-apps-challenge` are not in the proxy matcher, so
+  they carry the static CSP, which is fine for JSON and text.
+  `src/proxy.test.ts` and `src/lib/security/csp.test.ts` pin that.
+- **Errors (`src/server/connectors/errors.ts`).** Every failure is an
+  `isError: true` tool result, never a protocol error, and never echoes the
+  input (the 2025-11-25 rule for input errors).
 
   | Error | What the tool says |
   |---|---|
   | `NotFoundError` | "No space or item with that id, or you're not a member." |
-  | `ForbiddenError` | "Your role in <club> can't do that." |
-  | `SpaceRefusedError` | its own message (paused, or not on the plan) |
+  | `ForbiddenError` | "Your role in <organization> can't do that." ("this organization" without a name) |
+  | `SpaceRefusedError`, `ConnectorRefusedError` | their own message (the plan, the switch, the grant's scope) |
+  | The tools' own `AppError`s below 500 | fixed messages: `CursorError`, `ConnectorInputError`, `SectionHiddenError`, `BallotRowsHiddenError`, `ReadOnlyGrantError`, `WriteLimitError`, `WriteRefusedError` |
   | `ZodError` | the first issue, with its field and an example |
-  | anything else | "Something went wrong", plus a Sentry report |
+  | anything else | "Something went wrong on Bananasplit's side. Try again in a minute.", plus a Sentry report |
 
-### The sign-in page (External Sign-in URI)
+  The SDK checks arguments against each input schema before a tool runs;
+  a failure names the field, never its value.
 
-- **Files and headers.**
-  - `src/app/connect/page.tsx` and `actions.ts`.
-  - Add `/connect` to the proxy matcher and to `NONCE_ROUTE_PREFIXES` and
-    `STATIC_CSP_SOURCE` in `src/lib/security/csp.ts`.
-  - Add the AuthKit origin to `FORM_TARGETS`: a form posted without
-    JavaScript follows the redirect there, and `form-action` covers it.
-- **The page.**
-  - No session: `requireUser()` sends the member to sign-in and back, with
-    `external_auth_id` kept.
-  - An unconfirmed email gets "Confirm your email first".
-  - Otherwise it shows the signed-in email, "Use another account" (sign
-    out, then back here) and Continue. The space and access choices are
-    made on AuthKit's consent screen, not here.
-- **The action.** Completion is POST-only, never on GET.
-  1. Rate limit: `rateLimitKey("connector.connect", userId)`, 20 an hour.
-  2. Build the consent options: Space (Personal, then a "Clubs" group of
-     the clubs with connectors on) and Access.
-  3. Call `complete` outside any transaction, with
-     `AbortSignal.timeout(8000)`.
-  4. Check that `redirect_uri` is on the AuthKit origin, then redirect to
-     it.
+## The sign-in page (`/connect`)
+
+- **Files and headers.** `src/app/connect/page.tsx` and `actions.ts`.
+  `/connect` is in the proxy matcher, `NONCE_ROUTE_PREFIXES` and
+  `STATIC_CSP_SOURCE`; the AuthKit origin is in `FORM_TARGETS`, since a
+  form posted without JavaScript follows the redirect there.
+- **The page.** No session: `requireUser()` sends the member to sign-in and
+  back, with `external_auth_id` kept. An unconfirmed email gets "Confirm
+  your email first". Otherwise it shows the signed-in email, "Use another
+  account" (sign out, then back here) and Continue. Space and access are
+  chosen on AuthKit's consent screen, not here.
+- **The action** (POST only, never on GET):
+  1. `connector.connect`, 20 an hour per user.
+  2. The consent options (`src/server/connectors/consent.ts`): Space and
+     Access. With organizations that allow AI apps, Space is grouped ("All
+     spaces", "Personal", "Organizations"); otherwise flat. The WorkOS docs
+     show flat or grouped choices, never a mix (Phase 0 check 5 confirms
+     the rendering).
+  3. `complete`, outside any transaction, with `AbortSignal.timeout(8000)`.
+  4. Check that `redirect_uri` is on the AuthKit origin, then redirect.
   5. A 404 or 400 means the sign-in expired: "This sign-in expired. Go
      back to the app you were connecting and try again."
-- **Words.** "Personal" and "club", never "workspace", "organization" or
-  "org" (docs/features/personal-and-clubs.md).
 
-### Connected apps (the member's own page)
+## Connected apps and revocation
 
-- **Where and what.** On the profile page, beside the calendar feed card
-  (`src/app/app/[orgSlug]/profile/`). It lists each grant's app name,
-  access, space, and connected and last-used dates, with Disconnect and
-  Disconnect all.
-- **Disconnect.**
-  1. In `withUserTx`, set `revokedAt`. The next request is refused,
-     including with access tokens issued before it.
-  2. After commit, `DELETE /user_management/users/{workosUserId}/authorized_applications/{clientId}`.
-     This is best effort and logged; our row is what counts.
-- **How to connect.**
-  - The URL to copy.
-  - A prefilled Claude link:
-    `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Bananasplit&connectorUrl=<url>`.
-  - Short steps for ChatGPT, Claude Code, Cursor and VS Code. Claude Code
-    is `claude mcp add --transport http bananasplit <url>`.
-- **Hooks elsewhere.**
-  - A password reset and the Google sign-in gate's password strip revoke
-    all the user's grants. Both already bump `sessionVersion`:
-    `src/server/email/password-reset.ts` and
-    `src/lib/auth/google-linking.ts`.
-  - There is no self-service account deletion today. `purge-unverified`
-    only removes accounts that never confirmed an email, and `/connect`
-    refuses those. Whatever deletes an account later must also delete its
-    WorkOS user (`DELETE /user_management/users/{id}`). Otherwise a new
-    sign-up with the same email fails at `complete`.
+- **The profile card** (`src/app/app/[orgSlug]/profile/connected-apps-card.tsx`)
+  lists each grant's app name, access, space, and connected and last-used
+  dates, with Disconnect and Disconnect all. "How to connect" has the URL to
+  copy, a prefilled Claude link (`claudeConnectorUrl`), and short steps for
+  ChatGPT, Claude Code (`claude mcp add --transport http bananasplit
+  <url>`), Cursor and VS Code.
+- **Disconnect** sets `revokedAt` in `withUserTx`, so the next request is
+  refused, including with access tokens issued before it. After the
+  response it calls `DELETE
+  /user_management/users/{workosUserId}/authorized_applications/{clientId}`,
+  best effort and logged; our row is what counts.
+- **A password reset and the Google gate's password strip** revoke all the
+  user's grants (`src/server/email/password-reset.ts`,
+  `src/lib/auth/google-linking.ts`, through `app.revoke_connector_grants`).
+- **Account deletion.** There is no self-service deletion today;
+  `purge-unverified` only removes accounts that never confirmed an email,
+  and `/connect` refuses those. Whatever deletes an account later must also
+  delete its WorkOS user (`DELETE /user_management/users/{id}`), or a new
+  sign-up with the same email fails at `complete`.
+- **`scripts/connectors-grants.ts`** lists or revokes a user's authorized
+  apps at WorkOS by our user id.
 
-### The club switch
+## The club switch
 
-- **Where.** Admin panel › Privacy › AI connectors.
-- **Copy.** "Members can use this club from AI apps they connect, such as
-  Claude or ChatGPT. An app only ever sees what that member can see here."
-- **Effect.** Turning it off refuses every connector call for the club at
-  once. Nothing is revoked, so turning it back on restores access.
+Admin panel › Privacy › AI connectors: "Members can use this organization
+from AI apps they connect, such as Claude or ChatGPT. An app only ever sees
+what that member can see here." Off refuses every connector call for the
+organization at once; nothing is revoked, so on restores access. Audited as
+`privacy.connectors_changed`.
 
-### Phase 1 tool
+## Tools
 
-`list_spaces` returns Personal and the member's clubs. Each entry has its
-id, name, kind, the member's role, URL, whether connectors are on, and
-whether the club is paused.
+37 tools: 20 read tools every grant gets, and 17 write tools a WRITE grant
+gets after them. The 13 CRM tools (`crm_*`) are described in
+[`crm.md`](crm.md), "Your own Claude (MCP)"; the rest are below.
 
-**Done when:**
-- Claude Code, on localhost against WorkOS staging, connects and lists
-  spaces. *Not yet: waits on Phase 0's WorkOS staging setup.*
-- Disconnect refuses the next call, and the club switch refuses calls for
-  its club. *Verified by tests only (route and DB tests).*
-- Another org's id answers not found. *Verified by the DB tests.*
-- `pnpm test:rls` is green. *Yes, 2026-10-25.*
+### Rules every tool follows
 
-### Phase 1: as built (2026-10-25)
+- **Annotations.** A `title` and all four hints, explicit:
+  - read tools: `readOnlyHint: true`, `destructiveHint: false`,
+    `idempotentHint: true`, `openWorldHint: false` (`READ_ONLY`);
+  - adds (`create_task`, `add_task_comment`, `add_database_record`,
+    `create_note`): `readOnlyHint: false`, `destructiveHint: false`,
+    `idempotentHint: false` (`ADDS`);
+  - overwrites (`update_task`, `update_database_record`, `rsvp_to_event`,
+    `vote_in_poll`): `destructiveHint: true`, `idempotentHint: true`
+    (`OVERWRITES`);
+  - `post_weekly_update`: `destructiveHint: false`, `idempotentHint: true`
+    (`POSTS`). Posting a week again replaces that week's post, as the
+    app's Post button does. It is only ever the member's own post, but a
+    reviewer may count that as overwriting.
+  - `openWorldHint: false` on all: nothing reaches outside Bananasplit.
+  - `src/server/connectors/server.test.ts` lists the tools as a client does
+    and fails on a missing title, description or hint, an argument without
+    a description, or a behavioral directive in a description. The route
+    test pins each write tool's hints.
+- **Schemas.** Zod input schemas with field descriptions, and output
+  schemas. Results are `structuredContent` plus the same JSON as text.
+- **Names, links, pages.** Names beside ids, absolute URLs, a default limit
+  of 20 (at most 50), and a cursor.
+- **Ids** (`tools/ids.ts`). Every item id is opaque: `<kind>:<spaceId>:<id>`,
+  for note, task (epics and stories too), event, poll (either kind),
+  person, database (its URL key) and expense. `fetch` and the `get_` tools
+  take that id alone; space ids are the org ids `list_spaces` returns. A
+  forged id finds nothing: the space still opens through
+  `withConnectorOrgTx`, and every lookup filters on `organizationId`. Two
+  ids stay plain: note folder ids (`list_notes`) and a club-made
+  database's row ids (`query_database`).
+- **Cursors** (`tools/cursor.ts`). Base64url JSON naming an offset (or a
+  club-made database's keyset position) and a fingerprint of the tool and
+  its filters. A cursor from another list is refused with "start over
+  without a cursor". `search` and the `get_` tools have none.
+- **Times.** Instants are ISO 8601 with their offset, in the member's own
+  zone, or else the organization's. All-day events and due dates are days
+  (yyyy-mm-dd). `list_events` reads a `from` or `to` without an offset in
+  the member's zone.
+- **One way into a space for reads.** `inSpace` (`tools/space.ts`) runs
+  `withConnectorOrgTx` with the tool's feature, loads the space's name,
+  slug, zones and sidebar, and refuses a section the organization hid to
+  members (`SectionHiddenError`). Owners and admins (`settings.view`) still
+  read it, as search does. Hiding Polls hides Find a time too.
+- **One way in for writes.** `writeInSpace` (`tools/write.ts`), in order:
+  1. A READ grant is refused (`ReadOnlyGrantError`).
+  2. `connector.write`, 120 writes an hour per grant across every space.
+     It is counted before the space opens, so a refused write counts too,
+     and it fails open like every limit (`WriteLimitError`).
+  3. `withConnectorOrgTx`: the grant's scope, membership, the club switch
+     and the tool's plan feature.
+  4. A hidden section is refused to members, as for reads.
+  5. The app's own service, then a `connector.<tool>` audit row, in one
+     transaction. The diff is `{ client, clientId }`; `client` is the
+     grant's app name, null until the WorkOS lookup fills it in.
 
-Built as planned above, with these decisions on the way:
+  The services' own refusals (a closed poll, a task rule, a value its
+  column won't take: `{ error }`, `TaskError`, `DatabaseInputError`) come
+  back in their own words and roll the write back (`WriteRefusedError`).
 
-- **Two definer functions** (migration `20261025120000_connector_grants`).
-  - `app.connector_spaces()`, for `app_user`: the caller's spaces with each
-    club's switch. `OrgSettings` is readable only in the current org, and
-    both `list_spaces` and `/connect`'s consent choices need every club's.
-  - `app.revoke_connector_grants(user)`, for `app_auth` only: the password
-    reset and the Google gate run on the identity plane, without a member
-    context, and revoke in their own transaction. It returns what WorkOS
-    should forget. The grant matrix row stays `["SIUD", "", ""]`.
-  - Both are in the reviewed lists (`tests.mjs` T27c, T27f), and the three
-    own-row `ConnectorGrant` write policies are on the manifest's
-    tenant-only-write allowlist (as `Pin`'s are).
-- **Tokens** must also carry `sub`, since `workosUserId` is required for the
-  WorkOS revocation call.
-- **The wrapper's refusals, in order:** a grant scoped to another space
-  (checked before any query), then non-member or scheduled-for-deletion
-  (`NotFoundError`), then the club switch, then `checkSpace` with
-  `connectors` and the tool's own feature. The scope and switch refusals are
-  a `ConnectorRefusedError` (an `AppError`, 403) whose message the tool
-  passes on.
-- **`list_spaces`** also returns the grant's `access` (`read` or
-  `read_and_change`); a scoped grant lists only its space, and spaces
-  scheduled for deletion are left out. The `instructions` name only
-  `list_spaces`; Phase 2 adds `search` to them.
-- **Consent choices** are grouped ("All spaces", "Personal", "Clubs") when
-  the member has clubs with connectors on, and flat otherwise: the WorkOS
-  docs show flat or grouped choices, never a mix. Phase 0 check 5 confirms
-  how AuthKit renders them.
-- **The rate limit** answers HTTP 429 with `Retry-After` and a JSON-RPC
-  error body, before the MCP server runs.
-- **Bookkeeping.** `clientName` is looked up after the response when the
-  grant is created or renewed, or at a `lastUsedAt` write while it is still
-  empty (so at most every 15 minutes). The WorkOS DELETE after Disconnect,
-  a password reset or the Google gate also runs after the response
-  (`after()`), best effort and logged.
-- **Hidden while off.** With the flag off, `/connect` says so on load, the
-  profile card and the club switch are hidden, Settings › Plan doesn't list
-  "AI connectors", and the CSP leaves AuthKit out of `form-action`.
-- **Where things are.**
-  - `src/server/connectors/`: `config.ts`, `token.ts` (`VerifiedConnector`),
-    `grant.ts`, `errors.ts`, `server.ts`, `tools/`, `consent.ts`,
-    `connected-apps.ts`, `revoke.ts`, `workos.ts`.
-  - `withConnectorUserTx` and `withConnectorOrgTx` in
-    `src/server/db/context.ts`, importable only from
-    `src/server/connectors/**` (ESLint `CONNECTORS`).
-  - The profile card is `src/app/app/[orgSlug]/profile/connected-apps-card.tsx`.
-    The club switch is in `settings/privacy/`, audited as
-    `privacy.connectors_changed`.
-- **Still open, for Phase 0.**
-  - If a refresh can mint a new `sid` (check 8), a refresh would revive a
-    revoked grant, since a new consent clears `revokedAt`. The WorkOS DELETE
-    kills the refresh tokens, but it is best effort. If check 8 shows a new
-    `sid` on refresh, reviving must also require a `/connect` completion
-    after `revokedAt`.
-  - Whether a repeat authorization keeps `sid` (check 9). If it does, a
-    member who disconnected can't reconnect the same app unless the WorkOS
-    DELETE went through.
-- **Merged with main (2026-10-25).** The migration's
-  `app.security_manifest()` is rebuilt from `20261024120000_meetings` (the
-  latest before it), so main's `UpNextDismissal` entries stay. The profile
-  card uses Bananasplit's own icons (`@/components/icons`). Any later
-  migration that re-creates the manifest must start from this one.
+### Read tools
 
-## Phase 2: read tools
+| Tool | Backed by | Feature | Section |
+|---|---|---|---|
+| `list_spaces` | `app.connector_spaces()` and memberships | (none) | |
+| `search` (query) | `searchWorkspace` | per kind | as search |
+| `fetch` (id) | its kind's tool | its kind's | its kind's |
+| `list_tasks`, `get_task` | `getTableTasks`, `taskFilterWhere`, `visibleTaskWhere`; `getTaskDetail`, `getComments`, `getActivity` | tasks | Tasks |
+| `list_events`, `get_event` | `getEventsInRange`, `getUpcomingEvents`; `getEventById`, `getViewerRsvps` | rsvp | Calendar |
+| `list_notes`, `get_note` | `getNotesForList` (`noteListWhere`); `getNoteById`, `noteToMarkdown` | files | Files |
+| `list_databases`, `query_database` | `listDatabases`, `loadView`, `loadRecords` | databases | Databases |
+| `list_members` | `listOrgPeopleInTx`, `countOrgPeopleInTx` | people | People |
+| `get_weekly_summary` | `getWeeklySummary` | teamwork | Tasks |
+| `list_my_reimbursements` | `getMyReimbursements` | finance | Finance |
+| `list_open_polls` | `listOpenPolls`, `listQuestionPolls` | polls | Polls, or Find a time, per poll |
 
-Every tool sets:
-- a `title`;
-- `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`
-  and `openWorldHint: false`;
-- a zod input schema with field descriptions, and an output schema;
-- results as `structuredContent` plus the same JSON as text;
-- names beside ids, absolute URLs, and a default limit of 20 (at most 50),
-  with a cursor.
-
-Its plan feature (people, teamwork, finance, …) goes through the wrapper's
-`feature` option.
-
-The calendar, notes and finance queries live under `src/app/app/[orgSlug]/`
-(`calendar/queries.ts`, `notes/queries.ts`, `finance/queries.ts`). They
-take `db` first, so tools can import them as they are. Moving them into
-`src/server/` is optional tidying, not a blocker.
-
-| Tool | Backed by | Work needed |
-|---|---|---|
-| `search` (query) | `searchWorkspace` (`src/server/search/workspace.ts`) | Move the viewer building out of `search/actions.ts` into `src/server/search/viewer.ts`. Search each allowed space in turn, each in its own transaction, then merge by score (top 20). Ids look like `<kind>:<orgId>:<id>`, and URLs are absolute from `hit.href`. The name and shape follow ChatGPT's `search`/`fetch` contract. |
-| `fetch` (id) | `getNoteById` + `noteToMarkdown`, `getTaskDetail` + `getComments`, `getEventById`, database definition, poll, person | Dispatch on the id's kind. |
-| `list_tasks` (space, assignee, status, due before, cursor) | `getTableTasks`, `taskFilterWhere`, `visibleTaskWhere` | none |
-| `get_task` | `getTaskDetail`, `getComments`, `getActivity` (last 10) | none |
-| `list_events` (space, from, to) | `getEventsInRange`, `getUpcomingEvents` | Add RSVP counts, and give times in the viewer's zone. |
-| `get_event` | `getEventById`, `getViewerRsvps` | none |
-| `list_notes` (space, folder, query) | `getNotesForList` | none |
-| `get_note` | `getNoteById`, `noteToMarkdown` (`src/lib/notes/export/markdown.ts`) | Cap at 40k characters, with `truncated` and an `offset` argument. |
-| `list_databases`, `query_database` (space, database, filter, cursor) | `listDatabases`, `loadView`, `loadRecords` | none; `canViewDatabase` and member visibility apply |
-| `list_members` (club) | `listOrgPeople` | Add a variant that takes `db` (today it opens its own `withOrgTx`). Emails only with `members.viewEmails` or `showMemberEmailsToMembers`. |
-| `get_weekly_summary` (club, week) | `getWeeklySummary` | none |
-| `list_my_reimbursements` (club) | `getMyReimbursements` | none |
-| `list_open_polls` (space) | `listOpenPolls`, `listQuestionPolls` | none |
-
-The finance ledger is not in v1. RLS lets every member read it, and the
-app gates it on `finance.manage`. A tool that adds it must repeat that
-check.
-
-**Done when:** each tool has a `*.db.test.ts` covering its denials:
-- another org's id;
-- another member's PRIVATE note, and a share that has been removed;
-- a PRIVATE task;
-- sections the club hid, hidden from non-admins;
-- member emails;
-- a paused club's reads, which still work;
-- the club switch off;
-- a READ grant, which can't see write tools.
-
-### Phase 2: as built (2026-10-26)
-
-Built as the table above says, with these decisions on the way:
-
-- **Ids** (`src/server/connectors/tools/ids.ts`).
-  - Every item id a tool returns is opaque: `<kind>:<spaceId>:<id>`. The
-    kinds are note, task (epics and stories too), event, poll (either
-    kind), person, database (its URL key) and expense.
-  - `fetch` and the `get_` tools take that id alone. Space ids stay the
-    org ids `list_spaces` returns.
-  - A forged id finds nothing. The space still opens through
-    `withConnectorOrgTx`, and every lookup filters on `organizationId`.
-  - Folder ids, `list_notes`' filter, are plain ids from its own results:
-    a folder isn't something `fetch` opens.
-- **Cursors** (`tools/cursor.ts`).
-  - A cursor is base64url JSON. It names an offset (or a club-made
-    database's keyset position) and a fingerprint of the tool and its
-    filters.
-  - A cursor from another list is refused with "start over without a
-    cursor".
-  - `search` and the `get_` tools have no cursor. `search` returns its top
-    results, 20 unless asked for more, at most 50.
-- **One way into a space.** `inSpace` (`tools/space.ts`) does four things:
-  - runs `withConnectorOrgTx` with `whenPaused: "allow"` and the tool's
-    feature;
-  - loads the space's name, slug, zones and sidebar;
-  - refuses a section the club hid to members (`SectionHiddenError`);
-  - leaves that section open to owners and admins (`settings.view`), as
-    search does. Hiding Polls hides Find a time too, as in the sidebar.
-
-  | Tools | Feature | Section |
-  |---|---|---|
-  | `list_tasks`, `get_task` | tasks | Tasks |
-  | `list_events`, `get_event` | rsvp | Calendar |
-  | `list_notes`, `get_note` | files | Files |
-  | `list_databases`, `query_database` | databases | Databases |
-  | `list_members` | people | People |
-  | `get_weekly_summary` | teamwork | Tasks |
-  | `list_my_reimbursements` | finance | Finance |
-  | `list_open_polls` | polls | Polls, or Find a time, per poll |
-
-  `fetch` uses its kind's row. Personal doesn't have people, teamwork or
-  finance, so those tools refuse it with the plan's own message.
-- **search** (`tools/search.ts`).
-  - It is the palette's `searchWorkspace`. The viewer comes from
-    `src/server/search/viewer.ts`, which the ⌘K action now uses too.
-  - It runs over each space `list_spaces` lists with AI apps on, one
-    transaction each, and merges by score.
-  - It searches only what `fetch` opens: notes, tasks and epics, events,
-    polls, people and databases. `searchWorkspace` gained `groups` and
-    `limit` for this. A kind whose plan feature the space lacks isn't
-    searched.
-  - Left out: finance (the ledger), files and folders (`fetch` can't read
-    an upload), and tags and org-chart roles.
-  - A space that refuses (switched off between the two reads, say) is
-    skipped, not a failed search. A query with no words returns nothing,
-    rather than the palette's recent pages.
-- **fetch** (`tools/fetch.ts`) returns `{ id, title, text, url, metadata }`,
-  with the item as Markdown in `text`.
-  - A note is its first 40,000 characters. `metadata` holds `truncated`
-    and `nextOffset`, for `get_note`.
-  - A database is its columns and row count, not its rows.
-  - A poll reads as its page shows it to this member
-    (`buildQuestionPollView`, `buildPollView`). Counts stay hidden until it
-    closes when the poll says so, and an anonymous poll names no voters.
+- **list_spaces** returns Personal and the member's organizations: id,
+  name, kind, the member's role, URL and whether the organization allows
+  AI apps, plus the grant's `access` (`read` or `read_and_change`). A
+  scoped grant lists only its space; spaces scheduled for deletion are
+  left out.
+- **search** is the palette's `searchWorkspace` (the viewer comes from
+  `src/server/search/viewer.ts`, which ⌘K uses too). It runs over each
+  space `list_spaces` lists with AI apps on, one transaction each, and
+  merges by score (20 unless asked, at most 50). It searches only what
+  `fetch` opens: notes, tasks and epics, events, polls, people and
+  databases; a kind whose feature the space lacks isn't searched. Left
+  out: the finance ledger, files and folders (`fetch` can't read an
+  upload), tags and org-chart roles. A space that refuses is skipped, not
+  a failed search. A query with no words returns nothing. The name and
+  shape follow ChatGPT's `search`/`fetch` contract (not yet tried against
+  ChatGPT).
+- **fetch** returns `{ id, title, text, url, metadata }`, with the item as
+  Markdown in `text`. A note is its first 40,000 characters (`metadata`
+  holds `truncated` and `nextOffset`, for `get_note`). A database is its
+  columns and row count, not its rows. A poll reads as its page shows it to
+  this member (`buildQuestionPollView`, `buildPollView`): counts stay
+  hidden until it closes when the poll says so, and an anonymous poll
+  names no voters.
 - **get_event** lists the event's linked notes as the notes rules allow,
-  and none while the club hides Files from members.
-- **get_note** reads `noteToMarkdown`, the Download Markdown export.
-  - A part ends after a line break near 40,000 characters when there is
-    one, and never inside an emoji.
-  - The parts join back into the whole note.
-- **Times.**
-  - Instants are ISO 8601 with their offset, in the member's own zone, or
-    else the club's.
-  - All-day events and due dates are days (yyyy-mm-dd).
-  - `list_events` reads a `from` or `to` without an offset in the member's
-    zone.
-- **query_database** (`tools/databases.ts`).
-  - Built-in databases filter and sort through the view grammar
-    (`dbViewQuery`, `queryFor`). A filter the query builder rejects is
-    refused with its reason, never silently dropped. Each column says
-    whether it filters or sorts, and its operators.
-  - Club-made databases take `query` only (`loadRecords`). Values are what
-    the grid shows: choice labels, member names, "$15.50".
-  - Columns hidden from members are left out (`viewerColumns`). RLS masks
-    contact emails below the privacy tier.
-  - Individual ballots need the tier Privacy allows (`canViewBallotRows`).
-    Without it, `query_database` refuses and `fetch` describes the
-    database without a row count.
+  and none while the organization hides Files from members.
+- **get_note** reads `noteToMarkdown` (the Download Markdown export). A part
+  ends after a line break near 40,000 characters when there is one, never
+  inside an emoji, and the parts join back into the whole note.
+- **query_database.** Built-in databases filter and sort through the view
+  grammar (`dbViewQuery`, `queryFor`); a filter the query builder rejects
+  is refused with its reason, never dropped. Each column says whether it
+  filters or sorts, and its operators. Club-made databases take `query`
+  only (`loadRecords`), with values as the grid shows them (choice labels,
+  member names, "$15.50"). Columns hidden from members are left out
+  (`viewerColumns`); RLS masks contact emails below the privacy tier.
+  Individual ballots need the tier Privacy allows (`canViewBallotRows`);
+  without it `query_database` refuses and `fetch` describes the database
+  without a row count.
 - **list_members.** Emails come back for owners and admins
   (`members.viewEmails`), for everyone when Admin panel › Privacy shows
   member emails to members, and always for the member's own row.
-  `listOrgPeopleInTx` and `countOrgPeopleInTx` run `listOrgPeople`'s query
-  in the caller's transaction.
-- **get_weekly_summary** also takes a `member` ("me" unless given), since
-  the updates view lets anyone read a teammate's week. RLS leaves out their
-  private tasks, and a week that hasn't begun reads as this one, as in the
-  app.
+- **get_weekly_summary** takes a `member` ("me" unless given), since the
+  updates view lets anyone read a teammate's week. RLS leaves out their
+  private tasks; a week that hasn't begun reads as this one.
 - **list_my_reimbursements** returns only the member's own expense
-  requests, with no receipt files and no emails. `fetch` opens one of them
-  by its expense id; anyone else's is not found.
-- **Errors.**
-  - The SDK checks the arguments against each input schema before a tool
-    runs. A failure is an `isError` result naming the field, never
-    repeating its value.
-  - The tools' own refusals are `AppError`s below 500 with fixed messages:
-    `CursorError`, `ConnectorInputError`, `SectionHiddenError` and
-    `BallotRowsHiddenError`.
-- **Small refactors.**
-  - `noteListWhere` in `notes/queries.ts`.
-  - `loadFields`, now exported from `databases/custom.ts`.
-  - `loadSearchViewer` and `hiddenSections` in `src/server/search/viewer.ts`.
+  requests, with no receipt files and no emails. `fetch` opens one by its
+  expense id; anyone else's is not found.
 
-**Done when**, as checked on 2026-10-26:
-- Every tool has a `*.db.test.ts` covering its denials. They are in
-  `src/server/connectors/tools/`, over `src/test/connector-fixture.ts`:
-  - another org's id, and a forged one;
-  - another member's PRIVATE note, and a removed share;
-  - a PRIVATE task;
-  - hidden sections, refused to members and open to owners;
-  - member emails;
-  - a paused club's reads;
-  - the club switch;
-  - a grant scoped to another space.
+The finance ledger is not exposed: RLS lets every member read it and the
+app gates it on `finance.manage`, so a tool that adds it must repeat that
+check.
 
-  They ran for real against a fresh, migrated database. Each file also
-  runs its tools through the MCP server, so the SDK checks every output
-  schema against real rows.
-- A READ grant can't see write tools. None exist yet; the route test
-  asserts that READ and WRITE grants list the same 15 read tools.
-- Unit tests cover the cursor codec, the id codec and text parts.
-- Protocol tests cover `tools/list`, and calls to `get_note`, `search` and
-  `fetch`, in both eras.
-- *Not yet:* any client against WorkOS staging. It waits on Phase 0.
+### Write tools (WRITE grants only)
 
-**For Phase 3.** `inSpace` always allows reads in a paused club. Write
-tools need the wrapper's default, `whenPaused: "refuse"`, so they need a
-write variant of it.
-
-## Phase 3: write tools
-
-| Tool | Backed by | Work needed |
+| Tool | Backed by | Annotations |
 |---|---|---|
-| `create_task`, `update_task` (title, description, owner, due, priority, status) | `createTask`, `updateTask`, `setTaskStatus` with `loadTaskEnv(ctx)` | none; assigning notifies the owner, as in the app |
-| `add_task_comment` | `addComment` | none |
-| `rsvp_to_event` (going, maybe, not going) | the `updateMany` inside `rsvpTx` in the calendar actions | Move it to `src/server/events/rsvp.ts` as `setOwnRsvp(ctx, eventId, status)`. |
-| `add_database_record`, `update_database_record` | `createRecord`, `updateCell` (`src/server/databases/custom.ts`) | none; custom databases only, built-ins stay read-only here |
-| `post_weekly_update` | `postWeeklyUpdate` (`src/server/tasks/weekly.ts`) | none |
-| `vote_in_poll` | `setMyVotes` (question polls) | none |
-| `create_note` (space, title, Markdown, folder) | `createNote` in `notes/actions.ts` | Move it to `src/server/notes/create.ts`. Add a Markdown-to-note-JSON converter (`src/lib/notes/import/markdown.ts`), round-trip tested against `noteToMarkdown`. |
+| `create_task`, `update_task` | `createTask`, `updateTask` with `loadTaskEnv(ctx)` | adds; overwrites |
+| `add_task_comment` | `addComment` | adds |
+| `rsvp_to_event` | `setOwnRsvp` (`src/server/events/rsvp.ts`) | overwrites |
+| `add_database_record`, `update_database_record` | `createRecord`, `updateCell` | adds; overwrites |
+| `post_weekly_update` | `postWeeklyUpdate` | posts |
+| `vote_in_poll` | `setMyVotes` | overwrites |
+| `create_note` | `markdownToNote`, `checkNoteContent`, `createNote` (`src/server/notes/create.ts`) | adds |
 
-Rules for every write tool:
-- **Annotations.**
-  - `readOnlyHint: false` and `openWorldHint: false` on all.
-  - `destructiveHint: false` for purely additive tools (`create_task`,
-    `add_task_comment`, `add_database_record`, `post_weekly_update`,
-    `create_note`).
-  - `destructiveHint: true` for anything that overwrites (`update_task`,
-    `update_database_record`, `rsvp_to_event`, `vote_in_poll`).
-  - No deletes in v1.
-- **Audit.** Each write records `writeOrgAuditLog(ctx.db, { action:
-  "connector.<tool>", targetType, targetId, diff: { client, clientId } })`
-  in the same transaction.
-- **Limits.** `connector.write` allows 120 an hour per grant, and a paused
-  club refuses writes through the wrapper.
-
-Editing existing notes waits, because live collaboration owns their Yjs
-state.
-
-### Phase 3: as built (2026-10-26)
-
-Built as the table above says, with these decisions on the way:
-
-- **One way in for writes.** `writeInSpace` (`tools/write.ts`) checks, in
-  order:
-  1. A READ grant is refused (`ReadOnlyGrantError`).
-  2. `connector.write` allows 120 writes an hour per grant, across every
-     space. It is counted before the space opens, so a refused write
-     counts too, as with every limit, and it fails open like them
-     (`WriteLimitError`).
-  3. `withConnectorOrgTx` covers the grant's scope, membership, the club
-     switch and the tool's plan feature. It first ran with `whenPaused:
-     "refuse"`, but the homepage redesign (#72) removed pausing: a trial
-     now ends on Team Free. So no space is refused as paused any more.
-  4. A section the club hid is refused to members, as for reads
-     (`SectionHiddenError`). Owners and admins still write there.
-  5. The write runs, and then the `connector.<tool>` audit row, in the same
-     transaction. The diff is `{ client, clientId }`, where `client` is the
-     grant's app name and stays null until the WorkOS lookup has filled it
-     in.
-
-  The services' own refusals come back in their own words and roll the
-  write back (`WriteRefusedError`). They arrive as `{ error }`,
-  `TaskError` or `DatabaseInputError`: a closed poll, a task rule, a value
-  its column won't take.
-- **Write tools stay off a READ grant's `tools/list`.** The choice:
-  - A model can't try what it can't see, and both directories review the
-    tool list.
-  - The cost is that a model on a READ grant can't tell the member why it
-    can't make a change. So a READ grant's `instructions` add one factual
-    sentence: the connection reads only, and making changes needs the app
-    connected again with Read and make changes. `list_spaces` already
-    returns `access`.
-  - The wrapper still refuses a READ grant, as a second check.
-- **Annotations.** All four hints are explicit on every tool.
-  - Adds (`destructiveHint: false`, `idempotentHint: false`):
-    `create_task`, `add_task_comment`, `add_database_record` and
-    `create_note`.
-  - Overwrites (`destructiveHint: true`, `idempotentHint: true`):
-    `update_task`, `update_database_record`, `rsvp_to_event` and
-    `vote_in_poll`.
-  - `post_weekly_update` is `destructiveHint: false` as planned, with
-    `idempotentHint: true`. Posting a week again replaces that week's post,
-    as the app's Post button does. It is only ever the member's own post,
-    but a reviewer may count that as overwriting.
-- **Inputs.**
-  - Item ids are Phase 2's opaque ids (task, event, database, poll and
-    person), decoded with `refOf`. Space ids are the ones `list_spaces`
-    returns.
-  - An owner, or a member column's value, is "me" or a person id from the
-    same space (`memberOf`).
-  - Two ids stay plain, as Phase 2's folder ids do: a club-made database's
-    row ids (`query_database` returns them plain) and note folder ids
-    (`list_notes`).
-- **create_task and update_task.**
-  - They run `createTask` and `updateTask` with `loadTaskEnv(ctx)`.
-    `setTaskStatus` is `updateTask({ status, blockedReason })`, so a status
-    change goes through `updateTask` with the other fields, as one change.
-  - The fields are the title, the description (Markdown), owner, due day,
-    priority, status and `blockedReason`.
-  - There is no `expectedVersion`, so the last write wins, as with the
-    board's quick toggles.
-  - Assigning someone above the member in the published org chart is
-    refused. The message names them and asks for `confirmAboveLevel: true`
-    once the member confirms. With it, the task is saved flagged and they
-    get `TASK_FLAGGED`, as in the app.
-  - `update_task` looks the task up first, so a private task the member
-    isn't on is not found rather than a service error.
-  - Not exposed: collaborators, tags, subtasks and parents, visibility,
-    type, start dates and deleting.
-- **add_task_comment** runs `addComment`: the owner and collaborators are
-  notified. The tools hand out no raw user ids, so a comment can't
-  @-mention anyone.
-- **rsvp_to_event** runs `setOwnRsvp`.
-  - An event that is deleted, or in another club, is not found.
-  - An event the member isn't invited to is refused, and nobody's answer
-    changes.
-  - The answers are going, maybe and not going. There is no way back to
-    "no answer", as in the app.
-- **add_database_record and update_database_record** take club-made
-  databases only. A built-in one is refused with a pointer to its page.
-  - Cells are keyed by `query_database`'s column keys: field names, with
-    the second of a name as "Name (2)".
-  - Values go through the grid's `parseCell`, so choices are their labels,
-    and null clears a cell.
-  - `update_database_record` saves one `updateCell` per cell, all in one
-    transaction, so one refused cell rolls back every cell.
-  - Rows read back as the grid shows them.
-- **post_weekly_update** runs `postWeeklyUpdate`.
-  - Any day in a week names the club's week (`updateWeekStartOfKey`).
-  - A week that hasn't begun is refused.
-  - Personal is refused, since it has no teamwork.
-  - Private tasks stay out, as `summaryLines` leaves them.
-- **vote_in_poll** is for question polls only.
-  - Choices are labels, matched as the app compares options (`optionKey`).
-    An empty list takes the vote back.
-  - A find-a-time poll gets a pointer to its page.
-  - The result is the poll as its page shows this member
-    (`buildQuestionPollView`): counts stay hidden until it closes when the
-    poll says so.
-- **create_note.** Markdown goes through `markdownToNote`, then
-  `checkNoteContent`, then `createNote`.
-  - The note is always PRIVATE: it has no parent to inherit from, and who
-    sees a note isn't something a connected app changes.
-  - A folder is optional.
-  - A leading `# Title` is the title when none is given, and is dropped when
-    it repeats the title.
-  - With live collaboration on, the body is stored as Yjs state too, as
-    `importNote` stores it.
-  - The Markdown is capped at 100,000 characters.
-- **The Markdown converter** (`src/lib/notes/import/markdown.ts`).
-  - It uses `mdast-util-from-markdown` with the GFM extensions. They are
-    new direct dependencies, at the versions already in the lockfile
-    through `react-markdown` and `remark-gfm`.
-  - It reads paragraphs, headings, quotes, rules, code blocks, tables
-    (with the first row as the header), bullets, numbers and checklists,
-    bold, italic, strikethrough, `<u>`, inline code, links and line breaks.
-  - A blank line doesn't end a Markdown list, so a list's checklist items
-    become a checklist of their own. That is how the export's bullets
-    followed by a checklist round-trip.
-  - Links keep only http(s), mailto, tel and app paths (`//host` is
-    refused). An image becomes a link to it, never a picture fetched from
-    elsewhere. Raw HTML stays as text.
-  - The round-trip test checks both directions:
-    `noteToMarkdown` then `markdownToNote` gives back the same document,
-    and writing that again gives the same Markdown.
-  - What doesn't round-trip: callouts, toggles, columns, mentions, dates,
-    page links, task chips and file cards. The export's stand-ins for them
-    come back as plain blocks. A mark that covers spaces at its edges also
-    changes, since the export moves those spaces outside the marker.
-- **Refactors.**
-  - `setOwnRsvp` lives in `src/server/events/rsvp.ts`, and the calendar
-    action calls it.
-  - `createNote`, `parentFor` and `assertEventBelongsToOrg` live in
-    `src/server/notes/create.ts`, and New note is a thin shell over them.
-    `createNote` also takes a folder and a checked body.
-  - Phase 2's files export `findTaskSummary`, `findEventSummary`,
-    `memberNames` and their section constants.
+- **Inputs.** Item ids are the opaque ids above, decoded with `refOf`;
+  space ids come from `list_spaces`. An owner, or a member column's value,
+  is "me" or a person id from the same space (`memberOf`).
+- **create_task and update_task.** The fields are the title, the
+  description (Markdown), owner, due day, priority, status and
+  `blockedReason`. A status change goes through `updateTask` with the other
+  fields, as one change. There is no `expectedVersion`: the last write
+  wins, as with the board's quick toggles. Assigning someone above the
+  member in the published org chart is refused with their names until the
+  member confirms (`confirmAboveLevel: true`); the task is then saved
+  flagged and they get `TASK_FLAGGED`, as in the app. `update_task` looks
+  the task up first, so a private task the member isn't on is not found.
+  Not exposed: collaborators, tags, subtasks and parents, visibility,
+  type, start dates and deleting.
+- **add_task_comment** notifies the owner and collaborators. The tools
+  hand out no raw user ids, so a comment can't @-mention anyone.
+- **rsvp_to_event.** A deleted event, or one in another organization, is
+  not found; an event the member isn't invited to is refused and nobody's
+  answer changes. Going, maybe or not going; there is no way back to "no
+  answer", as in the app.
+- **add_database_record and update_database_record** take databases the
+  space made itself; a built-in one is refused with a pointer to its page.
+  Cells are keyed by `query_database`'s column keys (a second "Name" is
+  "Name (2)"); values go through the grid's `parseCell`, so choices are
+  labels and null clears a cell. One `updateCell` per cell, all in one
+  transaction, so one refused cell rolls back every cell.
+- **post_weekly_update.** Any day in a week names the organization's week
+  (`updateWeekStartOfKey`); a week that hasn't begun, and Personal, are
+  refused. Private tasks stay out, as `summaryLines` leaves them.
+- **vote_in_poll** is for question polls only. Choices are labels, matched
+  as the app compares options (`optionKey`); an empty list takes the vote
+  back. A find-a-time poll gets a pointer to its page. The result is the
+  poll as its page shows this member.
+- **create_note.** The note is always PRIVATE: it has no parent to inherit
+  from, and who sees a note isn't something a connected app changes. A
+  folder is optional. A leading `# Title` is the title when none is given,
+  and is dropped when it repeats the title. With live collaboration on, the
+  body is stored as Yjs state too, as `importNote` stores it. The Markdown
+  is capped at 100,000 characters. Editing existing notes waits, because
+  live collaboration owns their Yjs state.
+- **The Markdown converter** (`src/lib/notes/import/markdown.ts`) uses
+  `mdast-util-from-markdown` with the GFM extensions. It reads paragraphs,
+  headings, quotes, rules, code blocks, tables (first row as the header),
+  bullets, numbers and checklists, bold, italic, strikethrough, `<u>`,
+  inline code, links and line breaks. A blank line doesn't end a Markdown
+  list, so a list's checklist items become a checklist of their own (how
+  the export's bullets followed by a checklist round-trip). Links keep only
+  http(s), mailto, tel and app paths (`//host` is refused). An image
+  becomes a link, never a picture fetched from elsewhere; raw HTML stays as
+  text. Callouts, toggles, columns, mentions, dates, page links, task chips
+  and file cards don't round-trip: the export's stand-ins come back as
+  plain blocks.
 - **The audit log** (Admin panel › Audit log) names each connector write in
   words and filters them under AI apps, with the app's name once it's
-  known. The club switch's `privacy.connectors_changed` gets a sentence
-  too.
-
-**Done when**, as checked on 2026-10-26:
-- The nine tools are registered for WRITE grants only, and both refactors
-  are in.
-- Every write tool has DB tests, in `src/server/connectors/tools/`:
-  - `write.db.test.ts` runs all nine through each refusal: a READ grant, a
-    club the member isn't in, a grant scoped elsewhere, the club switch
-    and a hidden section. (Its paused-club case went with pausing, in
-    #72.) It then checks that nothing was left
-    behind and that no audit row was written.
-  - It also covers an owner writing in a hidden section, the audit row's
-    shape, and the real limiter refusing write 121 while another grant
-    still writes.
-  - Each `*-writes.db.test.ts` covers what its tools write, notify and
-    refuse, and runs them through the MCP server for their output schemas.
-  - They ran for real against a fresh, migrated database
-    (`bananasplit_connectors_p3`): 47 tests in seven files, with real
-    query timings.
-- The Markdown round trip is unit-tested
-  (`src/lib/notes/import/markdown.test.ts`).
-- The route test lists the 15 read tools for a READ grant and the nine
-  write tools after them for a WRITE grant, with their hints. It also shows
-  that a READ grant can't call a write tool, that a READ grant's
-  instructions say it reads only, and that the write limit comes back as an
-  `isError` result.
-- Typecheck, ESLint on the changed files, `pnpm test` (344 files, 3431
-  tests) and `pnpm test:rls` (134 + 17 + 141, with the usual environmental
-  skip T27b2) pass. Six DB files outside the connectors (integrations,
-  conference, the calendar actions, platform) fail without
-  `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT` and `SECRETS_FINGERPRINT_KEY`.
-  They pass with throwaway values passed on the command line.
-- *Not yet:* any client against WorkOS staging, so no real client has
-  called a write tool. That waits on Phase 0.
-
-**Left for later.**
-- Notifications name the member ("Alice assigned you …"), not the app that
-  made the change. A "from Claude" could follow once `clientName` is
-  reliable.
-- More write tools: subtasks, tags, collaborators, adding poll options,
-  find-a-time answers, editing notes and built-in databases.
+  known.
 
 ## Not exposed, and why
 
@@ -877,6 +569,7 @@ Built as the table above says, with these decisions on the way:
 - **Admin and money surfaces.** Member and role management, invitations,
   settings, integrations and keys, the plan, deletion and restore, finance
   writes and receipts, the finance ledger, and the audit log.
+- **Deleting anything.** No tool deletes in v1.
 
 ## Security checklist
 
@@ -888,13 +581,13 @@ Built as the table above says, with these decisions on the way:
 - **Live checks on every call.**
   - the grant isn't revoked;
   - membership and role (`app.set_context`);
-  - the plan and paused state (`checkSpace`);
+  - the plan (`checkSpace`);
   - the club switch;
-  - the tool's own permission (`can()`).
+  - the tool's own permission (`can()`), and the hidden sections.
 - **Text.**
   - Text members wrote comes back as data fields in `structuredContent`.
   - Descriptions and `instructions` carry no behavioral directives; both
-    directories reject them.
+    directories reject them, and `server.test.ts` checks the descriptions.
 - **Minimal responses.** Results carry only what the tool needs, and
   emails only when the member could see them in the app.
 - **`/connect`.**
@@ -907,74 +600,85 @@ Built as the table above says, with these decisions on the way:
 
 ## Tests
 
-- **Unit.**
-  - Token checks against a local JWKS: wrong `iss`, wrong `aud` (the
-    environment's client id), expired, missing `uid`, an HS256 header.
-  - The grant states, the error mapping, the cursor codec and the consent
-    options.
-- **DB** (`src/server/connectors/*.db.test.ts`).
-  - The wrappers, and every tool's denials (above).
-  - These skip silently without Postgres and the role passwords, so check
-    that a run actually executed them.
-- **RLS.** `pnpm test:rls` with the new table in the grant matrix, plus a
-  case where one user can't read or revoke another's grant.
-- **Protocol.** `@modelcontextprotocol/client` against the route handler in
-  Vitest:
-  - a 2025-11-25 `initialize`, then `tools/list` and `tools/call`;
-  - a 2026-07-28 `server/discover`, then a call;
-  - the 401 challenge's shape, and the Origin 403.
-- **E2E.** `/connect` signed out, then sign-in, back, and `complete` (with
-  WorkOS stubbed).
+- **Unit.** Token checks against a local JWKS (wrong `iss`, an `aud` that
+  is the environment's client id, expired, missing `uid`, an HS256
+  forgery); the grant states, error mapping, cursor and id codecs, text
+  parts, consent options and config; the Markdown round trip
+  (`src/lib/notes/import/markdown.test.ts`); the tool audit
+  (`src/server/connectors/server.test.ts`); `server.json`
+  (`config.test.ts`); the challenge route; the pricing row.
+- **Protocol** (`src/app/api/mcp/route.test.ts`). Through the route
+  handler: a 2025-11-25 `initialize`, `tools/list` and calls; a 2026-07-28
+  `server/discover` and calls; the 401 challenge's shape and the Origin
+  403; 404 while off; Disconnect; the 600-an-hour limit; READ and WRITE
+  tool lists with their hints; a READ grant's instructions and refused
+  write; the write limit as an `isError` result; `get_note`, `search` and
+  `fetch`.
+- **DB** (`src/server/connectors/*.db.test.ts`, `tools/*.db.test.ts`, over
+  `src/test/connector-fixture.ts`). The wrappers, and every tool's
+  denials: another org's id and a forged one; another member's PRIVATE
+  note and a removed share; a PRIVATE task; hidden sections, refused to
+  members and open to owners; member emails; the club switch; a grant
+  scoped elsewhere. `write.db.test.ts` runs all nine write tools through
+  each refusal and checks nothing was left behind and no audit row
+  written, plus the audit row's shape and the real limiter refusing write
+  121 while another grant still writes. Each file runs its tools through
+  the MCP server, so the SDK checks every output schema against real
+  rows. These skip silently without Postgres and the role passwords, so
+  check that a run actually executed them; Phases 1–3 ran them against
+  fresh, migrated databases.
+- **RLS.** `pnpm test:rls` with the table in the grant matrix, plus a case
+  where one user can't read or revoke another's grant.
 - **By hand, each release.** Claude Code, claude.ai, ChatGPT developer
-  mode, Cursor, VS Code and the MCP Inspector.
+  mode, Cursor, VS Code and the MCP Inspector. *Not done yet: it waits on
+  Phase 0.*
 
-## Phase 4: launch
+## Open questions (Phase 0)
 
-- **WorkOS production.**
-  - billing, the custom domain (decision 4) and branding (logo, colors,
-    consent page CSS);
-  - CIMD and DCR on;
-  - the External Sign-in URI, the default Resource Indicator and the JWT
-    template.
-- **Privacy policy and terms.**
-  - An AI app a member connects receives what the member asks it to read.
-  - WorkOS is a subprocessor, holding name, email and our user id.
-- **Docs.**
-  - This file becomes the feature doc.
-  - ARCHITECTURE gets the connector wrappers, the ESLint block and the
-    token path.
-  - `platform-services.md` gets the rate limits.
-  - `personal-and-clubs.md` and the pricing table get `FEATURE_LABELS`,
-    `FEATURE_PITCH` and the comparison rows.
-- **Claude Connectors Directory** (claude.ai/directory/manage).
-  - a test account with a populated club;
-  - a privacy policy, a support contact, a docs URL and screenshots;
-  - a title and a read-only or destructive hint on every tool.
-- **ChatGPT Plugin Directory.**
-  - organization and domain verification
-    (`/.well-known/openai-apps-challenge`);
-  - a reviewer password account without MFA;
-  - five test prompts that should work, three that should be refused, and
-    a video;
-  - all three hints explicit on every tool.
-- **MCP Registry** (optional). A `server.json` with a `streamable-http`
-  remote.
+The spike harness and its 13 checks are on `claude/mcp-spike` (commit
+`8474061`, runbook `ai-connectors-spike.md`); run them there, since the
+feature replaced the spike's `whoami` tool, which shows a token's claims.
+Until they run, nothing has been tried against WorkOS itself.
 
-## Later
+- **The user-id claim.** `urn:bananasplit:uid` appears in access tokens
+  issued to both CIMD and DCR clients (checks 3, 4).
+- **Localhost as a resource** in staging (check 2); if not, a tunnel.
+- **Consent.** How grouped choices render (check 5); whether the choices
+  appear as claims (check 6).
+- **Check 8: does a refresh keep `sid`?** A new consent clears `revokedAt`,
+  so if a refresh mints a new `sid`, a refresh would revive a revoked
+  grant. The WorkOS DELETE kills the refresh tokens, but it is best effort.
+  If check 8 shows a new `sid`, reviving must also require a `/connect`
+  completion after `revokedAt`.
+- **Check 9: does a repeat authorization keep `sid`?** If it does, a member
+  who disconnected can't reconnect the same app unless the WorkOS DELETE
+  went through.
+- **Failure paths.** What AuthKit's Cancel does (11), how long an
+  `external_auth_id` lives and what `complete` returns once expired (12;
+  the WorkOS emulator uses 10 minutes and 404), and whether our page can
+  abort the flow (nothing documents it; the fallback tells the member to
+  close the window).
+- **For WorkOS support.** Custom scopes for self-registered clients; RFC
+  9207 `iss` in authorization responses (ChatGPT uses its stable redirect
+  URI only with it); a client allowlist.
 
+## Left for later
+
+- **Notifications** name the member ("Alice assigned you …"), not the app
+  that made the change. A "from Claude" could follow once `clientName` is
+  reliable.
+- **More write tools.** Subtasks, tags, collaborators, adding poll
+  options, find-a-time answers, editing notes, built-in databases, and
+  creating events (admins, without attendee notices).
 - **MCP Apps cards.** An event with RSVP buttons, and the task board, for
   Claude, ChatGPT and VS Code. Text results stay for every other client.
-- **Personal access tokens** for developer tools and scripts.
-  - Prefixed `bsp_…`, hashed like the ICS token.
-  - Scoped to a space and an access level, with an expiry.
-  - Checked by the same route.
+- **Personal access tokens** for developer tools and scripts: prefixed
+  `bsp_…`, hashed like the ICS token, scoped to a space and an access
+  level, with an expiry, checked by the same route.
 - **A read-only URL.** `/api/mcp/readonly`, with its own Resource
   Indicator.
-- **More write tools.** Editing notes, creating events (admins, without
-  attendee notices), and availability polls.
-- **Not planned: the other direction.** That would be Bananasplit's own AI
-  calling Notion or Google MCP servers.
-  - Anthropic's MCP connector in the Messages API is still beta.
-  - Slack admits only Marketplace apps, and Google's MCP servers are a
-    developer preview.
-  - It would also end the no-tools rule in `src/server/ai/generate.ts`.
+- **Not planned: the other direction**, Bananasplit's own AI calling
+  Notion or Google MCP servers. Anthropic's MCP connector in the Messages
+  API is still beta, Slack admits only Marketplace apps, Google's MCP
+  servers are a developer preview, and it would end the no-tools rule in
+  `src/server/ai/generate.ts`.

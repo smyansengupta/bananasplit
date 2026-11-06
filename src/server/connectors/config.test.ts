@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { claudeConnectorUrl, connectorsConfig, connectorsConfigProblems } from "./config";
+import { claudeConnectorUrl, connectorsConfig, connectorsConfigProblems, MCP_PATH } from "./config";
 
 const ON = {
   CONNECTORS_ENABLED: "true",
@@ -67,5 +70,22 @@ describe("claudeConnectorUrl", () => {
       connectorName: "Bananasplit",
       connectorUrl: "https://bananasplit.fyi/api/mcp",
     });
+  });
+});
+
+/** The MCP Registry entry (server.json, published with mcp-publisher at launch). */
+describe("server.json", () => {
+  it("lists one streamable-http remote: production's MCP URL, under the domain's namespace", () => {
+    const entry = JSON.parse(readFileSync(path.join(process.cwd(), "server.json"), "utf8")) as {
+      name: string;
+      description: string;
+      websiteUrl: string;
+      remotes: { type: string; url: string }[];
+    };
+    const site = new URL(entry.websiteUrl);
+    expect(entry.remotes).toEqual([{ type: "streamable-http", url: `${site.origin}${MCP_PATH}` }]);
+    // A domain namespace is the reverse of the domain the registry verifies.
+    expect(entry.name.split("/")[0]).toBe(site.hostname.split(".").reverse().join("."));
+    expect(entry.description.length).toBeLessThanOrEqual(100);
   });
 });
