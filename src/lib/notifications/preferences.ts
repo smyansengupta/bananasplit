@@ -54,6 +54,11 @@ export const notificationPreferencesSchema = z
 /** Types that stay off until the user turns them on (Tasks). */
 export const DEFAULT_OFF_TYPES: ReadonlySet<NotificationType> = new Set([
   NotificationType.TASK_COMMENTED,
+  // Everyone who can see the task gets it, so it's Inbox-only unless asked for.
+  NotificationType.TASK_UP_FOR_GRABS,
+  // Someone new in the CRM comes in bursts (forms, booking pages): the Inbox
+  // always has it; it's emailed only when the member turns it on.
+  NotificationType.CRM_NEW,
 ]);
 
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
@@ -202,19 +207,21 @@ export interface NotificationTypeMeta {
 
 /**
  * Labels for the per-type email switches. TASK_DIGEST is not listed: the
- * digest has its own switch and hour.
+ * digest has its own switch and hour. Nor is CRM_BOOKED: nothing writes it
+ * any more (a booking is MEETING_BOOKED), but the enum value stays.
  */
 export const NOTIFICATION_TYPE_META: Record<
-  Exclude<NotificationType, "TASK_DIGEST">,
+  Exclude<NotificationType, "TASK_DIGEST" | "CRM_BOOKED">,
   NotificationTypeMeta
 > = {
   TASK_ASSIGNED: { label: "A task is assigned to me", group: "tasks" },
   TASK_MENTIONED: { label: "Someone @mentions me in a task or comment", group: "tasks" },
-  TASK_COMMENTED: { label: "Someone comments on a task I own", group: "tasks" },
+  TASK_COMMENTED: { label: "Someone comments on a task I'm on", group: "tasks" },
   TASK_DUE_REMINDER: { label: "A reminder before one of my tasks is due", group: "tasks" },
   TASK_DUE_TODAY: { label: "One of my tasks is due today", group: "tasks" },
   TASK_OVERDUE: { label: "One of my tasks is overdue", group: "tasks" },
   TASK_DUE_SOON: { label: "One of my tasks is due soon", group: "tasks" },
+  TASK_UP_FOR_GRABS: { label: "A task is up for grabs (nobody owns it)", group: "tasks" },
   TASK_FLAGGED: {
     label: "A task assignment needs my review",
     group: "tasks",
@@ -225,10 +232,15 @@ export const NOTIFICATION_TYPE_META: Record<
   EVENT_UPDATED: { label: "An event I'm going to changes", group: "events" },
   EVENT_CANCELLED: { label: "An event I'm going to is cancelled", group: "events" },
   EVENT_REMINDER: { label: "A reminder before a meeting I'm going to", group: "events" },
+  MEETING_BOOKED: {
+    label: "Someone books, moves or cancels a meeting on my meeting link",
+    group: "events",
+  },
   INVITE_ACCEPTED: { label: "Someone accepts an invite I sent", group: "org" },
   NOTE_SHARED: { label: "Someone shares a note with me", group: "org" },
   FORM_RESPONSE: { label: "Someone answers a form I made", group: "org" },
   WEEKLY_PULSE: { label: "My organization's weekly pulse", group: "org" },
+  REPORT_SENT: { label: "A report sent to me on its schedule", group: "org" },
   INTEGRATION_ERROR: {
     label: "An integration stops working",
     group: "org",
@@ -238,6 +250,20 @@ export const NOTIFICATION_TYPE_META: Record<
     label: "Security alerts, such as an integration key changing",
     group: "org",
     audience: "Owners",
+  },
+  CRM_ASSIGNED: { label: "A person or item in the CRM is given to me", group: "org" },
+  CRM_FOLLOW_UP: { label: "A follow-up in the CRM is due", group: "org" },
+  CRM_REPLY: { label: "Someone in the CRM replies to me", group: "org" },
+  CRM_REVIEW: {
+    label:
+      "Something in the CRM waits for my OK: a draft to send, paused sending, something held back",
+    group: "org",
+  },
+  CRM_HANDOVER: { label: "CRM relationships are handed to me", group: "org" },
+  CRM_NEW: { label: "Someone new comes into the CRM for me", group: "org" },
+  CRM_DEAL: {
+    label: "A deal of mine is won or lost, or a quote is opened or accepted",
+    group: "org",
   },
 };
 

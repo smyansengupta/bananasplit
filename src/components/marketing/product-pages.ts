@@ -269,7 +269,7 @@ export const PRODUCT_PAGES: readonly ProductPage[] = [
     subtitle:
       "Budgets by category, receipts that file themselves, paybacks your team can request, and runway you can see at a glance. Only the owner, admins and treasurers see the books.",
     steps: [
-      { title: "Set the budget", body: "Categories and amounts for the term or the year." },
+      { title: "Set the budget", body: "Categories and amounts for the quarter or the year." },
       { title: "Spend and snap", body: "Members photograph receipts and ask to be paid back." },
       { title: "Approve and see it", body: "Approve in a click. Spend and runway update live." },
     ],

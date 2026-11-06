@@ -4,7 +4,6 @@ import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types
 import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
-  DoorOpen,
   CalendarPlus,
   ExternalLink,
   MapPin,
@@ -106,7 +105,40 @@ export function EventDetailView({
   tasks = null,
   recording = null,
   askedRsvp = null,
+  crm = null,
+  booking = null,
+  ambient = null,
+  agendaAmbient = null,
+  invitedAmbient = null,
+  syncAmbient = null,
 }: {
+  /**
+   * Who booked it through a meeting link, for its host and admins only
+   * (read from the Booking, whose RLS hides it from everyone else).
+   */
+  booking?: {
+    name: string;
+    email: string;
+    confirmed: boolean;
+    answers: { q: string; a: string }[];
+  } | null;
+  /**
+   * Its people in the CRM (src/server/crm/outside-links.ts): attendees who
+   * are CRM people link to their card; guests are CRM people it was with
+   * who aren't members (a booking's guest).
+   */
+  crm?: {
+    attendees: Record<string, string>;
+    guests: { id: string; name: string; detail: string | null; href: string }[];
+  } | null;
+  /** Its ambient buttons (components/meetings/meeting-ambient), under the header. */
+  ambient?: ReactNode;
+  /** The agenda's (Carry them over), under its heading. */
+  agendaAmbient?: ReactNode;
+  /** The Invited card's (Remind maybes). */
+  invitedAmbient?: ReactNode;
+  /** Retry sync, beside the "sync failed" note. */
+  syncAmbient?: ReactNode;
   /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
   askedRsvp?: "YES" | "NO" | "MAYBE" | null;
   /** The Linked panel (components/links), first in the side column. */
@@ -200,19 +232,6 @@ export function EventDetailView({
   const typeColor =
     (event.meetingType ? meetingTypeColor(meetingTypes ?? [], event.meetingType) : null) ??
     `var(${KIND_META[event.kind].token})`;
-  // On the meeting's own day, the door list is one click from the header.
-  const dayKey = (d: Date) =>
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(d);
-  const doorToday =
-    section === "meetings" &&
-    canEdit &&
-    rsvp.enabled &&
-    dayKey(event.startsAt) === dayKey(new Date());
   // A meeting with no call (stored as In person), on its own page, for those who can edit it.
   const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
@@ -266,14 +285,6 @@ export function EventDetailView({
         <div className="flex flex-wrap items-center gap-2">
           {canEdit ? (
             <>
-              {doorToday && (
-                <Button asChild>
-                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
-                    <DoorOpen aria-hidden className="size-4" />
-                    Door
-                  </Link>
-                </Button>
-              )}
               {/* Delete is in the form, with Undo; one place, not two. */}
               <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
                 <Repeat aria-hidden className="size-4" />
@@ -287,6 +298,8 @@ export function EventDetailView({
           ) : null}
         </div>
       </header>
+      {/* On the day, the door list is one click away: Open door check-in is here. */}
+      {ambient}
 
       {event.needsReview && canEdit && (
         <p
@@ -301,13 +314,16 @@ export function EventDetailView({
           duplicates another session and merge them in Databases &gt; Sessions.
         </p>
       )}
-      {canEdit && event.googleSyncState === "FAILED" && event.googleSyncError && (
-        <p
-          className="bg-tint-danger text-tint-danger-foreground rounded-field p-3.5 text-sm"
+      {canEdit && event.googleSyncState === "FAILED" && (event.googleSyncError || syncAmbient) && (
+        <div
+          className="bg-tint-danger text-tint-danger-foreground rounded-field flex flex-wrap items-center gap-3 p-3.5 text-sm"
           role="note"
         >
-          Google Calendar sync failed: {event.googleSyncError}
-        </p>
+          <span className="min-w-0 flex-1">
+            Google Calendar sync failed{event.googleSyncError ? `: ${event.googleSyncError}` : "."}
+          </span>
+          {syncAmbient}
+        </div>
       )}
 
       {/* On a phone the two columns fold into one list (display: contents),
@@ -322,6 +338,7 @@ export function EventDetailView({
                 eventId={event.id}
                 initial={event.description}
                 canEdit={canEdit}
+                aside={agendaAmbient}
               />
               {recording}
 
@@ -577,6 +594,7 @@ export function EventDetailView({
                   />
                 </div>
               )}
+              {invitedAmbient && <div className="mb-3">{invitedAmbient}</div>}
               {event.attendees.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-3 text-[13px] tabular-nums">
@@ -597,7 +615,19 @@ export function EventDetailView({
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <UserAvatar user={a.user} size="md" />
-                          <span className="font-medium break-words">{a.user.name ?? "Member"}</span>
+                          {crm?.attendees[a.userId] ? (
+                            <Link
+                              href={String(crm.attendees[a.userId])}
+                              className="font-medium break-words underline-offset-4 hover:underline"
+                              title="Open in CRM"
+                            >
+                              {a.user.name ?? "Member"}
+                            </Link>
+                          ) : (
+                            <span className="font-medium break-words">
+                              {a.user.name ?? "Member"}
+                            </span>
+                          )}
                         </span>
                         <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>
                           {RSVP_META[a.rsvp].short}
@@ -607,7 +637,51 @@ export function EventDetailView({
                   </ul>
                 </>
               ) : (
-                <EmptyState size="compact" title="Nobody is invited yet" />
+                !crm?.guests.length &&
+                !booking && <EmptyState size="compact" title="Nobody is invited yet" />
+              )}
+              {booking && (
+                <div className="border-border/60 mt-3 space-y-2 border-t pt-3 text-sm">
+                  <p className="flex min-w-0 flex-col">
+                    <span className="font-medium break-words">{booking.name}</span>
+                    <a
+                      href={`mailto:${booking.email}`}
+                      className="text-muted-foreground truncate text-[13px] underline-offset-4 hover:underline"
+                    >
+                      {booking.email}
+                    </a>
+                    {!booking.confirmed && (
+                      <span className="text-muted-foreground text-[13px]">
+                        Booked, hasn&apos;t confirmed their email yet
+                      </span>
+                    )}
+                  </p>
+                  {booking.answers.map((x, i) => (
+                    <div key={i} className="text-[13px]">
+                      <p className="text-muted-foreground">{x.q}</p>
+                      <p className="break-words whitespace-pre-line">{x.a}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {crm && crm.guests.length > 0 && (
+                <ul className="border-border/60 mt-3 space-y-2 border-t pt-3">
+                  {crm.guests.map((g) => (
+                    <li key={g.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium break-words">{g.name}</span>
+                        {g.detail && (
+                          <span className="text-muted-foreground truncate text-[13px]">
+                            {g.detail}
+                          </span>
+                        )}
+                      </span>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={g.href}>Open in CRM</Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>

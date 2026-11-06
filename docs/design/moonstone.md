@@ -13,7 +13,8 @@ screen. The full rationale, mocks and decisions live in the redesign guide
   monochrome graphite and pearl lit by a banana glow, dark first.
 - **The logo never changes.** `CoreMark`/`Logo` keep their fixed colours
   (`--color-logo-*`) and Young Serif in every theme.
-- **One create action per screen** (`<Button variant="create">`). Primary
+- **One create action per screen** (`<Button variant="create">`, a plain
+  solid button: white in light with a hairline, no glow, no shadow). Primary
   (`variant="default"`) commits: Save, Send, Confirm.
 - **One destructive style.** `<Button variant="destructive">` is the red
   button everywhere (forms and confirm dialogs), always naming the thing:
@@ -38,7 +39,7 @@ screen. The full rationale, mocks and decisions live in the redesign guide
 | Page, cards, floats                                | `bg-background`, `bg-card`, `bg-raised` (dark-mode floats), `bg-popover`                     |
 | Fills                                              | `bg-muted` (tracks, hovers), `bg-muted-strong` (stronger fill), `bg-thumb` (segmented thumb) |
 | Text                                               | `text-foreground`, `text-muted-foreground`                                                   |
-| Accent (create, active nav, today)                 | `bg-brand-accent text-brand-accent-foreground` (+ `glow-halo`)                               |
+| Accent (active nav, today)                         | `bg-brand-accent text-brand-accent-foreground` (+ `glow-halo`)                               |
 | Glow (light only)                                  | `bg-glow`, `stroke-glow`; halos via `glow-halo`, focus via `focus-glow`                      |
 | Chrome (glass rail, toasts, menu button, tooltips) | `bg-chrome text-chrome-foreground`                                                           |
 | Block cards                                        | `bg-block-{quiet,alert,answer,goal}` + `-foreground` + `-meta`                               |

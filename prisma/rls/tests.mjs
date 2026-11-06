@@ -2097,6 +2097,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "blob_get",
         "blob_list",
         "blob_put",
+        // Booking links: a link's hosts' busy times (times only) from
+        // every space they're in, in the link's own org context.
+        "booking_host_busy",
         // C4: reads "Task"/"TaskAssignee" without RLS so the task-visibility
         // policies cannot recurse into themselves. Answers only about
         // app.user_id().
@@ -2119,6 +2122,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         // AI connectors: the caller's own spaces with each club's switch
         // (OrgSettings is readable only in the current org).
         "connector_spaces",
+        // CRM outreach: which org a public link opens (ids only), and a
+        // booking page's hosts' busy hours in the caller's org context.
+        "crm_booking_busy",
+        "crm_public_target",
         "enqueue_job",
         "event_defaults",
         // Budgets for finance: a member's category list, without the amounts.
@@ -2171,6 +2178,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "redeem_org_creation_code",
         "refresh_contact_rollups",
         "refresh_lapsed",
+        // A shared report's pages: the org and report an invite or a link's
+        // token hash opens, ids only (live, organization-shared reports).
+        "report_invite_target",
+        "report_link_target",
         "resolve_org_slug",
         // AI connectors: the identity plane's revoke (app_auth only), for a
         // password reset and the Google sign-in gate.
@@ -2279,6 +2290,12 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // tenant-only (it pins createdById and a new task is always readable
       // by its creator).
       value: [
+        // Announcements: any member posts (authorId pinned); each member
+        // marks only their own sightings (userId pinned).
+        // Your own AI usage (20261105090000_crm).
+        "AiUsage:INSERT",
+        "Announcement:INSERT",
+        "AnnouncementSeen:INSERT",
         "AvailabilityPoll:DELETE",
         "AvailabilityPoll:INSERT",
         "AvailabilityPoll:UPDATE",
@@ -2287,8 +2304,76 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "ConnectorGrant:INSERT",
         "ConnectorGrant:UPDATE",
         // Club-made database rows: app.can_edit_database is the role check.
+        // CRM (20261105090000_crm).
+        "CrmActivity:INSERT",
+        "CrmActivityTarget:DELETE",
+        "CrmActivityTarget:INSERT",
+        "CrmActivityTarget:UPDATE",
+        "CrmBookingPage:DELETE",
+        "CrmBookingPage:INSERT",
+        "CrmBookingPage:UPDATE",
+        "CrmCall:INSERT",
+        "CrmCall:UPDATE",
+        "CrmCampaign:DELETE",
+        "CrmCampaign:INSERT",
+        "CrmCampaign:UPDATE",
+        "CrmCampaignTarget:DELETE",
+        "CrmCampaignTarget:INSERT",
+        "CrmCampaignTarget:UPDATE",
+        "CrmCompany:INSERT",
+        "CrmCompany:UPDATE",
+        "CrmDeal:INSERT",
+        "CrmDeal:UPDATE",
+        "CrmDealPerson:DELETE",
+        "CrmDealPerson:INSERT",
+        "CrmDealPerson:UPDATE",
+        "CrmDeliverable:DELETE",
+        "CrmDeliverable:INSERT",
+        "CrmDeliverable:UPDATE",
+        "CrmEmailMessage:INSERT",
+        "CrmEmailMessage:UPDATE",
+        "CrmEmailThread:INSERT",
+        "CrmEmailThread:UPDATE",
+        "CrmEnrollment:DELETE",
+        "CrmEnrollment:INSERT",
+        "CrmEnrollment:UPDATE",
+        "CrmFieldHistory:INSERT",
+        "CrmForecastSnapshot:INSERT",
+        "CrmGuestLink:DELETE",
+        "CrmGuestLink:INSERT",
+        "CrmGuestLink:UPDATE",
+        "CrmJob:DELETE",
+        "CrmJob:INSERT",
+        "CrmJob:UPDATE",
+        "CrmMemberSettings:INSERT",
+        "CrmMemberSettings:UPDATE",
+        "CrmPerson:INSERT",
+        "CrmPerson:UPDATE",
+        "CrmPersonEmail:DELETE",
+        "CrmPersonEmail:INSERT",
+        "CrmPersonEmail:UPDATE",
+        "CrmQuote:DELETE",
+        "CrmQuote:INSERT",
+        "CrmQuote:UPDATE",
+        "CrmQuoteLine:DELETE",
+        "CrmQuoteLine:INSERT",
+        "CrmQuoteLine:UPDATE",
+        "CrmSequence:DELETE",
+        "CrmSequence:INSERT",
+        "CrmSequence:UPDATE",
+        "CrmSequenceStep:DELETE",
+        "CrmSequenceStep:INSERT",
+        "CrmSequenceStep:UPDATE",
+        "CrmSuggestion:INSERT",
+        "CrmSuggestion:UPDATE",
+        "CrmTemplate:INSERT",
+        "CrmTextMessage:INSERT",
+        "CrmTextMessage:UPDATE",
+        "CrmView:INSERT",
         "DatabaseRecord:INSERT",
         "DatabaseRecord:UPDATE",
+        // Decisions: any member raises one (createdById pinned).
+        "Decision:INSERT",
         "EventAttendee:DELETE",
         "EventAttendee:INSERT",
         "EventAttendee:UPDATE",
@@ -2346,6 +2431,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "RecentVisit:DELETE",
         "RecentVisit:INSERT",
         "RecentVisit:UPDATE",
+        "Report:INSERT",
+        "ReportSnapshot:INSERT",
         "Task:INSERT",
         "TaskActivity:INSERT",
         "TaskAssignee:DELETE",
@@ -2413,7 +2500,16 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       immutable_columns: "",
       invitation_by_token_hash: "s",
       join_code_org_id: "s",
+      crm_sees_all: "us",
+      // CRM outreach (20261105110000_crm_outreach): the public links' lookups.
+      crm_public_target: "s",
+      crm_booking_busy: "s",
+      // Booking links (20261107090000_booking_links).
+      booking_host_busy: "s",
       is_finance: "us",
+      is_crm_manager: "us",
+      // CRM databases (20261105100000_crm_databases): may CRM managers shape it?
+      is_crm_database: "u",
       is_org_admin: "us",
       is_org_owner: "us",
       lock_org: "us",
@@ -2436,6 +2532,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       poll_org_id: "s",
       purge_unverified_users: "a",
       rsvp_page: "s",
+      report_link_target: "s",
+      report_invite_target: "s",
       rsvp_ticket: "s",
       form_page: "s",
       my_rsvp_registrations: "u",
@@ -2528,6 +2626,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       note_cycle_guard: "",
       note_parent_visible: "",
       note_comment_guard: "",
+      // Home widgets: who puts a removed announcement back, and what a
+      // decision's UPDATE may change (trigger functions, no grant).
+      announcement_guard: "",
+      decision_guard: "",
       // The nightly job's counter repair (service path, its org context only).
       storage_reconcile: "s",
       // Moonstone gaps: "Free now" asks whether availability was shared at

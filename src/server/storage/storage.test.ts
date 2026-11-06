@@ -31,6 +31,7 @@ import { readUpload, UploadError, uploadErrorResponse } from "./upload";
 describe("storage kinds and keys", () => {
   it("every org-scoped kind is enumerated for the purge", () => {
     expect([...ORG_SCOPED_KINDS].sort()).toEqual([
+      "crm-audio",
       "event-covers",
       "exports",
       "files",

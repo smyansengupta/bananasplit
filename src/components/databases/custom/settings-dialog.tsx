@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Lock, ShieldCheck } from "@/components/icons";
+import { Archive, Lock, ShieldCheck, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { CustomDatabase } from "@/server/databases/custom";
 
 import { notice } from "../styles";
+import { useDeleteDatabase } from "./delete-database";
 
 const WHO: { value: MemberVisibility; label: string; hint: string }[] = [
   { value: "MEMBERS", label: "Everyone in the organization", hint: "Every member can open it." },
@@ -36,8 +37,9 @@ const WHO: { value: MemberVisibility; label: string; hint: string }[] = [
 ];
 
 /**
- * A database's name, who can see and edit it, and archiving it. Owners and
- * admins. In Personal it's its owner's alone, so there's no one to choose.
+ * A database's name, who can see and edit it, and archiving or deleting it.
+ * Owners and admins. In Personal it's its owner's alone, so there's no one
+ * to choose.
  */
 export function DatabaseSettingsDialog({
   orgId,
@@ -64,6 +66,12 @@ export function DatabaseSettingsDialog({
   const [memberCanEdit, setMemberCanEdit] = useState(database.memberCanEdit);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [deleteEl, deleteDatabase] = useDeleteDatabase({
+    orgId,
+    orgSlug,
+    database,
+    onDeleted: () => onOpenChange(false),
+  });
 
   function save() {
     setError(null);
@@ -101,6 +109,7 @@ export function DatabaseSettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {confirmEl}
+      {deleteEl}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Database settings</DialogTitle>
@@ -194,10 +203,23 @@ export function DatabaseSettingsDialog({
           )}
         </div>
         <DialogFooter className="sm:justify-between">
-          <Button type="button" variant="destructive" onClick={() => void archive()}>
-            <Archive aria-hidden="true" />
-            Archive database
-          </Button>
+          <span className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void archive()}>
+              <Archive aria-hidden="true" />
+              Archive
+            </Button>
+            {database.canDelete && (
+              <Button type="button" variant="destructive" onClick={() => void deleteDatabase()}>
+                <Trash2 aria-hidden="true" />
+                Delete
+              </Button>
+            )}
+            {database.deleteBlocked && (
+              <span className="text-muted-foreground flex items-center text-xs">
+                {database.deleteBlocked}
+              </span>
+            )}
+          </span>
           <span className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

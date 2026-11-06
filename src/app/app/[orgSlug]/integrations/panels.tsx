@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
 
+import { syncGoogleNow } from "@/app/app/[orgSlug]/calendar/sync/actions";
+import { syncNowAction } from "@/app/app/[orgSlug]/databases/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { SyncPanel } from "@/components/calendar/sync-panel";
 import { CircleCheck, Info, TriangleAlert } from "@/components/icons";
 import { VideoProviderPanel } from "@/components/integrations/video-provider-panel";
 import type { IntegrationProvider } from "@/generated/prisma/enums";
+import { domainToVerify, syncToRetry } from "@/lib/ambient/integrations";
 import type { PlanFeature } from "@/lib/billing/features";
 import { planGate } from "@/server/billing/plan-gate";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -16,10 +20,13 @@ import {
   GOOGLE_CALLBACK_MESSAGES,
   type GoogleCallbackError,
 } from "@/server/integrations/google-connect";
+import { loadSyncStatus } from "@/server/sync/status";
 
 import { SetupHelp } from "./integration-header";
+import { testIntegrationAction } from "./actions";
 import { StatusPanel, TestAndRemove } from "./integration-ui";
 import { loadIntegrationPage } from "./load";
+import { PHONE_APPS, phonePanel } from "./phone-panels";
 import {
   AiModelForm,
   ClaudeForm,
@@ -50,8 +57,23 @@ export const PANEL_APPS = [
   "zoom",
   "google-meet",
   "microsoft-teams",
+  ...PHONE_APPS,
 ] as const;
 export type PanelApp = (typeof PANEL_APPS)[number];
+
+/**
+ * Apps a Personal space doesn't offer: team chat, the website's build hook
+ * and its Supabase export (which fills an organization's built-in check-in,
+ * sign-up and ballot databases, which Personal doesn't have). The page
+ * leaves their tiles out and doesn't open their windows.
+ */
+export const ORG_ONLY_APPS: readonly string[] = [
+  "slack",
+  "discord",
+  "groupme",
+  "website",
+  "data-source",
+];
 
 export function isPanelApp(app: unknown): app is PanelApp {
   return typeof app === "string" && (PANEL_APPS as readonly string[]).includes(app);
@@ -76,6 +98,10 @@ export async function loadPanel(
     case "google-meet":
     case "microsoft-teams":
       return videoPanel(app, orgSlug);
+    case "telnyx":
+    case "twilio":
+    case "deepgram":
+      return phonePanel(app, orgSlug);
     case "email":
       return withIntegration(orgSlug, "EMAIL_RESEND", "integrations", "Email", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;
@@ -99,6 +125,29 @@ export async function loadPanel(
               </span>
             </p>
             <StatusPanel dto={dto} secretLabel="API key" />
+            {(() => {
+              const verify = canWrite
+                ? domainToVerify({ hasSecret: dto.hasSecret, domainStatus })
+                : null;
+              return (
+                verify && (
+                  <AmbientActions
+                    why
+                    className="items-start"
+                    actions={[
+                      {
+                        key: "verify",
+                        label: "Verify domain",
+                        reason: verify.reason,
+                        tone: "spark",
+                        run: testIntegrationAction.bind(null, organization.id, "EMAIL_RESEND"),
+                        done: "Your domain is verified",
+                      },
+                    ]}
+                  />
+                )
+              );
+            })()}
             <EmailSenderForm
               orgId={organization.id}
               dto={dto}
@@ -141,6 +190,7 @@ export async function loadPanel(
         "Google Calendar",
         async (p) => {
           const { organization, dto, canWrite, canRemove } = p;
+          const personal = organization.kind === "PERSONAL";
           const code = typeof sp.google === "string" ? sp.google : null;
           const notice = code
             ? (GOOGLE_NOTICES[code] ??
@@ -154,8 +204,9 @@ export async function loadPanel(
           return (
             <>
               <p className="text-muted-foreground text-sm">
-                Events are mirrored to your Google calendars, so members can subscribe in their own
-                calendar apps.
+                {personal
+                  ? "Your events are mirrored to your Google calendars, and you choose which ones."
+                  : "Events are mirrored to your Google calendars, so members can subscribe in their own calendar apps."}
               </p>
               {notice && (
                 <p
@@ -178,6 +229,19 @@ export async function loadPanel(
                 </p>
               )}
               <StatusPanel dto={dto} secretLabel="Refresh token" />
+              <RetryNow
+                why={
+                  canWrite && syncStatus
+                    ? syncToRetry({
+                        status: dto.status,
+                        failed: syncStatus.counts.FAILED ?? 0,
+                        lastError: null,
+                      })
+                    : null
+                }
+                action={syncGoogleNow}
+                args={[organization.id]}
+              />
               <GoogleCalendarPanel
                 orgId={organization.id}
                 dto={dto}
@@ -238,11 +302,12 @@ export async function loadPanel(
     case "ai-model":
       return withIntegration(orgSlug, "OPENAI_COMPATIBLE", "ai", "Other AI models", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;
+        const personal = organization.kind === "PERSONAL";
         return (
           <>
             <p className="text-muted-foreground text-sm">
-              Optional. The AI imports use whichever model you connect: this one, or Claude. Members
-              pick between them when both are set up.
+              Optional. The AI imports use whichever model you connect: this one, or Claude.
+              {personal ? " You pick" : " Members pick"} between them when both are set up.
             </p>
             <StatusPanel dto={dto} secretLabel="API key" />
             <AiModelForm orgId={organization.id} dto={dto} canWrite={canWrite} />
@@ -262,6 +327,10 @@ export async function loadPanel(
     case "data-source":
       return withIntegration(orgSlug, "SUPABASE_SOURCE", "integrations", "Supabase", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;
+        const sync =
+          canWrite && dto.hasSecret
+            ? await withOrgTx(organization.id, ({ db }) => loadSyncStatus(db, organization.id))
+            : null;
         const version =
           typeof dto.config.contractVersion === "string" ? dto.config.contractVersion : null;
         return (
@@ -272,6 +341,19 @@ export async function loadPanel(
               {version ? ` Export contract version ${version}.` : ""}
             </p>
             <StatusPanel dto={dto} secretLabel="Password" />
+            <RetryNow
+              why={
+                sync
+                  ? syncToRetry({
+                      status: dto.status,
+                      failed: sync.streams.filter((s) => s.lastError).length,
+                      lastError: sync.lastError,
+                    })
+                  : null
+              }
+              action={syncNowAction}
+              args={[organization.id, false]}
+            />
             <SupabaseForm orgId={organization.id} dto={dto} canWrite={canWrite} />
             {dto.hasSecret && (
               <TestAndRemove
@@ -318,6 +400,15 @@ export async function loadPanel(
                 schedule (at most once a minute).
               </p>
               <StatusPanel dto={dto} secretLabel="Hook" />
+              <RetryNow
+                why={
+                  canWrite && dto.hasSecret
+                    ? syncToRetry({ status: dto.status, failed: 0, lastError: dto.lastError })
+                    : null
+                }
+                action={testIntegrationAction}
+                args={[organization.id, "NETLIFY_BUILD_HOOK"]}
+              />
               <NetlifyForm orgId={organization.id} dto={dto} canWrite={canWrite} />
               {dto.hasSecret && (
                 <TestAndRemove
@@ -338,6 +429,37 @@ export async function loadPanel(
 }
 
 type Loaded = NonNullable<Awaited<ReturnType<typeof loadIntegrationPage>>>;
+
+/** An app window's "Retry now" (src/lib/ambient/integrations.ts says when). */
+function RetryNow<A extends unknown[]>({
+  why,
+  action,
+  args,
+}: {
+  why: { reason: string } | null;
+  /** The server action that retries, and what it's called with (bound only when shown). */
+  action: (...args: A) => Promise<unknown>;
+  args: A;
+}) {
+  if (!why) return null;
+  const run = (action as (...a: unknown[]) => Promise<unknown>).bind(null, ...args);
+  return (
+    <AmbientActions
+      why
+      className="items-start"
+      actions={[
+        {
+          key: "retry",
+          label: "Retry now",
+          reason: why.reason,
+          tone: "spark",
+          run,
+          done: "Trying again",
+        },
+      ]}
+    />
+  );
+}
 
 /** A stored integration's window: the plan check, the viewer's rights, then its body. */
 async function withIntegration(

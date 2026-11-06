@@ -5,6 +5,16 @@ import { KIND_INK, kindStyle } from "@/components/calendar/kinds";
 import { MapPin, Ticket, TriangleAlert, Video } from "@/components/icons";
 import { hasMeetingLogo, MeetingLogo } from "@/components/meeting-logos";
 import { CopyLinkButton } from "@/components/meetings/copy-link-button";
+import {
+  DateTile,
+  DAY,
+  KIND_TEXT,
+  KIND_WASH,
+  MONTH,
+  TypePill,
+  WEEKDAY,
+} from "@/components/meetings/date-tile";
+import { EventsListAmbient } from "@/components/meetings/meeting-ambient";
 import { RsvpButtons } from "@/components/meetings/rsvp-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,9 +32,13 @@ import { CONFERENCE_LABELS, type ConferenceStatus } from "@/lib/meetings/confere
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
 import { until } from "@/lib/relative-time";
+import { eventAmbient } from "@/lib/ambient/calendar";
+import { appUrl } from "@/lib/app-url";
 import { rsvpCover } from "@/lib/rsvp/cover";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
+
+export { TypePill };
 
 /**
  * What the Meetings list reads of an event. The host's start link
@@ -125,6 +139,7 @@ export function MeetingCard({
   mine,
   myRsvp,
   crowd,
+  reminded = false,
 }: {
   /** For answering an invitation on the card. */
   orgId?: string;
@@ -156,6 +171,8 @@ export function MeetingCard({
   myRsvp: RSVPStatus | null;
   /** Who is coming, or null when nobody was invited. */
   crowd: MeetingCrowd | null;
+  /** Members were already reminded about it (hosts). */
+  reminded?: boolean;
 }) {
   const integration = conferenceIntegration(e.conferenceProvider);
   const hasCover = Boolean(rsvpCover(e.rsvpCover));
@@ -168,6 +185,31 @@ export function MeetingCard({
   const answerable = Boolean(orgId) && myRsvp !== null && !past && !hosting;
   const counts = signups();
   const part = yourPart();
+  // Two days out with few sign-ups: share the link, remind members (hosts).
+  const rsvpUrl = e.rsvpEnabled && e.rsvpSlug ? appUrl(`/e/${e.rsvpSlug}`) : null;
+  const nudge =
+    canManage && orgId && !past
+      ? eventAmbient(
+          {
+            startsAt: e.startsAt,
+            endsAt: e.endsAt,
+            timeZone,
+            canEdit: true,
+            rsvp: {
+              enabled: e.rsvpEnabled,
+              url: rsvpUrl,
+              going,
+              waitlist: waiting,
+              capacity: e.rsvpCapacity,
+              waitlistOn: true,
+            },
+            checkedIn: 0,
+            thankedAt: null,
+            remindedAt: reminded ? now : null,
+          },
+          now,
+        ).filter((a) => a.kind === "share-rsvp" || a.kind === "remind-members")
+      : [];
 
   /**
    * Your part in it. The list is the whole organization's, so a meeting you
@@ -381,7 +423,7 @@ export function MeetingCard({
             )}
           </div>
 
-          {(crowd || counts || actions || answerable) && (
+          {(crowd || counts || actions || answerable || nudge.length > 0) && (
             <div className="border-border/70 mt-auto flex flex-col gap-3 border-t pt-4">
               {(crowd || actions) && (
                 <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
@@ -399,6 +441,15 @@ export function MeetingCard({
                 />
               )}
               {counts}
+              {nudge.length > 0 && (
+                <EventsListAmbient
+                  orgId={orgId!}
+                  eventId={e.id}
+                  title={e.title}
+                  rsvpUrl={rsvpUrl}
+                  items={nudge}
+                />
+              )}
             </div>
           )}
         </div>
@@ -410,43 +461,6 @@ export function MeetingCard({
 /** "Today, 6:00 – 7:00 PM EDT", "Wed, Oct 14, ...": the day as the app says it. */
 export function listWhen(start: Date, end: Date, timeZone: string, allDay: boolean): string {
   return `${shortDayAt(start, timeZone)}, ${timeLine(start, end, timeZone, allDay)}`;
-}
-
-const MONTH = (timeZone: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
-const DAY = (timeZone: string) => new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
-const WEEKDAY = (timeZone: string) =>
-  new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone });
-
-/** A 15% wash of the meeting type's colour, behind its month and its pill. */
-const KIND_WASH = "color-mix(in oklab, var(--kind) 15%, var(--card))";
-/**
- * The type's colour as text on that wash. An organization picks its own
- * colours, a bright yellow among them, so it is pulled toward the text
- * colour to stay readable in both modes.
- */
-const KIND_TEXT = "color-mix(in oklab, var(--kind) 62%, var(--foreground))";
-
-/**
- * The date as a tile: the month in the type's colour, the day in the
- * display face, the weekday. `lit` is the next meeting: the tile filled
- * solid in its colour.
- */
-function DateTile({ startsAt, timeZone, lit }: { startsAt: Date; timeZone: string; lit: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={lit ? { background: "var(--kind)", color: KIND_INK } : { background: KIND_WASH }}
-      className="rounded-tile flex w-[3.75rem] shrink-0 flex-col items-center justify-center py-2.5 leading-none"
-    >
-      <span className="text-[12px] font-semibold" style={lit ? undefined : { color: KIND_TEXT }}>
-        {MONTH(timeZone).format(startsAt)}
-      </span>
-      <span className="numeral my-1 text-[24px]">{DAY(timeZone).format(startsAt)}</span>
-      <span className={cn("text-[12px] font-medium", lit ? "opacity-80" : "text-muted-foreground")}>
-        {WEEKDAY(timeZone).format(startsAt)}
-      </span>
-    </span>
-  );
 }
 
 /**
@@ -475,19 +489,6 @@ function DatePanel({
       <span className={cn("text-[15px] font-medium", lit ? "opacity-80" : "text-muted-foreground")}>
         {WEEKDAY(timeZone).format(startsAt)}
       </span>
-    </span>
-  );
-}
-
-/** The meeting's type: its name on a wash of its colour, with a dot. Needs `--kind` set by a parent. */
-export function TypePill({ name }: { name: string }) {
-  return (
-    <span
-      style={{ background: KIND_WASH }}
-      className="text-foreground inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] leading-5 font-semibold"
-    >
-      <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-(--kind)" />
-      {name}
     </span>
   );
 }

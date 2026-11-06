@@ -8,7 +8,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { loadEventForEdit, moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { updateTask } from "@/app/app/[orgSlug]/tasks/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { toast } from "@/components/ui/toaster";
+import { firstClash } from "@/lib/ambient/calendar";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -30,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { AgendaList } from "./agenda-list";
 import "./calendar.css";
 import { useTodayKey } from "./hooks";
-import { anchorFor, EventPeek, type PeekAnchor } from "./event-peek";
+import { EventPeek } from "./event-peek";
 import type { EventFormEvent } from "./event-form-dialog";
 import type { CalendarItem } from "./item";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
@@ -131,7 +133,8 @@ export function EventCalendar({
   const asked = canManage ? searchParams.get(NEW_EVENT_PARAM) : null;
   const askedNew = newMeetingAsk(asked) ? asked : null;
   const askedShape = shapeFromParam(askedNew) ?? undefined;
-  const [peek, setPeek] = useState<PeekAnchor | null>(null);
+  // The event whose detail is open (a centred dialog, event-peek.tsx).
+  const [peek, setPeek] = useState<{ id: string } | null>(null);
   const [dialog, setDialog] = useState<
     | {
         mode: "create";
@@ -152,14 +155,16 @@ export function EventCalendar({
     }
   }
 
-  // Then drop the param, so a reload or Back doesn't open another.
+  // Then drop the param, so a reload or Back doesn't open another. Only the
+  // address changes: a router navigation would swap the page for its
+  // loading skeleton behind the open dialog.
   useEffect(() => {
     if (!askedNew) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete(NEW_EVENT_PARAM);
     const search = params.toString();
-    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-  }, [askedNew, searchParams, router, pathname]);
+    window.history.replaceState(null, "", search ? `${pathname}?${search}` : pathname);
+  }, [askedNew, searchParams, pathname]);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null);
   const [shotOpen, setShotOpen] = useState(false);
@@ -225,15 +230,13 @@ export function EventCalendar({
   }
 
   const openPeek = useCallback(
-    (item: CalendarItem, chip: HTMLElement) => {
+    (item: CalendarItem) => {
       // A task's due date opens the task itself.
       if (item.task) {
         router.push(`/app/${orgSlug}/tasks/${item.id}`);
         return;
       }
-      const wrap = wrapRef.current;
-      if (!wrap) return;
-      setPeek((current) => (current?.id === item.id ? null : anchorFor(chip, wrap, item.id)));
+      setPeek({ id: item.id });
     },
     [orgSlug, router],
   );
@@ -626,6 +629,10 @@ export function EventCalendar({
           </section>
         )}
 
+        {range.view === "timeGridWeek" && canManage && (
+          <WeekClash orgSlug={orgSlug} items={items} />
+        )}
+
         {(range.view === "timeGridWeek" || range.view === "timeGridDay") && (
           <WeekGrid
             items={items}
@@ -657,7 +664,6 @@ export function EventCalendar({
           <EventPeek
             orgId={orgId}
             item={openItem}
-            anchor={peek}
             orgSlug={orgSlug}
             canManage={canManage}
             showSync={canManage}
@@ -783,4 +789,39 @@ function nextLabel(view: CalendarView): string {
   if (view === "timeGridWeek") return "Next week";
   if (view === "timeGridDay") return "Next day";
   return "Next month";
+}
+
+/**
+ * Two events this week overlap: Move one opens the later one's form, where
+ * its time is chosen (src/lib/ambient/calendar.ts picks the pair).
+ */
+function WeekClash({ orgSlug, items }: { orgSlug: string; items: CalendarItem[] }) {
+  const clash = firstClash(
+    items
+      .filter((i) => !i.task)
+      .map((i) => ({
+        id: i.id,
+        title: i.title,
+        allDay: i.allDay,
+        startsAt: new Date(i.start),
+        endsAt: new Date(i.end),
+      })),
+  );
+  if (!clash) return null;
+  const reason = `${clash.keep.title} and ${clash.move.title} overlap`;
+  return (
+    <AmbientActions
+      why
+      className="mb-3 items-start"
+      actions={[
+        {
+          key: "move-one",
+          label: "Move one",
+          reason,
+          ariaLabel: `Move ${clash.move.title}`,
+          href: `/app/${orgSlug}/meetings/${clash.move.id}?edit=1`,
+        },
+      ]}
+    />
+  );
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { settingsNavItems, isSettingsItemActive } from "@/app/app/[orgSlug]/settings/settings-nav";
 
+import { crmNewHref } from "@/lib/crm/href";
 import { resolveSidebar, sectionLabel, toConfig, visibleSidebar } from "@/lib/nav/sidebar";
 
 import { createActions, isExactPage, isLinkActive, navSections } from "./nav-config";
@@ -20,14 +21,16 @@ describe("sidebar navigation", () => {
       "Tasks",
       "Calendar",
       "Meetings",
-      "Forms",
-      "Databases",
-      "Finance",
       "Files",
+      "Databases",
       "Integrations",
+      "Forms",
+      "Finance",
+      "CRM",
     ]);
     const groups = navSections("cbc", visibleSidebar(null));
-    // Finance is part of Data; the money group is empty by default and drops out.
+    // Files is part of Data; Integrations and apps is Integrations, then the
+    // add-ons. The money group is empty by default and drops out.
     expect(groups.map((s) => s.id)).toEqual(["main", "plan", "collect", "workspace"]);
     // The sidebar names the groups itself (SECTION_NAMES).
     expect(groups.every((s) => s.label === null)).toBe(true);
@@ -119,7 +122,7 @@ describe("sidebar navigation", () => {
   it("names a section's page the way the organization's sidebar does", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
-    groups.find((g) => g.id === "workspace")!.items.find((i) => i.id === "notes")!.label = "Docs";
+    groups.find((g) => g.id === "collect")!.items.find((i) => i.id === "notes")!.label = "Docs";
     groups.find((g) => g.id === "plan")!.items.find((i) => i.id === "meetings")!.hidden = true;
     const config = toConfig(groups);
     expect(sectionLabel(config, "notes")).toBe("Docs");
@@ -134,19 +137,19 @@ describe("sidebar navigation", () => {
   it("follows the org's sidebar: hidden, renamed, moved and reordered sections", () => {
     const groups = resolveSidebar(null);
     const collect = groups.find((g) => g.id === "collect")!;
-    collect.items.find((i) => i.id === "forms")!.hidden = true;
+    groups.find((g) => g.id === "workspace")!.items.find((i) => i.id === "forms")!.hidden = true;
     const main = groups.find((g) => g.id === "main")!;
     main.items.find((i) => i.id === "people")!.label = "Members";
-    // Move Finance into the first group, right after Home.
-    const finance = collect.items.splice(
-      collect.items.findIndex((i) => i.id === "finance"),
+    // Move Databases into the first group, right after Home.
+    const databases = collect.items.splice(
+      collect.items.findIndex((i) => i.id === "databases"),
       1,
     )[0]!;
-    main.items.splice(1, 0, finance);
+    main.items.splice(1, 0, databases);
     const config = toConfig(groups);
     const labels = links(config).map((i) => i.label);
     expect(labels).not.toContain("Forms");
-    expect(labels.slice(0, 3)).toEqual(["Home", "Finance", "Inbox"]);
+    expect(labels.slice(0, 3)).toEqual(["Home", "Databases", "Inbox"]);
     expect(labels).toContain("Members");
     // An emptied group drops out.
     expect(navSections("cbc", visibleSidebar(config)).map((s) => s.id)).toEqual([
@@ -164,6 +167,46 @@ describe("sidebar navigation", () => {
     };
     expect(links(tampered).map((i) => i.label)).toEqual(expect.arrayContaining(["Home", "Inbox"]));
   });
+
+  it("keeps Integrations first in its section, with only the added add-ons below it", () => {
+    const workspace = (raw: unknown, addOns?: string[]) =>
+      navSections("cbc", visibleSidebar(raw, addOns))
+        .find((s) => s.id === "workspace")!
+        .items.map((i) => i.label);
+    expect(workspace(null, [])).toEqual(["Integrations"]);
+    expect(workspace(null, ["finance"])).toEqual(["Integrations", "Finance"]);
+    expect(workspace(null, ["finance", "forms"])).toEqual(["Integrations", "Forms", "Finance"]);
+    // A sidebar saved with Files and the add-ons elsewhere, Integrations last:
+    // Files goes to Data, and the section keeps its order.
+    const saved = {
+      groups: [],
+      items: [
+        { id: "finance", group: "main", hidden: false, label: null },
+        { id: "forms", group: "collect", hidden: false, label: null },
+        { id: "notes", group: "workspace", hidden: false, label: null },
+        { id: "integrations", group: "workspace", hidden: false, label: null },
+      ],
+    };
+    expect(workspace(saved, ["forms", "finance"])).toEqual(["Integrations", "Forms", "Finance"]);
+    expect(
+      navSections("cbc", visibleSidebar(saved))
+        .find((s) => s.id === "collect")!
+        .items.map((i) => i.label),
+    ).toContain("Files");
+    // Another section an older sidebar put in that group sits below the add-ons.
+    const tasksThere = {
+      groups: [],
+      items: [{ id: "tasks", group: "workspace", hidden: false, label: null }],
+    };
+    const there = workspace(tasksThere, ["forms"]);
+    expect(there.slice(0, 2)).toEqual(["Integrations", "Forms"]);
+    expect(there).toContain("Tasks");
+    // An add-on that isn't added is hidden, and marked so the page can say so.
+    const forms = resolveSidebar(null, [])
+      .flatMap((g) => g.items)
+      .find((i) => i.id === "forms")!;
+    expect(forms).toMatchObject({ hidden: true, notAdded: true });
+  });
 });
 
 type Space = Parameters<typeof settingsNavItems>[2] & {};
@@ -176,19 +219,21 @@ const club = (plan: "TRIAL" | "CLUB" | "SOCIETY", trialEndsAt: Date | null = nul
 });
 
 describe("the sidebar in each space", () => {
-  const nav = (space: Space, showLocked = false) =>
-    navSections("me", visibleSidebar(null), { space, showLocked }).flatMap((s) => s.items);
+  const nav = (space: Space, showLocked = false, addOns?: string[]) =>
+    navSections("me", visibleSidebar(null, addOns), { space, showLocked }).flatMap((s) => s.items);
+  const PLUS: Space = { ...PERSONAL, plan: "PERSONAL_PLUS" };
 
-  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Databases and Files", () => {
-    const items = nav(PERSONAL, true);
+  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Files, Databases and Integrations", () => {
+    const items = nav(PLUS, true, []);
     expect(items.map((i) => i.label)).toEqual([
       "Home",
       "Inbox",
       "Tasks",
       "Calendar",
       "Meetings",
-      "Databases",
       "Files",
+      "Databases",
+      "Integrations",
     ]);
     expect(items.map((i) => i.href)).toEqual([
       "/app/me",
@@ -196,8 +241,9 @@ describe("the sidebar in each space", () => {
       "/app/me/tasks",
       "/app/me/calendar",
       "/app/me/meetings",
-      "/app/me/databases",
       "/app/me/notes",
+      "/app/me/databases",
+      "/app/me/integrations",
     ]);
     expect(items.some((i) => i.locked)).toBe(false);
     const all = items;
@@ -212,6 +258,20 @@ describe("the sidebar in each space", () => {
     expect(is("Calendar", "/app/me/calendar/rsvp/e1")).toBe(false);
     expect(is("Meetings", "/app/me/calendar/find-a-time/p1")).toBe(true);
     expect(is("Home", "/app/me/tasks")).toBe(false);
+  });
+
+  it("adds the CRM under Integrations once it's added, and locks both on Personal Free", () => {
+    expect(
+      nav(PLUS, true, ["crm"])
+        .map((i) => i.label)
+        .slice(-2),
+    ).toEqual(["Integrations", "CRM"]);
+    expect(nav(PLUS, true, ["crm"]).at(-1)?.href).toBe("/app/me/crm");
+    // Forms and Finance are an organization's: added or not, Personal doesn't show them.
+    expect(nav(PLUS, true, ["forms", "finance"]).map((i) => i.label)).not.toContain("Forms");
+    const free = nav(PERSONAL, true, ["crm"]);
+    expect(free.filter((i) => i.locked).map((i) => i.label)).toEqual(["Integrations", "CRM"]);
+    expect(nav(PERSONAL, false, ["crm"]).map((i) => i.label)).not.toContain("Integrations");
   });
 
   it("puts Personal's notes and uploads under one Files", () => {
@@ -233,16 +293,24 @@ describe("the sidebar in each space", () => {
     expect(nav(ended).map((i) => i.label)).toEqual(
       links()
         .map((i) => i.label)
-        .filter((l) => l !== "Finance" && l !== "Integrations"),
+        .filter((l) => l !== "Finance" && l !== "Integrations" && l !== "CRM"),
     );
     expect(nav(ended, true).find((i) => i.label === "Finance")?.locked).toBe(true);
   });
 
-  it("locks nothing on Organization and Society", () => {
-    for (const p of ["CLUB", "SOCIETY"] as const) {
-      expect(nav(club(p), true).some((i) => i.locked)).toBe(false);
-      expect(nav(club(p)).map((i) => i.label)).toEqual(links().map((i) => i.label));
-    }
+  it("locks nothing on Society, and only the CRM (Team Advanced) on Organization", () => {
+    expect(nav(club("SOCIETY"), true).some((i) => i.locked)).toBe(false);
+    expect(nav(club("SOCIETY")).map((i) => i.label)).toEqual(links().map((i) => i.label));
+    expect(
+      nav(club("CLUB"), true)
+        .filter((i) => i.locked)
+        .map((i) => i.label),
+    ).toEqual(["CRM"]);
+    expect(nav(club("CLUB")).map((i) => i.label)).toEqual(
+      links()
+        .map((i) => i.label)
+        .filter((l) => l !== "CRM"),
+    );
   });
 });
 
@@ -260,6 +328,9 @@ describe("the create menu", () => {
       ["poll", "/app/me/forms/new?poll=1"],
       ["form", "/app/me/forms/new"],
       ["expense", "/app/me/finance/my-reimbursements?new=1"],
+      ["crm-person", crmNewHref("me", "person")],
+      ["crm-company", crmNewHref("me", "company")],
+      ["crm-deal", crmNewHref("me", "deal")],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
     ]);
     // Members who can't create events don't get New event.
@@ -284,7 +355,16 @@ describe("the create menu", () => {
       createActions(sections(club("SOCIETY"), toConfig(groups)), { canCreateEvents: true }).map(
         (a) => a.id,
       ),
-    ).toEqual(["task", "event", "meeting", "expense", "find-a-time"]);
+    ).toEqual([
+      "task",
+      "event",
+      "meeting",
+      "expense",
+      "crm-person",
+      "crm-company",
+      "crm-deal",
+      "find-a-time",
+    ]);
   });
 
   describe("New meeting", () => {

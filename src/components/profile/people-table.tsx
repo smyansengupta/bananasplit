@@ -13,6 +13,7 @@ import {
   setMemberTitle,
   transferOwnership,
 } from "@/app/app/[orgSlug]/settings/members/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { SavedMark, useSaveOnChange } from "@/components/ui/autosave";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ export interface InvitedRow {
   /** ISO string. */
   expiresAt: string;
   expired: boolean;
+  /** "Invited 4 days ago": waited long enough for Resend invite (src/lib/ambient/people.ts). */
+  stale?: string;
 }
 
 export interface RosterAccess {
@@ -77,6 +80,7 @@ export function PeopleTable({
   people,
   emails,
   invites,
+  roleFixes = {},
   access,
   onSelect,
 }: {
@@ -86,6 +90,8 @@ export function PeopleTable({
   /** userId → email, only what the viewer may see. */
   emails: Record<string, string>;
   invites: InvitedRow[];
+  /** userId → the role their seat on the chart needs (Fix role). */
+  roleFixes?: Record<string, { to: Role; reason: string }>;
   access: RosterAccess;
   onSelect: (id: string) => void;
 }) {
@@ -246,6 +252,7 @@ export function PeopleTable({
                 onToggle={() => toggle(p.id)}
                 onSelect={onSelect}
                 confirm={confirm}
+                roleFix={roleFixes[p.id]}
               />
             ))}
             {invites.map((i) => (
@@ -278,6 +285,7 @@ function PersonLine({
   onToggle,
   onSelect,
   confirm,
+  roleFix,
 }: {
   orgId: string;
   person: DirectoryPerson;
@@ -291,6 +299,7 @@ function PersonLine({
   onToggle: () => void;
   onSelect: (id: string) => void;
   confirm: ReturnType<typeof useConfirm>[1];
+  roleFix?: { to: Role; reason: string };
 }) {
   const router = useRouter();
   const name = person.name ?? email ?? "Member";
@@ -402,6 +411,25 @@ function PersonLine({
               ))}
             </FieldSelect>
             <SavedMark status={roleSave.status} error={roleSave.error} />
+            {roleFix && role !== roleFix.to && roleOptions.includes(roleFix.to) && (
+              <AmbientActions
+                actions={[
+                  {
+                    key: "fix-role",
+                    label: "Fix role",
+                    reason: `${roleFix.reason}: make them ${ROLE_LABELS[roleFix.to]}`,
+                    tone: "spark",
+                    ariaLabel: `Make ${name} ${ROLE_LABELS[roleFix.to]}`,
+                    run: async () => {
+                      const result = await changeMemberRole(orgId, person.id, roleFix.to);
+                      if (!result?.error) setRole(roleFix.to);
+                      return result;
+                    },
+                    done: `${name} is ${ROLE_LABELS[roleFix.to]} now`,
+                  },
+                ]}
+              />
+            )}
           </span>
         ) : (
           <Badge variant={person.role === Role.OWNER ? "accent" : "secondary"}>
@@ -518,17 +546,34 @@ function InviteLine({
       </td>
       {manage && (
         <td className={cn(cell, "pr-0 text-right whitespace-nowrap")}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            disabled={busy}
-            title="Resend"
-            aria-label={`Resend the invite to ${invite.email}`}
-            onClick={() => void run(() => resendInvitation(orgId, invite.id), "Resent")}
-          >
-            {busy ? <Check aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
-          </Button>
+          {invite.stale ? (
+            // Waited three days: Resend comes forward, saying why.
+            <AmbientActions
+              className="me-1 align-middle"
+              actions={[
+                {
+                  key: "resend",
+                  label: "Resend invite",
+                  reason: invite.stale,
+                  ariaLabel: `Resend the invite to ${invite.email}`,
+                  run: () => resendInvitation(orgId, invite.id),
+                  done: "Resent",
+                },
+              ]}
+            />
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={busy}
+              title="Resend"
+              aria-label={`Resend the invite to ${invite.email}`}
+              onClick={() => void run(() => resendInvitation(orgId, invite.id), "Resent")}
+            >
+              {busy ? <Check aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"

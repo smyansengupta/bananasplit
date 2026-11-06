@@ -10,10 +10,12 @@ import {
   createCategory,
   deleteBudgetPeriod,
   deleteCategory,
+  moveBudget,
   setActivePeriod,
   updateBudgetPeriod,
   updateCategory,
 } from "@/app/app/[orgSlug]/finance/periods-actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
 import { seriesColor } from "@/components/reports/charts/chart-kit";
@@ -32,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Gauge, TickMeter } from "@/components/ui/meters";
 import { toast, undoable } from "@/components/ui/toaster";
+import { moveMoneyPlan } from "@/lib/ambient/finance";
 import { formatCents, formatDollars, parseDollarsToCents } from "@/lib/finance/money";
 
 import { tickUnitCents } from "./budget-ticks";
@@ -61,7 +64,7 @@ export interface BudgetCategoryRow {
 }
 
 /**
- * Finance > Budget: the periods (school year, semester...) and, for the
+ * Finance > Budget: the periods (a year, a quarter...) and, for the
  * active one, each category's budget against what's been spent. Every field
  * says what it is, new periods start from a preset, and everything can be
  * renamed, moved or deleted.
@@ -315,6 +318,7 @@ export function BudgetView({
                   maxTicks={maxTicks}
                   unit={unit}
                   onDelete={() => void removeCategory(c)}
+                  move={moveMoneyPlan(c, categories)}
                 />
               ))}
             </ul>
@@ -354,6 +358,7 @@ function CategoryRow({
   maxTicks,
   unit,
   onDelete,
+  move,
 }: {
   orgId: string;
   category: BudgetCategoryRow;
@@ -364,10 +369,18 @@ function CategoryRow({
   /** Cents per tick. */
   unit: number;
   onDelete: () => void;
+  /** Past 90% spent: Move money in from the line with the most left. */
+  move: ReturnType<typeof moveMoneyPlan>;
 }) {
   const router = useRouter();
   const [name, setName] = useState(category.name);
   const [amount, setAmount] = useState((category.allocatedCents / 100).toFixed(2));
+  // Money moved in or out (Move money) shows here once the page refreshes.
+  const [allocated, setAllocated] = useState(category.allocatedCents);
+  if (allocated !== category.allocatedCents) {
+    setAllocated(category.allocatedCents);
+    setAmount((category.allocatedCents / 100).toFixed(2));
+  }
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const left = category.allocatedCents - category.spentCents;
@@ -481,6 +494,22 @@ function CategoryRow({
         items={[{ label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete }]}
       />
       {message && <p className="text-destructive col-span-full px-2 text-xs">{message}</p>}
+      {move && (
+        <AmbientActions
+          why
+          className="col-span-full items-start px-2"
+          actions={[
+            {
+              key: "move",
+              label: move.label,
+              reason: move.reason,
+              ariaLabel: `${move.label} to ${category.name}`,
+              run: () => moveBudget(orgId, move.fromId, category.id, move.cents),
+              done: `Moved to ${category.name}`,
+            },
+          ]}
+        />
+      )}
     </li>
   );
 }
@@ -571,7 +600,7 @@ function PeriodDialog({
 }) {
   const isNew = period === "new";
   const open = period !== null;
-  // The form starts from the period being edited, or the school-year preset.
+  // The form starts from the period being edited, or the This year preset.
   const initial: PeriodDraft =
     period && period !== "new"
       ? { label: period.label, startsOn: period.startsOn, endsOn: period.endsOn }
@@ -674,7 +703,7 @@ function PeriodForm({
           value={draft.label}
           maxLength={100}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          placeholder="e.g. 2026–27 or Fall 2026"
+          placeholder="e.g. 2026 or Q3 2026"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

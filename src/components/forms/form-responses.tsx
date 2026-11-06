@@ -586,7 +586,7 @@ function Review({
 
           <div className="grid gap-1.5 border-t pt-4">
             <label htmlFor={`notes-${current.id}`} className="text-[13px] font-semibold">
-              Your notes (officers only)
+              Your notes (owners and admins only)
             </label>
             <Textarea
               key={current.id}
@@ -643,7 +643,7 @@ function Review({
       <Sheet open={peek !== null} onOpenChange={(o) => !o && setPeek(null)}>
         <SheetContent side="right" className="w-full gap-0 sm:max-w-2xl">
           <SheetHeader>
-            <SheetTitle className="pr-8 break-words">{peek?.name}</SheetTitle>
+            <SheetTitle className="break-words">{peek?.name}</SheetTitle>
           </SheetHeader>
           {peek && (
             <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">

@@ -24,6 +24,7 @@ export const GO_TO_KEYS: Record<SectionId, string> = {
   databases: "d",
   integrations: "n",
   finance: "m",
+  crm: "k",
 };
 
 /** The key after `g` for a sidebar link (a Personal space's Home is the Overview). */

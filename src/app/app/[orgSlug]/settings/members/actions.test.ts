@@ -13,6 +13,10 @@ vi.mock("@/server/db/context", async () =>
   (await import("@/test/fake-context")).fakeContextModule(),
 );
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
+// The CRM's handover on leaving has its own tests (src/server/crm/outreach).
+vi.mock("@/server/crm/outreach/handover", () => ({ memberLeft: vi.fn() }));
+// So do meeting links (src/server/booking/booking.db.test.ts).
+vi.mock("@/server/booking/links", () => ({ bookingMemberLeft: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn(async () => ({ allowed: true })),
   rateLimitKey: (...parts: string[]) => parts.join(":"),
@@ -76,6 +80,7 @@ function makeDb() {
     taskAssignee: { deleteMany: vi.fn() },
     eventAttendee: { deleteMany: vi.fn() },
     task: { updateMany: vi.fn() },
+    decision: { updateMany: vi.fn() },
     orgChartPosition: { updateMany: vi.fn() },
     organization: { findUnique: vi.fn(async () => ({ name: "Org One", slug: "org-one" })) },
     notification: { createMany: vi.fn() },

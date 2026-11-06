@@ -6,8 +6,9 @@ import { Slot } from "radix-ui";
 /*
  * Buttons (Moonstone): pills in two sizes, 40 (default) and 32 (sm). `xs`
  * and `lg` are kept as aliases of sm and default so older call sites line
- * up. `create` is the accent with the glow halo, for the one "New ..."
- * action on a screen; `default` (primary) commits. `destructive` is the one
+ * up. `create` is a plain solid button in the theme's blank colour (--create,
+ * derive.ts) with a hairline edge and no shadow, for the one "New ..." action
+ * on a screen; `default` (primary) commits. `destructive` is the one
  * red button, in forms and confirm dialogs alike. Circle icon buttons are
  * `size="icon"` / `"icon-sm"` with `variant="outline"`; `icon-xs` is only
  * for controls inside a field (clear, remove).
@@ -19,7 +20,7 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         create:
-          "bg-create text-create-foreground glow-halo hover:bg-[color-mix(in_oklab,var(--create)_92%,var(--foreground))]",
+          "border-input bg-create text-create-foreground hover:bg-[color-mix(in_oklab,var(--create)_92%,var(--create-foreground))] focus-visible:shadow-none aria-expanded:bg-[color-mix(in_oklab,var(--create)_92%,var(--create-foreground))]",
         outline:
           "border-input bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:

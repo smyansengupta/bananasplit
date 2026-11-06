@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { LinkedSection } from "@/components/links/linked-section";
 import { NoteEditorShell } from "@/components/notes/note-editor-shell";
+import { pinnedNoteChanged, summaryToSend, todosToTurn, uncheckedTodos } from "@/lib/ambient/files";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { collabConfig } from "@/lib/collab/config";
@@ -12,6 +13,7 @@ import { mintNoteCollabSession } from "@/server/collab/session";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { planGate } from "@/server/billing/plan-gate";
 import { userPublicSelect } from "@/server/members";
+import { lastVisitAt, linkedTaskTitles, meetingGoers } from "@/server/notes/ambient";
 import { listNoteComments, toCommentDto } from "@/server/notes/comments";
 import { listNoteShares } from "@/server/notes/sharing";
 import { listBacklinks, listNoteTree } from "@/server/notes/tree";
@@ -39,10 +41,55 @@ export default async function NoteDetailPage({
       where: { id: found.updatedById },
       select: { name: true },
     });
+    const versions = await listNoteVersions(db, org.id, found.id);
+    // The page's ambient buttons (src/lib/ambient/files.ts says when).
+    const access = toNoteAccess(found);
+    const actor = { userId: user.id, organizationId: org.id, role, user };
+    const shares = await listNoteShares(db, org.id, found.id);
+    const meeting = found.eventId
+      ? await db.event.findFirst({
+          where: { id: found.eventId, organizationId: org.id, deletedAt: null },
+          select: { endsAt: true },
+        })
+      : null;
+    const href = `/app/${org.slug}/notes/${found.id}`;
+    const ambient = {
+      todos:
+        spaceIncludes(org, "tasks") && canEditNote(actor, access)
+          ? todosToTurn(
+              uncheckedTodos(found.contentJson),
+              await linkedTaskTitles(db, org.id, found.id),
+            )
+          : null,
+      summary:
+        meeting && !isPersonalSpace(org)
+          ? summaryToSend({
+              canShare: canShareNote(actor, access),
+              meetingEndsAt: meeting.endsAt,
+              now: new Date(),
+              text: found.contentText,
+              went: await meetingGoers(db, org.id, found.eventId!),
+              sharedWith: shares.map((s) => s.userId),
+              authorId: found.authorId,
+              viewerId: user.id,
+            })
+          : null,
+      // Recorded after the page shows, so this is the visit before this one.
+      changes: pinnedNoteChanged({
+        pinned: pins.some((p) => p.href === href),
+        lastVisitAt: await lastVisitAt(db, org.id, user.id, href),
+        updatedAt: found.updatedAt,
+        updatedById: found.updatedById,
+        updatedByName: updatedBy?.name ?? null,
+        viewerId: user.id,
+        versions,
+      }),
+    };
     return {
+      ambient,
       note: found,
       events: await getOrgEventsForPicker(db, org.id),
-      shares: await listNoteShares(db, org.id, found.id),
+      shares,
       // The share dialog's people picker and @mentions: names and pictures only.
       members: (
         await db.membership.findMany({
@@ -57,7 +104,7 @@ export default async function NoteDetailPage({
       tree: await listNoteTree(db, org.id, user.id),
       backlinks: await listBacklinks(db, org.id, user.id, found.id),
       comments: (await listNoteComments(db, org.id, found.id)).map(toCommentDto),
-      versions: (await listNoteVersions(db, org.id, found.id)).map((v) => ({
+      versions: versions.map((v) => ({
         ...v,
         createdAt: v.createdAt.toISOString(),
       })),
@@ -92,6 +139,13 @@ export default async function NoteDetailPage({
       collab={collab}
       personal={isPersonalSpace(org)}
       canMakeTasks={!isPersonalSpace(org) || spaceIncludes(org, "ai")}
+      ambient={{
+        todos: data.ambient.todos
+          ? { count: data.ambient.todos.todos.length, reason: data.ambient.todos.reason }
+          : null,
+        summary: data.ambient.summary ? { reason: data.ambient.summary.reason } : null,
+        changes: data.ambient.changes,
+      }}
       sharing={{
         canShare: canShareNote(actor, access),
         isAuthor: access.authorId === user.id,

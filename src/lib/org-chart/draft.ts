@@ -183,6 +183,30 @@ export function addPosition(
   ];
 }
 
+/** Adds an empty position beside `id`: the same manager, right after it. */
+export function addBeside(
+  positions: readonly DraftPosition[],
+  id: string,
+  newId = newPositionId(),
+): DraftPosition[] | null {
+  const self = positions.find((p) => p.id === id);
+  if (!self) return null;
+  return moveDraft(addPosition(positions, self.reportsTo, newId), newId, id, "after");
+}
+
+/** Nobody in it: an open role. */
+export function toOpenRole(p: DraftPosition): DraftPosition {
+  return {
+    ...p,
+    isOpen: true,
+    userId: null,
+    personName: null,
+    matchState: "UNMATCHED",
+    matchScore: null,
+    suggestedUserIds: [],
+  };
+}
+
 /** Removes a position; its reports move up to its manager, and its dotted lines go. */
 export function removePosition(positions: readonly DraftPosition[], id: string): DraftPosition[] {
   const self = positions.find((p) => p.id === id);

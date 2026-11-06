@@ -34,12 +34,15 @@ export function MeetingAgenda({
   eventId,
   initial,
   canEdit,
+  aside = null,
 }: {
   orgId: string;
   orgSlug: string;
   eventId: string;
   initial: string | null;
   canEdit: boolean;
+  /** Its ambient buttons (Carry them over), under the heading. */
+  aside?: React.ReactNode;
 }) {
   const router = useRouter();
   const [text, setText] = useState(initial ?? "");
@@ -131,6 +134,7 @@ export function MeetingAgenda({
           )}
         </span>
       </div>
+      {!editing && aside}
 
       {editing ? (
         <Popover open={query !== null && (loading || hits.length > 0)}>

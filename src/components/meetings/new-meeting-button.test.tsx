@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CalendarMember } from "@/components/calendar/member-picker";
 
@@ -75,6 +75,12 @@ const chosen = () =>
   );
 // The form is loaded on first open (next/dynamic), date picker included.
 const dialogOpen = () => screen.findByRole("dialog", undefined, { timeout: 5000 });
+
+// Load the form's module once up front, so the first test doesn't spend its
+// whole 5 s timeout on a cold import when the full suite keeps the machine busy.
+beforeAll(async () => {
+  await import("@/components/calendar/event-form-dialog");
+}, 30_000);
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -190,6 +196,7 @@ describe("NewMeetingButton", () => {
     const view = render(button());
     expect(screen.queryByRole("dialog")).toBeNull();
 
+    mocks.search.current = "new=online";
     view.rerender(button({ startOpen: true, initialShape: "online" }));
 
     await dialogOpen();
@@ -204,25 +211,31 @@ describe("NewMeetingButton", () => {
 });
 
 describe("NewMeetingButton: the ?new= parameter", () => {
+  let replaceState: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    replaceState = vi.spyOn(window.history, "replaceState");
+  });
+
   it("is taken off the address once it has opened the dialog, keeping the rest", async () => {
     mocks.search.current = "new=online&conference=connected";
     render(button({ startOpen: true, initialShape: "online" }));
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith(
+    // Only the address: a router navigation would reload the page behind the dialog.
+    await waitFor(() => expect(replaceState).toHaveBeenCalled());
+    expect(replaceState).toHaveBeenCalledExactlyOnceWith(
+      null,
+      "",
       "/app/acme/meetings?conference=connected",
-      {
-        scroll: false,
-      },
     );
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("leaves a bare ?new= with just the path", async () => {
     mocks.search.current = "new=1";
     render(button({ startOpen: true }));
 
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
-    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/app/acme/meetings", { scroll: false });
+    await waitFor(() => expect(replaceState).toHaveBeenCalled());
+    expect(replaceState).toHaveBeenCalledExactlyOnceWith(null, "", "/app/acme/meetings");
   });
 
   it("leaves the address alone when it was not asked to open", async () => {
@@ -230,7 +243,7 @@ describe("NewMeetingButton: the ?new= parameter", () => {
     render(button());
 
     await Promise.resolve();
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it("does not take the parameter off for a button it did not ask to open", () => {
@@ -238,6 +251,6 @@ describe("NewMeetingButton: the ?new= parameter", () => {
     // The page's second button, repeated in an empty state, is not the one that opens.
     render(button({ variant: "secondary" }));
 
-    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });

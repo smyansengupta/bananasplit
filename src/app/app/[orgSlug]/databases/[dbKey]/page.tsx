@@ -20,6 +20,7 @@ import {
   SignupPanel,
   type PanelContext,
 } from "@/components/databases/detail-panels";
+import { DatabaseAmbient } from "@/components/databases/database-ambient";
 import { RowDrawer } from "@/components/databases/row-drawer";
 import { LinkedSection } from "@/components/links/linked-section";
 import {
@@ -33,8 +34,10 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { mergeDuplicates, needsReport, syncStopped } from "@/lib/ambient/databases";
 import { NotFoundError } from "@/lib/auth/errors";
-import { isPersonalSpace } from "@/lib/billing/space";
+import { can } from "@/lib/auth/permissions";
+import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { parseDbViewParams } from "@/lib/databases/href";
 import {
   listPolls,
@@ -49,9 +52,13 @@ import {
   loadSessionDetail,
   loadSignupDetail,
 } from "@/server/databases/details";
+import { likelyDuplicates } from "@/server/databases/duplicates";
 import { fmtDate } from "@/server/databases/format";
 import { loadCustomDatabase } from "@/server/databases/custom";
-import { sourceFor } from "@/server/databases/sources";
+import { isCrmKind, loadSourceFor } from "@/server/databases/sources";
+import { CrmRowPanel } from "@/components/crm/row-panel";
+import { loadCrmRowPanel } from "@/server/crm/row-panel";
+import { crmNewHref } from "@/lib/crm/href";
 import {
   canViewBallotRows,
   getDatabase,
@@ -66,6 +73,9 @@ import { SIGNUP_LABELS } from "@/server/sync/supabase-map";
 import { syncIfStale } from "@/server/sync/enqueue";
 import { getOrgMembersForPicker } from "@/server/members";
 import { planGate } from "@/server/billing/plan-gate";
+import { listReports } from "@/server/reports/saved";
+import { reportTier } from "@/server/reports/tier";
+import { loadSyncStatus } from "@/server/sync/status";
 
 /**
  * One database (Phase 4a/4b): the server-paginated table in the view URL
@@ -77,6 +87,13 @@ import { planGate } from "@/server/billing/plan-gate";
 
 const SYNCED_KINDS = new Set(["ATTENDANCE", "SIGNUPS", "BALLOTS", "PEOPLE", "SESSIONS"]);
 
+/** The report source a built-in database is reported on through. */
+const REPORT_SOURCE: Partial<Record<string, string>> = {
+  SESSIONS: "events",
+  ATTENDANCE: "events",
+  PEOPLE: "people",
+};
+
 const DATE_LABELS: Record<string, string> = {
   SESSIONS: "Date",
   ATTENDANCE: "Check-in",
@@ -87,6 +104,9 @@ const DATE_LABELS: Record<string, string> = {
 
 /** What a row of each database is, for the summary under the title ("401 check-ins"). */
 const ROW_NOUNS: Record<string, [string, string]> = {
+  CRM_PEOPLE: ["person", "people"],
+  CRM_COMPANIES: ["company", "companies"],
+  CRM_PIPELINE: ["item", "items"],
   SESSIONS: ["session", "sessions"],
   ATTENDANCE: ["check-in", "check-ins"],
   SIGNUPS: ["signup", "signups"],
@@ -132,8 +152,13 @@ export default async function DatabaseViewPage({
   const planLock = await planGate(orgSlug, "databases");
   if (planLock) return planLock;
   const sp = (await searchParams) as SearchParams;
-  const { organization } = await getOrgContextBySlug(orgSlug);
+  const { organization, role } = await getOrgContextBySlug(orgSlug);
   const rowId = typeof sp.row === "string" ? sp.row : undefined;
+  // Reports on any database, for whoever may read reports (the Reports tab's rule).
+  const canReport = () =>
+    spaceIncludes(organization, "reports") &&
+    Boolean(reportTier(role)) &&
+    can({ role }, "reports.view");
 
   // A club-made database: the editable grid instead of a built-in's table.
   const trash = sp.trash === "1";
@@ -169,6 +194,22 @@ export default async function DatabaseViewPage({
         trash={trash}
         timezone={organization.timezone}
         personal={isPersonalSpace(organization)}
+        ambient={
+          !trash && (
+            <DatabaseAmbient
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              report={(() => {
+                const r = needsReport({
+                  canReport: canReport(),
+                  hasReport: custom.reportCount > 0,
+                  rows: custom.total,
+                });
+                return r && { source: `custom:${custom.id}`, name: custom.name, ...r };
+              })()}
+            />
+          )
+        }
       />
     );
   }
@@ -209,10 +250,48 @@ export default async function DatabaseViewPage({
         )
       : 0;
 
+  // The header's ambient buttons (src/lib/ambient/databases.ts says when).
+  const reportSource = REPORT_SOURCE[kind] ?? null;
+  const ambient = await withOrgTx(organization.id, async ({ db }) => {
+    let merge = null;
+    if (admin && kind === "SESSIONS") {
+      const { events, pairs } = await likelyDuplicates(
+        db,
+        organization.id,
+        organization.timezone || "UTC",
+      );
+      merge = mergeDuplicates(pairs, events, true);
+    }
+    const report =
+      reportSource && canReport()
+        ? needsReport({
+            canReport: true,
+            hasReport: (await listReports(db, organization.id)).some(
+              (r) => r.source === reportSource,
+            ),
+            rows: table?.total ?? 0,
+          })
+        : null;
+    const sync =
+      admin && SYNCED_KINDS.has(kind)
+        ? syncStopped(await loadSyncStatus(db, organization.id))
+        : null;
+    return { merge, report, sync };
+  });
+
   // The one primary action: adding a row, for admins where rows can be added
   // here. Setup pages and the export are in the "…" menu.
   let addRow: ReactNode = null;
-  if (admin) {
+  if (isCrmKind(kind)) {
+    // The CRM's own databases: a row is a CRM record, made in the CRM.
+    // The New card for it (?open=new:...), over the CRM list it belongs to.
+    const what = kind === "CRM_PEOPLE" ? "person" : kind === "CRM_COMPANIES" ? "company" : "deal";
+    addRow = (
+      <Button asChild variant="create">
+        <Link href={crmNewHref(orgSlug, what)}>New {what}</Link>
+      </Button>
+    );
+  } else if (admin) {
     if (kind === "SESSIONS") {
       addRow = (
         <SessionFormDialog
@@ -298,6 +377,22 @@ export default async function DatabaseViewPage({
                   </Link>
                 </Button>
               )}
+              <DatabaseAmbient
+                orgId={organization.id}
+                orgSlug={orgSlug}
+                merge={ambient.merge}
+                report={
+                  ambient.report && reportSource
+                    ? { source: reportSource, name: database.name, ...ambient.report }
+                    : null
+                }
+                reconnect={
+                  ambient.sync && {
+                    href: `/app/${orgSlug}/integrations?app=data-source`,
+                    reason: ambient.sync.reason,
+                  }
+                }
+              />
               {addRow}
               <DatabaseMenu
                 name={database.name}
@@ -440,7 +535,7 @@ async function loadPage(
     }
   }
 
-  const source = sourceFor(database.kind, sourceView);
+  const source = await loadSourceFor(db, org.id, database, sourceView);
   if (!source) return null;
   const columns = viewerColumns(source, database.columns, vctx.tier);
   const table = view === "table" ? await loadView(db, source, columns, vctx, sp) : null;
@@ -558,6 +653,20 @@ async function loadPage(
           kind: "other",
           title: "Ballot",
           node: <BallotPanel detail={detail} ctx={panelCtx} />,
+        };
+        break;
+      }
+      case "CRM_PEOPLE":
+      case "CRM_COMPANIES":
+      case "CRM_PIPELINE": {
+        // The same record as in the CRM: its fields, editable here.
+        const panel = await loadCrmRowPanel(ctx, org.slug, database.kind, rowId);
+        if (!panel) throw new NotFoundError();
+        drawer = {
+          kind: "other",
+          title: panel.title,
+          description: panel.subtitle ?? undefined,
+          node: <CrmRowPanel orgId={org.id} orgSlug={org.slug} panel={panel} />,
         };
         break;
       }

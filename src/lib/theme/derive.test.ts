@@ -22,6 +22,17 @@ describe("deriveTokens", () => {
     expect(JSON.stringify(deriveTokens(custom))).toBe(JSON.stringify(deriveTokens({ ...custom })));
   });
 
+  it("makes the create button a blank plain button in every theme, never the accent", () => {
+    for (const preset of THEME_PRESETS) {
+      const light = deriveTokens(preset.light, { glow: preset.glow ?? null });
+      const dark = deriveTokens(preset.dark, { glow: preset.glow ?? null });
+      expect(light.create).toBe(preset.light.surface);
+      expect(dark.create).toBe("#ffffff");
+      expect(contrastRatio(light.create, light["create-foreground"])).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(dark.create, dark["create-foreground"])).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it("returns every token, each a lowercase #rrggbb", () => {
     const tokens = deriveTokens(CBC_PRESET.light);
     expect(Object.keys(tokens).sort()).toEqual([...TOKEN_NAMES].sort());

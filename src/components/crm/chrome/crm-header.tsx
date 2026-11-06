@@ -1,0 +1,103 @@
+"use client";
+
+import { Building2, Columns3, FileSpreadsheet, Settings, UserPlus } from "@/components/icons";
+import Link from "next/link";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
+
+import { useCrmOpen } from "@/components/crm/card/use-crm-open";
+import { useCrmKeys } from "@/components/crm/chrome/crm-toolbar";
+import { PHONE_SMALL_CREATE } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
+import { CreateSplitButton } from "@/components/ui/create-split-button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { TASK_KEYS } from "@/lib/shortcuts";
+import { cn } from "@/lib/utils";
+
+/**
+ * The CRM's header row, the same on every tab, laid out like Tasks': the
+ * title, then the one create (New person, New company on Companies, New
+ * deal on the Board; C makes it; the others and Import a spreadsheet in its
+ * menu) and, right of it, the round settings
+ * button. Everyone gets it: each settings section decides who may open it
+ * (canOpenSection), and a member lands on You. Creating opens a card over
+ * the page (?open=new:...), never a new page.
+ */
+const CREATE_LABEL = { person: "New person", company: "New company", deal: "New deal" } as const;
+
+export function CrmHeader({
+  orgSlug,
+  title = "CRM",
+  toolbar,
+  banner,
+  create = "person",
+}: {
+  orgSlug: string;
+  title?: string;
+  /** The toolbar row under it (CrmToolbar). */
+  toolbar?: ReactNode;
+  /** One line under the toolbar when something stopped (CrmSendingBanner). */
+  banner?: ReactNode;
+  /**
+   * What the create button makes in one click (People's Companies view: a
+   * company), a page's own create in its place, or
+   * false on pages that make nothing (CRM settings).
+   */
+  create?: "person" | "company" | "deal" | false | ReactElement;
+}) {
+  const { setOpen } = useCrmOpen();
+  const base = `/app/${orgSlug}/crm`;
+  // C makes the one thing this page creates, as Tasks' New task (c).
+  const kind = typeof create === "string" ? create : null;
+  useCrmKeys({ [TASK_KEYS.newTask]: kind ? () => setOpen({ kind: "new", what: kind }) : undefined });
+  return (
+    <div className="mb-[30px] space-y-[30px] max-md:mb-5 max-md:space-y-4">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
+        <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
+        <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
+          {isValidElement(create) ? (
+            create
+          ) : create ? (
+            <CreateSplitButton
+              label={CREATE_LABEL[create]}
+              title={`${CREATE_LABEL[create]} (${TASK_KEYS.newTask})`}
+              onClick={() => setOpen({ kind: "new", what: create })}
+              menuLabel="More to create"
+            >
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "person" })}>
+                <UserPlus className="size-4" aria-hidden="true" />
+                New person
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "company" })}>
+                <Building2 className="size-4" aria-hidden="true" />
+                New company
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "deal" })}>
+                <Columns3 className="size-4" aria-hidden="true" />
+                New deal
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`${base}/import`}>
+                  <FileSpreadsheet className="size-4" aria-hidden="true" />
+                  <span className="flex flex-col">
+                    Import a spreadsheet
+                    <span className="text-muted-foreground text-xs">
+                      People, companies or deals from a CSV
+                    </span>
+                  </span>
+                </Link>
+              </DropdownMenuItem>
+            </CreateSplitButton>
+          ) : null}
+          {/* The same button as the create beside it, in every theme. */}
+          <Button asChild variant="create" size="icon">
+            <Link href={`${base}/settings`} aria-label="CRM settings" title="CRM settings">
+              <Settings className="size-[18px]" aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+      {toolbar}
+      {banner}
+    </div>
+  );
+}

@@ -9,7 +9,12 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { dismissReviewAction } from "@/app/app/[orgSlug]/databases/actions";
+import { AmbientActions } from "@/components/ambient/ambient-button";
+import {
+  dismissReviewAction,
+  mergeLikelyDuplicatesAction,
+} from "@/app/app/[orgSlug]/databases/actions";
+import { mergeDuplicates, suggestedKeep } from "@/lib/ambient/databases";
 import { NotFoundError } from "@/lib/auth/errors";
 import { EVENT_KIND_LABELS, fmtDateTime } from "@/server/databases/format";
 import { getDatabase } from "@/server/databases/views";
@@ -62,6 +67,7 @@ export default async function DuplicatesPage({
   const byId = new Map(data.events.map((e) => [e.id, e]));
   const pairs = findDuplicatePairs(data.events, tz);
   const flagged = data.events.filter((e) => e.needsReview);
+  const merge = mergeDuplicates(pairs, data.events, true);
   const describe = (e: (typeof data.events)[number]) =>
     `${e.title}, ${fmtDateTime(e.startsAt, tz)}, ${e.attendanceCount} check-ins${e.sourceSessionId ? ", website" : ""}${e.googleEventId ? ", Google" : ""}`;
 
@@ -99,7 +105,27 @@ export default async function DuplicatesPage({
     <div className="max-w-3xl space-y-7.5">
       <div className="space-y-3">
         <BackLink href={`/app/${orgSlug}/databases/${dbKey}`} label={data.database.name} />
-        <PageHeader title="Possible duplicates" description={summary} />
+        <PageHeader
+          title="Possible duplicates"
+          description={summary}
+          actions={
+            merge && (
+              <AmbientActions
+                why
+                actions={[
+                  {
+                    key: "merge",
+                    label: `Merge ${merge.count}`,
+                    reason: merge.reason,
+                    tone: "solid",
+                    run: mergeLikelyDuplicatesAction.bind(null, organization.id),
+                    done: "Merged",
+                  },
+                ]}
+              />
+            )
+          }
+        />
       </div>
 
       <p className={notice.neutral}>
@@ -176,11 +202,7 @@ export default async function DuplicatesPage({
                 const eb = byId.get(b);
                 if (!ea || !eb) return null;
                 // Suggest keeping the one with more check-ins (then the website-linked one).
-                const keepA =
-                  ea.attendanceCount > eb.attendanceCount ||
-                  (ea.attendanceCount === eb.attendanceCount && Boolean(ea.sourceSessionId));
-                const keep = keepA ? ea : eb;
-                const drop = keepA ? eb : ea;
+                const { keep, drop } = suggestedKeep(ea, eb);
                 return (
                   <li key={`${a}-${b}`} className="space-y-3 py-4 first:pt-0 last:pb-0">
                     <Row e={keep} keep />

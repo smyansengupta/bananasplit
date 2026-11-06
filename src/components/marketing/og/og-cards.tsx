@@ -406,7 +406,7 @@ function MeetingNotes() {
       >
         <span style={{ fontSize: 18, fontWeight: 600, color: MUTED }}>Agenda</span>
         <span style={{ fontSize: 21 }}>1. Kickoff budget</span>
-        <span style={{ fontSize: 21 }}>2. Sponsor outreach</span>
+        <span style={{ fontSize: 21 }}>2. Partner outreach</span>
         <span style={{ fontSize: 21 }}>3. Volunteers for check-in</span>
       </span>
       <span
@@ -415,7 +415,7 @@ function MeetingNotes() {
       >
         <span style={{ fontSize: 18, fontWeight: 600, color: MUTED }}>Action items</span>
         <span className="flex items-center gap-[12px]" style={{ fontSize: 21 }}>
-          <Check done={false} /> Maya emails three sponsors
+          <Check done={false} /> Maya emails three partners
         </span>
         <span className="flex items-center gap-[12px]" style={{ fontSize: 21 }}>
           <Check done={false} /> Jay finalizes the budget
@@ -480,7 +480,7 @@ function AiProposal() {
         <span className="flex items-center gap-[10px]" style={{ fontSize: 19, color: MUTED }}>
           <Sparkles size={22} /> Nothing changes until you approve
         </span>
-        {["Reserve the hall", "Order food for 40", "Email three sponsors"].map((task) => (
+        {["Reserve the hall", "Order food for 40", "Email three partners"].map((task) => (
           <span key={task} className="flex items-center gap-[12px]" style={{ fontSize: 21 }}>
             <Check done={false} />
             {task}
@@ -597,7 +597,7 @@ const TEXTING_THREAD = [
   { from: "you", text: "Remind everyone about Thursday at 6" },
   { from: "them", text: "Done. 24 people get it Wednesday at noon." },
   { from: "you", text: "What's due this week?" },
-  { from: "them", text: "The sponsor deck (Maya), the pizza order (you) and flyers (Jay)." },
+  { from: "them", text: "The partner deck (Maya), the pizza order (you) and flyers (Jay)." },
 ] as const;
 
 /** Every card by the name /dev/og/<card> and scripts/og-cards.json use. */

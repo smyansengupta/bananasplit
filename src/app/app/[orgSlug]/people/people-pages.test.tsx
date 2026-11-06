@@ -17,6 +17,8 @@ const { getOrgContextBySlugMock, getPersonSheetMock, loadDirectoryMock } = vi.ho
   loadDirectoryMock: vi.fn(),
 }));
 
+// Not a CRM person here (src/server/crm/outside-links.ts has its own tests).
+vi.mock("@/server/crm/outside-links", () => ({ crmPersonForMember: async () => null }));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: getOrgContextBySlugMock,
   // The roster extras (emails, invites, the join code) a member doesn't get.
@@ -25,6 +27,7 @@ vi.mock("@/server/db/context", () => ({
       db: {
         membership: { findMany: async () => [] },
         invitation: { findMany: async () => [] },
+        upNextDismissal: { findMany: async () => [] },
       },
     }),
   withOrgAction: (fn: unknown) => fn,
@@ -37,7 +40,12 @@ vi.mock("@/components/pins/pins-context", () => ({ PinToggle: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
 vi.mock("next/navigation", async () => {
   const actual = await vi.importActual<typeof import("next/navigation")>("next/navigation");
-  return { ...actual, usePathname: () => "/app/cbc/people" };
+  return {
+    ...actual,
+    usePathname: () => "/app/cbc/people",
+    // The profile's ambient buttons (Check in, Say hi) refresh the page when done.
+    useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  };
 });
 vi.mock("@/app/app/[orgSlug]/people/actions", () => ({
   searchPeopleAction: vi.fn(),
@@ -46,6 +54,7 @@ vi.mock("@/app/app/[orgSlug]/people/actions", () => ({
 vi.mock("@/server/profiles/directory", () => ({
   getPersonSheet: getPersonSheetMock,
   loadDirectory: loadDirectoryMock,
+  saidHiTo: async () => new Set(),
 }));
 
 const { notFound } = await import("next/navigation");
@@ -116,6 +125,7 @@ function sheet() {
     tasks: [{ id: "t1", title: "Exec sync agenda", dueKey: "2026-10-20" }],
     taskCount: 1,
     todayKey: "2026-10-19",
+    sent: { hi: false, checkIn: false },
   };
 }
 

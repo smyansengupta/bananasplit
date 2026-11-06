@@ -96,7 +96,7 @@ function Body({ screen }: { screen: string }) {
     return (
       <StartScreen
         first="Jackson"
-        invites={[{ id: "inv_1", role: "MEMBER", orgName: "Robotics Club", orgLogoUrl: null }]}
+        invites={[{ id: "inv_1", role: "MEMBER", orgName: "Robotics Society", orgLogoUrl: null }]}
         exit={<span className={exitClass}>Sign out</span>}
         hrefs={{
           join: "/dev/onboarding/join-profile",
@@ -123,7 +123,7 @@ function Body({ screen }: { screen: string }) {
   const subject = personal
     ? "your personal workspace"
     : joining
-      ? "you in Robotics Club"
+      ? "you in Robotics Society"
       : "Acme Labs";
 
   const body = (() => {
@@ -167,13 +167,17 @@ function Body({ screen }: { screen: string }) {
           <ProfileForm
             back={backOf(screen)}
             pronouns={!personal}
-            title={joining ? "You're in Robotics Club." : "Last thing: you."}
+            title={joining ? "You're in Robotics Society." : "Last thing: you."}
             intro={personal ? "Your photo, name and time zone." : "How they'll see you."}
             user={ME}
             initial={PROFILE}
             next="#"
             continueLabel={
-              personal ? "Open my workspace" : joining ? "Go to Robotics Club" : "Go to Acme Labs"
+              personal
+                ? "Open my workspace"
+                : joining
+                  ? "Go to Robotics Society"
+                  : "Go to Acme Labs"
             }
           />
         );

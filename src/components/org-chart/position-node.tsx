@@ -2,7 +2,7 @@
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { UserPlus } from "@/components/icons";
-import { memo, type CSSProperties } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { NODE_HEIGHT, NODE_WIDTH } from "@/lib/org-chart/layout";
@@ -15,7 +15,9 @@ import { cn } from "@/lib/utils";
  * (or Open role, Advisor, Not on the portal). The pill is a real button,
  * so keyboard users tab through the chart and press Enter to open the side
  * panel. A position with reports gets a small toggle under it that folds
- * its branch away. Handles are invisible: the chart is not edited here.
+ * its branch away. Handles are invisible; in the editor a position is
+ * dragged onto another (the one it would land on is ringed), and buttons
+ * can sit under it (`actions`).
  */
 
 export type PositionNodeData = {
@@ -29,6 +31,10 @@ export type PositionNodeData = {
   onToggle?: (id: string) => void;
   /** The builder's preview: a named person who is not a member is flagged. */
   flagUnknown?: boolean;
+  /** A position is being dragged onto this one. */
+  dropTarget?: boolean;
+  /** Buttons under the position. */
+  actions?: ReactNode;
 };
 
 export type PositionFlowNode = Node<PositionNodeData, "position">;
@@ -55,7 +61,17 @@ export function subtitleFor(node: ChartNodeDTO, flagUnknown = false): string {
 }
 
 export const PositionNode = memo(function PositionNode({ data }: NodeProps<PositionFlowNode>) {
-  const { node, selected, color, descendants, collapsed, onToggle, flagUnknown } = data;
+  const {
+    node,
+    selected,
+    color,
+    descendants,
+    collapsed,
+    onToggle,
+    flagUnknown,
+    dropTarget,
+    actions,
+  } = data;
   const variant = nodeVariant(node);
   const subtitle = subtitleFor(node, flagUnknown);
   const dashed =
@@ -95,6 +111,7 @@ export const PositionNode = memo(function PositionNode({ data }: NodeProps<Posit
             : "border-foreground/8 shadow-e1 bg-[color-mix(in_oklab,var(--team)_9%,var(--card))]",
           warn && "ring-tint-danger-foreground ring-[1.5px]",
           selected && "ring-brand-accent ring-2",
+          dropTarget && "ring-primary ring-offset-card ring-2 ring-offset-2",
         )}
       >
         {variant === "member" && node.user ? (
@@ -137,6 +154,18 @@ export const PositionNode = memo(function PositionNode({ data }: NodeProps<Posit
         >
           {collapsed ? `+${descendants}` : "−"}
         </button>
+      )}
+      {actions && (
+        // Its own clicks: a button here never selects the position under it.
+        <div
+          className={cn(
+            "nodrag nopan absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5",
+            descendants > 0 && onToggle ? "top-[calc(100%+1rem)]" : "top-[calc(100%+0.5rem)]",
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {actions}
+        </div>
       )}
       <Handle
         type="source"

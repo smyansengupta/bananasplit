@@ -84,7 +84,7 @@ const TEMPLATE = [
   "2026-09-05,Pizza for the kickoff meeting,-84.50,Food,Domino's",
   "2026-09-08,Member dues (12 people),240.00,Dues,Members",
   "2026-09-12,Poster printing,-35.20,Marketing,FedEx Office",
-  "2026-09-20,Sponsorship from Acme,500.00,Sponsorships,Acme Corp",
+  "2026-09-20,Deal with Acme,500.00,Deals,Acme Corp",
 ].join("\n");
 
 export const STEPS = ["Choose", "Columns", "Review", "Done"] as const;

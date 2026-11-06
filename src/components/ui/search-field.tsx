@@ -62,7 +62,7 @@ export function SearchField({
           onChange?.(e);
         }}
         className={cn(
-          "h-10 rounded-full ps-10 pe-9 text-sm [&::-webkit-search-cancel-button]:appearance-none",
+          "h-10 rounded-full ps-10 pe-9 text-base md:text-sm [&::-webkit-search-cancel-button]:appearance-none",
           inputClassName,
         )}
       />

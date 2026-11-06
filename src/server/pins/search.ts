@@ -48,7 +48,7 @@ const PAGES = [
   "/finance/transactions",
   "/finance/budget",
   "/finance/my-reimbursements",
-  "/finance/sponsorships",
+  "/finance/deals",
   "/profile",
   "/settings",
   "/settings/members",

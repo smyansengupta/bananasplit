@@ -160,6 +160,52 @@ export const saveRsvpSettings = run(async (ctx, eventId: string, input: unknown)
   return {};
 });
 
+/**
+ * A full event's "Open a waitlist": new sign-ups queue instead of being
+ * turned away, and a page closed by hand opens again.
+ */
+export const openRsvpWaitlist = run(async (ctx, eventId: string) => {
+  const event = await loadEvent(ctx, eventId);
+  await ctx.db.event.update({
+    where: { id: event.id },
+    data: { rsvpWaitlist: true, rsvpClosed: false },
+  });
+  await writeOrgAuditLog(ctx.db, {
+    organizationId: ctx.organizationId,
+    action: "event.rsvp_waitlist_on",
+    targetType: "Event",
+    targetId: event.id,
+  });
+  return {};
+});
+
+const seatsSchema = z.number().int().min(1, "Add at least one spot.").max(10_000);
+
+/** A full event's "Add seats": more spots, and the waitlist moves up into them. */
+export const addRsvpSeats = run(async (ctx, eventId: string, seats: unknown) => {
+  const parsed = seatsSchema.safeParse(seats);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Add at least one spot." };
+  const event = await loadEvent(ctx, eventId);
+  if (event.rsvpCapacity === null) return { error: "This page has no limit to raise." };
+  await lockEvent(ctx.db, event.id);
+  const capacity = Math.min(100_000, event.rsvpCapacity + parsed.data);
+  const updated = await ctx.db.event.update({
+    where: { id: event.id },
+    data: { rsvpCapacity: capacity },
+    select: RSVP_RULES_SELECT,
+  });
+  await promoteFromWaitlist(ctx.db, updated);
+  await writeOrgAuditLog(ctx.db, {
+    organizationId: ctx.organizationId,
+    action: "event.rsvp_seats_added",
+    targetType: "Event",
+    targetId: event.id,
+    diff: { from: event.rsvpCapacity, to: capacity },
+  });
+  return {};
+});
+
 const statusSchema = z.enum(["GOING", "WAITLIST", "CANCELLED"]);
 
 /** Moves a guest (to going even past capacity, to the waitlist, or out). */

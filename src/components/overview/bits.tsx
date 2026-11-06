@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import type { PersonFace } from "@/server/overview/queries";
+import type { PersonFace } from "@/lib/overview/types";
 
 /**
  * Small Overview pieces that work in server components (icon components are

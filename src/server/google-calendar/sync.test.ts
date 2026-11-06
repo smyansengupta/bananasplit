@@ -126,6 +126,8 @@ function makeTx() {
       } else throw new Error(`unexpected SQL: ${sql}`);
       return n;
     },
+    // No booking is made on a meeting link here (src/server/booking).
+    booking: { findFirst: async () => null },
     event: {
       async findFirst({ where }: { where: Record<string, unknown> }) {
         return clone([...store.events.values()].find((r) => visible(r) && matchWhere(r, where)) ?? null);

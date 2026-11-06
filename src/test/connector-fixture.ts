@@ -27,6 +27,8 @@ import { ownerDb } from "./owner-db";
  *
  *   alice  a MEMBER of `club`, the OWNER of `paused`, with her Personal space
  *   bob    the OWNER of `club` and of `other` (Alice isn't in `other`)
+ *
+ * `club` and `other` have added the Forms and Finance add-ons, not the CRM.
  */
 
 export interface FixtureUser {
@@ -160,6 +162,13 @@ export async function setUpConnectorFixture(label: string): Promise<ConnectorFix
       if (!made.ok) throw new Error(JSON.stringify(made));
       orgs.push(made.orgId);
       slugs.push(made.slug);
+      // Forms and Finance are add-ons a new organization hasn't added
+      // (src/lib/addons.ts); these have, as one that uses them has. The CRM
+      // is left off: its tests add it.
+      await ownerDb.orgSettings.update({
+        where: { organizationId: made.orgId },
+        data: { addOns: ["forms", "finance"] },
+      });
       return { id: made.orgId, slug: made.slug };
     };
     const main = await club(`Robotics ${tag}`, `${label}-robotics-${tag}`);

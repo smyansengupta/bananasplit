@@ -84,7 +84,7 @@ describe("what Up next shows", () => {
     expect(ids(build({ polls: [poll("soon", { closesAt: soon })] }))).toEqual(["soon"]);
   });
 
-  it("drops an event that has already started, and keeps the one coming", () => {
+  it("drops an event that has already ended, and keeps the one coming", () => {
     const slots = build({ events: [event("gone", ago(2)), event("coming", ahead(2))] });
     expect(ids(slots)).toEqual(["coming"]);
   });
@@ -103,5 +103,185 @@ describe("what Up next shows", () => {
     // Hiding the poll leaves the event alone.
     const left = build({ polls, events, hidden: new Set(["poll:x"]) });
     expect(left.map((s) => s.item.kind)).toEqual(["event"]);
+  });
+
+  it("says why each card matters and chips what it's linked to", () => {
+    const social = { ...event("social", ahead(2)), title: "Fall Social" };
+    const meeting = { ...event("sync", ahead(1)), title: "Exec sync" };
+    const tasks = [
+      {
+        id: "t1",
+        title: "Order pizza",
+        status: "NOT_STARTED" as const,
+        visibility: "ORG" as const,
+        dueDate: new Date("2026-10-27T00:00:00Z"),
+        blockedReason: null,
+        parentTask: null,
+      },
+    ];
+    const chip = (kind: "event" | "note", id: string, label: string) => ({
+      kind: kind === "event" ? ("event" as const) : ("note" as const),
+      label,
+      href: `/app/cbc/x/${id}`,
+      ref: { kind, id },
+    });
+    const slots = build({
+      tasks: tasks as never,
+      events: [social],
+      meetings: [meeting],
+      context: {
+        links: new Map([["task:t1", [chip("event", "social", "Fall Social")]]]),
+        details: new Map([
+          [
+            "sync",
+            {
+              id: "sync",
+              description: "- Budget\n- Room",
+              seriesId: "s",
+              rsvpEnabled: false,
+              capacity: null,
+              hideCount: false,
+              notes: [{ id: "n1", title: "Exec notes" }],
+            },
+          ],
+          [
+            "social",
+            {
+              id: "social",
+              description: null,
+              seriesId: null,
+              rsvpEnabled: true,
+              capacity: 120,
+              hideCount: false,
+              notes: [],
+            },
+          ],
+        ]),
+        lastActions: new Map([["sync", { open: 2, total: 6, href: "/app/cbc/meetings/last" }]]),
+        seats: new Map([["social", 58]]),
+      },
+    });
+    const card = (id: string) => slots.find((s) => s.item.id === id)!.item;
+    expect(card("t1").subtitle).toBe("For Fall Social, Tue, 12:00 PM.");
+    expect(card("t1").chips?.map((c) => c.label)).toEqual(["Fall Social"]);
+    expect(card("sync").subtitle).toBe(
+      "2 agenda items. 2 action items from last time are still open.",
+    );
+    expect(card("sync").chips?.map((c) => c.label)).toEqual(["Exec notes", "2 open actions"]);
+    expect(card("social").subtitle).toBe("58 of 120 seats taken.");
+  });
+});
+
+describe("an event's life on Up next", () => {
+  const min = (m: number) => new Date(NOW.getTime() + m * 60_000);
+  const only = (over: Partial<Parameters<typeof buildUpNext>[0]>) => build(over)[0]?.item;
+
+  it("counts down in its last hour, without going live yet", () => {
+    const card = only({ events: [event("w8", min(45))] });
+    expect(card?.kicker).toBe("In 45 min");
+    expect(card?.live).toBeUndefined();
+  });
+
+  it("goes live a quarter of an hour before it starts", () => {
+    const card = only({ events: [event("w8", min(10))] });
+    expect(card?.kicker).toBe("In 10 min");
+    expect(card?.live).toBe("soon");
+  });
+
+  it("stays while it's happening, live", () => {
+    const card = only({ events: [{ ...event("w8", min(-20)), location: "Richards Hall 300" }] });
+    expect(card?.kicker).toBe("Happening now, Richards Hall 300");
+    expect(card?.live).toBe("now");
+  });
+
+  it("says it just ended for two hours after, with what to add while it's fresh", () => {
+    const ended = { ...event("sync", min(-90)), title: "Weekly exec sync meeting" };
+    const card = only({ ended: [ended] });
+    expect(card?.kicker).toBe("Just ended");
+    expect(card?.ended).toBe(true);
+    expect(card?.href).toBe("/app/cbc/meetings/sync");
+    expect(card?.subtitle).toMatch(/notes and action items/);
+  });
+
+  it("keeps an all-day event plain: no countdown and never live", () => {
+    const card = only({ events: [{ ...event("fair", min(30)), allDay: true }] });
+    expect(card?.live).toBeUndefined();
+    expect(card?.kicker).not.toMatch(/^In /);
+  });
+
+  it("takes over two columns on event day, with check-ins against RSVPs, and leaves room for two more", () => {
+    const live = event("w8", min(-20));
+    const slots = build({
+      events: [live, event("later", min(600)), event("next", min(900)), event("after", min(1200))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 31 }]]) },
+    });
+    const card = slots[0]?.item;
+    expect(card?.wide).toBe(true);
+    expect(card?.figure).toBe("31");
+    expect(card?.figureLabel).toBe("checked in, of 38 RSVPs");
+    expect(slots).toHaveLength(3);
+  });
+
+  it("doesn't take over two columns before anyone has checked in", () => {
+    const card = only({
+      events: [event("w8", min(-5))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 0 }]]) },
+    });
+    expect(card?.wide).toBeFalsy();
+  });
+
+  it("never shows two wide cards, and narrows one that the row can't fit", () => {
+    const turnout = new Map([
+      ["a", { rsvps: 10, checkIns: 4 }],
+      ["b", { rsvps: 12, checkIns: 6 }],
+    ]);
+    const slots = build({
+      events: [event("a", min(-20)), event("b", min(-10)), event("c", min(600))],
+      context: { turnout },
+    });
+    expect(slots.filter((s) => s.item.wide)).toHaveLength(1);
+  });
+
+  it('says someone is about to start, never "In 0 min"', () => {
+    const card = only({ events: [event("w8", new Date(NOW.getTime() + 20_000))] });
+    expect(card?.kicker).toBe("In 1 min");
+  });
+
+  it("says how many said they'd go when an event ends without check-ins", () => {
+    const card = only({
+      ended: [event("w8", min(-120))],
+      going: new Map([["w8", { going: 9, faces: [] }]]),
+    });
+    expect(card?.figureLabel).toBe("said they'd go");
+  });
+
+  it("offers Join on a call about to start, only to a secure link", () => {
+    const joinUrls = new Map([["w8", "https://zoom.us/j/1"]]);
+    const card = only({ events: [event("w8", min(10))], context: { joinUrls } });
+    expect(card?.acts?.[0]).toMatchObject({
+      kind: "join",
+      href: "https://zoom.us/j/1",
+      external: true,
+    });
+    const unsafe = only({
+      events: [event("w8", min(10))],
+      context: { joinUrls: new Map([["w8", "javascript:alert(1)"]]) },
+    });
+    expect(unsafe?.acts).toBeUndefined();
+  });
+
+  it("opens the door check-in while an event is on, and asks for notes once a meeting ends", () => {
+    expect(only({ events: [event("w8", min(-20))] })?.acts?.[0]?.kind).toBe("check-in");
+    const ended = { ...event("sync", min(-90)), title: "Weekly exec sync meeting" };
+    expect(only({ ended: [ended] })?.acts?.[0]?.kind).toBe("add-notes");
+  });
+
+  it("shows an event's turnout once it's over", () => {
+    const card = only({
+      ended: [event("w8", min(-120))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 33 }]]) },
+    });
+    expect(card?.figure).toBe("33");
+    expect(card?.figureLabel).toBe("came, of 38 who said yes");
   });
 });

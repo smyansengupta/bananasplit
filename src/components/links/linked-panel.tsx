@@ -1,19 +1,25 @@
 "use client";
 
 import {
+  Building2,
   CalendarDays,
   CheckSquare,
+  Columns3,
   ClipboardList,
   Database,
   FileText,
   Link2,
   Loader2,
+  Megaphone,
+  MessageCircleQuestion,
   NotebookText,
   PiggyBank,
   Plus,
   Search,
   Table,
+  UserRound,
   Users,
+  Vote,
   Wallet,
   X,
   type IconComponent,
@@ -26,7 +32,7 @@ import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
-import { linkRefOfHit, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
+import { linkRefOfHit, opensAsCard, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
 
 import { SidePeek } from "./side-peek";
 import type { SearchHit } from "@/lib/search/types";
@@ -43,6 +49,12 @@ const ICONS: Record<LinkKind, IconComponent> = {
   form: ClipboardList,
   budget: PiggyBank,
   record: Table,
+  poll: Vote,
+  decision: MessageCircleQuestion,
+  announcement: Megaphone,
+  "crm-person": UserRound,
+  "crm-company": Building2,
+  "crm-deal": Columns3,
 };
 
 /**
@@ -61,6 +73,12 @@ const TONES: Record<LinkKind, string> = {
   form: "var(--tag-navy)",
   budget: "var(--tag-ochre)",
   record: "var(--tag-teal)",
+  poll: "var(--tag-navy)",
+  decision: "var(--tag-burgundy)",
+  announcement: "var(--tag-rust)",
+  "crm-person": "var(--tag-forest)",
+  "crm-company": "var(--tag-navy)",
+  "crm-deal": "var(--tag-ochre)",
 };
 
 /** A row the page attaches itself (a meeting's notes): opens like a link, can't be unlinked here. */
@@ -187,8 +205,10 @@ export function LinkedPanel({
                   href={item.href}
                   onClick={(e) => {
                     // A plain click peeks beside the page; Ctrl, Cmd, Shift
-                    // or the middle button still open it as a page.
+                    // or the middle button still open it as a page. A CRM
+                    // record opens its card in one click, no peek first.
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    if (opensAsCard(item.kind)) return;
                     e.preventDefault();
                     setPeek(item);
                   }}

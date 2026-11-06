@@ -110,7 +110,7 @@ export default async function DevOgGalleryPage() {
       <section data-group="With a logo" className="mb-12">
         <h2 className="m-0 mb-1 text-[20px] font-semibold">When the organization has a logo</h2>
         <p className="text-muted-foreground mt-0 mb-5 text-[15px]">
-          Invites, codes and polls send the club&apos;s own logo instead of the card above.
+          Invites, codes and polls send the organization&apos;s own logo instead of the card above.
         </p>
         <div className="grid grid-cols-3 gap-x-8" style={{ width: BUBBLE_WIDTH * 3 + 64 }}>
           {withLogo.map((name) => (

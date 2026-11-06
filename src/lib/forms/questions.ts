@@ -314,7 +314,7 @@ export const FORM_TEMPLATES: readonly FormTemplate[] = [
     review: true,
     questions: () => [
       q("short", "What's your name?", { required: true }),
-      q("email", "Your school email", { required: true }),
+      q("email", "Your email", { required: true }),
       q("choice", "Which team do you want to join?", {
         required: true,
         options: [opt("Design"), opt("Engineering"), opt("Events"), opt("Outreach")],
@@ -331,20 +331,21 @@ export const FORM_TEMPLATES: readonly FormTemplate[] = [
   {
     id: "interest",
     name: "Interest form",
-    blurb: "Name, year, what you want to do",
+    blurb: "Name, how they heard of you, what they want to do",
     title: "Interest form",
     review: false,
     questions: () => [
       q("short", "What's your name?", { required: true }),
       q("email", "Your email", { required: true }),
-      q("dropdown", "What year are you?", {
+      q("dropdown", "How did you hear about us?", {
         options: [
-          opt("First year"),
-          opt("Second year"),
-          opt("Third year"),
-          opt("Fourth year"),
-          opt("Grad"),
+          opt("A friend or colleague"),
+          opt("One of our events"),
+          opt("Social media"),
+          opt("Our website"),
+          opt("Email or a newsletter"),
         ],
+        allowOther: true,
       }),
       q("checkboxes", "What are you interested in?", {
         options: [opt("Building"), opt("Workshops"), opt("Socials"), opt("Leading")],

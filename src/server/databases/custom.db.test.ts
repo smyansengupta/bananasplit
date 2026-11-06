@@ -45,6 +45,7 @@ import {
 } from "./custom";
 import { NotFoundError } from "@/lib/auth/errors";
 
+import { linkedFrom, searchRelationTargets } from "./relations";
 import { getDatabase, listDatabases } from "./views";
 
 const tag = randomBytes(4).toString("hex");
@@ -329,7 +330,9 @@ describe("club-made databases against the local database", () => {
       ),
     ).rejects.toThrow();
     const still = await ownerDb.databaseRecord.findUniqueOrThrow({ where: { id: row.id } });
-    expect((still.values as Record<string, unknown>)[roster.field("Name").id]).toBe("Organization A only");
+    expect((still.values as Record<string, unknown>)[roster.field("Name").id]).toBe(
+      "Organization A only",
+    );
   });
 
   it("keeps rows only in club-made databases, never in the built-ins", async () => {
@@ -712,5 +715,96 @@ describe("club-made databases against the local database", () => {
     const page = await as(ownerA, orgA, (a) => loadRecords(a, roster.id, { q: "o" }));
     expect(page.total).toBe(page.records.length);
     expect(page.total).toBe(3);
+  });
+});
+
+describe("relation fields against the local database", () => {
+  it("links a row of another database, refuses another organization's, and finds the link from the other side", async () => {
+    if (!reachable) return;
+    const events = await as(ownerA, orgA, (a) =>
+      createDatabase(a, { name: `Events ${tag}`, templateId: "blank" }),
+    );
+    const eventsDb = await as(ownerA, orgA, (a) => loadCustomDatabase(a, events.key));
+    const gala = await as(ownerA, orgA, (a) =>
+      createRecord(a, eventsDb.id, { [eventsDb.fields[0]!.id]: "Spring gala" }),
+    );
+
+    const gifts = await as(ownerA, orgA, (a) =>
+      createDatabase(a, { name: `Gifts ${tag}`, templateId: "blank" }),
+    );
+    const giftsDb = await as(ownerA, orgA, (a) => loadCustomDatabase(a, gifts.key));
+    const event = await as(ownerA, orgA, (a) =>
+      addField(a, giftsDb.id, {
+        name: "Event",
+        type: "RELATION",
+        options: { target: { kind: "record", databaseId: eventsDb.id } },
+      }),
+    );
+    const amount = await as(ownerA, orgA, (a) =>
+      addField(a, giftsDb.id, { name: "Amount", type: "CURRENCY" }),
+    );
+    // A relation must say what it links to.
+    await expect(
+      as(ownerA, orgA, (a) => addField(a, giftsDb.id, { name: "Bad", type: "RELATION" })),
+    ).rejects.toBeInstanceOf(DatabaseInputError);
+
+    const link = [{ kind: "record", id: gala.id }];
+    await as(ownerA, orgA, (a) =>
+      createRecord(a, giftsDb.id, {
+        [giftsDb.fields[0]!.id]: "Harbor Light",
+        [event.id]: link,
+        [amount.id]: "250",
+      }),
+    );
+    const second = await as(ownerA, orgA, (a) =>
+      createRecord(a, giftsDb.id, { [giftsDb.fields[0]!.id]: "Alder" }),
+    );
+    expect(await as(ownerA, orgA, (a) => updateCell(a, second.id, event.id, link))).toEqual(link);
+    await as(ownerA, orgA, (a) => updateCell(a, second.id, amount.id, 100));
+
+    // The grid gets the linked row's name with the rows.
+    const loaded = await as(ownerA, orgA, (a) => loadCustomDatabase(a, gifts.key));
+    expect(loaded.labels[`record:${gala.id}`]?.label).toBe("Spring gala");
+
+    // Another organization's row, or a made-up id, can't be linked.
+    const { key: otherKey } = await as(ownerB, orgB, (a) =>
+      createDatabase(a, { name: `Other ${tag}`, templateId: "blank" }),
+    );
+    const otherDb = await as(ownerB, orgB, (a) => loadCustomDatabase(a, otherKey));
+    const theirs = await as(ownerB, orgB, (a) => createRecord(a, otherDb.id));
+    await expect(
+      as(ownerA, orgA, (a) =>
+        updateCell(a, second.id, event.id, [{ kind: "record", id: theirs.id }]),
+      ),
+    ).rejects.toBeInstanceOf(DatabaseInputError);
+    await expect(
+      as(ownerA, orgA, (a) => updateCell(a, second.id, event.id, [{ kind: "person", id: "x" }])),
+    ).rejects.toBeInstanceOf(DatabaseInputError);
+
+    // From the gala's side: both gifts, with their amounts added up.
+    const groups = await as(ownerA, orgA, (a) =>
+      linkedFrom(a.db, orgA, `db-test-a-${tag}`, { kind: "record", id: gala.id }),
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.fieldName).toBe("Event");
+    expect(groups[0]!.count).toBe(2);
+    expect(groups[0]!.rows.map((r) => r.label).sort()).toEqual(["Alder", "Harbor Light"]);
+    expect(groups[0]!.rollups).toContainEqual({
+      fieldName: "Amount",
+      kind: "sum",
+      value: 350,
+      money: true,
+    });
+    // Another organization sees none of it.
+    const fromB = await as(ownerB, orgB, (a) =>
+      linkedFrom(a.db, orgB, `db-test-b-${tag}`, { kind: "record", id: gala.id }),
+    );
+    expect(fromB).toEqual([]);
+
+    // The picker finds the gala by name.
+    const found = await as(ownerA, orgA, (a) =>
+      searchRelationTargets(a.db, orgA, { kind: "record", databaseId: eventsDb.id, q: "gala" }),
+    );
+    expect(found.map((f) => f.id)).toEqual([gala.id]);
   });
 });

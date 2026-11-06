@@ -4,6 +4,8 @@ import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 
 import type { ResolvedGrant } from "./grant";
 import { connectorFromAuthInfo } from "./token";
+import { registerCrmTools } from "./tools/crm";
+import { registerCrmWrites } from "./tools/crm-writes";
 import { registerDatabaseWrites } from "./tools/database-writes";
 import { registerDatabaseTools } from "./tools/databases";
 import { registerEventWrites } from "./tools/event-writes";
@@ -62,6 +64,7 @@ const READ_TOOLS: readonly ToolRegistrar[] = [
   registerWeeklyTools,
   registerFinanceTools,
   registerPollTools,
+  registerCrmTools,
 ];
 
 /** Tools that change something: WRITE grants only (Phase 3). */
@@ -72,6 +75,7 @@ const WRITE_TOOLS: readonly ToolRegistrar[] = [
   registerWeeklyWrites,
   registerPollWrites,
   registerNoteWrites,
+  registerCrmWrites,
 ];
 
 export function buildConnectorServer(session: ConnectorSession): McpServer {

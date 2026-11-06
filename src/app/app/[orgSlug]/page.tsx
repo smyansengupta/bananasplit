@@ -1,40 +1,62 @@
 import { voteOnQuestionPoll } from "@/app/app/[orgSlug]/calendar/polls/question-actions";
-import { Users } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
-import { PersonalHome } from "@/components/personal/personal-home";
-import { CardControls, OpenLink } from "@/components/overview/bits";
-import { GettingStarted } from "@/components/overview/getting-started";
-import { RsvpGoalBlock } from "@/components/overview/goal-blocks";
-import { MyTasksCard, type DueDay } from "@/components/overview/my-tasks-card";
-import { OverviewBoard } from "@/components/overview/overview-board";
-import { OverviewStats } from "@/components/overview/overview-stats";
-import { PinnedGrid } from "@/components/overview/pinned-grid";
-import { UpNext } from "@/components/overview/up-next";
-import { UpcomingEventsCard } from "@/components/overview/upcoming-events-card";
-import { WeeklyPulseCard } from "@/components/overview/weekly-pulse-card";
+import { OrganizationsStrip } from "@/components/personal/organizations-strip";
+import { FocusTime } from "@/components/overview/focus-time";
 import {
-  FileList,
-  NoteList,
-  PeopleList,
-  PollList,
-  RecentList,
-} from "@/components/overview/widget-bodies";
+  OrgInbox,
+  OrgTasks,
+  Reimbursements,
+  UpForGrabs,
+  WaitingOnYourAnswer,
+} from "@/components/personal/elsewhere-widgets";
+import { KIND_META } from "@/components/calendar/kinds";
+import { CardControls, OpenLink } from "@/components/overview/bits";
+import { Insight, LinkChip, type ItemRef } from "@/components/overview/connections";
+import { GettingStarted } from "@/components/overview/getting-started";
+import { MyTasksCard } from "@/components/overview/my-tasks-card";
+import { OverviewBoard } from "@/components/overview/overview-board";
+import { PinnedGrid } from "@/components/overview/pinned-grid";
+import { TodayStrip } from "@/components/overview/today-strip";
+import { UpNext } from "@/components/overview/up-next";
+import {
+  EventsList,
+  MeetingsList,
+  type EventExtras,
+} from "@/components/overview/upcoming-events-card";
+import { WeeklyPulseCard } from "@/components/overview/weekly-pulse-card";
+import { PollList, RecentList } from "@/components/overview/widget-bodies";
 import { WeekTimeline, type WeekDay } from "@/components/overview/week-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
-import { getRecentNotes } from "@/app/app/[orgSlug]/notes/queries";
+import {
+  getRecentlyEnded,
+  getUpcomingEvents,
+  getViewerRsvps,
+} from "@/app/app/[orgSlug]/calendar/queries";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { timeWord } from "@/lib/overview/format";
+import {
+  agendaItems,
+  crowdedEventWeek,
+  dayLoad,
+  expectedHeadcount,
+  myTasksFinding,
+  percent,
+  pulseFinding,
+  weekFinding,
+  type DueTask,
+  type Finding,
+} from "@/lib/overview/insights";
 import { startedProgress } from "@/lib/overview/getting-started";
-import { overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
+import { todayStrip } from "@/lib/overview/today-strip";
+import { PERSONAL_EXTRAS, overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
 import { DEFAULT_PULSE_DAY, DEFAULT_PULSE_HOUR } from "@/lib/pulse/settings";
 import {
   addDaysToKey,
@@ -42,27 +64,45 @@ import {
   effectiveTimezone,
   fromDateKey,
   localDateKey,
-  mondayOfKey,
-  zonedInstant,
 } from "@/lib/tasks/dates";
-import { loadSavedBoard } from "@/server/boards";
+import { loadHomeMode, loadSavedBoard } from "@/server/boards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { listNoteFiles } from "@/server/notes/files";
+import { homeWidgetCards } from "@/components/overview/home-widget-cards";
+import { AppsFeed } from "@/components/overview/apps-feed";
+import { loadAppsFeed } from "@/server/overview/apps-feed";
+import type { BoardWidget } from "@/lib/boards";
+import type { Role } from "@/generated/prisma/enums";
+import { HERE_NOW_RECENT } from "@/server/overview/here-now";
+import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
+import { AmbientButton } from "@/components/ambient/ambient-button";
+import { Network } from "@/components/icons";
+import { placementSummary } from "@/lib/org-chart/self-place";
+import { getAskDraft } from "@/server/org-chart/service";
+import { joinable, recapTime } from "@/lib/overview/home-acts";
+import { isNight, scoreHome, type HomeSignals } from "@/lib/overview/priority";
+import { markHomeVisit } from "@/server/overview/since-you-were-here";
+import { rolePositions } from "@/server/crm/owners";
+import { sidebarCounts } from "@/server/inbox/counts";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import {
+  loadEventDetails,
   loadEventGoing,
+  loadEventTurnout,
+  loadFormResponsesSince,
+  loadLastInSeries,
+  loadLinkedChips,
   loadOpenForms,
-  loadPollStats,
+  loadPickUpChanges,
+  loadPinStates,
   loadTaskExtras,
-  nextRsvpGoalEvent,
-  rsvpSeatsTaken,
+  type LinkedChip,
 } from "@/server/overview/queries";
-import { buildUpNext } from "@/server/overview/up-next";
+import { JUST_ENDED_MS, buildUpNext, type LastMeetingActions } from "@/server/overview/up-next";
+import { reportTier } from "@/server/reports/tier";
 import { hideUpNextCard, showHiddenUpNextCards, unhideUpNextCard } from "./up-next-actions";
 import { rsvpToEvent } from "./calendar/actions";
-import { setTaskStatus } from "./tasks/actions";
+import { setTaskStatus, takeTask } from "./tasks/actions";
 import { listPins, listRecent } from "@/server/pins";
-import { listOpenPolls } from "@/server/polls/open-polls";
 import {
   getPulseIssue,
   latestSentPulse,
@@ -70,16 +110,41 @@ import {
   weeklyDoneTrend,
 } from "@/server/pulse/queries";
 import { upcomingPulseSend } from "@/server/pulse/schedule";
+import { websiteSyncConnected } from "@/server/integrations/website-sync";
 import { onlineNow } from "@/server/presence";
 import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
-import { getMyOpenTasks, getTaskStats, taskFilterWhere } from "@/server/tasks/queries";
+import { otherSpacesUpNext } from "@/lib/personal/up-next";
+import { UP_NEXT_KINDS } from "@/lib/overview/up-next";
+import { getMyOpenTasks, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
-/** "Next 14 days" in the stat strip. */
+/** "Events, next 14 days" in the Today strip. */
 const UPCOMING_DAYS = 14;
 const EVENTS_LIMIT = 6;
 const RECENT_LIMIT = 8;
+/** My deadlines read for the week view and the crowded-week warning: this far ahead. */
+const DEADLINE_DAYS = 27;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A finding as Home draws it. */
+function FindingLine({ finding, after }: { finding: Finding | null; after?: React.ReactNode }) {
+  if (!finding) return null;
+  return (
+    <Insight tone={finding.tone}>
+      {finding.lead && <b>{finding.lead}</b>} {finding.text}
+      {after && <span className="mt-2 flex flex-wrap gap-1.5">{after}</span>}
+    </Insight>
+  );
+}
+
+/** Chips as Home shows them: what's still open, no more than `max`. */
+function chipsOf(list: readonly LinkedChip[] | undefined, max = 3): ItemRef[] {
+  return (list ?? [])
+    .filter((c) => !c.done)
+    .slice(0, max)
+    .map(({ kind, label, href }) => ({ kind, label, href }));
+}
 
 /** Minutes after midnight for `at`, in `timeZone`. */
 function minutesOfDay(at: Date, timeZone: string): number {
@@ -91,6 +156,28 @@ function minutesOfDay(at: Date, timeZone: string): number {
   }).formatToParts(at);
   const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
   return part("hour") * 60 + part("minute");
+}
+
+/**
+ * What Ambient adds to anyone's Home, and what each role brings into You
+ * (right after My tasks): a treasurer's Waiting on you, where reimbursements
+ * are approved; an owner's or admin's Decisions. Each rests when it has
+ * nothing, like any widget.
+ */
+function roleExtras(role: Role, addOns: readonly string[] | null | undefined): BoardWidget[] {
+  const extras: BoardWidget[] = [{ id: "apps", type: "apps", w: 2, h: 1 }];
+  const finance = addOns?.includes("finance") ?? true;
+  if (role === "TREASURER" && finance)
+    extras.push({ id: "waiting-on-you", type: "waiting-on-you", w: 2, h: 1 });
+  if (role === "OWNER" || role === "ADMIN")
+    extras.push({ id: "decisions", type: "decisions", w: 2, h: 1 });
+  return extras;
+}
+
+function rolePromoted(role: Role, addOns: readonly string[] | null | undefined): string[] {
+  return roleExtras(role, addOns)
+    .map((w) => w.type)
+    .filter((t) => t !== "apps");
 }
 
 function greeting(now: Date, timeZone: string): string {
@@ -106,8 +193,8 @@ function greeting(now: Date, timeZone: string): string {
 /**
  * The Overview (redesign guide 9): each member's own board of widgets,
  * arranged to answer "what needs me?". Always on top, whatever the board:
- * the greeting, the stat strip (due this week, overdue, coming up in two
- * weeks, as on the Personal home), Up next, and for owners and admins
+ * the greeting, the Today strip (overdue, waiting on you, due this week,
+ * events in the next two weeks), Up next, and for owners and admins
  * "Get your organization started" until every step is done or checked
  * off. Then the member's widgets. Nothing about the organization's money
  * is on it.
@@ -115,12 +202,13 @@ function greeting(now: Date, timeZone: string): string {
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
-  // A Personal space's home is the Personal dashboard, not a club's board.
-  if (org.kind === "PERSONAL") {
-    return <PersonalHome data={await loadPersonalHome(user.id)} orgSlug={org.slug} />;
-  }
-  // A club whose plan has no Overview board lands on its events.
-  if (!spaceIncludes(org, "overview")) {
+  // A Personal space runs the same Home, as one person's: no team widgets,
+  // its own default board, and your organizations (their Up next cards and
+  // the strip under it) from loadPersonalHome.
+  const personal = org.kind === "PERSONAL";
+  const personalHome = personal ? await loadPersonalHome(user.id).catch(() => null) : null;
+  // An organization whose plan has no Overview board lands on its events.
+  if (!personal && !spaceIncludes(org, "overview")) {
     if (!can({ role }, "events.write")) redirect(`/app/${org.slug}/calendar`);
     redirect(`/app/${org.slug}/meetings`);
   }
@@ -132,9 +220,30 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const pulseHour = settings?.pulseHourLocal ?? DEFAULT_PULSE_HOUR;
 
   // One transaction as the member: the reads run one after another on its
-  // connection, and RLS bounds each to the org.
+  // connection, and RLS bounds each to the org. The newer widgets' shared
+  // reads and the cheap ones among them run here too
+  // (src/server/overview/home-widgets.ts).
   const now = new Date();
+  // Website polls (elections) come from the website data sync; without it
+  // they're stale leftovers nobody can update or remove, so Home leaves them out.
+  // If the check fails, show them: hiding real polls is worse than a stale one.
+  const websitePolls = personal
+    ? false
+    : await websiteSyncConnected(org.id, user.id).catch(() => true);
+  // The CRM's role owners, for its Inbox rows in the Today strip's count (read before the transaction).
+  const crmRoles = settings?.addOns?.includes("crm")
+    ? await rolePositions(org.id).catch(() => null)
+    : null;
   const data = await withOrgTx(org.id, async ({ db }) => {
+    const saved = await loadSavedBoard(db, org.id, user.id, "overview");
+    const homeMode = await loadHomeMode(db, org.id, user.id);
+    const placed = new Set(
+      resolveOverview(saved, isAdmin, settings?.addOns, personal).map((w) => w.type),
+    );
+    // Ambient also shows From your apps and what the viewer's role is for,
+    // whether or not they're on the member's board: load them too.
+    if (homeMode === "ambient" && !personal)
+      for (const w of roleExtras(role, settings?.addOns)) placed.add(w.type);
     const me = await db.user.findUnique({
       where: { id: user.id },
       select: { timezone: true, name: true, image: true, avatar: true },
@@ -146,45 +255,126 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const events = await getUpcomingEvents(db, org.id, now, EVENTS_LIMIT, "events");
     const meetings = await getUpcomingEvents(db, org.id, now, EVENTS_LIMIT, "meetings");
     const weekEvents = await getUpcomingEvents(db, org.id, now, 100);
+    const ended = await getRecentlyEnded(db, org.id, now, JUST_ENDED_MS, 4);
     const myTasks = await getMyOpenTasks(db, org.id, user.id, { limit: MY_TASKS_LIMIT, today });
+    // My deadlines up to four weeks out, late ones first: This week's dashed
+    // boxes, the crowded-week warning and the Today strip's lines.
+    // Deadlines and Focus time read the same list.
+    const myDue = await db.task.findMany({
+      where: {
+        AND: [
+          mine,
+          { dueDate: { not: null, lte: fromDateKey(addDaysToKey(dayKey, DEADLINE_DAYS)) } },
+        ],
+      },
+      select: { id: true, title: true, dueDate: true, status: true, priority: true },
+      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+      take: 60,
+    });
+    // Up for grabs: the open task nobody owns that's due soonest (Up next offers Take it).
+    const upForGrabs = await db.task.findFirst({
+      where: {
+        AND: [taskFilterWhere(org.id, { unowned: true }), { type: { not: "EPIC" } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        status: true,
+        parentTask: { select: { title: true } },
+      },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+    });
     const memberCount = await db.membership.count({ where: { organizationId: org.id } });
-    const polls = await loadPollStats(
-      db,
-      org.id,
-      user.id,
-      await listOpenPolls(db, org.id, now, 5),
+    // What's open in Forms and the member polls, read once for every widget.
+    const shared = await readHomeShared(db, {
+      orgId: org.id,
+      userId: user.id,
+      now,
       memberCount,
-    );
+      myDue,
+      addOns: settings?.addOns,
+      elections: websitePolls,
+    });
+    const polls = shared.upNextPolls;
     // Cards this member hid from their own Up next (own-row RLS).
     const dismissed = await db.upNextDismissal.findMany({
-      where: { organizationId: org.id, userId: user.id },
+      where: { organizationId: org.id, userId: user.id, kind: { in: [...UP_NEXT_KINDS] } },
       select: { kind: true, refId: true },
     });
     const upcomingSend = upcomingPulseSend(now, orgZone, pulseDay, pulseHour);
-    return {
+    const listed = [...events, ...meetings];
+    // Going counts for everything on the next seven days, not just the two lists.
+    const weekIds = weekEvents
+      .filter((e) => e.startsAt.getTime() - now.getTime() <= 7 * DAY_MS)
+      .map((e) => e.id);
+    const details = await loadEventDetails(
+      db,
+      org.id,
+      listed.map((e) => e.id),
+    );
+    const lastInSeries = await loadLastInSeries(
+      db,
+      org.id,
+      [...details.values()].flatMap((d) => (d.seriesId ? [d.seriesId] : [])),
+      now,
+    );
+    const openForms = loadOpenForms({
+      base: `/app/${org.slug}`,
+      forms: shared.forms,
+      website: shared.elections,
+      polls,
+      answered: shared.answered,
+      readsResponses: isAdmin,
+      limit: 5,
+    });
+    // Pick up shows the first few; Here now looks at more.
+    const recentAll = await listRecent(db, org.id, org.slug, user.id, HERE_NOW_RECENT);
+    const recent = recentAll.slice(0, RECENT_LIMIT);
+    const pins = await listPins(db, org.id, org.slug, user.id);
+    // What every task, meeting, event and form on Home is linked to, in one read.
+    const links = await loadLinkedChips(
+      db,
+      org.id,
+      org.slug,
+      [
+        ...[...new Set([...myTasks.tasks.map((t) => t.id), ...myDue.map((t) => t.id)])].map(
+          (id) => ({ kind: "task" as const, id }),
+        ),
+        ...listed.map((e) => ({ kind: "event" as const, id: e.id })),
+        ...[...lastInSeries.values()].map((e) => ({ kind: "event" as const, id: e.id })),
+        ...openForms
+          .filter((f) => f.kind === "form" || f.kind === "poll")
+          .map((f) => ({ kind: "form" as const, id: f.id })),
+      ],
+      tz,
+    );
+    const viewer = {
+      orgId: org.id,
+      orgSlug: org.slug,
+      userId: user.id,
+      role,
+      timeZone: tz,
+      orgTimeZone: orgZone,
+      now,
+      addOns: settings?.addOns,
+    };
+    const rest = {
       timeZone: tz,
       todayKey: dayKey,
       hiddenUpNext: dismissed.map((d) => `${d.kind}:${d.refId}`),
+      upForGrabs,
       // Your face for "members online" when you're the only one here.
       you: { id: user.id, name: me?.name ?? null, image: me?.image ?? null, avatar: me?.avatar },
       firstName: me?.name?.trim().split(/\s+/)[0] ?? null,
       myTasks,
+      myDue,
       taskExtras: await loadTaskExtras(
         db,
         org.id,
         myTasks.tasks.map((t) => t.id),
       ),
-      // Tasks' own stat strip numbers (no filters), for the phone's bar.
-      taskBar: await getTaskStats(
-        db,
-        org.id,
-        {},
-        {
-          today,
-          weekEnd: fromDateKey(addDaysToKey(mondayOfKey(dayKey), 6)),
-          weekStart: zonedInstant(mondayOfKey(dayKey), 0, tz),
-        },
-      ),
+      // The Today strip's task counts.
       stats: {
         // Due today through the sixth day from now: "this week".
         dueSoon: await db.task.count({
@@ -192,76 +382,99 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             AND: [mine, { dueDate: { gte: today, lte: fromDateKey(addDaysToKey(dayKey, 6)) } }],
           },
         }),
-        today: await db.task.count({ where: { AND: [mine, { dueDate: today }] } }),
         overdue: await db.task.count({ where: { AND: [mine, { dueDate: { lt: today } }] } }),
       },
-      // My open tasks due each of the next seven days, for My tasks' strip.
-      dueByDay: await db.task.groupBy({
-        by: ["dueDate"],
-        where: {
-          AND: [mine, { dueDate: { gte: today, lte: fromDateKey(addDaysToKey(dayKey, 6)) } }],
-        },
-        _count: { _all: true },
-      }),
       events,
       meetings,
       weekEvents,
+      ended,
+      details,
+      lastInSeries,
+      links,
       rsvps: await getViewerRsvps(
         db,
         org.id,
         user.id,
-        [...events, ...meetings].map((e) => e.id),
+        listed.map((e) => e.id),
       ),
-      going: await loadEventGoing(
-        db,
-        org.id,
-        [...events, ...meetings].map((e) => e.id),
-      ),
-      pins: await listPins(db, org.id, org.slug, user.id),
-      recent: await listRecent(db, org.id, org.slug, user.id, RECENT_LIMIT),
-      notes: await getRecentNotes(db, org.id, user.id, 6),
-      files: (await listNoteFiles(db, org.id)).slice(0, 6),
+      going: await loadEventGoing(db, org.id, [
+        ...new Set([...listed.map((e) => e.id), ...weekIds, ...ended.map((e) => e.id)]),
+      ]),
+      pins,
+      pinStates: await loadPinStates(db, org.id, org.slug, user.id, pins, tz),
+      recent,
+      pickUp: await loadPickUpChanges(db, org.id, user.id, recent),
       // Questions and find-a-time polls still taking answers, newest first (Up next).
       polls,
       // What the Forms list shows as open: forms, member polls, website polls.
-      openForms: await loadOpenForms(db, org.id, user.id, `/app/${org.slug}`, polls, now, 5),
-      goal: await nextRsvpGoalEvent(db, org.id, now),
-      pulse: await latestSentPulse(db, org.id),
-      trend: await weeklyDoneTrend(db, org.id, { timeZone: orgZone, pulseDay, now }),
+      openForms,
+      formsThisWeek: await loadFormResponsesSince(
+        db,
+        org.id,
+        openForms.filter((f) => f.kind === "form" || f.kind === "poll").map((f) => f.id),
+        new Date(now.getTime() - 7 * DAY_MS),
+      ),
+      pulse: personal ? null : await latestSentPulse(db, org.id),
+      trend: personal
+        ? []
+        : await weeklyDoneTrend(db, org.id, { timeZone: orgZone, pulseDay, now }),
       draft:
-        isAdmin && pulseOn
+        isAdmin && pulseOn && !personal
           ? await getPulseIssue(db, org.id, upcomingSend.weekStart, { drafts: true })
           : null,
-      people: await db.membership.findMany({
-        where: { organizationId: org.id },
-        select: {
-          userId: true,
-          title: true,
-          user: { select: { id: true, name: true, email: true, image: true, avatar: true } },
-        },
-        orderBy: { joinedAt: "desc" },
-        take: 12,
-      }),
       memberCount,
-      saved: await loadSavedBoard(db, org.id, user.id, "overview"),
-      started: isAdmin
-        ? {
-            picture: org.logo != null,
-            members: memberCount > 1,
-            event:
-              (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
-            types: settings?.eventTypes != null,
-            teams: (await db.orgChartVersion.count({ where: { organizationId: org.id } })) > 0,
-            // Epics and stories are tasks too.
-            task: (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
-            budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
-            database:
-              (await db.databaseDefinition.count({
-                where: { organizationId: org.id, kind: "CUSTOM" },
-              })) > 0,
-          }
-        : null,
+      saved,
+      homeMode,
+      placed,
+      shared,
+      viewer,
+      started:
+        isAdmin && !personal
+          ? {
+              picture: org.logo != null,
+              members: memberCount > 1,
+              event:
+                (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+              types: settings?.eventTypes != null,
+              teams: (await db.orgChartVersion.count({ where: { organizationId: org.id } })) > 0,
+              // Epics and stories are tasks too.
+              task:
+                (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+              budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
+              database:
+                (await db.databaseDefinition.count({
+                  where: { organizationId: org.id, kind: "CUSTOM" },
+                })) > 0,
+            }
+          : null,
     };
+    // Last on this transaction, each caught on its own: the cheap widgets,
+    // who's here now (beside the date and in Here now; the shell's
+    // heartbeat keeps both fresh), this visit, which becomes the last
+    // one (Since you were here counts from the one before; stamped whether
+    // or not that widget is placed, so adding it later starts from a real
+    // visit), and the Inbox's Needs you for the Today strip, read as the
+    // sidebar reads its badge so the two never disagree. If one fails, it
+    // goes and the board stays.
+    const widgets = await loadMainWidgets(db, placed, viewer, {
+      shared,
+      upcoming: weekEvents,
+      recent: recentAll,
+    });
+    const online = await onlineNow(db, org.id, user.id).catch(() => null);
+    const since = await markHomeVisit(db, org.id, user.id, now).catch(() => null);
+    const needsYou = await sidebarCounts(db, {
+      orgId: org.id,
+      userId: user.id,
+      org,
+      canReviewFinance:
+        can({ role }, "finance.manage") && (settings?.addOns?.includes("finance") ?? true),
+      canReviewForms:
+        can({ role }, "databases.write") && (settings?.addOns?.includes("forms") ?? true),
+      crm: crmRoles ? { orgSlug, roles: crmRoles } : null,
+      now,
+    }).catch(() => null);
+    return { ...rest, widgets, online, since, needsYou };
   }).catch(handleAuthErrorInPage);
 
   const { timeZone, todayKey } = data;
@@ -275,64 +488,166 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     timeZone,
   }).format(now);
 
-  // Seats for the RSVP goal: counted on the service path (the page's own number).
-  const goal = data.goal;
-  const seats = goal && (!goal.hideCount || isAdmin) ? await rsvpSeatsTaken(org.id, goal.id) : null;
+  // Sign-ups against the room for the listed events, and each kind's past
+  // check-in rate. Its own transaction on the service path (sign-ups hold
+  // guests' details; only counts come back): if it fails, the numbers go and
+  // the board stays.
+  const turnout = await loadEventTurnout(org.id, {
+    upcoming: [...data.details.values()].map((d) => ({
+      id: d.id,
+      rsvpEnabled: d.rsvpEnabled,
+      hideCount: d.hideCount,
+    })),
+    isAdmin,
+    tier: reportTier(role) ?? "MEMBER",
+    now,
+    // Under way now, or just ended: their check-ins for Up next.
+    live: [
+      ...data.events.filter((e) => e.startsAt <= now && e.endsAt > now).map((e) => e.id),
+      ...data.ended.map((e) => e.id),
+    ],
+  }).catch(() => ({
+    seats: new Map<string, number>(),
+    rates: new Map(),
+    live: new Map<string, { rsvps: number; checkIns: number }>(),
+  }));
+
+  const dayKeyOf = (e: { startsAt: Date; allDay: boolean }) =>
+    localDateKey(e.startsAt, e.allDay ? orgZone : timeZone);
+  const myDue: DueTask[] = data.myDue.flatMap((t) =>
+    t.dueDate ? [{ id: t.id, title: t.title, dueKey: dueDateKey(t.dueDate) }] : [],
+  );
+  const lateTasks = myDue.filter((t) => t.dueKey < todayKey);
+  const weekEndKey = addDaysToKey(todayKey, 6);
+  const dueThisWeek = myDue.filter((t) => t.dueKey >= todayKey && t.dueKey <= weekEndKey);
+
+  // Personal: your organizations' deadlines and events are in This week too,
+  // each opening in the organization it's from.
+  const hrefOf = new Map<string, string>();
+  const otherDue: DueTask[] = (personalHome?.dueSoon ?? [])
+    .filter((t) => t.space.id !== org.id)
+    .map((t) => {
+      hrefOf.set(t.id, t.href);
+      return { id: t.id, title: t.title, dueKey: t.dueKey };
+    });
+  const otherWeekEvents = (personalHome?.upcoming ?? [])
+    .filter((e) => e.space.id !== org.id && e.startsAt.getTime() - now.getTime() < 7 * DAY_MS)
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      kind: e.kind,
+      allDay: e.allDay,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+    }));
+  const weekDue = [...myDue, ...otherDue];
+  const weekLate = weekDue.filter((t) => t.dueKey < todayKey);
 
   // "This week": the next seven days in the viewer's timezone, each event
-  // placed at its time of day (an event running past midnight stops there).
+  // with its time and who's going, beside the viewer's own deadlines (late
+  // ones on today).
   const weekdayFmt = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
-  const week: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
+  const weekdayLong = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" });
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
     const key = addDaysToKey(todayKey, i);
     const date = new Date(`${key}T00:00:00Z`);
-    return {
+    const dayEvents = [...data.weekEvents, ...otherWeekEvents].filter((e) => dayKeyOf(e) === key);
+    const deadlines = [
+      ...(i === 0 ? weekLate.map((t) => ({ ...t, overdue: true })) : []),
+      ...weekDue.filter((t) => t.dueKey === key).map((t) => ({ ...t, overdue: false })),
+    ].map((t) => ({
+      id: t.id,
+      title: t.title,
+      href: hrefOf.get(t.id) ?? `${base}/tasks/${t.id}`,
+      overdue: t.overdue,
+    }));
+    const load = dayLoad(
+      key,
+      dayEvents.map((e) => {
+        const sameDay = localDateKey(e.endsAt, timeZone) === key;
+        return {
+          id: e.id,
+          title: e.title,
+          allDay: e.allDay,
+          start: e.allDay ? 0 : minutesOfDay(e.startsAt, timeZone),
+          end: e.allDay ? 24 * 60 : sameDay ? minutesOfDay(e.endsAt, timeZone) : 24 * 60,
+        };
+      }),
+      deadlines.filter((t) => !t.overdue).length,
+    );
+    const day: WeekDay = {
       key,
       weekday: weekdayFmt.format(date),
       date: String(date.getUTCDate()),
       isToday: i === 0,
-      events: data.weekEvents
-        .filter((e) => localDateKey(e.startsAt, e.allDay ? orgZone : timeZone) === key)
-        .map((e) => {
-          const start = e.allDay ? 0 : minutesOfDay(e.startsAt, timeZone);
-          const sameDay = localDateKey(e.endsAt, timeZone) === key;
-          return {
-            id: e.id,
-            title: e.title,
-            kind: e.kind,
-            allDay: e.allDay,
-            time: e.allDay ? "All day" : timeWord(e.startsAt, timeZone),
-            start,
-            end: e.allDay ? 24 * 60 : sameDay ? minutesOfDay(e.endsAt, timeZone) : 24 * 60,
-          };
-        }),
+      events: dayEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        kind: e.kind,
+        allDay: e.allDay,
+        time: e.allDay ? "All day" : timeWord(e.startsAt, timeZone).replace(":00", ""),
+        going: data.going.get(e.id)?.going ?? 0,
+      })),
+      deadlines,
+      busy: load.clash !== null || load.crowded,
     };
+    return { day, load, name: i === 0 ? "Today" : weekdayLong.format(date) };
   });
-
-  // My tasks' strip: what's late, then today and the six days after it.
-  const dueCounts = new Map(
-    data.dueByDay.flatMap((g) => (g.dueDate ? [[dueDateKey(g.dueDate), g._count._all]] : [])),
-  );
-  const dueStrip: DueDay[] = [
-    { key: "late", label: "Late", count: data.stats.overdue, tone: "late" },
-    ...week.map((d, i) => ({
-      key: d.key,
-      label: i === 0 ? "Today" : d.weekday,
-      count: dueCounts.get(d.key) ?? 0,
-      tone: (i === 0 ? "today" : "day") as DueDay["tone"],
+  const week = weekDays.map((d) => d.day);
+  const weekInsight = weekFinding(
+    weekDays.map(({ day, load, name }) => ({
+      weekday: name,
+      load,
+      events: day.events,
+      deadlines: day.deadlines.filter((t) => !t.overdue),
     })),
-  ];
+  );
+  const weekCounts = {
+    events: week.reduce((n, d) => n + d.events.length, 0),
+    due: weekDue.filter((t) => t.dueKey >= todayKey && t.dueKey <= weekEndKey).length,
+    // A free day has nothing on at all: no events, nothing due.
+    free: week.filter((d) => d.events.length === 0 && d.deadlines.length === 0).length,
+  };
 
-  const upcomingUntil = new Date(now.getTime() + UPCOMING_DAYS * 24 * 60 * 60 * 1000);
-  const stats = (
-    <OverviewStats
-      dueSoon={data.stats.dueSoon}
-      dueToday={data.stats.today}
-      overdue={data.stats.overdue}
-      upcoming={data.weekEvents.filter((e) => e.startsAt < upcomingUntil).length}
-      upcomingDays={UPCOMING_DAYS}
-      taskBar={data.taskBar}
-      tasksHref={`${base}/tasks`}
-      calendarHref={calendarHref}
+  // The Today strip: overdue, waiting on you, due this week, events ahead.
+  // On Personal it counts your organizations' too.
+  const upcomingUntil = new Date(now.getTime() + UPCOMING_DAYS * DAY_MS);
+  const elsewhere = {
+    tasks: (personalHome?.dueSoon ?? []).filter((t) => t.space.id !== org.id),
+    events: (personalHome?.upcoming ?? []).filter(
+      (e) => e.space.id !== org.id && e.startsAt < upcomingUntil,
+    ),
+  };
+  const ahead = [
+    ...data.weekEvents.filter((e) => e.startsAt < upcomingUntil),
+    ...elsewhere.events,
+  ].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const lateElsewhere = elsewhere.tasks.filter((t) => t.bucket === "overdue");
+  const dueElsewhere = elsewhere.tasks.filter((t) => t.bucket !== "overdue");
+  const todayBar = (
+    <TodayStrip
+      scope={org.id}
+      cells={todayStrip({
+        base,
+        todayKey,
+        zones,
+        overdue: {
+          count: data.stats.overdue + lateElsewhere.length,
+          first: lateTasks[0] ?? lateElsewhere[0] ?? null,
+        },
+        waiting: data.needsYou
+          ? { count: data.needsYou.inbox, parts: data.needsYou.needsYou }
+          : null,
+        dueThisWeek: {
+          count: data.stats.dueSoon + dueElsewhere.length,
+          titles: [...dueThisWeek, ...dueElsewhere].map((t) => t.title),
+        },
+        events: {
+          count: ahead.length,
+          days: UPCOMING_DAYS,
+          next: ahead.find((e) => e.startsAt >= now) ?? ahead[0] ?? null,
+        },
+      })}
     />
   );
 
@@ -350,6 +665,38 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     />
   );
 
+  // The action items each upcoming meeting's last one made: its linked tasks.
+  const lastActions = new Map<string, LastMeetingActions & { title: string; startsAt: Date }>();
+  for (const m of data.meetings) {
+    const seriesId = data.details.get(m.id)?.seriesId;
+    const last = seriesId ? data.lastInSeries.get(seriesId) : undefined;
+    if (!last) continue;
+    const tasks = (data.links.get(`event:${last.id}`) ?? []).filter((c) => c.ref.kind === "task");
+    if (tasks.length === 0) continue;
+    lastActions.set(m.id, {
+      open: tasks.filter((c) => !c.done).length,
+      total: tasks.length,
+      href: `${base}/meetings/${last.id}`,
+      title: last.title,
+      startsAt: last.startsAt,
+    });
+  }
+
+  // The call links of what starts within a quarter of an hour or is on now, for Join.
+  const soonIds = [...data.meetings, ...data.events]
+    .filter((e) => !e.allDay && e.startsAt.getTime() - now.getTime() <= 15 * 60_000)
+    .map((e) => e.id);
+  const joinUrls =
+    soonIds.length > 0
+      ? await withOrgTx(org.id, ({ db }) =>
+          db.event.findMany({
+            where: { organizationId: org.id, id: { in: soonIds }, conferenceUrl: { not: null } },
+            select: { id: true, conferenceUrl: true },
+          }),
+        )
+          .then((rows) => new Map(rows.map((r) => [r.id, r.conferenceUrl ?? ""])))
+          .catch(() => new Map<string, string>())
+      : new Map<string, string>();
   const upNext = buildUpNext({
     orgSlug,
     now,
@@ -362,16 +709,317 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     rsvps: data.rsvps,
     going: data.going,
     polls: data.polls,
+    ended: data.ended,
     hidden: new Set(data.hiddenUpNext),
+    upForGrabs: data.upForGrabs,
+    others: personalHome ? otherSpacesUpNext(personalHome, now, org.id) : undefined,
+    context: {
+      links: data.links,
+      details: data.details,
+      lastActions,
+      seats: turnout.seats,
+      turnout: turnout.live,
+      joinUrls,
+    },
   });
+
+  // Meetings: a repeating meeting shows once, its next time, not every week ahead.
+  // Without a series id, the same title on the same weekday and time is a
+  // repeat; the same title at another time is a different meeting.
+  const slotOf = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    timeZone: orgZone,
+  });
+  const seriesKey = (m: { id: string; title: string; startsAt: Date }) =>
+    data.details.get(m.id)?.seriesId ??
+    `${m.title.trim().toLowerCase()}|${slotOf.format(m.startsAt)}`;
+  const nextMeetings = data.meetings.filter(
+    (m, i, all) => all.findIndex((o) => seriesKey(o) === seriesKey(m)) === i,
+  );
+
+  // Meetings and Events: what each is tied to, its agenda or its sign-ups.
+  const noteChips = (id: string): ItemRef[] =>
+    (data.details.get(id)?.notes ?? []).map((n) => ({
+      kind: "note",
+      label: n.title,
+      href: `${base}/notes/${n.id}`,
+    }));
+  const openTasksChip = (id: string, href: string): ItemRef[] => {
+    const open = (data.links.get(`event:${id}`) ?? []).filter(
+      (c) => c.ref.kind === "task" && !c.done,
+    ).length;
+    return open > 0
+      ? [{ kind: "task", label: `${open} open ${open === 1 ? "task" : "tasks"}`, href }]
+      : [];
+  };
+  const otherChips = (id: string) =>
+    chipsOf(
+      (data.links.get(`event:${id}`) ?? []).filter((c) => c.ref.kind !== "task"),
+      2,
+    );
+  const eventExtras = new Map<string, EventExtras>();
+  for (const m of data.meetings) {
+    const detail = data.details.get(m.id);
+    const last = lastActions.get(m.id);
+    const items = detail ? agendaItems(detail.description).length : undefined;
+    eventExtras.set(m.id, {
+      going: data.going.get(m.id)?.going ?? 0,
+      faces: data.going.get(m.id)?.faces ?? [],
+      ...(items !== undefined ? { agendaItems: items > 0 ? items : null } : {}),
+      chips: [
+        ...noteChips(m.id),
+        ...(last && last.open > 0
+          ? [{ kind: "task" as const, label: `${last.open} open actions`, href: last.href }]
+          : []),
+        ...openTasksChip(m.id, `${base}/meetings/${m.id}`),
+        ...otherChips(m.id),
+      ].slice(0, 4),
+    });
+  }
+  let eventsInsight: Finding | null = null;
+  for (const e of data.events) {
+    const detail = data.details.get(e.id);
+    const going = data.going.get(e.id);
+    const taken = turnout.seats.get(e.id);
+    // RSVPs as the rate counts them: the RSVP page's sign-ups, else members going.
+    const rsvps = detail?.rsvpEnabled ? taken : (going?.going ?? 0);
+    const rate = turnout.rates.get(e.kind);
+    const expected = rsvps !== undefined ? expectedHeadcount(rsvps, rate?.rate) : null;
+    eventExtras.set(e.id, {
+      going: going?.going ?? 0,
+      faces: going?.faces ?? [],
+      ...(taken !== undefined ? { seats: { taken, capacity: detail?.capacity ?? null } } : {}),
+      ...(expected !== null ? { expected } : {}),
+      chips: [
+        ...noteChips(e.id),
+        ...openTasksChip(e.id, `${base}/calendar/${e.id}`),
+        ...otherChips(e.id),
+      ].slice(0, 4),
+    });
+    if (!eventsInsight && expected !== null && rate) {
+      const kinds = e.kind === "OTHER" ? "Past events like it" : `${KIND_META[e.kind].label}s`;
+      eventsInsight = {
+        tone: "plain",
+        lead: `${kinds} average a ${percent(rate.rate)} check-in rate`,
+        text: `over ${rate.events} past events, so ${e.title} should see about ${expected} people.`,
+      };
+    }
+  }
+  const meetingNote = data.meetings
+    .map((m) => ({ m, last: lastActions.get(m.id) }))
+    .find(({ last }) => last && last.total > 0);
+  const meetingsInsight = meetingNote?.last ? (
+    <FindingLine
+      finding={{
+        tone: meetingNote.last.open > 0 ? "warn" : "good",
+        lead: `The last ${meetingNote.last.title} made ${meetingNote.last.total} action ${meetingNote.last.total === 1 ? "item" : "items"}.`,
+        text: `${meetingNote.last.total - meetingNote.last.open} ${meetingNote.last.total - meetingNote.last.open === 1 ? "is" : "are"} done, ${meetingNote.last.open} ${meetingNote.last.open === 1 ? "is" : "are"} still open.`,
+      }}
+      after={
+        <LinkChip
+          item={{
+            kind: "meeting",
+            label: `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(meetingNote.last.startsAt)} meeting`,
+            href: meetingNote.last.href,
+          }}
+        />
+      }
+    />
+  ) : null;
+
+  // My tasks: three or more of your deadlines in the week of a big event.
+  const crowded = crowdedEventWeek(
+    myDue.filter((t) => t.dueKey >= todayKey),
+    data.events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      dayKey: dayKeyOf(e),
+      size: turnout.seats.get(e.id) ?? data.going.get(e.id)?.going ?? 0,
+    })),
+  );
 
   const pulseHref = `${base}/pulse`;
   const sentLabel = data.pulse?.sentAt
     ? `Sent ${new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: orgZone }).format(data.pulse.sentAt)}`
     : null;
+  const pulseData = data.pulse?.data ?? null;
+  const epics = [...(pulseData?.byProject ?? [])]
+    .filter((p) => p.projectId && p.done > 0)
+    .sort((a, b) => b.done - a.done);
+  const pulseChips: ItemRef[] = [
+    ...epics.slice(0, 2).map((p) => ({
+      kind: "task" as const,
+      label: p.name,
+      href: `${base}/tasks/${p.projectId}`,
+    })),
+    ...(pulseData?.events ?? []).slice(0, 2).map((e) => ({
+      kind: "event" as const,
+      label: e.title,
+      href: `${calendarHref}/${e.eventId}`,
+    })),
+  ];
+  const pulseInsight = pulseFinding(
+    data.trend.slice(0, -1),
+    epics[0] ? { name: epics[0].name, done: epics[0].done } : null,
+  );
 
-  const bodies = {
-    pinned: <PinnedGrid orgId={org.id} pins={data.pins} />,
+  const { online, since, placed } = data;
+  // The rest of the newer widgets, each in its own transaction.
+  const ownTx = await loadOwnTxWidgets(placed, data.viewer, {
+    shared: data.shared,
+    since,
+    upcoming: data.weekEvents,
+    todayKey,
+    ballotVisibility: settings?.ballotIndividualVisibility,
+  });
+  const newer = homeWidgetCards({
+    orgId: org.id,
+    orgSlug,
+    viewer: { userId: user.id, role },
+    you: data.you,
+    online,
+    placed,
+    data: { ...data.widgets, ...ownTx },
+  });
+
+  // Personal: your organizations' tasks, Inbox, questions, grabs and money.
+  const orgTasks = (personalHome?.dueSoon ?? []).filter((t) => t.space.id !== org.id);
+  const fromOrgs = {
+    updates: personalHome?.updates ?? [],
+    invites: personalHome?.invites ?? [],
+    polls: personalHome?.pollsWaiting ?? [],
+    forms: personalHome?.formsWaiting ?? [],
+    grabs: personalHome?.grabs ?? [],
+    mine: personalHome?.reimbursements ?? [],
+    approvals: personalHome?.approvals ?? [],
+  };
+  const elsewhereResting = [
+    ...(orgTasks.length === 0 ? ["org-tasks"] : []),
+    ...(fromOrgs.updates.length === 0 ? ["org-inbox"] : []),
+    ...(fromOrgs.invites.length + fromOrgs.polls.length + fromOrgs.forms.length === 0
+      ? ["your-answer"]
+      : []),
+    ...(fromOrgs.grabs.length === 0 ? ["org-grabs"] : []),
+    ...(fromOrgs.mine.length + fromOrgs.approvals.length === 0 ? ["reimbursements"] : []),
+  ];
+
+  // Ambient: widgets with nothing to show rest (their band neighbours take
+  // the space), and Here now with only you in needs one column. A widget
+  // whose read failed isn't resting: it says so in its card.
+  const w = { ...data.widgets, ...ownTx };
+  const resting = [
+    ...(w.since && w.since.rows.length === 0 ? ["since-you-were-here"] : []),
+    ...(w.votes && w.votes.total === 0 ? ["votes"] : []),
+    ...(w.deadlines && w.deadlines.total === 0 ? ["deadlines"] : []),
+    ...(w.waitingOnYou && w.waitingOnYou.rows.length === 0 ? ["waiting-on-you"] : []),
+    ...(w.waitingOnOthers && w.waitingOnOthers.rows.length === 0 ? ["waiting-on-others"] : []),
+    ...(data.openForms.length === 0 ? ["polls"] : []),
+    ...(data.meetings.length === 0 ? ["meetings"] : []),
+    ...(data.events.length === 0 ? ["events"] : []),
+    ...(data.recent.length === 0 ? ["recent"] : []),
+    // Personal: your organizations' tasks are in Up next and This week, so an
+    // empty list of your own steps aside rather than saying all clear.
+    ...(personal && data.myTasks.total === 0 ? ["my-tasks"] : []),
+    // Personal: what your organizations hold for you, resting when there's none.
+    ...(personal ? elsewhereResting : []),
+  ];
+  // From your apps, read when Ambient shows it or it's on the board.
+  const apps = placed.has("apps")
+    ? await loadAppsFeed({ orgId: org.id, orgSlug, userId: user.id, role, now }).catch(
+        () => undefined,
+      )
+    : undefined;
+  if (apps && apps.rows.length === 0) resting.push("apps");
+  if (w.decisions && w.decisions.total === 0) resting.push("decisions");
+  // Nothing on Home is ever narrower than a square: Here now keeps its size with only you in.
+  const compact: string[] = [];
+
+  // The org chart is asking everyone where they sit, and this member hasn't said.
+  const asking = personal ? null : await getAskDraft(org.id, user.id).catch(() => null);
+  const askWhereYouSit = asking !== null && !placementSummary(asking.positions).placed.has(user.id);
+
+  // What leads Ambient Home: every widget scored from what's going on now.
+  const minutesUntil = (at: Date) => Math.ceil((at.getTime() - now.getTime()) / 60_000);
+  const underWay = (e: { startsAt: Date; endsAt: Date }) => e.startsAt <= now && e.endsAt > now;
+  const nextMeeting = nextMeetings.find((m) => !m.allDay) ?? null;
+  const nextEvent = data.events.find((e) => !e.allDay) ?? null;
+  const tomorrowKey = addDaysToKey(todayKey, 1);
+  const clock = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hourCycle: "h23",
+    weekday: "short",
+    timeZone,
+  }).formatToParts(now);
+  const hourNow = Number(clock.find((p) => p.type === "hour")?.value ?? 12);
+  // Late at night, the next morning's first thing; before dawn that's today's.
+  const firstTomorrow = data.weekEvents.find(
+    (e) => !e.allDay && e.startsAt > now && dayKeyOf(e) === (hourNow < 5 ? todayKey : tomorrowKey),
+  );
+  const weekdayOf = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const signals: HomeSignals = {
+    hour: hourNow,
+    weekday: weekdayOf.indexOf(clock.find((p) => p.type === "weekday")?.value ?? "Wed"),
+    role,
+    meeting: nextMeeting
+      ? {
+          title: nextMeeting.title,
+          startsInMin: minutesUntil(nextMeeting.startsAt),
+          underWay: underWay(nextMeeting),
+        }
+      : null,
+    meetingJustEnded:
+      data.ended.find((e) => e.kind === "BOARD_MEETING" || /meeting|sync/i.test(e.title)) ?? null,
+    event: nextEvent
+      ? {
+          title: nextEvent.title,
+          startsInMin: minutesUntil(nextEvent.startsAt),
+          underWay: underWay(nextEvent),
+          checkIns: turnout.live.get(nextEvent.id)?.checkIns ?? 0,
+        }
+      : null,
+    overdue: data.stats.overdue,
+    dueToday: myDue.filter((t) => t.dueKey === todayKey).length,
+    tomorrowNotStarted:
+      w.deadlines?.rows.find((r) => r.dayKey === tomorrowKey && r.notStarted)?.title ?? null,
+    deadlinesToday: w.deadlines?.rows.filter((r) => r.dayKey === todayKey).length ?? 0,
+    waiting: data.needsYou
+      ? { count: data.needsYou.inbox, requests: data.needsYou.needsYou.requests }
+      : { count: 0, requests: 0 },
+    voteClosing:
+      w.votes?.cards.find(
+        (c) => c.mine === false && /^Closes (today|tomorrow)$/.test(c.closes ?? ""),
+      )?.title ?? null,
+    formsClosing: data.openForms.filter(
+      (f) => f.closesAt && f.closesAt.getTime() - now.getTime() < DAY_MS && f.closesAt > now,
+    ).length,
+    decisions: w.decisions?.total ?? 0,
+    changes: w.since?.rows.length ?? 0,
+    daysAway: data.since ? Math.floor((now.getTime() - data.since.getTime()) / DAY_MS) : 0,
+    othersOnline: online ? Math.max(0, online.count - 1) : 0,
+    tomorrowFirst: firstTomorrow
+      ? {
+          widget: nextMeetings.some((m) => m.id === firstTomorrow.id) ? "meetings" : "events",
+          label: `${firstTomorrow.title}, ${timeWord(firstTomorrow.startsAt, timeZone).replace(":00", "")}`,
+        }
+      : null,
+    week: {
+      events: weekCounts.events,
+      due: weekCounts.due,
+      meetings: nextMeetings.filter((m) => m.startsAt.getTime() - now.getTime() < 7 * DAY_MS)
+        .length,
+    },
+  };
+  const scores = Object.fromEntries(scoreHome(signals));
+
+  // Open forms' chips, by form id.
+  const formLinks = new Map(
+    data.openForms.map((f) => [f.id, chipsOf(data.links.get(`form:${f.id}`), 2)]),
+  );
+
+  const bodies: Record<string, React.ReactNode> = {
+    pinned: <PinnedGrid orgId={org.id} pins={data.pins} live={data.pinStates} />,
     "my-tasks": (
       <MyTasksCard
         orgId={org.id}
@@ -379,53 +1027,54 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         tasks={data.myTasks.tasks}
         extras={data.taskExtras}
         todayKey={todayKey}
-        strip={dueStrip}
+        links={data.links}
+        insight={<FindingLine finding={myTasksFinding(crowded)} />}
       />
     ),
-    recent: <RecentList items={data.recent} now={now} />,
+    recent: <RecentList items={data.recent} changes={data.pickUp} now={now} />,
     meetings: (
-      <UpcomingEventsCard
-        bare
+      <MeetingsList
         orgSlug={orgSlug}
-        icon={Users}
-        events={data.meetings}
+        meetings={nextMeetings}
+        extras={eventExtras}
         rsvps={data.rsvps}
         zones={zones}
         now={now}
+        canEdit={canAddEvents}
+        joinUrl={
+          nextMeetings[0] && joinable(joinUrls.get(nextMeetings[0].id))
+            ? joinUrls.get(nextMeetings[0].id)
+            : null
+        }
         empty={eventEmpty("No meetings coming up", "Schedule a meeting")}
+        insight={meetingsInsight}
       />
     ),
     events: (
-      <UpcomingEventsCard
-        bare
+      <EventsList
         orgSlug={orgSlug}
         events={data.events}
+        extras={eventExtras}
         rsvps={data.rsvps}
         zones={zones}
         now={now}
         empty={eventEmpty("No events coming up", "Add an event")}
+        insight={<FindingLine finding={eventsInsight} />}
       />
     ),
-    "rsvp-goal": (
-      <RsvpGoalBlock
-        event={goal}
-        when={
-          goal
-            ? new Intl.DateTimeFormat("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                timeZone: goal.allDay ? orgZone : timeZone,
-              }).format(goal.startsAt)
-            : null
-        }
-        taken={seats}
-        href={goal ? `${base}/calendar/${goal.id}` : null}
-        createHref={canAddEvents ? `${base}/meetings` : null}
+    week: (
+      <WeekTimeline orgSlug={orgSlug} days={week} insight={<FindingLine finding={weekInsight} />} />
+    ),
+    polls: (
+      <PollList
+        orgSlug={orgSlug}
+        forms={data.openForms}
+        now={now}
+        timeZone={timeZone}
+        fresh={data.formsThisWeek}
+        links={formLinks}
       />
     ),
-    week: <WeekTimeline orgSlug={orgSlug} days={week} nowMinutes={minutesOfDay(now, timeZone)} />,
-    polls: <PollList orgSlug={orgSlug} forms={data.openForms} now={now} timeZone={timeZone} />,
     "weekly-pulse": (
       <WeeklyPulseCard
         issue={data.pulse}
@@ -434,15 +1083,43 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         issueHref={data.pulse ? `${pulseHref}/${data.pulse.weekStart}` : null}
         nextSend={pulseOn ? nextPulseLabel(now, orgZone, pulseDay, pulseHour) : null}
         draftHref={data.draft && !data.draft.sentAt ? `${pulseHref}/${data.draft.weekStart}` : null}
+        recap={recapTime(signals.weekday, signals.hour)}
+        insight={<FindingLine finding={pulseInsight} />}
+        chips={pulseChips}
       />
     ),
-    notes: <NoteList orgSlug={orgSlug} notes={data.notes} />,
-    files: <FileList orgSlug={orgSlug} files={data.files} />,
-    people: <PeopleList orgSlug={orgSlug} people={data.people} total={data.memberCount} />,
+    ...newer.bodies,
+    ...(apps ? { apps: <AppsFeed data={apps} /> } : {}),
+    ...(personalHome?.focus
+      ? { "focus-time": <FocusTime orgId={org.id} data={personalHome.focus} /> }
+      : {}),
+    ...(personal
+      ? {
+          "org-tasks": <OrgTasks tasks={orgTasks} todayKey={todayKey} />,
+          "org-inbox": <OrgInbox updates={fromOrgs.updates} now={now} />,
+          "your-answer": (
+            <WaitingOnYourAnswer
+              invites={fromOrgs.invites}
+              polls={fromOrgs.polls}
+              forms={fromOrgs.forms}
+              viewerZone={timeZone}
+              now={now}
+            />
+          ),
+          "org-grabs": <UpForGrabs tasks={fromOrgs.grabs} todayKey={todayKey} />,
+          reimbursements: (
+            <Reimbursements mine={fromOrgs.mine} approvals={fromOrgs.approvals} now={now} />
+          ),
+        }
+      : {}),
   };
 
   // Shown until every step is done or checked off, then gone by itself.
-  const startedSkipped = settings?.startedSkipped ?? [];
+  // Without Finance added there's no budget to set up: that step counts as not needed.
+  const startedSkipped = [
+    ...(settings?.startedSkipped ?? []),
+    ...(settings?.addOns && !settings.addOns.includes("finance") ? ["budget"] : []),
+  ];
   const showStarted =
     data.started !== null && !startedProgress(data.started, startedSkipped).complete;
   // The invite tile copies the join link right there, while members is still to do.
@@ -488,43 +1165,38 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       </CardControls>
     ),
     meetings: (
-      <CardControls>
-        <OpenLink href={calendarHref} label="Calendar" />
+      <CardControls count={nextMeetings.length || undefined}>
+        <OpenLink href={`${base}/meetings`} label="Meetings" />
       </CardControls>
     ),
     events: (
-      <CardControls>
+      <CardControls count={data.events.length || undefined}>
         <OpenLink href={calendarHref} label="Calendar" />
       </CardControls>
     ),
     week: (
-      <CardControls>
+      <CardControls
+        chips={
+          <span className="text-muted-foreground text-[13px] max-sm:hidden">
+            {[
+              `${weekCounts.events} ${weekCounts.events === 1 ? "event" : "events"}`,
+              `${weekCounts.due} ${weekCounts.due === 1 ? "task" : "tasks"} due`,
+              `${weekCounts.free} free ${weekCounts.free === 1 ? "day" : "days"}`,
+            ].join(", ")}
+          </span>
+        }
+      >
         <OpenLink href={`${calendarHref}?view=week`} label="Calendar" />
       </CardControls>
     ),
-    people: (
-      <CardControls count={data.memberCount}>
-        <OpenLink href={`${base}/people`} label="People" />
-      </CardControls>
-    ),
     pinned: <CardControls count={data.pins.length || undefined} />,
-    notes: (
+    ...newer.headers,
+    apps: (
       <CardControls>
-        <OpenLink href={`${base}/notes`} label="Files" />
-      </CardControls>
-    ),
-    files: (
-      <CardControls>
-        <OpenLink href={`${base}/notes`} label="Files" />
+        <OpenLink href={`${base}/integrations`} label="Integrations" />
       </CardControls>
     ),
   };
-
-  // Who's here now, beside the date (the shell's heartbeat keeps it fresh).
-  // Its own transaction: if it fails, the line goes and the board stays.
-  const online = await withOrgTx(org.id, ({ db }) => onlineNow(db, org.id, user.id)).catch(
-    () => null,
-  );
 
   const greetingBlock = (
     <h1 className="page-title">
@@ -537,35 +1209,64 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     <div className="space-y-6">
       <OverviewBoard
         orgId={org.id}
-        types={overviewWidgetsFor(isAdmin)}
-        initialLayout={resolveOverview(data.saved, isAdmin)}
+        types={overviewWidgetsFor(isAdmin, settings?.addOns, personal)}
+        initialLayout={resolveOverview(data.saved, isAdmin, settings?.addOns, personal)}
         customized={data.saved !== null}
+        mode={data.homeMode}
+        resting={resting}
+        compact={compact}
+        extras={personal ? PERSONAL_EXTRAS : roleExtras(role, settings?.addOns)}
+        promoted={personal ? [] : rolePromoted(role, settings?.addOns)}
+        scores={scores}
+        night={isNight(signals.hour)}
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}
         introDescription={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span>{`${dateLine}, ${org.name}`}</span>
-            {online && (
+            <span>{personal ? dateLine : `${dateLine}, ${org.name}`}</span>
+            {online && !personal && (
               <OnlineNow orgId={org.id} orgSlug={org.slug} you={data.you} initial={online} />
             )}
           </span>
         }
         stats={
           <div className="space-y-[30px]">
-            {stats}
+            {todayBar}
             <UpNext
+              orgId={org.id}
               slots={upNext}
               calendarHref={calendarHref}
               onHide={hideUpNextCard.bind(null, org.id)}
               onUnhide={unhideUpNextCard.bind(null, org.id)}
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
               onDone={setTaskStatus.bind(null, org.id)}
+              onTake={takeTask.bind(null, org.id)}
               onRsvp={rsvpToEvent.bind(null, org.id)}
               onVote={voteOnQuestionPoll.bind(null, org.id)}
+              elsewhere={personal ? { onDone: setTaskStatus, onRsvp: rsvpToEvent } : undefined}
               hiddenCount={data.hiddenUpNext.length}
             />
+            {/* Personal: your organizations, always right under Up next. */}
+            {personalHome && <OrganizationsStrip data={personalHome} now={now} />}
             {started}
+            {askWhereYouSit && (
+              <p className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-[14px]">
+                <span className="min-w-0 flex-1 font-medium">
+                  Where do you sit on the org chart? Your best guess is already picked.
+                </span>
+                <AmbientButton
+                  action={{
+                    key: "place-self",
+                    label: "Answer",
+                    icon: <Network />,
+                    tone: "solid",
+                    reason: "The org chart is asking everyone",
+                    href: `${base}/people?view=chart`,
+                  }}
+                />
+              </p>
+            )}
           </div>
         }
       />

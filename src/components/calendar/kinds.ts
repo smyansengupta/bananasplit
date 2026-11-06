@@ -26,15 +26,17 @@ export interface KindMeta {
   label: string;
   /** The CSS variable carrying this kind's colour. */
   token: string;
+  /** Its colour as a solid block (Up next, This week): the tag colour, or dark mode's own set. */
+  fill: string;
 }
 
 export const KIND_META: Record<EventKind, KindMeta> = {
-  WORKSHOP: { label: "Workshop", token: tagToken("navy") },
-  INFO_SESSION: { label: "Info session", token: tagToken("rust") },
-  HACKATHON: { label: "Hackathon", token: tagToken("forest") },
-  SOCIAL: { label: "Social", token: tagToken("ochre") },
-  BOARD_MEETING: { label: "Board meeting", token: tagToken("plum") },
-  OTHER: { label: "Other", token: "--muted-foreground" },
+  WORKSHOP: { label: "Workshop", token: tagToken("navy"), fill: "--fill-workshop" },
+  INFO_SESSION: { label: "Info session", token: tagToken("rust"), fill: "--fill-info" },
+  HACKATHON: { label: "Hackathon", token: tagToken("forest"), fill: "--fill-hackathon" },
+  SOCIAL: { label: "Social", token: tagToken("ochre"), fill: "--fill-social" },
+  BOARD_MEETING: { label: "Board meeting", token: tagToken("plum"), fill: "--fill-board" },
+  OTHER: { label: "Other", token: "--muted-foreground", fill: "--muted-foreground" },
 };
 
 export const KIND_ORDER: EventKind[] = [

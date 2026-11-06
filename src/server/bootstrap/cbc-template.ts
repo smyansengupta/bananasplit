@@ -2090,10 +2090,14 @@ async function seedCbcBudget(
 ): Promise<void> {
   const { organizationId, members, monday, rng } = ctx;
   const year = monday.getMonth() >= 6 ? monday.getFullYear() : monday.getFullYear() - 1;
+  // The demo has a budget, so it has Finance (an add-on, src/lib/addons.ts).
+  await db.$executeRaw`
+    UPDATE "OrgSettings" SET "addOns" = array_append("addOns", 'finance')
+     WHERE "organizationId" = ${organizationId} AND NOT ('finance' = ANY ("addOns"))`;
   const period = await db.budgetPeriod.create({
     data: {
       organizationId,
-      label: `Fall ${year}`,
+      label: `${year} budget`,
       startsOn: new Date(Date.UTC(year, 7, 15)),
       endsOn: new Date(Date.UTC(year, 11, 20)),
       isActive: true,

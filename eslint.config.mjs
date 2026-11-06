@@ -121,6 +121,20 @@ const CLIENT_ALLOWLIST = [
 const COLLAB_BRIDGE = ["src/app/api/collab/**"];
 
 /**
+ * Saved reports on a schedule (src/server/reports/schedule-jobs.ts): a job
+ * computes a report as its maker (the copy it keeps) and as each recipient
+ * (their email), so each sees only their own rows. It acts only as the
+ * report's maker or a member its schedule names. Adding a path here is a
+ * security review item.
+ */
+const REPORT_JOBS = [
+  "src/server/reports/schedule-jobs.ts",
+  // A report shared outside the organization, read as its maker after the
+  // link or invite was checked on the service path (src/server/reports/shared-view.ts).
+  "src/server/reports/shared-as-maker.ts",
+];
+
+/**
  * AI connectors (docs/features/ai-connectors.md): they verify an AuthKit
  * token (a VerifiedConnector), resolve its grant, then act as the member it
  * names through withConnectorUserTx / withConnectorOrgTx. The MCP route
@@ -336,6 +350,13 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, CONNECTOR_TX),
     },
   },
+  // Scheduled reports: withOrgTxAs, and still no service or auth client.
+  {
+    files: REPORT_JOBS,
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, CONNECTOR_TX),
+    },
+  },
   // AI connectors: the connector wrappers, and still no service or auth
   // client, no withOrgTxAs and (a service) no navigation.
   {
@@ -421,6 +442,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude Code's local worktrees (each a full checkout with its own lint).
     ".claude/**",
+    // Cloudflare Workers (workers/*): their own package, runtime and deploy.
+    "workers/**",
   ]),
 ]);
 

@@ -141,3 +141,33 @@ describe("describePath", () => {
     expect(describePath("cbc", "/app/cbc/notes/<script>")).toBeNull();
   });
 });
+
+describe("the CRM's pages", () => {
+  it("names Today and its groups, People's views and lists, and settings", () => {
+    expect(describePath("cbc", "/app/cbc/crm")).toMatchObject({ kind: "page", label: "CRM" });
+    expect(describePath("cbc", "/app/cbc/crm?show=approve&open=power")).toMatchObject({
+      href: "/app/cbc/crm?show=approve",
+      label: "CRM, To approve",
+    });
+    expect(describePath("cbc", "/app/cbc/crm/people")).toMatchObject({ label: "CRM people" });
+    expect(describePath("cbc", "/app/cbc/crm/people?view=companies&open=company:x")).toMatchObject({
+      href: "/app/cbc/crm/people?view=companies",
+      label: "CRM companies",
+    });
+    expect(describePath("cbc", "/app/cbc/crm/people?list=due")).toMatchObject({
+      label: "CRM people, Follow-ups due",
+    });
+    expect(describePath("cbc", "/app/cbc/crm/people?list=cmabc123")).toMatchObject({
+      href: "/app/cbc/crm/people?list=cmabc123",
+      label: "CRM people, A saved list",
+    });
+    expect(describePath("cbc", "/app/cbc/crm/people?view=board")).toMatchObject({ label: "CRM deals" });
+    // Old pages that only redirect now (deals, calls, forecast, handover) aren't pages to pin.
+    expect(describePath("cbc", "/app/cbc/crm/deals")).toBeNull();
+    expect(describePath("cbc", "/app/cbc/crm/settings/automations")).toMatchObject({
+      label: "CRM settings, Automations and sending",
+    });
+    // A record's old page redirects to its card: nothing to pin or list.
+    expect(describePath("cbc", "/app/cbc/crm/people/abc123")).toBeNull();
+  });
+});

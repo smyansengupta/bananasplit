@@ -395,6 +395,61 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
     expect(second).toEqual([{ userId: p.alex.id }, { userId: p.smyan.id }]);
   });
 
+  it("a comment reaches everyone on the task, but never past a private task's audience", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "Inbox test: comments",
+      ownerId: p.alex.id,
+      dueDate: due(12),
+    });
+    const told = async () =>
+      (
+        await read(({ db }) =>
+          db.notification.findMany({
+            where: { taskId: id, type: NotificationType.TASK_COMMENTED },
+            select: { userId: true },
+          }),
+        )
+      )
+        .map((n) => n.userId)
+        .sort();
+
+    // The owner and whoever made it hear about it; the commenter doesn't.
+    as(p.kristine);
+    await act(svc.addComment)(s.cbcId, id, "First");
+    expect(await told()).toEqual([p.alex.id, p.oliver.id].sort());
+
+    // Made private, it stops reaching the earlier commenter outside it.
+    as(p.oliver);
+    await act(svc.updateTask)(s.cbcId, id, { visibility: TaskVisibility.PRIVATE });
+    await act(svc.addComment)(s.cbcId, id, "Second");
+    expect(await told()).toEqual([p.alex.id, p.alex.id, p.oliver.id].sort());
+  });
+
+  it("a task left for anyone tells everyone who can see it, once", async () => {
+    const id = await create({
+      title: "B6 test: up for grabs",
+      ownerId: null,
+      openToAnyone: true,
+      dueDate: due(8),
+    });
+    const told = () =>
+      read(({ db }) =>
+        db.notification.findMany({
+          where: { taskId: id, type: NotificationType.TASK_UP_FOR_GRABS },
+          select: { userId: true },
+        }),
+      );
+    const first = (await told()).map((n) => n.userId);
+    // Not whoever posted it; everyone else in the organization.
+    expect(first).not.toContain(p.oliver.id);
+    expect(first).toEqual(expect.arrayContaining([p.jackson.id, p.alex.id, p.smyan.id]));
+    // Taken, then left for anyone again: nobody is told twice.
+    await act(svc.updateTask)(s.cbcId, id, { ownerId: p.oliver.id });
+    await act(svc.updateTask)(s.cbcId, id, { ownerId: null, openToAnyone: true });
+    expect(await told()).toHaveLength(first.length);
+  });
+
   it("the digest records once per local date, however often it runs", async () => {
     // Opt Oliver into the digest for this test, then restore his preferences.
     const original = await authDb.user.findUnique({

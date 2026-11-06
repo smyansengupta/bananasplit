@@ -1,0 +1,201 @@
+import {
+  MergeCard,
+  MergePickCard,
+  type MergeCardData,
+  type MergeSideData,
+} from "@/components/crm/cards/merge-card";
+import { scoreCompanies, scorePeople } from "@/lib/crm/dedupe";
+import { duplicateReason } from "@/lib/crm/people-view";
+import type { MergePayload } from "@/server/crm/dedupe";
+import { ownerLabel } from "@/server/crm/owners";
+import { withOrgTx } from "@/server/db/context";
+
+import type { OverlayProps } from "./crm-overlays";
+import { crmMembers } from "@/app/app/[orgSlug]/crm/shell";
+
+function added(source: string | null, at: Date): string {
+  const when = at.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const from =
+    !source || source === "manual"
+      ? "Added by hand"
+      : source === "import"
+        ? "Import"
+        : source.charAt(0).toUpperCase() + source.slice(1).replace(/[-_]/g, " ");
+  return `${from}, ${when}`;
+}
+
+/** ["Same name", "Same phone"] as "Same name and same phone". */
+function sentence(reasons: readonly string[]): string {
+  const parts = reasons.map((r, i) => (i ? r.charAt(0).toLowerCase() + r.slice(1) : r));
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : (parts[0] ?? "");
+}
+
+/**
+ * The Merge card (?open=merge:<a>,<b>, Merge.dc.html): two people (or two
+ * companies) side by side, a pick per field, and what moves. Kept apart
+ * with Keep both, so they're never suggested again. With one id
+ * (?open=merge:<a>, a card's "…" > Merge a duplicate) it asks for the other.
+ */
+export async function MergeOverlay({ shell, open }: OverlayProps<"merge">) {
+  const orgId = shell.org.id;
+  if (open.ids.length === 1) {
+    const id = open.ids[0];
+    const first = await withOrgTx(orgId, async ({ db }) => {
+      const person = await db.crmPerson.findFirst({
+        where: { id, organizationId: orgId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      if (person) return { kind: "person" as const, ...person };
+      const company = await db.crmCompany.findFirst({
+        where: { id, organizationId: orgId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      return company ? { kind: "company" as const, ...company } : null;
+    });
+    return <MergePickCard orgId={orgId} first={first} />;
+  }
+  const names = new Map((await crmMembers(orgId)).map((m) => [m.id, m.name]));
+  const relationships = new Map(
+    (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
+  );
+  const data = await withOrgTx(orgId, async ({ db }): Promise<MergeCardData | null> => {
+    const [a, b] = open.ids as [string, string];
+    const pending = await db.crmSuggestion.findMany({
+      where: { organizationId: orgId, kind: "MERGE", status: "PENDING", targetId: { in: [a, b] } },
+      select: { payload: true },
+      take: 20,
+    });
+    const suggested = pending
+      .map((s) => s.payload as unknown as MergePayload | null)
+      .find((p) => p?.ids?.includes(a) && p.ids.includes(b));
+    // Both sides' timeline entries and deals, two reads for the pair (a
+    // transaction runs one query at a time, so nothing here is in parallel).
+    const countsFor = async (kind: "person" | "company") => {
+      const activities = await db.crmActivityTarget.groupBy({
+        by: ["targetId"],
+        where: { organizationId: orgId, targetKind: kind, targetId: { in: [a, b] } },
+        _count: { _all: true },
+      });
+      const deals =
+        kind === "person"
+          ? (
+              await db.crmDealPerson.groupBy({
+                by: ["personId"],
+                where: { organizationId: orgId, personId: { in: [a, b] }, deal: { deletedAt: null } },
+                _count: { _all: true },
+              })
+            ).map((d) => ({ id: d.personId, n: d._count._all }))
+          : (
+              await db.crmDeal.groupBy({
+                by: ["companyId"],
+                where: { organizationId: orgId, companyId: { in: [a, b] }, deletedAt: null },
+                _count: { _all: true },
+              })
+            ).map((d) => ({ id: d.companyId, n: d._count._all }));
+      return (id: string) => ({
+        activities: activities.find((x) => x.targetId === id)?._count._all ?? 0,
+        deals: deals.find((x) => x.id === id)?.n ?? 0,
+      });
+    };
+
+    const people = await db.crmPerson.findMany({
+      where: { organizationId: orgId, id: { in: [a, b] }, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        primaryEmail: true,
+        phone: true,
+        companyId: true,
+        company: { select: { name: true } },
+        ownerId: true,
+        ownerRoleKey: true,
+        relationship: true,
+        source: true,
+        createdAt: true,
+        emails: { select: { email: true } },
+      },
+    });
+    if (people.length === 2) {
+      const ordered = [people.find((p) => p.id === a)!, people.find((p) => p.id === b)!];
+      const counts = await countsFor("person");
+      const sides = ordered.map((p): MergeSideData => {
+        const c = counts(p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          line: added(p.source, p.createdAt),
+          activities: c.activities,
+          deals: c.deals,
+          values: {
+            name: p.name,
+            primaryEmail: p.primaryEmail,
+            phone: p.phone,
+            companyId: p.companyId,
+            ownerId: p.ownerId,
+          },
+          labels: {
+            name: p.name,
+            primaryEmail: p.primaryEmail,
+            phone: p.phone,
+            companyId: p.company?.name ?? null,
+            // A Personal space has one owner: no Owner row to pick.
+            ownerId: shell.access.personal ? null : ownerLabel(p, shell.roles, names),
+          },
+        };
+      });
+      const [pa, pb] = ordered as [(typeof ordered)[number], (typeof ordered)[number]];
+      const score = scorePeople(
+        { id: pa.id, name: pa.name, phone: pa.phone, companyId: pa.companyId, emails: pa.emails.map((e) => e.email) },
+        { id: pb.id, name: pb.name, phone: pb.phone, companyId: pb.companyId, emails: pb.emails.map((e) => e.email) },
+      );
+      const reasons = suggested?.reasons?.length ? suggested.reasons : score.reasons;
+      const same = [
+        pa.relationship && pa.relationship === pb.relationship
+          ? (relationships.get(pa.relationship) ?? pa.relationship)
+          : null,
+        pa.companyId && pa.companyId === pb.companyId ? pa.company?.name : null,
+      ].filter((v): v is string => Boolean(v));
+      return {
+        kind: "person",
+        why: reasons.length ? `${sentence(reasons)}.` : null,
+        sides: [sides[0]!, sides[1]!],
+        same,
+      };
+    }
+
+    const companies = await db.crmCompany.findMany({
+      where: { organizationId: orgId, id: { in: [a, b] }, deletedAt: null },
+      select: { id: true, name: true, domain: true, website: true, ownerId: true, ownerRoleKey: true, createdAt: true },
+    });
+    if (companies.length !== 2) return null;
+    const ordered = [companies.find((c) => c.id === a)!, companies.find((c) => c.id === b)!];
+    const counts = await countsFor("company");
+    const sides = ordered.map((c): MergeSideData => {
+      const n = counts(c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        line: added(null, c.createdAt).replace("Added by hand", "Added"),
+        activities: n.activities,
+        deals: n.deals,
+        values: { name: c.name, primaryEmail: null, phone: null, companyId: null, ownerId: c.ownerId },
+        labels: {
+          name: c.name,
+          primaryEmail: c.domain ?? c.website,
+          phone: null,
+          companyId: null,
+          ownerId: ownerLabel(c, shell.roles, names),
+        },
+      };
+    });
+    const score = scoreCompanies(ordered[0]!, ordered[1]!);
+    const reasons = suggested?.reasons?.length ? suggested.reasons : score.reasons;
+    return {
+      kind: "company",
+      why: reasons.length ? `${duplicateReason(reasons[0]!, ordered[1]!.name)}.` : null,
+      sides: [sides[0]!, sides[1]!],
+      same: [],
+    };
+  });
+  return <MergeCard orgId={shell.org.id} data={data} />;
+}

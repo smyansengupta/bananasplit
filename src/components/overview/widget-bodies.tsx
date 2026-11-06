@@ -1,33 +1,38 @@
-import { formatDistanceToNow } from "date-fns";
-import { Check, ClipboardList, Globe, ListChecks, Vote } from "@/components/icons";
+import { Check, ClipboardList, FileText, Globe, ListChecks, Vote } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
 import { PIN_KIND_LABELS } from "@/components/shell/pin-icons";
-import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { dayWordOfKey } from "@/lib/overview/format";
 import type { PinKind } from "@/lib/pins/pages";
 import { ago } from "@/lib/relative-time";
 import { tagToken } from "@/lib/tag-colors";
 import { localDateKey } from "@/lib/tasks/dates";
-import type { OpenFormStat } from "@/server/overview/queries";
+import type { OpenFormStat, PickUpChange } from "@/server/overview/queries";
 
-import { KindIcon, KindTile } from "./kind-tiles";
+import { LinkChips, type ItemRef } from "./connections";
+import { KIND_ICON, KindIcon, SECTION_ICON, kindToken, pageSection } from "./kind-tiles";
 
 /**
  * Bodies of the Overview widgets (redesign guide 9.2), as server
- * components: the board places them in its cards. Pages, notes, files and
- * pins are coloured tiles, one colour per kind (kind-tiles.tsx); open
- * forms are bars of their responses.
+ * components: the board places them in its cards. Pick up where you left
+ * off lists the pages you opened, each in its kind's colour
+ * (kind-tiles.tsx), with what changed since; open forms are bars of their
+ * responses, with what's new and what each is linked to.
  */
 
-const TILE_GRID = "grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]";
-
+/**
+ * "Pick up where you left off": the pages you opened, newest first, each
+ * saying what changed since you last opened it where that can be counted
+ * (loadPickUpChanges), else when you opened it.
+ */
 export function RecentList({
   items,
+  changes,
   now,
 }: {
   items: readonly { href: string; label: string; kind: PinKind; visitedAt: Date }[];
+  changes?: ReadonlyMap<string, PickUpChange>;
   now: Date;
 }) {
   if (items.length === 0) {
@@ -40,17 +45,39 @@ export function RecentList({
     );
   }
   return (
-    <ul className={TILE_GRID}>
-      {items.map((item) => (
-        <li key={item.href} className="min-w-0">
-          <KindTile
-            href={item.href}
-            kind={item.kind}
-            title={item.label}
-            sub={`${PIN_KIND_LABELS[item.kind] ?? "Page"}, ${ago(item.visitedAt, now)}`}
-          />
-        </li>
-      ))}
+    <ul className="divide-border/70 divide-y">
+      {items.map((item) => {
+        const Icon =
+          SECTION_ICON[pageSection(item.kind, item.href)] ?? KIND_ICON[item.kind] ?? FileText;
+        const change = changes?.get(item.href);
+        return (
+          <li key={item.href} className="py-1 first:pt-0 last:pb-0">
+            <Link
+              href={item.href}
+              className="hover:bg-muted/60 rounded-field -mx-2 flex min-w-0 items-center gap-3 px-2 py-2"
+            >
+              <KindIcon
+                color={kindToken(item.kind, item.href)}
+                className="size-9 rounded-[11px] [&_svg]:size-4"
+              >
+                <Icon />
+              </KindIcon>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14.5px] font-semibold">{item.label}</span>
+                <span className="text-muted-foreground mt-0.5 block truncate text-[12.5px]">
+                  {change?.line ??
+                    `${PIN_KIND_LABELS[item.kind] ?? "Page"}, opened ${ago(item.visitedAt, now)}`}
+                </span>
+              </span>
+              {change && change.fresh > 0 && (
+                <span className="bg-tint-info text-tint-info-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
+                  {change.fresh} new
+                </span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -74,18 +101,27 @@ const FORM_KIND: Record<
  * Open forms, as the Forms list has them: forms, quick polls, member polls
  * and website polls, each a bar of its responses. Where who can answer is
  * a known number the bar runs to it ("12 of 40"); otherwise the bars
- * compare the forms' response counts with each other.
+ * compare the forms' response counts with each other. Under each: how many
+ * came in this week and wait on a review, and chips for what it's linked to.
+ * A form whose responses the viewer can't read (a member: they're owners'
+ * and admins' to read) shows no count and no bar, only how long it's open.
  */
 export function PollList({
   orgSlug,
   forms,
   now,
   timeZone,
+  fresh,
+  links,
 }: {
   orgSlug: string;
   forms: readonly OpenFormStat[];
   now: Date;
   timeZone: string;
+  /** A form's responses in the last seven days, by form id. */
+  fresh?: ReadonlyMap<string, number>;
+  /** What each form is linked to, by form id. */
+  links?: ReadonlyMap<string, readonly ItemRef[]>;
 }) {
   if (forms.length === 0) {
     return (
@@ -105,64 +141,86 @@ export function PollList({
     );
   }
   const todayKey = localDateKey(now, timeZone);
-  const loudest = Math.max(1, ...forms.filter((f) => f.outOf === null).map((f) => f.responses));
-  const total = forms.reduce((n, f) => n + f.responses, 0);
+  const counted = forms.flatMap((f) => (f.responses === null ? [] : [f.responses]));
+  const loudest = Math.max(
+    1,
+    ...forms.flatMap((f) => (f.outOf === null && f.responses !== null ? [f.responses] : [])),
+  );
+  const total = counted.reduce((n, r) => n + r, 0);
   return (
     <div className="space-y-4">
-      <p className="flex items-baseline gap-2">
-        <b className="numeral text-[32px] leading-none">{total}</b>
-        <span className="text-muted-foreground text-[13px]">
-          {total === 1 ? "response" : "responses"} so far
-        </span>
-      </p>
+      {counted.length > 0 && (
+        <p className="flex items-baseline gap-2">
+          <b className="numeral text-[32px] leading-none">{total}</b>
+          <span className="text-muted-foreground text-[13px]">
+            {total === 1 ? "response" : "responses"} so far
+          </span>
+        </p>
+      )}
       <ul className="space-y-3.5">
         {forms.map((f) => {
           const kind = FORM_KIND[f.kind];
-          const outOf = f.outOf !== null ? Math.max(f.outOf, f.responses) : null;
-          const pct = (f.responses / Math.max(1, outOf ?? loudest)) * 100;
-          const closes = f.closesAt
-            ? `closes ${closesWord(dayWordOfKey(localDateKey(f.closesAt, timeZone), todayKey))}`
+          const responses = f.responses;
+          const outOf =
+            f.outOf !== null && responses !== null ? Math.max(f.outOf, responses) : null;
+          const pct = responses !== null ? (responses / Math.max(1, outOf ?? loudest)) * 100 : 0;
+          const until = f.closesAt
+            ? closesWord(dayWordOfKey(localDateKey(f.closesAt, timeZone), todayKey))
+            : null;
+          // Without counts the line says how long it's open, which is all there is.
+          const closes = until
+            ? `${responses === null ? "open until" : "closes"} ${until}`
             : "open";
+          const week = fresh?.get(f.id) ?? 0;
+          const chips = links?.get(f.id) ?? [];
           return (
-            <li key={f.id}>
-              <Link href={f.href} className="group/form flex items-start gap-3">
-                <KindIcon color={kind.color} className="size-8 rounded-[10px] [&_svg]:size-4">
-                  <kind.Icon />
-                </KindIcon>
-                <span className="min-w-0 flex-1">
+            <li key={f.id} className="flex items-start gap-3">
+              <KindIcon color={kind.color} className="size-8 rounded-[10px] [&_svg]:size-4">
+                <kind.Icon />
+              </KindIcon>
+              <span className="min-w-0 flex-1">
+                <Link href={f.href} className="group/form block">
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="min-w-0 truncate text-[14px] font-semibold group-hover/form:underline">
                       {f.title}
                     </span>
-                    <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-                      {outOf !== null ? (
-                        <>
-                          {f.responses}
-                          <span className="text-muted-foreground font-medium">/{outOf}</span>
-                        </>
-                      ) : (
-                        f.responses
-                      )}
-                    </span>
+                    {responses !== null && (
+                      <span className="shrink-0 text-[13px] font-semibold tabular-nums">
+                        {outOf !== null ? (
+                          <>
+                            {responses}
+                            <span className="text-muted-foreground font-medium">/{outOf}</span>
+                          </>
+                        ) : (
+                          responses
+                        )}
+                      </span>
+                    )}
                   </span>
-                  <span
-                    role="img"
-                    aria-label={
-                      outOf !== null
-                        ? `${f.responses} of ${outOf} answered`
-                        : `${f.responses} ${f.responses === 1 ? "response" : "responses"}`
-                    }
-                    className="bg-muted-strong mt-1.5 block h-2 overflow-hidden rounded-full"
-                  >
+                  {responses !== null && (
                     <span
-                      className="block h-full rounded-full bg-(--chart-1) transition-[width] duration-700"
-                      style={{ width: `${Math.max(pct, f.responses > 0 ? 4 : 0)}%` }}
-                    />
-                  </span>
+                      role="img"
+                      aria-label={
+                        outOf !== null
+                          ? `${responses} of ${outOf} answered`
+                          : `${responses} ${responses === 1 ? "response" : "responses"}`
+                      }
+                      className="bg-muted-strong mt-1.5 block h-2 overflow-hidden rounded-full"
+                    >
+                      <span
+                        className="block h-full rounded-full bg-(--chart-1) transition-[width] duration-700"
+                        style={{ width: `${Math.max(pct, responses > 0 ? 4 : 0)}%` }}
+                      />
+                    </span>
+                  )}
                   <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
                     <span>
                       {kind.word}, {closes}
                     </span>
+                    {week > 0 && <span>{week} new this week</span>}
+                    {f.toReview > 0 && (
+                      <span className="text-foreground font-semibold">{f.toReview} to review</span>
+                    )}
                     {f.mine && (
                       <span className="bg-tint-success text-tint-success-foreground inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[11.5px] font-semibold">
                         <Check className="size-3" strokeWidth={3} aria-hidden="true" />
@@ -170,129 +228,13 @@ export function PollList({
                       </span>
                     )}
                   </span>
-                </span>
-              </Link>
+                </Link>
+                <LinkChips items={chips} className="mt-2" />
+              </span>
             </li>
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-export function NoteList({
-  orgSlug,
-  notes,
-}: {
-  orgSlug: string;
-  notes: {
-    id: string;
-    title: string;
-    visibility: string;
-    updatedAt: Date;
-    updatedBy: { name: string | null } | null;
-  }[];
-}) {
-  if (notes.length === 0) {
-    return (
-      <EmptyState
-        size="compact"
-        title="No notes yet"
-        action={
-          <Link
-            href={`/app/${orgSlug}/notes`}
-            className="text-sm font-semibold underline underline-offset-4"
-          >
-            Write the first one
-          </Link>
-        }
-      />
-    );
-  }
-  return (
-    <ul className={TILE_GRID}>
-      {notes.map((n) => (
-        <li key={n.id} className="min-w-0">
-          <KindTile
-            href={`/app/${orgSlug}/notes/${n.id}`}
-            kind="note"
-            title={n.title || "Untitled note"}
-            sub={`${n.visibility === "PRIVATE" ? "Private, " : ""}${n.updatedBy?.name ?? "Someone"}, ${formatDistanceToNow(n.updatedAt, { addSuffix: true })}`}
-          />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function FileList({
-  orgSlug,
-  files,
-}: {
-  orgSlug: string;
-  files: { id: string; name: string; contentType: string; createdAt: Date }[];
-}) {
-  if (files.length === 0) {
-    return <EmptyState size="compact" title="No files yet" />;
-  }
-  return (
-    <ul className={TILE_GRID}>
-      {files.map((f) => (
-        <li key={f.id} className="min-w-0">
-          <KindTile
-            href={`/app/${orgSlug}/notes/files/${f.id}`}
-            kind="file"
-            title={f.name}
-            sub={formatDistanceToNow(f.createdAt, { addSuffix: true })}
-          />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** People as an avatar grid with the count. */
-export function PeopleList({
-  orgSlug,
-  people,
-  total,
-}: {
-  orgSlug: string;
-  people: {
-    userId: string;
-    title: string | null;
-    user: UserAvatarUser & { name: string | null };
-  }[];
-  total: number;
-}) {
-  return (
-    <div className="space-y-3">
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-x-2 gap-y-3">
-        {people.map((p) => (
-          <li key={p.userId}>
-            <Link
-              href={`/app/${orgSlug}/people/${p.userId}`}
-              title={p.title ? `${p.user.name ?? "Member"}, ${p.title}` : (p.user.name ?? "Member")}
-              className="group/person flex flex-col items-center gap-1.5 text-center"
-            >
-              <UserAvatar
-                user={p.user}
-                size="lg"
-                className="transition-transform duration-200 group-hover/person:-translate-y-0.5"
-              />
-              <span className="w-full truncate text-[12px] font-medium">
-                {p.user.name?.split(/\s+/)[0] ?? "Member"}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <Link
-        href={`/app/${orgSlug}/people`}
-        className="text-muted-foreground hover:text-foreground block text-[13px] font-medium"
-      >
-        All {total} member{total === 1 ? "" : "s"}
-      </Link>
     </div>
   );
 }

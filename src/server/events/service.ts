@@ -467,6 +467,24 @@ async function afterSave(
       runAt: new Date(Date.now() + 60_000),
     });
   }
+  // A meeting booked on a meeting link that was moved or deleted here (the
+  // calendar, the meeting's page): the booking follows and its guest is
+  // told (src/server/booking/manage.ts). Bookings are read under RLS, which
+  // shows them to their host and to owners and admins, who are the people
+  // who can move the meeting; the job does the rest on the service path.
+  const moved =
+    action === "event.deleted" ||
+    (before !== null &&
+      (before.startsAt.getTime() !== after.startsAt.getTime() ||
+        before.endsAt.getTime() !== after.endsAt.getTime()));
+  if (moved && (await ctx.db.booking.findFirst({ where: { organizationId: ctx.organizationId, eventId: after.id }, select: { id: true } }))) {
+    await enqueueJob(ctx.db, {
+      orgId: ctx.organizationId,
+      kind: "booking-sync",
+      key: `${after.id}:${after.syncVersion}`,
+      payload: { eventId: after.id },
+    });
+  }
   if (action === "event.deleted") {
     // An RSVP page's guests are told it's off (not a merge: mergeEvents
     // won't merge away a live page that people signed up on). Its queued

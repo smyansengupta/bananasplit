@@ -9,14 +9,19 @@ import { planGate } from "@/server/billing/plan-gate";
 
 import { SettingsCard } from "../settings-card";
 import { SettingsNoAccess } from "../settings-no-access";
-import { ConnectorsSwitchForm, DatabaseVisibilityRow, PrivacySettings } from "./privacy-forms";
+import {
+  ConnectorsSwitchForm,
+  DatabaseDeleteSwitch,
+  DatabaseVisibilityRow,
+  PrivacySettings,
+} from "./privacy-forms";
 
 /**
  * Admin panel › Privacy (OWNER/ADMIN): ballots (who sees individual votes,
  * OWNER-only to change; whether members see results; the smallest group
  * shown), member and contact emails, the public events feed, AI apps while
- * the deployment has them, and who can browse each database. Every control
- * saves as it changes.
+ * the deployment has them, who can browse each database, and whether
+ * members may delete databases. Every control saves as it changes.
  */
 export default async function PrivacySettingsPage({
   params,
@@ -40,6 +45,7 @@ export default async function PrivacySettingsPage({
         publicEventsEnabled: true,
         contactEmailVisibility: true,
         connectorsEnabled: true,
+        memberCanDeleteDatabases: true,
       },
     }),
     databases: await db.databaseDefinition.findMany({
@@ -79,6 +85,12 @@ export default async function PrivacySettingsPage({
         )}
 
         <SettingsCard title="Databases" description="Admins can always open hidden databases.">
+          <div className="border-border/70 border-b pb-4">
+            <DatabaseDeleteSwitch
+              orgId={organization.id}
+              value={settings.memberCanDeleteDatabases}
+            />
+          </div>
           {databases.length === 0 ? (
             <EmptyState size="compact" icon={Database} title="No databases yet." className="py-0" />
           ) : (

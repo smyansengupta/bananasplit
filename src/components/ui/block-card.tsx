@@ -56,7 +56,7 @@ const ON_KIND = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
 const ACCENT_STYLE: React.CSSProperties = {
   background: "var(--kind)",
   color: ON_KIND,
-  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 74%, var(--kind))`,
+  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 88%, var(--kind))`,
   ["--ring-bg" as string]: "var(--kind)",
 };
 
@@ -73,6 +73,7 @@ export function BlockCard({
   href,
   children,
   className,
+  live,
 }: {
   tone: BlockTone;
   /**
@@ -94,6 +95,8 @@ export function BlockCard({
   href?: string;
   children?: ReactNode;
   className?: string;
+  /** About to start ("soon") or under way ("now"): a ring and a breathing dot by the kicker. */
+  live?: "soon" | "now";
 }) {
   const ref = useRef<HTMLElement>(null);
 
@@ -161,7 +164,12 @@ export function BlockCard({
           )}
         </h3>
       )}
-      {title && kicker && <p className="text-[13px] font-medium text-(--meta)">{kicker}</p>}
+      {title && kicker && (
+        <p className="flex items-center gap-2 text-[13px] font-medium text-(--meta)">
+          {live === "now" && <span aria-hidden="true" className="live-dot" />}
+          {kicker}
+        </p>
+      )}
       {subtitle && <p className="text-sm text-(--meta)">{subtitle}</p>}
       {children}
       {(figure !== undefined || aside) && (

@@ -98,6 +98,29 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
 }
 
 /** The next `limit` events that have not ended yet (one under way included), for the overview. */
+/** Meetings and events that ended in the last `withinMs` (Up next's "Just ended"), latest first. */
+export function getRecentlyEnded(
+  db: TxClient,
+  organizationId: string,
+  now: Date,
+  withinMs: number,
+  limit: number,
+) {
+  return db.event.findMany({
+    where: {
+      organizationId,
+      deletedAt: null,
+      mergedIntoId: null,
+      // An all-day event "ends" at midnight; there's nothing just over to follow up.
+      allDay: false,
+      endsAt: { gt: new Date(now.getTime() - withinMs), lte: now },
+    },
+    select: calendarEventSelect,
+    orderBy: [{ endsAt: "desc" }, { id: "asc" }],
+    take: limit,
+  });
+}
+
 export function getUpcomingEvents(
   db: TxClient,
   organizationId: string,

@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { Role, TaskStatus } from "@/generated/prisma/enums";
 import { can } from "@/lib/auth/permissions";
 import { formatEventWhen } from "@/lib/calendar/format";
+import { crmPeopleHref, crmRecordHref } from "@/lib/crm/href";
 import { DELETED_TRANSACTION_REASON } from "@/lib/finance/deleted";
 import { formatCents, parseDollarsToCents } from "@/lib/finance/money";
 import { formatFinanceDate } from "@/lib/finance/stats";
@@ -30,6 +31,8 @@ import {
   type ServerGroupId,
 } from "@/lib/search/types";
 import { dueDateKey, formatDueKey } from "@/lib/tasks/dates";
+import { crmAccess } from "@/server/crm/access";
+import { financeCrmLinks } from "@/server/crm/outside-links";
 import { LISTED_DEFINITIONS } from "@/server/databases/types";
 import type { TxClient } from "@/server/db/context";
 import { noteVisibleSql } from "@/server/notes/visibility";
@@ -40,7 +43,7 @@ import { everyWord } from "./where";
 /**
  * Workspace search for the ⌘K palette: notes (full text, prefix-matched),
  * files, folders, tasks, projects and labels, events, polls, people,
- * org-chart roles, databases and finance, as the member under RLS.
+ * org-chart roles, databases, finance and the CRM, as the member under RLS.
  *
  * Every query runs in the caller's transaction (one connection, so one
  * after another), each capped, so a search costs a dozen small indexed
@@ -64,6 +67,8 @@ export interface SearchViewer {
   zones: { viewer: string; org: string };
   /** Sections the org turned off in Settings › Sidebar. */
   hiddenSections: ReadonlySet<SectionId>;
+  /** Add-ons the org hasn't added: left out for everyone (src/lib/addons.ts). */
+  notAddedSections?: ReadonlySet<SectionId>;
   /** The published org chart, if any. */
   orgChartVersionId: string | null;
   /** A Personal space: its databases are its owner's, not the club's. */
@@ -719,7 +724,7 @@ async function searchPeople(ctx: Ctx): Promise<SearchGroup> {
 
 /**
  * Roles on the published org chart: by title, who holds it, and what it is
- * responsible for ("who handles sponsors?"). A chart is small, so it is read
+ * responsible for ("who handles partners?"). A chart is small, so it is read
  * whole and matched here, where the responsibility lists can be searched.
  */
 async function searchRoles(ctx: Ctx): Promise<SearchGroup> {
@@ -852,7 +857,7 @@ function amountQuery(text: string): number | null {
 
 /**
  * Finance. Owners, admins and treasurers: the ledger (description, counterparty,
- * category, or the amount itself) and sponsors. Everyone else: only their
+ * category, or the amount itself) and Deals' partners (Sponsor rows). Everyone else: only their
  * own expenses, which open on My reimbursements.
  */
 async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
@@ -919,11 +924,22 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
             id: true,
             name: true,
             contactName: true,
+            contactEmail: true,
             _count: { select: { sponsorships: true } },
           },
           take: ctx.pool,
         })
       : [];
+  // A partner that's in the CRM opens as its card there.
+  const inCrm = sponsors.length
+    ? (
+        await financeCrmLinks(
+          { db, organizationId: viewer.orgId, userId: viewer.userId, role: viewer.role },
+          viewer.orgSlug,
+          { sponsors, sponsorshipIds: [] },
+        )
+      ).partners
+    : {};
 
   // Budget lines of the active period (finance roles; members can't read
   // them), so a meeting or a task can be linked to the line it spends from.
@@ -983,9 +999,9 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
     ...sponsors.map((s) =>
       hit("sponsor", s.id, {
         title: s.name,
-        href: `${ctx.base}/finance/sponsorships`,
+        href: inCrm[s.id] ?? `${ctx.base}/finance/deals`,
         detail: s.contactName ?? null,
-        meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "sponsorship" : "sponsorships"}`,
+        meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "deal" : "deals"}`,
         score: scoreFields(
           [
             { text: s.name, weight: 3 },
@@ -997,6 +1013,143 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
     ),
   ];
   return group("finance", ctx.browsing ? hits.slice(0, ctx.limit) : rank(hits, ctx.limit));
+}
+
+// ---------------------------------------------------------------- crm
+
+/**
+ * The CRM's people, companies and deals (docs/features/crm.md), each
+ * opening as its card (src/lib/crm/href.ts). Only where the space added
+ * the CRM and its plan (or trial) has it, Personal spaces included; the
+ * database decides whose records a member sees (with "members see their
+ * own", only what they own or made), so a search never shows a row the
+ * CRM wouldn't. Nothing in the trash.
+ */
+async function searchCrmRecords(ctx: Ctx): Promise<SearchGroup> {
+  const { db, viewer, q } = ctx;
+  const access = await crmAccess({
+    db,
+    organizationId: viewer.orgId,
+    userId: viewer.userId,
+    role: viewer.role,
+  });
+  if (!access.added || !access.onPlan) return group("crm", []);
+  const relationship = new Map(
+    (access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
+  );
+  const live = { organizationId: viewer.orgId, deletedAt: null };
+  const order = ctx.browsing ? ({ updatedAt: "desc" } as const) : ({ name: "asc" } as const);
+  const people = await db.crmPerson.findMany({
+    where: {
+      ...live,
+      ...everyWord<Prisma.CrmPersonWhereInput>(q.terms, (c) => [
+        { name: c },
+        { title: c },
+        { company: { name: c } },
+        { emails: { some: { email: c } } },
+      ]),
+    },
+    orderBy: order,
+    select: {
+      id: true,
+      name: true,
+      title: true,
+      primaryEmail: true,
+      relationship: true,
+      company: { select: { name: true } },
+    },
+    take: ctx.pool,
+  });
+  const companies = await db.crmCompany.findMany({
+    where: {
+      ...live,
+      ...everyWord<Prisma.CrmCompanyWhereInput>(q.terms, (c) => [
+        { name: c },
+        { domain: c },
+        { industry: c },
+      ]),
+    },
+    orderBy: order,
+    select: { id: true, name: true, domain: true, industry: true },
+    take: ctx.pool,
+  });
+  const deals = await db.crmDeal.findMany({
+    where: {
+      ...live,
+      ...everyWord<Prisma.CrmDealWhereInput>(q.terms, (c) => [
+        { title: c },
+        { company: { name: c } },
+      ]),
+    },
+    orderBy: ctx.browsing ? { updatedAt: "desc" } : { title: "asc" },
+    select: {
+      id: true,
+      title: true,
+      amountCents: true,
+      currency: true,
+      stage: { select: { name: true } },
+      company: { select: { name: true } },
+    },
+    take: ctx.pool,
+  });
+  const slug = viewer.orgSlug;
+  const hits = [
+    ...people.map((p) =>
+      hit("crm-person", p.id, {
+        title: p.name,
+        href: crmRecordHref(slug, "person", p.id),
+        detail: join(p.title, p.company?.name),
+        meta: (p.relationship && relationship.get(p.relationship)) || "Person",
+        score: scoreFields(
+          [
+            { text: p.name, weight: 3 },
+            { text: p.title, weight: 1 },
+            { text: p.company?.name, weight: 1 },
+            { text: p.primaryEmail, weight: 1 },
+          ],
+          q,
+        ),
+      }),
+    ),
+    ...companies.map((c) =>
+      hit("crm-company", c.id, {
+        title: c.name,
+        href: crmRecordHref(slug, "company", c.id),
+        detail: join(c.industry, c.domain),
+        meta: "Company",
+        score: scoreFields(
+          [
+            { text: c.name, weight: 3 },
+            { text: c.domain, weight: 1 },
+            { text: c.industry, weight: 1 },
+          ],
+          q,
+        ),
+      }),
+    ),
+    ...deals.map((d) =>
+      hit("crm-deal", d.id, {
+        title: d.title,
+        href: crmRecordHref(slug, "deal", d.id),
+        detail: join(d.stage.name, d.company?.name),
+        meta: d.amountCents != null ? formatCents(d.amountCents, d.currency) : "Deal",
+        score: scoreFields(
+          [
+            { text: d.title, weight: 3 },
+            { text: d.company?.name, weight: 1 },
+          ],
+          q,
+        ),
+      }),
+    ),
+  ];
+  const more = ctx.browsing
+    ? null
+    : {
+        href: `${crmPeopleHref(slug)}?q=${encodeURIComponent(q.text)}`,
+        label: `Search all CRM people for “${q.text}”`,
+      };
+  return group("crm", ctx.browsing ? hits.slice(0, ctx.limit) : rank(hits, ctx.limit), more);
 }
 
 // ---------------------------------------------------------------- entry
@@ -1013,6 +1166,7 @@ const SEARCHERS: Record<ServerGroupId, (ctx: Ctx) => Promise<SearchGroup>> = {
   roles: searchRoles,
   databases: searchDatabases,
   finance: searchFinance,
+  crm: searchCrmRecords,
 };
 
 const RECENT_KIND: Record<string, SearchKind> = {
@@ -1040,12 +1194,13 @@ function sectionOf(href: string, base: string): SectionId | null {
 /** Which groups a search reads: the filter's, minus sections the org hid (unless admin). */
 export function groupsFor(
   scope: SearchScope,
-  viewer: Pick<SearchViewer, "role" | "hiddenSections">,
+  viewer: Pick<SearchViewer, "role" | "hiddenSections" | "notAddedSections">,
 ): ServerGroupId[] {
   const admin = can({ role: viewer.role }, "settings.view");
   return SERVER_GROUPS.filter((id) => {
     if (scope !== "all" && GROUP_SCOPE[id] !== scope) return false;
     const section = GROUP_SECTION[id];
+    if (section && viewer.notAddedSections?.has(section)) return false;
     return admin || !section || !viewer.hiddenSections.has(section);
   });
 }
@@ -1078,6 +1233,7 @@ export async function searchWorkspace(
     const recent = (await listRecent(db, viewer.orgId, viewer.orgSlug, viewer.userId, 10))
       .filter((r) => {
         const section = sectionOf(r.href, base);
+        if (section && viewer.notAddedSections?.has(section)) return false;
         return admin || !section || !viewer.hiddenSections.has(section);
       })
       .slice(0, 6);

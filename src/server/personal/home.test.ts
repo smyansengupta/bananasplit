@@ -256,6 +256,96 @@ describe("shapePersonalHome", () => {
     ]);
   });
 
+  it("gathers what your organizations hold for you, labelled, sorted and linked", () => {
+    const at = (iso: string) => new Date(iso);
+    const data = shapePersonalHome(
+      raw({
+        spaces: [
+          { space: personal, digest: digest() },
+          {
+            space: robotics,
+            digest: digest({
+              grabs: [
+                { id: "g1", title: "Order parts", dueDate: null },
+                { id: "g2", title: "Book the room", dueDate: at("2026-10-15T00:00:00Z") },
+              ],
+              invites: [
+                {
+                  id: "e1",
+                  title: "Build night",
+                  startsAt: at("2026-10-16T23:00:00Z"),
+                  endsAt: at("2026-10-17T01:00:00Z"),
+                  allDay: false,
+                },
+              ],
+              formsWaiting: [
+                { id: "f1", title: "Officer interest", slug: "officers", closesAt: null },
+              ],
+              reimbursements: [
+                {
+                  id: "r1",
+                  description: "Pizza",
+                  amountCents: 4250,
+                  status: "SUBMITTED",
+                  createdAt: at("2026-10-07T00:00:00Z"),
+                },
+              ],
+              approvals: {
+                count: 2,
+                description: "Tape",
+                amountCents: 1800,
+                createdAt: at("2026-10-09T00:00:00Z"),
+                by: "Lucas",
+              },
+              updates: [
+                {
+                  id: "n1",
+                  title: "Oliver mentioned you",
+                  body: null,
+                  linkUrl: "/app/robotics/notes/x",
+                  createdAt: at("2026-10-13T14:00:00Z"),
+                  actor: null,
+                },
+              ],
+            }),
+          },
+          {
+            space: chess,
+            digest: digest({
+              grabs: [{ id: "g3", title: "Bring boards", dueDate: at("2026-10-14T00:00:00Z") }],
+              updates: [
+                {
+                  id: "n2",
+                  title: "You were assigned",
+                  body: null,
+                  linkUrl: null,
+                  createdAt: at("2026-10-13T14:30:00Z"),
+                  actor: null,
+                },
+              ],
+            }),
+          },
+        ],
+      }),
+      NOW,
+    );
+    // Due soonest first, no due date last.
+    expect(data.grabs?.map((g) => g.id)).toEqual(["g3", "g2", "g1"]);
+    expect(data.grabs?.[0]).toMatchObject({ dueKey: "2026-10-14", href: "/app/chess/tasks/g3" });
+    expect(data.invites?.[0]).toMatchObject({ href: "/app/robotics/calendar/e1" });
+    expect(data.invites?.[0]?.space.name).toBe("Robotics");
+    expect(data.formsWaiting?.[0]?.href).toBe("/f/officers");
+    expect(data.reimbursements?.[0]?.href).toBe("/app/robotics/finance/my-reimbursements?open=r1");
+    expect(data.approvals).toEqual([
+      expect.objectContaining({ count: 2, href: "/app/robotics/inbox" }),
+    ]);
+    // Newest first; without a link it opens that organization's Inbox.
+    expect(data.updates?.map((n) => [n.id, n.href])).toEqual([
+      ["n2", "/app/chess/inbox"],
+      ["n1", "/app/robotics/notes/x"],
+    ]);
+  });
+
   it("turns sign-ups into ticket links and Personal pages into hosted pages", () => {
     const data = shapePersonalHome(
       raw({
@@ -366,5 +456,48 @@ describe("profileGapsOf / Finish your profile", () => {
   it("counts links alone as a bio", () => {
     const links = [{ kind: "github", url: "https://github.com/maya" }];
     expect(profileGapsOf({ ...user, bio: null, links })).toEqual([]);
+  });
+});
+
+describe("Focus time on the Personal home", () => {
+  const evening = (id: string) => ({
+    id,
+    title: "Build night",
+    // Thursday 6 to 9 PM in Chicago.
+    startsAt: at("2026-10-15T23:00:00Z"),
+    endsAt: at("2026-10-16T02:00:00Z"),
+    allDay: false,
+    kind: "WORKSHOP" as const,
+    location: null,
+  });
+  const freeHours = (rsvp: "YES" | "NO" | null) => {
+    const data = shapePersonalHome(
+      raw({
+        spaces: [
+          { space: personal, digest: digest() },
+          {
+            space: robotics,
+            digest: digest({
+              events: [evening("e1")],
+              rsvps: rsvp ? new Map([["e1", rsvp]]) : new Map(),
+            }),
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(data.personalOrgId).toBe("p1");
+    expect(data.focus?.availabilityHref).toBe("/app/me-abc/profile");
+    return data.focus!.week.days.reduce((n, d) => n + d.free, 0);
+  };
+
+  it("counts an organization's event as busy only once you said yes", () => {
+    expect(freeHours("NO")).toBe(freeHours(null));
+    expect(freeHours("YES")).toBeLessThan(freeHours(null));
+  });
+
+  it("is left out without a Personal space", () => {
+    const data = shapePersonalHome(raw({ spaces: [{ space: robotics, digest: digest() }] }), NOW);
+    expect(data.focus).toBeNull();
   });
 });

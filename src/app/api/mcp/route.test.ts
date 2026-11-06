@@ -198,6 +198,11 @@ const READ_TOOLS = [
   "get_weekly_summary",
   "list_my_reimbursements",
   "list_open_polls",
+  "crm_search",
+  "crm_timeline",
+  "crm_not_contacted",
+  "crm_changes_since",
+  "crm_pipelines",
 ];
 
 /** What a WRITE grant adds (Phase 3), and whether each one overwrites. */
@@ -211,6 +216,14 @@ const WRITE_TOOLS: Record<string, { destructiveHint: boolean; idempotentHint: bo
   post_weekly_update: { destructiveHint: false, idempotentHint: true },
   vote_in_poll: { destructiveHint: true, idempotentHint: true },
   create_note: { destructiveHint: false, idempotentHint: false },
+  crm_create_person: { destructiveHint: false, idempotentHint: false },
+  crm_create_company: { destructiveHint: false, idempotentHint: false },
+  crm_update_record: { destructiveHint: false, idempotentHint: false },
+  crm_move_stage: { destructiveHint: false, idempotentHint: false },
+  crm_log_activity: { destructiveHint: false, idempotentHint: false },
+  crm_add_note: { destructiveHint: false, idempotentHint: false },
+  crm_build_list: { destructiveHint: false, idempotentHint: false },
+  crm_draft_email: { destructiveHint: false, idempotentHint: false },
 };
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: rateLimit,

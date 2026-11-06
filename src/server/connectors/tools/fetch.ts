@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { NotFoundError } from "@/lib/auth/errors";
 
+import { fetchCrmRecord } from "./crm";
 import { fetchDatabase } from "./databases";
 import { fetchEvent } from "./events";
 import { fetchExpense } from "./finance";
@@ -41,6 +42,9 @@ const FETCHERS: Record<
   person: fetchPerson,
   database: fetchDatabase,
   expense: fetchExpense,
+  crmperson: fetchCrmRecord,
+  crmcompany: fetchCrmRecord,
+  crmitem: fetchCrmRecord,
 };
 
 const input = z.object({
@@ -72,7 +76,7 @@ export const registerFetch: ToolRegistrar = (server, session) => {
     {
       title: "Fetch",
       description:
-        "Opens one item by the id search or a list tool returned (a note, task, event, poll, member, database or expense) and returns it as text with its link.",
+        "Opens one item by the id search or a list tool returned (a note, task, event, poll, member, database, expense or CRM record) and returns it as text with its link.",
       inputSchema: input,
       outputSchema: output,
       annotations: READ_ONLY,

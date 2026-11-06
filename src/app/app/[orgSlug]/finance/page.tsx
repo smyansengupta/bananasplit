@@ -22,7 +22,7 @@ import { getDashboardData } from "./queries";
  * widgets, under the header's Add transaction. It never dead-ends: until the
  * budget basics are in place the setup guide's banner sits on top (Finance ›
  * Set up), the board shows empty widgets, and the first transaction sets up
- * this school year by itself. Everyone else lands on their reimbursements.
+ * this year by itself. Everyone else lands on their reimbursements.
  */
 export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/finance">) {
   const { orgSlug } = await params;

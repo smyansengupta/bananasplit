@@ -69,6 +69,12 @@ const PROVIDER_LABEL: Record<IntegrationProvider, string> = {
   GOOGLE_MEET: "Google Meet connection",
   ZOOM: "Zoom connection",
   MICROSOFT_TEAMS: "Microsoft Teams connection",
+  TAVILY: "Tavily key",
+  HUNTER: "Hunter key",
+  PROSPEO: "Prospeo key",
+  TELNYX: "Telnyx key",
+  TWILIO: "Twilio key",
+  DEEPGRAM: "Deepgram key",
 };
 
 interface SecretRow {

@@ -1,18 +1,30 @@
 import { notFound } from "next/navigation";
 
 import { EventDetailView } from "@/components/calendar/event-detail-view";
+import { RetrySync } from "@/components/calendar/retry-sync";
 import { LinkedSection } from "@/components/links/linked-section";
 import { CreateMeetingNotes } from "@/components/meetings/create-meeting-notes";
+import {
+  CarryOver,
+  MeetingHeaderAmbient,
+  MeetingNotesAmbient,
+  RemindMaybes,
+  type HeaderKind,
+} from "@/components/meetings/meeting-ambient";
 import { MeetingTasks, type MeetingTask } from "@/components/meetings/meeting-tasks";
 import { MeetingJoinCard } from "@/components/meetings/meeting-join-card";
 import { MeetingRecording } from "@/components/meetings/meeting-recording";
+import { eventAmbient, needsSyncRetry } from "@/lib/ambient/calendar";
+import { meetingAmbient, undecidedMaybes, underWay } from "@/lib/ambient/meetings";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-status";
 import { parseDialIn } from "@/lib/meetings/dial-in";
 import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { crmForMeeting } from "@/server/crm/outside-links";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { loadMeetingAmbient } from "@/server/meetings/ambient";
 import { getOrgMembersForPicker } from "@/server/members";
 
 import { getEventById } from "../../calendar/queries";
@@ -37,7 +49,8 @@ export default async function MeetingPage({
   const { orgSlug, id } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const canEdit = can({ role }, "events.write");
-  const loaded = await withOrgTx(org.id, async ({ db }) => {
+  const loaded = await withOrgTx(org.id, async (ctx) => {
+    const { db } = ctx;
     const event = await getEventById(db, org.id, id, user.id);
     // Sign-up numbers for owners and admins (RLS shows sign-ups only to them).
     const signups =
@@ -79,9 +92,54 @@ export default async function MeetingPage({
           orderBy: [{ status: "asc" }, { dueDate: { sort: "asc", nulls: "last" } }],
         })
       : [];
-    return { event, signups, tasks };
+    // Who of its people are in the CRM (a booking's guest, attendees who are CRM people).
+    const crm = event
+      ? await crmForMeeting(
+          ctx,
+          orgSlug,
+          event.id,
+          event.attendees.map((a) => a.userId),
+        )
+      : null;
+    // Who booked it, for its host and admins only (the Booking's RLS hides it
+    // from everyone else, and the event itself carries none of it).
+    const booking = event
+      ? await db.booking.findFirst({
+          where: { organizationId: org.id, eventId: event.id },
+          select: { guestName: true, guestEmail: true, answers: true, verifiedAt: true },
+        })
+      : null;
+    // What its ambient buttons act on (src/server/meetings/ambient.ts).
+    const facts = event
+      ? await loadMeetingAmbient(
+          db,
+          org.id,
+          event,
+          {
+            ids: taskIds,
+            tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status })),
+          },
+          canEdit,
+        )
+      : null;
+    return { event, signups, tasks, crm, booking, facts };
   });
-  const { event, signups, tasks } = loaded;
+  const { event, signups, tasks, crm, facts } = loaded;
+  const booking = loaded.booking
+    ? {
+        name: loaded.booking.guestName,
+        email: loaded.booking.guestEmail,
+        confirmed: Boolean(loaded.booking.verifiedAt),
+        answers: (Array.isArray(loaded.booking.answers) ? loaded.booking.answers : []).flatMap(
+          (x) => {
+            const r = x as { q?: unknown; a?: unknown } | null;
+            return r && typeof r.q === "string" && typeof r.a === "string"
+              ? [{ q: r.q, a: r.a }]
+              : [];
+          },
+        ),
+      }
+    : null;
   const dueFmt = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -96,8 +154,56 @@ export default async function MeetingPage({
         .filter(Boolean)
         .join(", ") || null,
   }));
-  if (!event) notFound();
+  if (!event || !facts) notFound();
   const countOf = (s: string) => signups.find((r) => r.status === s)?._count._all ?? 0;
+  const rsvpUrl = event.rsvpSlug && event.rsvpEnabled ? appUrl(`/e/${event.rsvpSlug}`) : null;
+
+  // Its ambient buttons: decided here, from src/lib/ambient, so the first
+  // paint and the browser agree. The header gets the first two.
+  const now = new Date();
+  const whenMeeting = meetingAmbient(
+    {
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      timeZone: org.timezone,
+      canEdit,
+      agenda: event.description,
+      openItems: facts.openTasks.length + facts.carryOver.length,
+      joinUrl: event.conferenceUrl,
+    },
+    now,
+  );
+  const whenEvent = eventAmbient(
+    {
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      timeZone: org.timezone,
+      canEdit,
+      rsvp: {
+        enabled: event.rsvpEnabled,
+        url: rsvpUrl,
+        going: countOf("GOING"),
+        waitlist: countOf("WAITLIST"),
+        capacity: event.rsvpCapacity,
+        waitlistOn: event.rsvpWaitlist,
+      },
+      checkedIn: facts.checkedIn,
+      thankedAt: facts.thankedAt,
+      remindedAt: facts.remindedAt,
+    },
+    now,
+  );
+  const headerItems: { kind: HeaderKind; reason: string }[] = [
+    ...whenMeeting.filter((a) => a.kind !== "draft-agenda"),
+    ...whenEvent,
+    ...whenMeeting.filter((a) => a.kind === "draft-agenda"),
+  ];
+  const maybes = undecidedMaybes(
+    event.attendees,
+    { startsAt: event.startsAt, canEdit, remindedAt: facts.maybesRemindedAt },
+    now,
+  );
+  const meetingOn = underWay(event, now);
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
   // "Edit" sends people here with the form already open, as on the Calendar.
   const { edit, rsvp: rsvpParam } = await searchParams;
@@ -156,7 +262,52 @@ export default async function MeetingPage({
         />
       }
       tasks={
-        <MeetingTasks orgId={org.id} orgSlug={orgSlug} eventId={event.id} initial={meetingTasks} />
+        <MeetingTasks
+          orgId={org.id}
+          orgSlug={orgSlug}
+          eventId={event.id}
+          initial={meetingTasks}
+          ambient={
+            meetingOn || (canEdit && facts.todos.length > 0) || facts.decisions.length > 0 ? (
+              <MeetingNotesAmbient
+                orgId={org.id}
+                orgSlug={orgSlug}
+                eventId={event.id}
+                meetingTitle={event.title}
+                underWay={meetingOn}
+                todos={canEdit ? facts.todos.length : 0}
+                decision={facts.decisions[0] ?? null}
+              />
+            ) : null
+          }
+        />
+      }
+      ambient={
+        headerItems.length > 0 ? (
+          <MeetingHeaderAmbient
+            orgId={org.id}
+            orgSlug={orgSlug}
+            eventId={event.id}
+            title={event.title}
+            items={headerItems}
+            joinUrl={event.conferenceUrl}
+            noteId={facts.noteId}
+            rsvpUrl={rsvpUrl}
+          />
+        ) : null
+      }
+      agendaAmbient={
+        canEdit && facts.carryOver.length > 0 ? (
+          <CarryOver orgId={org.id} eventId={event.id} count={facts.carryOver.length} />
+        ) : null
+      }
+      invitedAmbient={
+        maybes > 0 ? <RemindMaybes orgId={org.id} eventId={event.id} count={maybes} /> : null
+      }
+      syncAmbient={
+        needsSyncRetry({ googleSyncState: event.googleSyncState, canEdit }) ? (
+          <RetrySync orgId={org.id} eventId={event.id} />
+        ) : null
       }
       recording={
         // Once it has started there may be a recording to paste or watch.
@@ -170,6 +321,8 @@ export default async function MeetingPage({
         ) : null
       }
       askedRsvp={askedRsvp}
+      crm={crm}
+      booking={booking}
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}
@@ -218,7 +371,7 @@ export default async function MeetingPage({
       }))}
       rsvp={{
         enabled: event.rsvpEnabled,
-        url: event.rsvpSlug && event.rsvpEnabled ? appUrl(`/e/${event.rsvpSlug}`) : null,
+        url: rsvpUrl,
         going: countOf("GOING"),
         waitlist: countOf("WAITLIST"),
         capacity: event.rsvpCapacity,

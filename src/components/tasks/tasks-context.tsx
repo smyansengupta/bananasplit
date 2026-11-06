@@ -239,7 +239,7 @@ export function TasksProvider({
         role="status"
         aria-live="polite"
         className={cn(
-          "bg-foreground text-background fixed right-4 bottom-4 z-50 max-w-sm rounded-md px-4 py-3 text-sm shadow-lg transition-opacity duration-200",
+          "bg-foreground text-background fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-w-sm rounded-md px-4 py-3 text-sm shadow-lg transition-opacity duration-200",
           message ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       >

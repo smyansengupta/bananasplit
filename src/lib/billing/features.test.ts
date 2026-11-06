@@ -40,12 +40,13 @@ describe("what each plan includes", () => {
     }
   });
 
-  it("gives Personal Plus Personal Free plus themes, calendar sync and AI, and nothing for a team", () => {
+  it("gives Personal Plus Personal Free plus themes, calendar sync, AI and the CRM, and nothing for a team", () => {
     expect(featuresOf("PERSONAL_PLUS")).toEqual([
       ...featuresOf("FREE"),
       "integrations",
       "themes",
       "ai",
+      "crm",
     ]);
     for (const f of [
       "overview",

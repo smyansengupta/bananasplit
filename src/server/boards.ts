@@ -58,3 +58,35 @@ export async function saveBoard(
   });
   return { ok: true };
 }
+
+/** Home's layout mode: Ambient arranges itself, Custom is the member's own board. */
+export type HomeMode = "ambient" | "custom";
+
+/** The member's Home mode; Ambient unless they switched to Custom. */
+export async function loadHomeMode(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+): Promise<HomeMode> {
+  const row = await db.memberPrefs.findUnique({
+    where: { organizationId_userId: { organizationId, userId } },
+    select: { homeMode: true },
+  });
+  return row?.homeMode === "CUSTOM" ? "custom" : "ambient";
+}
+
+export async function saveHomeMode(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  mode: unknown,
+): Promise<SaveBoardResult> {
+  if (mode !== "ambient" && mode !== "custom") return { ok: false, error: "Unknown layout." };
+  const homeMode = mode === "custom" ? "CUSTOM" : null;
+  await db.memberPrefs.upsert({
+    where: { organizationId_userId: { organizationId, userId } },
+    create: { organizationId, userId, homeMode },
+    update: { homeMode },
+  });
+  return { ok: true };
+}

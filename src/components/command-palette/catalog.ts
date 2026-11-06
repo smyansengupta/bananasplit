@@ -1,6 +1,7 @@
 import { SETTINGS_SECTIONS } from "@/app/app/[orgSlug]/settings/settings-nav";
 import type { Role } from "@/generated/prisma/enums";
 import { can, type Permission } from "@/lib/auth/permissions";
+import { crmDealsHref, crmPeopleHref, crmSettingsHomeHref, crmTodayHref } from "@/lib/crm/href";
 import type { SectionId } from "@/lib/nav/sidebar";
 import { scoreFields, type ParsedQuery } from "@/lib/search/text";
 
@@ -45,6 +46,8 @@ export interface PaletteSection {
   /** Other paths in the same section (People's /org-chart). */
   also?: readonly string[];
   hidden: boolean;
+  /** An add-on the organization hasn't added: not offered at all. */
+  notAdded?: boolean;
   icon: string;
   description: string;
 }
@@ -220,12 +223,12 @@ const PAGES: readonly PageDef[] = [
     keywords: ["categories", "allocation", "spending", "money"],
   },
   {
-    path: "/finance/sponsorships",
-    title: "Sponsorships",
+    path: "/finance/deals",
+    title: "Finance deals",
     section: "finance",
     permission: "finance.manage",
     icon: "Handshake",
-    keywords: ["sponsors", "partners", "funding"],
+    keywords: ["deals", "partners", "funding", "sponsorships", "pledges", "money"],
   },
   {
     path: "/finance/my-reimbursements",
@@ -352,9 +355,59 @@ const SETTINGS_KEYWORDS: Record<string, readonly string[]> = {
   danger: ["delete", "export", "backup", "download data"],
 };
 
+/** The CRM's pages: Today, People, Companies, Deals and CRM settings. */
+function crmPages(orgSlug: string): Omit<CatalogEntry, "group">[] {
+  const href = (to: string) => ({ type: "href" as const, href: to });
+  return [
+    {
+      key: "page:crm:today",
+      title: "CRM today",
+      icon: "Inbox",
+      keywords: ["follow ups", "replies", "to approve", "drafts", "calls", "who to reach"],
+      command: href(crmTodayHref(orgSlug)),
+    },
+    {
+      key: "page:crm:approve",
+      title: "To approve",
+      icon: "ListChecks",
+      keywords: ["review", "suggestions", "drafts", "approve", "crm"],
+      command: href(crmTodayHref(orgSlug, "approve")),
+    },
+    {
+      key: "page:crm:people",
+      title: "CRM people",
+      icon: "Users",
+      keywords: ["contacts", "relationships", "lists", "crm"],
+      command: href(crmPeopleHref(orgSlug)),
+    },
+    {
+      key: "page:crm:companies",
+      title: "CRM companies",
+      icon: "Building2",
+      keywords: ["organizations", "accounts", "partners", "crm"],
+      command: href(crmPeopleHref(orgSlug, { companies: true })),
+    },
+    {
+      key: "page:crm:deals",
+      title: "CRM deals",
+      icon: "Columns3",
+      keywords: ["deals", "pipeline", "board", "stages", "crm"],
+      command: href(crmDealsHref(orgSlug)),
+    },
+    {
+      key: "page:crm:settings",
+      title: "CRM settings",
+      icon: "Settings2",
+      keywords: ["automations", "follow up series", "fields", "pipelines", "crm", "booking", "sending"],
+      command: href(crmSettingsHomeHref(orgSlug)),
+    },
+  ];
+}
+
 function sectionVisible(input: CatalogInput, section: SectionId | undefined): boolean {
   if (!section) return true;
   const found = input.sections.find((s) => s.id === section);
+  if (found?.notAdded) return false;
   return !found?.hidden || can({ role: input.role }, "settings.view");
 }
 
@@ -389,6 +442,14 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       icon: page.icon,
       command: { type: "href", href: `${base}${page.path}` },
     });
+  }
+
+  // The CRM's pages (src/lib/crm/href.ts builds their links).
+  if (sectionVisible(input, "crm")) {
+    const crm = sectionLabel("crm");
+    for (const page of crmPages(input.orgSlug)) {
+      entries.push({ ...page, group: "pages", detail: page.detail ?? crm });
+    }
   }
 
   for (const s of SETTINGS_SECTIONS) {

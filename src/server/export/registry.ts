@@ -125,11 +125,70 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "DataSourceSyncState", key: ID },
   // Links between things (the Linked panel): org data, both ends are ids.
   { model: "ItemLink", key: ID },
+  // Announcements to the whole organization, removed ones included (as the
+  // database trash above), and who has seen each: every member reads those
+  // rows ("Seen by N of M").
+  { model: "Announcement", key: ID },
+  { model: "AnnouncementSeen", key: ["announcementId", "userId"] },
+  // Home's Decisions: what was raised, who owns it, what was decided.
+  { model: "Decision", key: ID },
+  // Saved reports (which database, which widgets) and the copies people
+  // kept: numbers already shown in the app, no rows of their own.
+  { model: "Report", key: ID },
+  { model: "ReportSnapshot", key: ID },
+  // Who a report is shared with outside the organization, by email.
+  { model: "ReportInvite", key: ID },
+  // The CRM (docs/features/crm.md): everything, the timeline included.
+  // Tokens that open a page or sign a request are left out; so are a
+  // member's private timeline rows and their own saved views, templates
+  // and import files.
+  { model: "CrmSettings", key: ["organizationId"] },
+  { model: "CrmMemberSettings", key: ID, omit: ["bccToken"] },
+  { model: "CrmCompany", key: ID },
+  { model: "CrmPerson", key: ID, omit: ["selfUpdateTokenHash"] },
+  { model: "CrmPersonEmail", key: ID },
+  { model: "CrmJob", key: ID },
+  { model: "CrmPipeline", key: ID },
+  { model: "CrmStage", key: ID },
+  { model: "CrmDeal", key: ID },
+  { model: "CrmDealPerson", key: ID },
+  { model: "CrmActivity", key: ID, where: { privateToId: null } },
+  { model: "CrmActivityTarget", key: ID, where: { activity: { privateToId: null } } },
+  { model: "CrmEmailThread", key: ID },
+  { model: "CrmEmailMessage", key: ID },
+  { model: "CrmTemplate", key: ID, where: { shared: true } },
+  { model: "CrmSequence", key: ID },
+  { model: "CrmSequenceStep", key: ID },
+  { model: "CrmEnrollment", key: ID },
+  { model: "CrmView", key: ID, where: { shared: true } },
+  { model: "CrmCampaign", key: ID },
+  { model: "CrmCampaignTarget", key: ID },
+  { model: "CrmWorkflow", key: ID },
+  { model: "CrmWorkflowRun", key: ID },
+  { model: "CrmFieldHistory", key: ID },
+  { model: "CrmGoal", key: ID },
+  { model: "CrmForecastSnapshot", key: ID },
+  { model: "CrmScoreRule", key: ID },
+  { model: "CrmQuote", key: ID },
+  { model: "CrmQuoteLine", key: ID },
+  { model: "CrmBookingPage", key: ID },
+  // Meeting links: the meetings booked (the guest's name, email and answers; never the link's token hash).
+  { model: "Booking", key: ID, omit: ["tokenHash"] },
+  { model: "CrmSuggestion", key: ID },
+  { model: "CrmDeliverable", key: ID },
+  { model: "CrmGuestLink", key: ID, omit: ["tokenHash"] },
+  { model: "CrmCall", key: ID },
+  { model: "CrmTextMessage", key: ID },
+  { model: "CrmWebhook", key: ID, omit: ["signingSecret"] },
+  { model: "CrmWebhookDelivery", key: ID },
+  // What AI cost the organization, by feature and member.
+  { model: "AiUsage", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */
 export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
+  CrmApiKey: "The CRM's API keys are credentials (only their hashes are stored); an export must not carry them.",
   Notification:
     "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
   UpNextDismissal:

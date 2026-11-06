@@ -35,6 +35,8 @@ function makeCtx(opts: {
   const saved: Record<string, unknown>[] = [];
   const db = {
     membership: { count: vi.fn(async () => (opts.hostIsMember === false ? 0 : 1)) },
+    // No booking is made on a meeting link here (src/server/booking).
+    booking: { findFirst: vi.fn(async () => null) },
     orgIntegration: { findMany: vi.fn(async () => opts.integrations ?? []) },
     orgSettings: {
       findUnique: vi.fn(async () =>

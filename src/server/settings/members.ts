@@ -1,4 +1,5 @@
 import {
+  DecisionStatus,
   OrgChartVersionStatus,
   PositionMatchState,
   Role,
@@ -9,6 +10,8 @@ import {
 import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, type OrgContext, type TxClient } from "@/server/db/context";
+import { memberLeft } from "@/server/crm/outreach/handover";
+import { bookingMemberLeft } from "@/server/booking/links";
 
 /**
  * Member lifecycle helpers shared by the Settings > Members actions
@@ -86,6 +89,8 @@ export function outstandingExpensesMessage(n: number, self: boolean): string {
  *     their ICS feed);
  *   - ownership of open tasks (they become unowned and anyone can claim
  *     them; completed tasks keep their owner as history), epics included;
+ *   - ownership of open decisions, the same way (decided and dropped ones
+ *     keep theirs);
  *   - org chart positions revert to placeholders (the title stays), and the
  *     member drops out of draft match suggestions.
  * Their notes, comments and past events stay, authored by a former member.
@@ -111,7 +116,15 @@ export async function untieDepartingMember(
     },
     data: { ownerId: null, ownerRelation: null, ownerFlagged: false, ownerAssignedById: null },
   });
+  await db.decision.updateMany({
+    where: { organizationId, ownerId: userId, status: DecisionStatus.OPEN },
+    data: { ownerId: null, updatedAt: new Date() },
+  });
   await untieOrgChart(db, organizationId, userId);
+  // The CRM: pause their sequences, flag their relationships for handover.
+  await memberLeft(db, organizationId, userId);
+  // Meeting links: theirs stops, they come off shared ones, their bookings move or are flagged.
+  await bookingMemberLeft(db, organizationId, userId);
 }
 
 async function untieOrgChart(db: TxClient, organizationId: string, userId: string): Promise<void> {

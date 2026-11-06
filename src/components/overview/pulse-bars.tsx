@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 
+import { smoothPath, trendLine } from "@/lib/overview/trend";
 import { cn } from "@/lib/utils";
 
 /**
  * Tasks finished per week, as columns (redesign guide 8.1): one hue (the
  * theme's first chart slot), 4px rounded tops on a shared baseline, a
- * dashed average line, and the week under way hatched because it isn't
- * over. Hover or arrow keys move the focus; the focused week's numbers sit
+ * dashed average line, the week under way hatched because it isn't
+ * over, and a smooth trend of where the weeks are heading (dashed into the
+ * week under way). Hover or arrow keys move the focus; the focused week's numbers sit
  * in the tooltip above its column. Text stays in the text tokens.
  */
 
@@ -118,6 +120,7 @@ export function PulseBars({
               </div>
             ))}
           </div>
+          <TrendLine values={bars.map((b) => b.value)} pct={pct} />
           {/* The average, across every week. */}
           <span
             className="border-foreground/70 pointer-events-none absolute inset-x-0 border-t-2 border-dashed"
@@ -145,6 +148,54 @@ export function PulseBars({
             </span>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The trend: where the finished weeks are heading (src/lib/overview/trend.ts),
+ * drawn as one smooth curve across the columns' centres (a grid with a 6%
+ * gap inside a 0.25rem inset), then dashed on into the week under way,
+ * whose own count isn't in yet. One dot where it ends now.
+ */
+function TrendLine({ values, pct }: { values: readonly number[]; pct: (v: number) => number }) {
+  const n = values.length;
+  if (n < 3) return null;
+  const col = (100 - (n - 1) * 6) / n;
+  const trend = trendLine(values.slice(0, -1), 1);
+  const pts = trend.map((v, i) => ({ x: i * (col + 6) + col / 2, y: 100 - pct(v) }));
+  const end = pts[pts.length - 1];
+  return (
+    <div className="pointer-events-none absolute inset-0 px-1" aria-hidden="true">
+      <div className="relative h-full w-full">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 size-full overflow-visible"
+        >
+          <path
+            d={smoothPath(pts.slice(0, -1))}
+            fill="none"
+            stroke="var(--attention)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          <path
+            d={smoothPath(pts.slice(-2))}
+            fill="none"
+            stroke="var(--attention)"
+            strokeWidth="2.5"
+            strokeDasharray="4 5"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="ring-card absolute size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-(--attention) ring-2"
+          style={{ left: `${end.x}%`, bottom: `${100 - end.y}%` }}
+        />
       </div>
     </div>
   );

@@ -5,8 +5,10 @@ import {
   DollarSign,
   Hash,
   Link,
+  Link2,
   Mail,
   Phone,
+  Sparkles,
   SquareCheck,
   Tags,
   Type,
@@ -30,6 +32,8 @@ const ICONS: Record<FieldType, IconComponent> = {
   EMAIL: Mail,
   PHONE: Phone,
   URL: Link,
+  RELATION: Link2,
+  AI: Sparkles,
 };
 
 /** A field type's icon, as in the column headers and the add-field menu. */

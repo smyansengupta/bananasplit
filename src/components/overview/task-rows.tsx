@@ -1,22 +1,65 @@
 "use client";
 
-import { Ban, CalendarDays, Flag, Lock } from "@/components/icons";
+import { Ban, CalendarClock, CalendarDays, Flag, Lock } from "@/components/icons";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
+import { AmbientMenu } from "@/components/tasks/ambient-pills";
+import { updateTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { TagChip } from "@/components/ui/chip";
 import { toast } from "@/components/ui/toaster";
 import { TaskStatus } from "@/generated/prisma/enums";
 import type { DueTone } from "@/lib/overview/format";
+import { nextMondayKey } from "@/lib/ambient/tasks";
+import { addDaysToKey } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 
+import { LinkChips, type ItemRef } from "./connections";
+import { StartItButton } from "./home-act";
 import { TaskCheck } from "./task-check";
+
+/** Push back, for a task of yours that's late: tomorrow, next Monday or a week on. */
+function PushBackPill({
+  orgId,
+  taskId,
+  title,
+  today,
+}: {
+  orgId: string;
+  taskId: string;
+  title: string;
+  today: string;
+}) {
+  const push = (key: string) => () => updateTask(orgId, taskId, { dueDate: key });
+  const tomorrow = addDaysToKey(today, 1);
+  const monday = nextMondayKey(today);
+  return (
+    <AmbientMenu
+      label="Push back"
+      icon={CalendarClock}
+      reason="Yours, and late"
+      ariaLabel={`Push back ${title}`}
+      choices={[
+        { label: "Tomorrow", run: push(tomorrow), done: `${title} is due tomorrow` },
+        ...(monday !== tomorrow
+          ? [{ label: "Next Monday", run: push(monday), done: `${title} is due Monday` }]
+          : []),
+        {
+          label: "In a week",
+          run: push(addDaysToKey(today, 7)),
+          done: `${title} is due in a week`,
+        },
+      ]}
+    />
+  );
+}
 
 /**
  * My tasks' rows (redesign guide 7.11, 16): a 22px circle check, the title,
- * a meta line (the epic as a tag chip, the due label by urgency), and a
- * High chip on the right. Checking one marks it done through the tasks
+ * a meta line (the epic as a tag chip, the due label by urgency), chips for
+ * what the task is linked to (its event, meeting or note), and a High chip
+ * on the right. Checking one marks it done through the tasks
  * action (the same checks as the task page), with the check's spring and a
  * "Done: …" toast with Undo; the row leaves when the page refreshes.
  */
@@ -32,7 +75,13 @@ export interface TaskRowData {
   /** "Subtask of …", when it is one. */
   context: string | null;
   due: { text: string; tone: DueTone } | null;
+  /** Past its due date: Push back sits beside the date. */
+  late?: boolean;
+  /** Due within two days and not started: Start it sits beside the date. */
+  startable?: boolean;
   high: boolean;
+  /** What it's linked to. */
+  chips?: readonly ItemRef[];
 }
 
 /** The due date as a pill on the right: red when late or today, firm tomorrow, quiet after. */
@@ -42,17 +91,36 @@ const DUE_TONE: Record<DueTone, string> = {
   muted: "bg-muted text-muted-foreground",
 };
 
-export function TaskRows({ orgId, tasks }: { orgId: string; tasks: readonly TaskRowData[] }) {
+export function TaskRows({
+  orgId,
+  tasks,
+  todayKey,
+}: {
+  orgId: string;
+  tasks: readonly TaskRowData[];
+  /** The viewer's today ("2026-11-03"), for Push back's dates. */
+  todayKey: string;
+}) {
   return (
     <ul>
       {tasks.map((task, i) => (
-        <TaskRow key={task.id} orgId={orgId} task={task} first={i === 0} />
+        <TaskRow key={task.id} orgId={orgId} task={task} first={i === 0} today={todayKey} />
       ))}
     </ul>
   );
 }
 
-function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; first: boolean }) {
+function TaskRow({
+  orgId,
+  task,
+  first,
+  today,
+}: {
+  orgId: string;
+  task: TaskRowData;
+  first: boolean;
+  today: string;
+}) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -119,19 +187,32 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
             )}
           </div>
         )}
+        {task.chips && task.chips.length > 0 && (
+          <LinkChips items={task.chips} className="relative z-10 mt-1.5" />
+        )}
         {error && (
           <p role="alert" className="text-destructive mt-1 text-xs">
             {error}
           </p>
         )}
       </div>
-      <span className="flex shrink-0 items-center gap-1.5">
+      <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
         {task.high && (
           <span
             title="High priority"
             className="bg-tint-accent text-tint-accent-foreground grid size-6 place-items-center rounded-full"
           >
             <Flag className="size-3.5" aria-label="High priority" />
+          </span>
+        )}
+        {/* Its ambient buttons, above the row's link. */}
+        {!done && (task.late || task.startable) && (
+          <span className="relative z-10 inline-flex">
+            {task.late ? (
+              <PushBackPill orgId={orgId} taskId={task.id} title={task.title} today={today} />
+            ) : (
+              <StartItButton orgId={orgId} taskId={task.id} title={task.title} />
+            )}
           </span>
         )}
         {task.due && (

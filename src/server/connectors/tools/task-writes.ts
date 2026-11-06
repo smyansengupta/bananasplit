@@ -95,7 +95,7 @@ async function serviceWrite(run: () => Promise<TaskActionResult>): Promise<strin
 function confirmRefusal(confirm: FlagConfirmation): WriteRefusedError {
   const names = confirm.flagged.map((f) => f.name?.trim() || "a member").join(", ");
   return new WriteRefusedError(
-    `Assigning ${names} goes above the member's place in the club's org chart, and Bananasplit asks before saving that. Nothing was saved. If the member confirms, call again with confirmAboveLevel true.`,
+    `Assigning ${names} goes above the member's place in the organization's org chart, and Bananasplit asks before saving that. Nothing was saved. If the member confirms, call again with confirmAboveLevel true.`,
   );
 }
 

@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckSquare,
   Layers,
+  Megaphone,
   Minus,
   PenLine,
   UserPlus,
@@ -13,11 +14,13 @@ import {
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
+import { AmbientButton } from "@/components/ambient/ambient-button";
 import { pollOutcome, pulseProjectLine, type PulseIssueData } from "@/lib/pulse/data";
 import { tagToken, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 import type { TrendWeek } from "@/server/pulse/queries";
 
+import { LinkChips, type ItemRef } from "./connections";
 import { KindIcon } from "./kind-tiles";
 import { PulseBars } from "./pulse-bars";
 
@@ -25,8 +28,9 @@ import { PulseBars } from "./pulse-bars";
  * The Overview's Weekly pulse (redesign guide 9 and 15): the latest
  * issue's figures on the left (tasks done last week against the average,
  * the run of weeks, the best one), tasks finished per week as columns on
- * the right, and the issue's highlights as coloured tiles under both.
- * Nothing about money. The board's card header holds "Sent Fri, Oct 9"
+ * the right, one finding about the run (the page works it out) with chips
+ * for the epics and events behind it, and the issue's highlights as
+ * coloured tiles under both. Nothing about money. The board's card header holds "Sent Fri, Oct 9"
  * and the link to the archive.
  */
 
@@ -37,7 +41,7 @@ interface Highlight {
   color: TagColor;
 }
 
-export function pulseHighlights(data: PulseIssueData): Highlight[] {
+function pulseHighlights(data: PulseIssueData): Highlight[] {
   const out: Highlight[] = [];
   const epic = data.epicsFinished?.[0];
   if (epic) out.push({ icon: <Layers />, title: epic.title, sub: "Epic finished", color: "navy" });
@@ -84,6 +88,9 @@ export function WeeklyPulseCard({
   issueHref,
   nextSend,
   draftHref,
+  recap = false,
+  insight,
+  chips = [],
 }: {
   issue: { data: PulseIssueData } | null;
   trend: readonly TrendWeek[];
@@ -93,6 +100,11 @@ export function WeeklyPulseCard({
   nextSend: string | null;
   /** Admins: this week's draft, to add a note before it goes out. */
   draftHref: string | null;
+  /** Friday afternoon to Sunday: posting the recap is the main button. */
+  recap?: boolean;
+  insight?: ReactNode;
+  /** The epics that moved and the events held in the issue's week. */
+  chips?: readonly ItemRef[];
 }) {
   // The last full week is the latest issue's; the trend's final point is the week under way.
   const finished = trend.slice(0, -1);
@@ -173,6 +185,10 @@ export function WeeklyPulseCard({
               />
               Average
             </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-(--attention)" />
+              Trend
+            </span>
           </div>
           <PulseBars
             bars={trend.map((w) => ({ label: w.label, value: w.done }))}
@@ -180,6 +196,8 @@ export function WeeklyPulseCard({
           />
         </div>
       </div>
+      {insight}
+      <LinkChips items={chips} />
       {highlights.length > 0 && issueHref && (
         <ul className="grid gap-2.5 sm:grid-cols-3">
           {highlights.map((h) => (
@@ -209,15 +227,27 @@ export function WeeklyPulseCard({
             (nextSend
               ? `The first pulse goes out ${nextSend}.`
               : "The weekly pulse is off for this organization.")}
-          {draftHref && (
-            <Link
-              href={draftHref}
-              className="text-foreground inline-flex items-center gap-1.5 font-semibold"
-            >
-              <PenLine className="size-3.5" aria-hidden="true" />
-              Add a note to this week&apos;s pulse
-            </Link>
-          )}
+          {draftHref &&
+            (recap ? (
+              <AmbientButton
+                action={{
+                  key: "post-recap",
+                  label: "Post the recap",
+                  icon: <Megaphone />,
+                  tone: "solid",
+                  reason: "This week's recap isn't out yet",
+                  href: draftHref,
+                }}
+              />
+            ) : (
+              <Link
+                href={draftHref}
+                className="text-foreground inline-flex items-center gap-1.5 font-semibold"
+              >
+                <PenLine className="size-3.5" aria-hidden="true" />
+                Add a note to this week&apos;s pulse
+              </Link>
+            ))}
           {!issue && (
             <Link
               href={archiveHref}

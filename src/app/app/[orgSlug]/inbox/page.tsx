@@ -2,10 +2,26 @@ import { Inbox } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
+import {
+  InboxAnnouncements,
+  type AnnouncementEventOption,
+  type InboxAnnouncement,
+} from "@/components/inbox/announcements";
 import { InboxView, type InboxRow, type InboxView as View } from "@/components/inbox/inbox-view";
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
 import { listWhen } from "@/components/meetings/meeting-card";
 import { PageHeader } from "@/components/page-header";
+import {
+  canWaitTillMonday,
+  inviteReason,
+  mentionReason,
+  mentionWaiting,
+  recapIsDue,
+  requestReason,
+  reviewAction,
+  smallBatch,
+  smallBatchTitle,
+} from "@/lib/ambient/inbox";
 import { can } from "@/lib/auth/permissions";
 import { groupForDay, groupForPast, inboxKey, type InboxGroup } from "@/lib/inbox/items";
 import { sectionLabel } from "@/lib/nav/sidebar";
@@ -18,15 +34,31 @@ import {
   localDateKey,
 } from "@/lib/tasks/dates";
 import type { NotificationType } from "@/generated/prisma/enums";
+import {
+  countAnnouncements,
+  listAnnouncements,
+  signupInsights,
+} from "@/server/announcements/announcements";
+import { byline, postedWhen, recapWindowStart } from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
+import { signalsFor } from "@/server/crm/signals";
+import { crmRecordHref, crmTodayHref } from "@/lib/crm/href";
+import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
+import { loadElsewhereUpdates } from "@/server/inbox/elsewhere";
+import { crmInboxItems, crmReviewRow } from "@/server/crm/outreach/inbox";
+import { rolePositions } from "@/server/crm/owners";
 import { loadInboxState } from "@/server/inbox/state";
+import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
 /** How far ahead a task counts as needing you now. */
 const TASK_DAYS = 7;
 const TASKS_LIMIT = 40;
 const UPDATES_LIMIT = 80;
+/** The events a new announcement can be about: from yesterday on, the next few. */
+const EVENT_CHOICES = 20;
 
 /**
  * Inbox: everything waiting on you in this space, with the thing to do right
@@ -43,6 +75,16 @@ const UPDATES_LIMIT = 80;
  *
  * A row opens beside the list (the side peek); the chips above filter by
  * kind; j and k move, Enter opens, e finishes, s snoozes until tomorrow.
+ *
+ * Above the tabs, in every view: Announcements, the organization's latest
+ * post in full (a new one takes its place), with a composer anyone can post
+ * from. The composer also drafts this
+ * week's recap on demand (the recap isn't loaded here); from Friday to Sunday
+ * (the organization's time) it nudges to post it until one goes out.
+ *
+ * A Personal space has no announcements (there's nobody to tell). Its
+ * Updates gather your organizations' too (loadElsewhereUpdates), each
+ * saying which organization it's from and opening there.
  */
 export default async function InboxPage({
   params,
@@ -55,8 +97,16 @@ export default async function InboxPage({
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const base = `/app/${orgSlug}`;
-  const canReview = can(ctx, "finance.manage");
+  // An add-on that isn't added keeps its rows out of Inbox (src/lib/addons.ts).
+  const addOns = readAddOns(ctx.settings?.addOns);
+  const canReview = can(ctx, "finance.manage") && addOns.includes("finance");
+  const personal = org.kind === "PERSONAL";
+  const canManagePosts = can(ctx, "events.write") && !personal;
   const now = new Date();
+  // The end of the week, when the composer nudges to post the recap (null other days).
+  const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
+  // The CRM's follow-up queue (its positions read before the transaction).
+  const crmRoles = addOns.includes("crm") ? await rolePositions(org.id) : null;
 
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
@@ -64,45 +114,12 @@ export default async function InboxPage({
     const todayKey = localDateKey(now, tz);
     const [state, invites, open, toReview, notifications, forms, nextEvent] = await Promise.all([
       loadInboxState(db, org.id, user.id, now),
-      db.eventAttendee.findMany({
-        where: {
-          organizationId: org.id,
-          userId: user.id,
-          rsvp: "PENDING",
-          event: { deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
-        },
-        select: {
-          event: {
-            select: {
-              id: true,
-              title: true,
-              startsAt: true,
-              endsAt: true,
-              allDay: true,
-              location: true,
-              createdBy: { select: { name: true, image: true, avatar: true } },
-              host: { select: { name: true, image: true, avatar: true } },
-            },
-          },
-        },
-        orderBy: { event: { startsAt: "asc" } },
-        take: 30,
-      }),
+      listOpenInvites(db, org.id, user.id, now),
       getMyOpenTasks(db, org.id, user.id, { limit: TASKS_LIMIT, today: fromDateKey(todayKey) }),
       // Each reimbursement request waiting on a treasurer, oldest first.
+      // A treasurer can't approve their own, so theirs aren't listed here.
       canReview
-        ? db.transaction.findMany({
-            where: { organizationId: org.id, status: "SUBMITTED", voidedAt: null },
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              description: true,
-              amountCents: true,
-              occurredAt: true,
-              submittedBy: { select: { name: true, image: true, avatar: true } },
-            },
-            take: 30,
-          })
+        ? listRequestsToReview(db, org.id, { notSubmittedBy: user.id })
         : Promise.resolve([]),
       db.notification.findMany({
         where: { organizationId: org.id, userId: user.id },
@@ -111,7 +128,7 @@ export default async function InboxPage({
         include: { actor: { select: { name: true, image: true, avatar: true } } },
       }),
       // Forms this person made whose responses wait on a review.
-      can(ctx, "databases.write")
+      can(ctx, "databases.write") && addOns.includes("forms")
         ? toReviewForOwner(db, org.id, user.id)
         : Promise.resolve([] as { id: string; title: string; count: number }[]),
       // For the empty state: what's next, so caught up still points somewhere.
@@ -126,37 +143,95 @@ export default async function InboxPage({
         select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
       }),
     ]);
+    // The CRM's signals for this member (stuck items, someone gone quiet...), when the CRM is added.
+    const signals = addOns.includes("crm") ? await signalsFor(db, org.id, user.id) : [];
+    // Announcements, one query after the other (a transaction has one connection).
+    // Just the latest: it shows until the next one goes out. None on Personal.
+    const posts = personal
+      ? []
+      : await listAnnouncements(db, org.id, user.id, { limit: 1, orgSlug });
+    const postCount = personal ? 0 : await countAnnouncements(db, org.id);
+    // Sign-ups are for owners and admins to read, so only they get the fact.
+    const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
+    // Friday to Sunday: is this week's recap still to go out? (One posted since Friday is it.)
+    const recapDue = recapIsDue(
+      recapFrom,
+      recapFrom && !personal
+        ? await db.announcement.count({
+            where: {
+              organizationId: org.id,
+              deletedAt: null,
+              title: { startsWith: RECAP_TITLE },
+              createdAt: { gte: recapFrom },
+            },
+          })
+        : 0,
+    );
+    const eventChoices = personal
+      ? []
+      : await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            mergedIntoId: null,
+            startsAt: { gte: new Date(now.getTime() - 86_400_000) },
+          },
+          orderBy: { startsAt: "asc" },
+          take: EVENT_CHOICES,
+          select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
+        });
+    const crm = crmRoles
+      ? await crmInboxItems(db, org.id, user.id, orgSlug, crmRoles, now).catch(() => [])
+      : [];
+    // Review suggestions assigned to them, as one row with the count.
+    const review = crmRoles ? await crmReviewRow(db, org.id, user.id, orgSlug) : null;
+    if (review) crm.unshift(review);
     return {
+      crm,
       tz,
       todayKey,
       state,
+      posts,
+      postCount,
+      insights,
+      recapDue,
+      eventChoices,
       invites,
       tasks: open.tasks,
       toReview,
       notifications,
       forms,
+      signals,
       nextEvent,
     };
   });
 
   const { tz, todayKey, state } = data;
+  // Personal: your organizations' updates as well.
+  const elsewhere = personal ? await loadElsewhereUpdates(user.id, org.id).catch(() => []) : [];
+
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
   const needs: InboxRow[] = [
-    ...data.invites.map(({ event: e }): InboxRow => ({
-      key: inboxKey("invite", e.id),
-      kind: "invite",
-      id: e.id,
-      title: e.title,
-      meta: [listWhen(e.startsAt, e.endsAt, tz, e.allDay), e.location?.trim() || null]
-        .filter(Boolean)
-        .join(", "),
-      group: groupForDay(localDateKey(e.startsAt, tz), todayKey),
-      category: "meeting",
-      href: `${base}/meetings/${e.id}`,
-      peek: { kind: "event", id: e.id },
-      actor: e.host ?? e.createdBy,
-    })),
+    ...data.invites.map(({ event: e }): InboxRow => {
+      const dayKey = localDateKey(e.startsAt, tz);
+      return {
+        key: inboxKey("invite", e.id),
+        kind: "invite",
+        id: e.id,
+        title: e.title,
+        meta: [listWhen(e.startsAt, e.endsAt, tz, e.allDay), e.location?.trim() || null]
+          .filter(Boolean)
+          .join(", "),
+        group: groupForDay(dayKey, todayKey),
+        category: "meeting",
+        href: `${base}/meetings/${e.id}`,
+        peek: { kind: "event", id: e.id },
+        actor: e.host ?? e.createdBy,
+        why: inviteReason(dayKey, todayKey),
+        canWait: canWaitTillMonday({ dayKey }, todayKey),
+      };
+    }),
     ...data.tasks
       .filter((t) => t.dueDate && dueDateKey(t.dueDate) <= weekEnd)
       .map((t): InboxRow => {
@@ -178,6 +253,10 @@ export default async function InboxPage({
           href: `${base}/tasks/${t.id}`,
           peek: { kind: "task", id: t.id },
           task: { status: t.status, dueKey: key },
+          canWait: canWaitTillMonday(
+            { urgent: overdue || key === todayKey, dayKey: key },
+            todayKey,
+          ),
         };
       }),
     ...data.toReview.map((t): InboxRow => ({
@@ -192,6 +271,7 @@ export default async function InboxPage({
       peek: { kind: "transaction", id: t.id },
       actor: t.submittedBy,
       actorName: t.submittedBy?.name ?? null,
+      why: requestReason({ receipts: t._count.receipts, createdAt: t.createdAt }, now),
     })),
     ...data.forms.map((f): InboxRow => ({
       key: inboxKey("review", f.id),
@@ -203,8 +283,40 @@ export default async function InboxPage({
       category: "form",
       href: `${base}/forms/${f.id}?tab=responses&view=review`,
       peek: { kind: "form", id: f.id },
+      review: reviewAction(f.count),
+      canWait: true,
     })),
+    // People the CRM says to reach today (replies, steps, follow-ups, new ones).
+    ...data.crm.map((c): InboxRow => ({ ...c, kind: "crm", category: "crm", peek: null })),
   ];
+  // Approve all: three or more small requests with receipts, at the top of Needs you.
+  const batch = smallBatch(
+    data.toReview
+      .filter((t) => live({ key: inboxKey("request", t.id) }))
+      .map((t) => ({
+        id: t.id,
+        amountCents: t.amountCents,
+        receipts: t._count.receipts,
+        createdAt: t.createdAt,
+      })),
+  );
+
+  needs.push(
+    ...data.signals.map((s): InboxRow => ({
+      key: inboxKey("signal", s.id),
+      kind: "signal",
+      id: s.id,
+      title: s.title,
+      meta: [s.label, s.summary].filter(Boolean).join(": "),
+      group: "review",
+      category: "signal",
+      href:
+        s.targetKind && s.targetId
+          ? crmRecordHref(orgSlug, s.targetKind, s.targetId)
+          : crmTodayHref(orgSlug),
+      peek: null,
+    })),
+  );
 
   const updates: InboxRow[] = data.notifications.map((n): InboxRow => {
     const category = CATEGORY[n.type] ?? "other";
@@ -222,11 +334,50 @@ export default async function InboxPage({
       when: ago(n.createdAt, now),
       unread: n.readAt === null,
       replyTaskId: n.taskId && (category === "mention" || category === "comment") ? n.taskId : null,
+      // A mention left about a day: Reply comes forward, with a few replies written.
+      replyWhy:
+        n.taskId && category === "mention" && mentionWaiting(n.createdAt, now)
+          ? mentionReason(n.actor?.name, n.createdAt, now)
+          : null,
+      canWait: true,
     };
   });
 
-  const snoozedAt = (r: InboxRow) => state.snoozed.get(r.key);
-  const live = (r: InboxRow) => !snoozedAt(r) && !state.done.has(r.key);
+  // Your organizations' updates on Personal: they open where they're from,
+  // and Reply and the side peek stay there too.
+  for (const n of elsewhere) {
+    updates.push({
+      key: inboxKey("update", n.id),
+      kind: "update",
+      id: n.id,
+      title: n.title,
+      meta: n.body ?? "",
+      space: n.org.name,
+      group: groupForPast(n.createdAt, now, tz),
+      category: CATEGORY[n.type as NotificationType] ?? "other",
+      href: n.linkUrl ?? `/app/${n.org.slug}/inbox`,
+      peek: null,
+      actor: n.actor,
+      when: ago(n.createdAt, now),
+      unread: n.readAt === null,
+      replyTaskId: null,
+      replyWhy: null,
+      canWait: true,
+    });
+  }
+  // Newest first, whichever space it's from.
+  const at = new Map<string, number>([
+    ...data.notifications.map((n) => [n.id, n.createdAt.getTime()] as const),
+    ...elsewhere.map((n) => [n.id, n.createdAt.getTime()] as const),
+  ]);
+  updates.sort((a, b) => (at.get(b.id) ?? 0) - (at.get(a.id) ?? 0));
+
+  function snoozedAt(r: Pick<InboxRow, "key">) {
+    return state.snoozed.get(r.key);
+  }
+  function live(r: Pick<InboxRow, "key">) {
+    return !snoozedAt(r) && !state.done.has(r.key);
+  }
   const needsNow = needs.filter(live).sort(byGroup);
   const updatesNow = collapseRepeats(updates.filter(live));
   const isSnoozed = (r: InboxRow) => Boolean(snoozedAt(r)) && !state.done.has(r.key);
@@ -238,6 +389,29 @@ export default async function InboxPage({
   // Snoozed only shows while something is snoozed.
   const view: View = asked === "snoozed" && snoozed.length === 0 ? "needs" : asked;
   const rows = view === "needs" ? needsNow : view === "updates" ? updatesNow : snoozed;
+
+  const announcements: InboxAnnouncement[] = data.posts.map((p) => ({
+    id: p.id,
+    title: p.title,
+    body: p.body,
+    author: p.author,
+    byline: byline(p.author?.name, postedWhen(p.createdAt, now, tz)),
+    seenCount: p.seenCount,
+    memberCount: p.memberCount,
+    seenByMe: p.seenByMe,
+    links: p.links,
+    canManage: canManagePosts || p.author?.id === user.id,
+    insight: data.insights.get(p.id) ?? null,
+  }));
+  const eventChoices: AnnouncementEventOption[] = data.eventChoices.map((e) => ({
+    id: e.id,
+    label: `${e.title}, ${listWhen(e.startsAt, e.endsAt, tz, e.allDay)}`,
+  }));
+  // Links keep the Inbox's tab (view) as it is.
+  const inboxHref = (to: { view?: View } = {}): string => {
+    const tab = to.view ?? asked;
+    return tab === "needs" ? `${base}/inbox` : `${base}/inbox?view=${tab}`;
+  };
 
   const next = data.nextEvent;
   const caughtUp = (
@@ -275,6 +449,16 @@ export default async function InboxPage({
         }
       />
 
+      {!personal && (
+        <InboxAnnouncements
+          orgId={org.id}
+          items={announcements}
+          events={eventChoices}
+          total={data.postCount}
+          recapDue={data.recapDue}
+        />
+      )}
+
       <InboxView
         key={view}
         orgId={org.id}
@@ -285,13 +469,13 @@ export default async function InboxPage({
             value: "needs",
             label: "Needs you",
             count: needsNow.length,
-            href: `${base}/inbox`,
+            href: inboxHref({ view: "needs" }),
           },
           {
             value: "updates",
             label: "Updates",
             count: unread,
-            href: `${base}/inbox?view=updates`,
+            href: inboxHref({ view: "updates" }),
           },
           ...(snoozed.length > 0
             ? [
@@ -299,12 +483,15 @@ export default async function InboxPage({
                   value: "snoozed" as const,
                   label: "Snoozed",
                   count: snoozed.length,
-                  href: `${base}/inbox?view=snoozed`,
+                  href: inboxHref({ view: "snoozed" }),
                 },
               ]
             : []),
         ]}
         rows={rows}
+        batch={
+          view === "needs" && batch ? { ...batch, title: smallBatchTitle(batch.ids.length) } : null
+        }
         empty={caughtUp}
       />
     </div>
@@ -321,12 +508,23 @@ const CATEGORY: Partial<Record<NotificationType, InboxRow["category"]>> = {
   TASK_DUE_TODAY: "task",
   TASK_OVERDUE: "task",
   TASK_DIGEST: "task",
+  TASK_UP_FOR_GRABS: "task",
   WEEKLY_UPDATE_REMINDER: "task",
   EVENT_INVITE: "meeting",
   EVENT_UPDATED: "meeting",
   EVENT_CANCELLED: "meeting",
+  MEETING_BOOKED: "meeting",
   SECURITY_ALERT: "alert",
   INTEGRATION_ERROR: "alert",
+  // The CRM's lines (src/server/crm/inbox-notify.ts) share one chip.
+  CRM_ASSIGNED: "crm",
+  CRM_FOLLOW_UP: "crm",
+  CRM_REPLY: "crm",
+  CRM_REVIEW: "crm",
+  CRM_HANDOVER: "crm",
+  CRM_NEW: "crm",
+  CRM_BOOKED: "crm",
+  CRM_DEAL: "crm",
 };
 
 /**

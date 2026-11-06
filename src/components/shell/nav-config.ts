@@ -1,5 +1,7 @@
+import type { PlanFeature } from "@/lib/billing/features";
 import { spaceIncludes, type SpaceInfo } from "@/lib/billing/space";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
+import { crmNewHref } from "@/lib/crm/href";
 import { SECTION_FEATURES, type ResolvedGroup } from "@/lib/nav/sidebar";
 import { NEW_TASK_PARAM } from "@/lib/shortcuts";
 
@@ -39,7 +41,8 @@ export interface NavSection {
  * A Personal space's sidebar: Home (the Personal dashboard) and Inbox;
  * Tasks, Calendar and Meetings (its calls, event pages, tickets and Find a
  * time); Databases (only the ones you make) and Files (notes and uploads
- * together, the one library at /notes). No Forms: only members answer
+ * together, the one library at /notes); then Integrations (Personal Plus)
+ * with the CRM under it once it's added. No Forms: only members answer
  * those, and Personal has one. Not arrangeable: there is no team to
  * arrange it for.
  */
@@ -53,6 +56,10 @@ export const PERSONAL_NAV: readonly {
   exact: boolean;
   /** Which section of the sidebar it's in (SECTION_NAMES names them). */
   group: "main" | "plan" | "collect" | "workspace";
+  /** The plan feature it needs; without it, it's locked (owner) like an organization's. */
+  feature?: PlanFeature;
+  /** An add-on (src/lib/addons.ts): shown only once it's added. */
+  addOn?: boolean;
 }[] = [
   { id: "home", label: "Home", icon: "House", path: "", exact: true, group: "main" },
   { id: "inbox", label: "Inbox", icon: "Inbox", path: "/inbox", exact: false, group: "main" },
@@ -74,6 +81,15 @@ export const PERSONAL_NAV: readonly {
     exact: false,
     group: "plan",
   },
+  // Notes and uploads together, as in an organization: one library at /notes, in Data.
+  {
+    id: "notes",
+    label: "Files",
+    icon: "FolderOpen",
+    path: "/notes",
+    exact: false,
+    group: "collect",
+  },
   {
     id: "databases",
     label: "Databases",
@@ -82,14 +98,25 @@ export const PERSONAL_NAV: readonly {
     exact: false,
     group: "collect",
   },
-  // Notes and uploads together, as in a club: one library at /notes.
   {
-    id: "notes",
-    label: "Files",
-    icon: "FolderOpen",
-    path: "/notes",
+    id: "integrations",
+    label: "Integrations",
+    icon: "Plug",
+    path: "/integrations",
+    also: ["/settings/integrations", "/setup"],
     exact: false,
     group: "workspace",
+    feature: "integrations",
+  },
+  {
+    id: "crm",
+    label: "CRM",
+    icon: "Handshake",
+    path: "/crm",
+    exact: false,
+    group: "workspace",
+    feature: "crm",
+    addOn: true,
   },
 ];
 
@@ -97,7 +124,8 @@ export const PERSONAL_NAV: readonly {
  * With a `space`, sections it lacks are left out, or (`showLocked`, for the
  * owner and admins, who can switch plans) kept and marked locked. The
  * Overview is always left out when the space lacks it. A Personal space
- * gets PERSONAL_NAV whatever `groups` says.
+ * gets PERSONAL_NAV whatever `groups` says, but for its add-ons: one shows
+ * when `groups` has it (visibleSidebar leaves out what isn't added).
  */
 export function navSections(
   orgSlug: string,
@@ -106,18 +134,30 @@ export function navSections(
 ): NavSection[] {
   const { space, showLocked = false } = options;
   if (space?.kind === "PERSONAL") {
-    return (["main", "plan", "collect", "workspace"] as const).map((group) => ({
-      id: group,
-      label: null,
-      items: PERSONAL_NAV.filter((i) => i.group === group).map((i) => ({
-        id: i.id,
-        label: i.label,
-        href: `/app/${orgSlug}${i.path}`,
-        icon: i.icon,
-        also: (i.also ?? []).map((p) => `/app/${orgSlug}${p}`),
-        exact: i.exact,
-      })),
-    }));
+    const shown = new Set<string>(groups.flatMap((g) => g.items.map((i) => i.id)));
+    return (["main", "plan", "collect", "workspace"] as const)
+      .map((group) => ({
+        id: group,
+        label: null,
+        items: PERSONAL_NAV.filter(
+          (i) => i.group === group && (!i.addOn || shown.has(i.id)),
+        ).flatMap((i): NavLink[] => {
+          const locked = i.feature ? !spaceIncludes(space, i.feature) : false;
+          if (locked && !showLocked) return [];
+          return [
+            {
+              id: i.id,
+              label: i.label,
+              href: `/app/${orgSlug}${i.path}`,
+              icon: i.icon,
+              also: (i.also ?? []).map((p) => `/app/${orgSlug}${p}`),
+              exact: i.exact,
+              ...(locked ? { locked: true } : {}),
+            },
+          ];
+        }),
+      }))
+      .filter((g) => g.items.length > 0);
   }
   return groups
     .map((g) => ({
@@ -212,7 +252,17 @@ export function isExactPage(href: string, pathname: string, search: string = "")
 }
 
 export type CreateActionId =
-  "task" | "event" | "meeting" | "note" | "poll" | "form" | "expense" | "find-a-time";
+  | "task"
+  | "event"
+  | "meeting"
+  | "note"
+  | "poll"
+  | "form"
+  | "expense"
+  | "crm-person"
+  | "crm-company"
+  | "crm-deal"
+  | "find-a-time";
 
 export interface CreateAction {
   id: CreateActionId;
@@ -294,6 +344,28 @@ export function createActions(
       label: "New expense",
       icon: "Receipt",
       href: `${path("finance")}/my-reimbursements?new=1`,
+    });
+  }
+  if (links.has("crm")) {
+    // The CRM's three ways in (docs/features/crm.md): each opens the New card (?open=new:...).
+    const slug = path("crm").split("/")[2]!;
+    actions.push({
+      id: "crm-person",
+      label: "New person",
+      icon: "UserPlus",
+      href: crmNewHref(slug, "person"),
+    });
+    actions.push({
+      id: "crm-company",
+      label: "New company",
+      icon: "Building2",
+      href: crmNewHref(slug, "company"),
+    });
+    actions.push({
+      id: "crm-deal",
+      label: "New deal",
+      icon: "Columns3",
+      href: crmNewHref(slug, "deal"),
     });
   }
   if (links.has("meetings")) {

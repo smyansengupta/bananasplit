@@ -11,13 +11,23 @@ import type {
 } from "@/generated/prisma/client";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
 import { type SpaceInfo } from "@/lib/billing/space";
+import { parseAvailability } from "@/lib/availability";
+import { focusWeek, localHours, spansOf } from "@/lib/overview/focus-time";
 import { DUE_SOON_DAYS, UPCOMING_DAYS } from "@/lib/personal/home-windows";
 import { parseStoredLinks } from "@/lib/profile/links";
 import { pollHref } from "@/lib/polls/paths";
-import { addDaysToKey, effectiveTimezone, fromDateKey, localDateKey } from "@/lib/tasks/dates";
+import {
+  addDaysToKey,
+  effectiveTimezone,
+  fromDateKey,
+  localDateKey,
+  zonedInstant,
+} from "@/lib/tasks/dates";
 import { NotFoundError } from "@/lib/auth/errors";
+import { can } from "@/lib/auth/permissions";
 import { withOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { listNoteFiles } from "@/server/notes/files";
+import type { FocusTimeData } from "@/server/overview/focus-time";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { findPendingInvitationsForMe, type PendingInvitation } from "@/server/settings/invitations";
 import { taskFilterWhere } from "@/server/tasks/queries";
@@ -50,12 +60,16 @@ const PER_SPACE_EVENTS = 8;
 const PER_SPACE_TASKS = 8;
 const PER_SPACE_POLLS = 4;
 const HOSTED_PAGES = 6;
+/** Per organization: tasks up for grabs, invites, forms and reimbursements. */
+const PER_SPACE_ELSEWHERE = 4;
 const RSVP_LIMIT = 8;
 const RECENT_FILES = 6;
 
 export const UPCOMING_LIMIT = 10;
 export const DUE_SOON_LIMIT = 10;
 export const POLLS_LIMIT = 6;
+/** Personal Home's widgets from your organizations, each list cut to this. */
+export const ELSEWHERE_LIMIT = 6;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -139,6 +153,62 @@ export interface OwnPoll {
   href: string;
 }
 
+/** An open task in one of your organizations that nobody owns. */
+export interface GrabTask {
+  space: SpaceRef;
+  id: string;
+  title: string;
+  /** YYYY-MM-DD, or null with no due date. */
+  dueKey: string | null;
+  href: string;
+}
+
+/** An event in one of your organizations you're invited to and haven't answered. */
+export interface InviteItem extends PersonalHomeEvent {
+  space: SpaceRef;
+  href: string;
+}
+
+/** An open form in one of your organizations you haven't answered. */
+export interface WaitingForm {
+  space: SpaceRef;
+  id: string;
+  title: string;
+  closesAt: Date | null;
+  href: string;
+}
+
+/** A reimbursement you asked for that isn't paid yet. */
+export interface ReimbursementItem {
+  space: SpaceRef;
+  id: string;
+  description: string;
+  amountCents: number;
+  status: "SUBMITTED" | "APPROVED";
+  createdAt: Date;
+  href: string;
+}
+
+/** Something unread in one of your organizations' Inboxes (a mention, a comment, an assignment). */
+export interface UpdateItem {
+  space: SpaceRef;
+  id: string;
+  title: string;
+  body: string | null;
+  createdAt: Date;
+  actor: { name: string | null; image: string | null; avatar: unknown } | null;
+  href: string;
+}
+
+/** Reimbursement requests waiting on you to approve, in one organization. */
+export interface ApprovalsItem {
+  space: SpaceRef;
+  count: number;
+  /** The one that has waited longest. */
+  oldest: { description: string; amountCents: number; createdAt: Date; by: string | null };
+  href: string;
+}
+
 /** A public RSVP page you signed up for. */
 export interface RsvpTicket {
   registrationId: string;
@@ -190,6 +260,14 @@ export interface PersonalHomeData {
   pendingInvites: PendingInvitation[];
   /** Events in the next UPCOMING_DAYS across Personal and your clubs. */
   upcoming: UpcomingItem[];
+  /**
+   * Focus time: your free hours in the next FOCUS_DAYS, against your
+   * availability and the timed events you said yes or maybe to (or keep in
+   * Personal) in every space. Null without a Personal space to save from.
+   */
+  focus?: FocusTimeData | null;
+  /** The Personal space's id, for Focus time's Block it off. */
+  personalOrgId?: string | null;
   /** Your open tasks due within DUE_SOON_DAYS (or overdue), across spaces. */
   dueSoon: DueTask[];
   /** How many of those there were before the list was cut. */
@@ -210,6 +288,18 @@ export interface PersonalHomeData {
   yourWeek: { done: number; bySpace: { space: SpaceRef; done: number }[] };
   /** Personal's newest files. */
   recentFiles: { id: string; name: string; contentType: string; createdAt: Date; href: string }[];
+  /** Your organizations' open tasks nobody owns, due soonest. */
+  grabs?: GrabTask[];
+  /** Events in your organizations you haven't answered, soonest first. */
+  invites?: InviteItem[];
+  /** Open forms in your organizations you haven't answered, closing soonest first. */
+  formsWaiting?: WaitingForm[];
+  /** Your reimbursement requests not yet paid, newest first. */
+  reimbursements?: ReimbursementItem[];
+  /** Requests waiting on you to approve, per organization. */
+  approvals?: ApprovalsItem[];
+  /** Unread in your organizations' Inboxes, newest first. */
+  updates?: UpdateItem[];
 }
 
 // ---------------------------------------------------------------- raw reads
@@ -262,6 +352,31 @@ export interface SpaceDigest {
   doneThisWeek?: number;
   /** Personal only: the newest files. */
   recentFiles?: { id: string; name: string; contentType: string; createdAt: Date }[];
+  /** Organizations only: open tasks nobody owns. */
+  grabs?: { id: string; title: string; dueDate: Date | null }[];
+  /** Organizations only: events you're invited to and haven't answered. */
+  invites?: PersonalHomeEvent[];
+  /** Organizations only: open forms you haven't answered. */
+  formsWaiting?: { id: string; title: string; slug: string; closesAt: Date | null }[];
+  /** Organizations only: your reimbursement requests not yet paid. */
+  reimbursements?: {
+    id: string;
+    description: string;
+    amountCents: number;
+    status: "SUBMITTED" | "APPROVED";
+    createdAt: Date;
+  }[];
+  /** Organizations only, finance roles: requests waiting to be approved. */
+  approvals?: ApprovalsItem["oldest"] & { count: number };
+  /** Organizations only: the newest unread in your Inbox there. */
+  updates?: {
+    id: string;
+    title: string;
+    body: string | null;
+    linkUrl: string | null;
+    createdAt: Date;
+    actor: UpdateItem["actor"];
+  }[];
 }
 
 export type { RegistrationRow };
@@ -276,6 +391,8 @@ export interface PersonalHomeRaw {
     bio: string | null;
     links: Prisma.JsonValue | null;
     hasAvailability: boolean;
+    /** The saved availability (UserAvailability.rules), for Focus time. */
+    availabilityRules?: Prisma.JsonValue | null;
   } | null;
   spaces: { space: SpaceRow; digest: SpaceDigest | null }[];
   moreClubs: number;
@@ -300,7 +417,7 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
 /** One space, as its member: every read bounded, one after another. */
 export async function readSpaceDigest(
   db: TxClient,
-  space: Pick<SpaceRow, "id" | "kind">,
+  space: Pick<SpaceRow, "id" | "kind"> & { role?: Role },
   userId: string,
   window: { now: Date; until: Date; dueBy: Date },
 ): Promise<SpaceDigest> {
@@ -466,7 +583,10 @@ export async function readSpaceDigest(
     }));
   }
 
+  const elsewhere = club ? await readElsewhere(db, organizationId, userId, now, space.role) : {};
+
   return {
+    ...elsewhere,
     events,
     rsvps,
     nextMeeting: nextMeeting
@@ -490,6 +610,128 @@ export async function readSpaceDigest(
   };
 }
 
+/**
+ * What one organization asks of you, for Personal Home's widgets: open tasks
+ * nobody owns, events you haven't answered, open forms you haven't answered
+ * (not your own, not anonymous ones, which can't tell), your reimbursements
+ * not yet paid, for finance roles the requests waiting to be approved, and
+ * the newest unread in your Inbox there.
+ */
+async function readElsewhere(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  now: Date,
+  role: Role | undefined,
+): Promise<
+  Pick<
+    SpaceDigest,
+    "grabs" | "invites" | "formsWaiting" | "reimbursements" | "approvals" | "updates"
+  >
+> {
+  const grabs = await db.task.findMany({
+    where: { AND: [taskFilterWhere(organizationId, { unowned: true }), { type: { not: "EPIC" } }] },
+    select: { id: true, title: true, dueDate: true },
+    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
+    take: PER_SPACE_ELSEWHERE,
+  });
+  const invites = await db.eventAttendee.findMany({
+    where: {
+      organizationId,
+      userId,
+      rsvp: "PENDING",
+      event: { deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
+    },
+    select: {
+      event: { select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true } },
+    },
+    orderBy: { event: { startsAt: "asc" } },
+    take: PER_SPACE_ELSEWHERE,
+  });
+  const formsWaiting = await db.form.findMany({
+    where: {
+      organizationId,
+      publishedAt: { not: null },
+      closedAt: null,
+      anonymous: false,
+      createdById: { not: userId },
+      OR: [{ closesAt: null }, { closesAt: { gt: now } }],
+      responses: { none: { userId } },
+    },
+    select: { id: true, title: true, slug: true, closesAt: true },
+    orderBy: [{ closesAt: { sort: "asc", nulls: "last" } }, { publishedAt: "desc" }],
+    take: PER_SPACE_ELSEWHERE,
+  });
+  const mine = await db.transaction.findMany({
+    where: {
+      organizationId,
+      kind: "EXPENSE",
+      submittedById: userId,
+      status: { in: ["SUBMITTED", "APPROVED"] },
+      voidedAt: null,
+    },
+    select: { id: true, description: true, amountCents: true, status: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: PER_SPACE_ELSEWHERE,
+  });
+  let approvals: SpaceDigest["approvals"];
+  if (role && can({ role }, "finance.manage")) {
+    const waitingApproval = {
+      organizationId,
+      status: "SUBMITTED" as const,
+      voidedAt: null,
+      submittedById: { not: userId },
+    };
+    const count = await db.transaction.count({ where: waitingApproval });
+    const oldest =
+      count > 0
+        ? await db.transaction.findFirst({
+            where: waitingApproval,
+            select: {
+              description: true,
+              amountCents: true,
+              createdAt: true,
+              submittedBy: { select: { name: true } },
+            },
+            orderBy: { createdAt: "asc" },
+          })
+        : null;
+    if (oldest) {
+      approvals = {
+        count,
+        description: oldest.description,
+        amountCents: oldest.amountCents,
+        createdAt: oldest.createdAt,
+        by: oldest.submittedBy?.name ?? null,
+      };
+    }
+  }
+  const updates = await db.notification.findMany({
+    where: { organizationId, userId, readAt: null },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      linkUrl: true,
+      createdAt: true,
+      actor: { select: { name: true, image: true, avatar: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: PER_SPACE_ELSEWHERE,
+  });
+  return {
+    updates,
+    grabs,
+    invites: invites.map((i) => i.event),
+    formsWaiting,
+    reimbursements: mine.map((t) => ({
+      ...t,
+      status: t.status === "APPROVED" ? ("APPROVED" as const) : ("SUBMITTED" as const),
+    })),
+    approvals,
+  };
+}
+
 async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
   const { user, spaces } = await withUserTx(userId, async ({ db }) => {
     const user = await db.user.findUnique({
@@ -502,7 +744,7 @@ async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
         gradYear: true,
         bio: true,
         links: true,
-        availability: { select: { userId: true } },
+        availability: { select: { userId: true, rules: true } },
       },
     });
     const memberships = await db.membership.findMany({
@@ -579,6 +821,7 @@ async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
           bio: user.bio,
           links: user.links,
           hasAvailability: user.availability !== null,
+          availabilityRules: user.availability?.rules ?? null,
         }
       : null,
     spaces: toRead.map((space, i) => ({ space, digest: digests[i] })),
@@ -635,6 +878,12 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
   const waiting: (WaitingPoll & { sortAt: number })[] = [];
   const ownPolls: OwnPoll[] = [];
   let hosting: HostedPage[] = [];
+  const grabs: GrabTask[] = [];
+  const invites: InviteItem[] = [];
+  const formsWaiting: WaitingForm[] = [];
+  const reimbursements: ReimbursementItem[] = [];
+  const approvals: ApprovalsItem[] = [];
+  const updates: UpdateItem[] = [];
 
   for (const { space, digest } of raw.spaces) {
     const ref = refOf(space);
@@ -700,6 +949,42 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     for (const p of digest.ownPolls) {
       ownPolls.push({ space: ref, ...p, href: pollHref(base, "availability", p.id) });
     }
+    for (const t of digest.grabs ?? []) {
+      grabs.push({
+        space: ref,
+        id: t.id,
+        title: t.title,
+        dueKey: t.dueDate ? dueKeyOf(t.dueDate) : null,
+        href: `${base}/tasks/${t.id}`,
+      });
+    }
+    for (const e of digest.invites ?? []) {
+      invites.push({ ...e, space: ref, href: `${base}/calendar/${e.id}` });
+    }
+    for (const f of digest.formsWaiting ?? []) {
+      formsWaiting.push({
+        space: ref,
+        id: f.id,
+        title: f.title,
+        closesAt: f.closesAt,
+        href: `/f/${f.slug}`,
+      });
+    }
+    for (const r of digest.reimbursements ?? []) {
+      reimbursements.push({
+        space: ref,
+        ...r,
+        href: `${base}/finance/my-reimbursements?open=${r.id}`,
+      });
+    }
+    for (const n of digest.updates ?? []) {
+      const { linkUrl, ...rest } = n;
+      updates.push({ space: ref, ...rest, href: linkUrl ?? `${base}/inbox` });
+    }
+    if (digest.approvals) {
+      const { count, ...oldest } = digest.approvals;
+      approvals.push({ space: ref, count, oldest, href: `${base}/inbox` });
+    }
     if (space.kind === "PERSONAL") {
       hosting = digest.hosted.map((h) => ({
         id: h.id,
@@ -722,6 +1007,20 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
   );
   due.sort((a, b) => a.dueKey.localeCompare(b.dueKey) || a.title.localeCompare(b.title));
   waiting.sort((a, b) => a.sortAt - b.sortAt);
+  // No due date sorts last.
+  grabs.sort(
+    (a, b) =>
+      (a.dueKey ?? "9999").localeCompare(b.dueKey ?? "9999") || a.title.localeCompare(b.title),
+  );
+  invites.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  formsWaiting.sort(
+    (a, b) =>
+      (a.closesAt?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+        (b.closesAt?.getTime() ?? Number.MAX_SAFE_INTEGER) || a.title.localeCompare(b.title),
+  );
+  reimbursements.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  updates.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  approvals.sort((a, b) => a.oldest.createdAt.getTime() - b.oldest.createdAt.getTime());
 
   const rsvps: RsvpTicket[] = raw.registrations
     .filter(
@@ -748,6 +1047,8 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     .sort((a, b) => b.done - a.done);
   const personalDigest = raw.spaces.find((s) => s.space.kind === "PERSONAL");
   return {
+    focus: personal ? focusOf(raw, personal.slug, due, timeZone, todayKey, now) : null,
+    personalOrgId: personal?.id ?? null,
     yourWeek: { done: bySpace.reduce((n, s) => n + s.done, 0), bySpace },
     recentFiles: (personalDigest?.digest?.recentFiles ?? []).map((f) => ({
       ...f,
@@ -769,6 +1070,56 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     hosting,
     profileGaps,
     finishProfileHref: profileGaps[0] && personal ? `/app/${personal.slug}/profile` : null,
+    grabs: grabs.slice(0, ELSEWHERE_LIMIT),
+    invites: invites.slice(0, ELSEWHERE_LIMIT),
+    formsWaiting: formsWaiting.slice(0, ELSEWHERE_LIMIT),
+    reimbursements: reimbursements.slice(0, ELSEWHERE_LIMIT),
+    approvals,
+    updates: updates.slice(0, ELSEWHERE_LIMIT),
+  };
+}
+
+const FOCUS_DAYS = 7;
+const FOCUS_TASKS = 2;
+
+/** Focus time across every space (PersonalHomeData.focus). */
+function focusOf(
+  raw: PersonalHomeRaw,
+  personalSlug: string,
+  due: readonly DueTask[],
+  timeZone: string,
+  todayKey: string,
+  now: Date,
+): FocusTimeData {
+  const until = zonedInstant(addDaysToKey(todayKey, FOCUS_DAYS), 0, timeZone);
+  const busy = raw.spaces.flatMap(({ space, digest }) =>
+    (digest?.events ?? [])
+      .filter((e) => {
+        if (e.allDay || e.startsAt >= until || e.endsAt <= now) return false;
+        const rsvp = digest?.rsvps.get(e.id);
+        return space.kind === "PERSONAL" || rsvp === "YES" || rsvp === "MAYBE";
+      })
+      .flatMap((e) => spansOf(e.startsAt, e.endsAt, timeZone)),
+  );
+  const availability = parseAvailability(raw.user?.availabilityRules);
+  const tasks = due
+    .filter((t) => t.dueKey >= todayKey)
+    .sort((a, b) => a.dueKey.localeCompare(b.dueKey))
+    .slice(0, FOCUS_TASKS)
+    .map((t) => ({ id: t.id, title: t.title, href: t.href, dueKey: t.dueKey }));
+  return {
+    week: focusWeek({
+      todayKey,
+      nowHour: localHours(now, timeZone),
+      availability,
+      events: busy,
+      days: FOCUS_DAYS,
+    }),
+    todayKey,
+    availability,
+    tasks,
+    availabilityHref: `/app/${personalSlug}/profile`,
+    links: tasks.map((t) => ({ kind: "task", label: t.title, href: t.href })),
   };
 }
 

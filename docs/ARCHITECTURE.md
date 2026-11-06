@@ -310,8 +310,8 @@ The Phase 0-6 modules started on `app_legacy`, a temporary role with
 `FOR ALL USING (true)` policies on 23 tables — for that role, row-level
 security was effectively off. Phase 0C moved each module onto `app_user`
 through the wrappers, so RLS covers it. Notes, workspace search
-(the command palette), finance (periods, categories, transactions, sponsors
-and sponsorships, the dashboard, the CSV export, the finance digest and
+(the command palette), finance (periods, categories, transactions, Deals'
+partners and deals, the dashboard, the CSV export, the finance digest and
 receipts), the org overview, the org switcher, the notification bell and
 bare `/app` are done. The pattern every module follows:
 

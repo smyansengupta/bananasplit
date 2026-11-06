@@ -20,6 +20,7 @@ import {
   isTaskFlagged,
   isTaskPrivate,
 } from "./task-badges";
+import { TaskAmbientActions } from "./task-ambient";
 import { TaskItemMenu } from "./task-item-menu";
 import { ProgressBar, TaskTypeChip } from "./task-type";
 import { TaskTitle } from "./task-title";
@@ -30,7 +31,8 @@ import type { TaskItem } from "./types";
  * One task as a list row (Moonstone 7.11) — the Week, the List and
  * Personal home all use it, so a task reads the same wherever you meet it.
  * The circle, the title, a meta row (epic chip, due date, tags, progress,
- * comments), then the priority chip, the owner and the ••• on the right.
+ * comments), then its ambient buttons, the priority chip, the owner and the
+ * ••• on the right.
  * Rows become a soft tile on hover; a full-width line ends each task.
  * `depth` hangs a story's tasks under it in the List, on a rail from the
  * story's circle.
@@ -91,30 +93,35 @@ export function TaskRow({
         <QuickDone task={task} disabled={!editable} />
       )}
 
-      <button
-        type="button"
-        onClick={() => showTask(task)}
-        className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2"
-      >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {priv && <PrivateMark />}
-          {task.type === "STORY" && <TaskTypeChip type="STORY" iconOnly />}
-          {/* Two lines on a phone, where one cut most titles off. */}
-          <span className="min-w-0 truncate text-[15px] leading-snug max-md:line-clamp-2 max-md:whitespace-normal">
-            {/* The story it's in (its epic is the chip below). */}
-            {showParent && task.parentTask && task.parentTask.type !== "EPIC" && (
-              <span className="text-muted-foreground">{task.parentTask.title} / </span>
-            )}
-            <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
-              <TaskTitle>{task.title}</TaskTitle>
+      {/* The title opens the task, over the whole block; the ambient buttons sit above it, beside the date. */}
+      <div className="relative min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => showTask(task)}
+          className="focus-visible:outline-foreground block w-full min-w-0 rounded-md text-left after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            {priv && <PrivateMark />}
+            {task.type === "STORY" && <TaskTypeChip type="STORY" iconOnly />}
+            {/* Two lines on a phone, where one cut most titles off. */}
+            <span className="min-w-0 truncate text-[15px] leading-snug max-md:line-clamp-2 max-md:whitespace-normal">
+              {/* The story it's in (its epic is the chip below). */}
+              {showParent && task.parentTask && task.parentTask.type !== "EPIC" && (
+                <span className="text-muted-foreground">{task.parentTask.title} / </span>
+              )}
+              <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
+                <TaskTitle>{task.title}</TaskTitle>
+              </span>
             </span>
+            {flagged && <FlagBadge />}
           </span>
-          {flagged && <FlagBadge />}
-        </span>
+        </button>
 
         <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
           {showEpic && epic && epic.id !== task.id && <TagChip color={color}>{epic.title}</TagChip>}
           <DueLabel dueDate={task.dueDate} todayKey={org.todayKey} done={done} />
+          {/* What moves it now (late, blocked, unowned, finished, quiet): src/lib/ambient/tasks.ts. */}
+          <TaskAmbientActions task={task} className="relative z-10" align="start" />
           {task.labels.slice(0, 3).map(({ label }) => (
             <TagChip key={label.id} color={label.color}>
               {label.name}
@@ -140,7 +147,7 @@ export function TaskRow({
             <BlockedNote reason={task.blockedReason} className="max-w-full" />
           )}
         </span>
-      </button>
+      </div>
 
       <div className="flex shrink-0 items-center gap-2">
         {task.priority === "HIGH" && !done && (

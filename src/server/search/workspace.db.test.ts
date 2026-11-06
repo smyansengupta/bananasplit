@@ -90,6 +90,11 @@ beforeAll(async () => {
     });
     if (!made.ok) throw new Error(JSON.stringify(made));
     org = { id: made.orgId, slug: made.slug };
+    // Forms and Finance are add-ons (src/lib/addons.ts): search covers them once added.
+    await ownerDb.orgSettings.update({
+      where: { organizationId: org.id },
+      data: { addOns: ["forms", "finance"] },
+    });
     await ownerDb.membership.create({
       data: { organizationId: org.id, userId: member.id, role: "MEMBER", title: "VP Outreach" },
     });

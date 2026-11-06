@@ -16,7 +16,7 @@ export const FINANCE_CARDS = [
     title: "When money runs out",
     detail: "When the money runs out, at the current pace",
   },
-  { id: "sponsorships", title: "Sponsorships", detail: "Committed vs. received" },
+  { id: "sponsorships", title: "Deals", detail: "Committed vs. received" },
   { id: "burn", title: "Spend by month", detail: "Money out per month this period" },
 ] as const;
 

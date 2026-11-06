@@ -77,7 +77,7 @@ export default async function FinanceLayout({
                 { label: "Transactions", href: `${base}/transactions` },
                 { label: "Budget", href: `${base}/budget` },
                 ...(spaceIncludes(org, "sponsorships")
-                  ? [{ label: "Sponsorships", href: `${base}/sponsorships` }]
+                  ? [{ label: "Deals", href: `${base}/deals` }]
                   : []),
                 { label: "My requests", href: `${base}/my-reimbursements` },
               ]}

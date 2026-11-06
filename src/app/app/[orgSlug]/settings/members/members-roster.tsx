@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 
 import { PeopleTable, type InvitedRow, type RosterAccess } from "@/components/profile/people-table";
 import { personHref } from "@/lib/profile/href";
+import type { Role } from "@/generated/prisma/enums";
 import type { DirectoryPerson } from "@/server/profiles/directory";
 
 /**
@@ -17,6 +18,7 @@ export function MembersRoster({
   people,
   emails,
   invites,
+  roleFixes,
   access,
 }: {
   orgId: string;
@@ -25,6 +27,7 @@ export function MembersRoster({
   people: DirectoryPerson[];
   emails: Record<string, string>;
   invites: InvitedRow[];
+  roleFixes?: Record<string, { to: Role; reason: string }>;
   access: RosterAccess;
 }) {
   const router = useRouter();
@@ -35,6 +38,7 @@ export function MembersRoster({
       people={people}
       emails={emails}
       invites={invites}
+      roleFixes={roleFixes}
       access={access}
       onSelect={(id) => router.push(personHref(orgSlug, id))}
     />

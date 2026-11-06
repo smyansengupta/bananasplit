@@ -32,11 +32,13 @@ vi.mock("@/server/db/context", () => ({
         event: { findMany: mocks.findMany, findFirst: async () => null },
         eventRegistration: { groupBy: mocks.groupBy },
         eventAttendee: { findMany: mocks.attendees },
+        orgAuditLog: { findMany: async () => [] },
         note: { findMany: mocks.notes },
         availabilityPoll: { count: async () => 0 },
       },
     }),
 }));
+vi.mock("@/server/booking/co-hosted", () => ({ coHostedEventIds: async () => [] }));
 vi.mock("@/server/rsvp/my-registrations", () => ({ myRsvpRegistrations: mocks.registrations }));
 vi.mock("@/server/conference/connections", () => ({ loadMeetingConnections: mocks.connections }));
 vi.mock("@/server/conference/connect", () => ({ CONFERENCE_CALLBACK_MESSAGES: {} }));

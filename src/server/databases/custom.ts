@@ -14,15 +14,23 @@ import {
   LIMITS,
   parseCell,
   readOptions,
+  readRelation,
   type Choice,
   type FieldDef,
   type FieldOptions,
   type FieldType,
   type StoredValue,
 } from "@/lib/databases/fields";
+import {
+  canDeleteDatabase,
+  deleteBlockedReason,
+  type DatabaseDeleteCheck,
+} from "@/lib/databases/delete";
 import { DATABASE_TEMPLATES, findTemplate } from "@/lib/databases/templates";
 import { writeOrgAuditLog } from "@/server/audit";
 import type { TxClient } from "@/server/db/context";
+
+import { labelsForRows, relationProblem, type RelationLabel } from "./relations";
 
 /**
  * Club-made databases (DatabaseDefinition kind CUSTOM; docs/features/
@@ -84,8 +92,16 @@ export interface CustomDatabase {
   trashCount: number;
   /** Add and edit rows (app.can_edit_database). */
   canEdit: boolean;
-  /** Fields, settings, deleting for good (owners and admins). */
+  /** Fields, settings, deleting rows for good (owners and admins). */
   canManage: boolean;
+  /** Deleting the whole database for good (lib/databases/delete.ts). */
+  canDelete: boolean;
+  /** Why it can never be deleted (a form writes into it), shown where Delete would be. */
+  deleteBlocked: string | null;
+  /** Saved reports (the viewer can see) that read it: the delete confirm says they'll show it's gone. */
+  reportCount: number;
+  /** Names of what the loaded rows' RELATION cells link to, keyed `${kind}:${id}`. */
+  labels: Record<string, RelationLabel>;
 }
 
 /** Rows a page loads at once; "Load more" fetches the next page. */
@@ -108,6 +124,8 @@ export interface RecordPage {
   next: string | null;
   /** Rows matching the query, on every page. */
   total: number;
+  /** Names of what these rows' RELATION cells link to, keyed `${kind}:${id}`. */
+  labels: Record<string, RelationLabel>;
 }
 
 async function allowed(db: TxClient, fn: "can_view_database" | "can_edit_database", id: string) {
@@ -166,6 +184,8 @@ export async function loadCustomDatabase(
   const trashCount = await db.databaseRecord.count({
     where: { organizationId, databaseId: def.id, deletedAt: { not: null } },
   });
+  const canEdit = await allowed(db, "can_edit_database", def.id);
+  const check = await deleteCheck(actor, def.id, canEdit);
   return {
     id: def.id,
     key: def.key,
@@ -179,8 +199,12 @@ export async function loadCustomDatabase(
     next: page.next,
     total: page.total,
     trashCount,
-    canEdit: await allowed(db, "can_edit_database", def.id),
+    canEdit,
     canManage: can({ role: actor.role }, "databases.write"),
+    canDelete: canDeleteDatabase(check),
+    deleteBlocked: deleteBlockedReason(check),
+    reportCount: await reportsReading(db, organizationId, def.id),
+    labels: page.labels,
   };
 }
 
@@ -229,8 +253,13 @@ function searchSql(
   const value = (f: FieldDef) => Prisma.sql`r."values" -> (${f.id}::text)`;
   const text = (f: FieldDef) => Prisma.sql`r."values" ->> (${f.id}::text)`;
   const parts: Prisma.Sql[] = [];
+  // An AI field shows its value as its output type does; links aren't text.
+  const choiceList = (f: FieldDef) =>
+    hasChoices(f.type) || (f.type === "AI" && f.options.output === "SELECT");
   const plain = fields
-    .filter((f) => !hasChoices(f.type) && !["CURRENCY", "CHECKBOX", "MEMBER"].includes(f.type))
+    .filter(
+      (f) => !choiceList(f) && !["CURRENCY", "CHECKBOX", "MEMBER", "RELATION"].includes(f.type),
+    )
     .map((f) => f.id);
   if (plain.length > 0) {
     parts.push(Prisma.sql`EXISTS (SELECT 1 FROM jsonb_each_text(r."values") AS e
@@ -249,13 +278,13 @@ function searchSql(
       if (ids.length > 0) {
         parts.push(Prisma.sql`${text(f)} IN (${Prisma.join(ids.map(([id]) => id))})`);
       }
-    } else if (hasChoices(f.type)) {
+    } else if (choiceList(f)) {
       const ids = (f.options.choices ?? [])
         .filter((c) => c.label.toLowerCase().includes(needle))
         .map((c) => c.id);
       if (ids.length === 0) continue;
       parts.push(
-        f.type === "SELECT"
+        f.type !== "MULTI_SELECT"
           ? Prisma.sql`${text(f)} IN (${Prisma.join(ids)})`
           : Prisma.sql`(${value(f)}) ?| ARRAY[${Prisma.join(ids)}]::text[]`,
       );
@@ -313,25 +342,27 @@ async function readRecords(
   const counted = await db.$queryRaw<{ total: number }[]>`
     SELECT count(*)::int AS total FROM "DatabaseRecord" r WHERE ${where}`;
   const last = hits.length > limit ? hits[limit - 1] : undefined;
+  const records: CustomRecord[] = ids.flatMap((id) => {
+    const r = byId.get(id);
+    return r
+      ? [
+          {
+            id: r.id,
+            values: (r.values ?? {}) as Record<string, unknown>,
+            createdAt: r.createdAt.toISOString(),
+            updatedAt: r.updatedAt.toISOString(),
+            createdByName: r.createdBy?.name ?? null,
+            updatedByName: r.updatedBy?.name ?? null,
+            deletedAt: r.deletedAt?.toISOString() ?? null,
+          },
+        ]
+      : [];
+  });
   return {
-    records: ids.flatMap((id) => {
-      const r = byId.get(id);
-      return r
-        ? [
-            {
-              id: r.id,
-              values: (r.values ?? {}) as Record<string, unknown>,
-              createdAt: r.createdAt.toISOString(),
-              updatedAt: r.updatedAt.toISOString(),
-              createdByName: r.createdBy?.name ?? null,
-              updatedByName: r.updatedBy?.name ?? null,
-              deletedAt: r.deletedAt?.toISOString() ?? null,
-            },
-          ]
-        : [];
-    }),
+    records,
     next: last ? `${last.at}~${last.id}` : null,
     total: counted[0]?.total ?? 0,
+    labels: await labelsForRows(db, organizationId, fields, records),
   };
 }
 
@@ -654,9 +685,137 @@ export async function archiveDatabase(actor: Actor, databaseId: string): Promise
   });
 }
 
+/** Everything canDeleteDatabase needs about one CUSTOM database, read as the viewer. */
+async function deleteCheck(
+  actor: Actor,
+  databaseId: string,
+  canEditRows: boolean,
+  kind: DatabaseDeleteCheck["kind"] = "CUSTOM",
+): Promise<DatabaseDeleteCheck> {
+  const { db, organizationId } = actor;
+  // A form in the trash doesn't hold its database: it goes with it.
+  const forms = await db.form.count({ where: { organizationId, databaseId, deletedAt: null } });
+  const settings = await db.orgSettings.findUnique({
+    where: { organizationId },
+    select: { memberCanDeleteDatabases: true },
+  });
+  return {
+    role: actor.role,
+    kind,
+    formOwned: forms > 0,
+    membersCanDelete: settings?.memberCanDeleteDatabases ?? false,
+    canEditRows,
+  };
+}
+
+/** Built-ins are refused by deleteBlockedReason; a CUSTOM one must be the viewer's to open. */
+async function viewable(db: TxClient, databaseId: string, kind: string): Promise<boolean> {
+  return kind !== "CUSTOM" || allowed(db, "can_view_database", databaseId);
+}
+
+/**
+ * Removes the Linked-panel links to a database and its rows before it goes,
+ * so a later database with the same key never inherits them.
+ */
+async function dropLinks(db: TxClient, organizationId: string, def: { id: string; key: string }) {
+  const linked = await db.itemLink.findMany({
+    where: { organizationId, OR: [{ fromKind: "record" }, { toKind: "record" }] },
+    select: { fromKind: true, fromId: true, toKind: true, toId: true },
+  });
+  const ids = [
+    ...new Set(
+      linked.flatMap((l) => [
+        ...(l.fromKind === "record" ? [l.fromId] : []),
+        ...(l.toKind === "record" ? [l.toId] : []),
+      ]),
+    ),
+  ];
+  const mine = ids.length
+    ? (
+        await db.databaseRecord.findMany({
+          where: { organizationId, databaseId: def.id, id: { in: ids } },
+          select: { id: true },
+        })
+      ).map((r) => r.id)
+    : [];
+  const refs = [
+    { kind: "database", ids: [def.key] },
+    ...(mine.length ? [{ kind: "record", ids: mine }] : []),
+  ];
+  await db.itemLink.deleteMany({
+    where: {
+      organizationId,
+      OR: refs.flatMap((r) => [
+        { fromKind: r.kind, fromId: { in: r.ids } },
+        { toKind: r.kind, toId: { in: r.ids } },
+      ]),
+    },
+  });
+}
+
+/** Saved reports (not archived) that read a database, as their source or their join. */
+async function reportsReading(
+  db: TxClient,
+  organizationId: string,
+  databaseId: string,
+): Promise<number> {
+  const source = `custom:${databaseId}`;
+  return db.report.count({
+    where: {
+      organizationId,
+      archivedAt: null,
+      OR: [{ source }, { joinWith: { path: ["source"], equals: source } }],
+    },
+  });
+}
+
+/**
+ * Deletes a database for good: its fields and rows go with it (they
+ * cascade from the definition). Built-in databases and a form's answers
+ * can't be deleted; who else may is canDeleteDatabase, and the DELETE
+ * policy on "DatabaseDefinition" refuses anyone else whatever they send.
+ * A report reading it shows its database is gone.
+ */
+export async function deleteDatabase(actor: Actor, databaseId: string): Promise<void> {
+  const { db, organizationId } = actor;
+  const def = await db.databaseDefinition.findFirst({
+    where: { id: databaseId, organizationId },
+    select: { id: true, key: true, name: true, kind: true, archivedAt: true },
+  });
+  if (!def) throw new NotFoundError();
+  // One the viewer can't open doesn't exist for them, archived or not (an
+  // admin can't delete an owner-only database by archiving it first).
+  if (!(await viewable(db, def.id, def.kind))) throw new NotFoundError();
+  const canEditRows = await allowed(db, "can_edit_database", def.id);
+  const check = await deleteCheck(actor, def.id, canEditRows, def.kind);
+  const blocked = deleteBlockedReason(check);
+  if (blocked) throw new DatabaseInputError(blocked);
+  if (!canDeleteDatabase(check)) {
+    throw new DatabaseInputError(
+      check.membersCanDelete
+        ? "Only owners, admins and members who can edit this database can delete it."
+        : "Only owners and admins can delete databases.",
+    );
+  }
+  const rows = await db.databaseRecord.count({ where: { organizationId, databaseId: def.id } });
+  await dropLinks(db, organizationId, def);
+  const deleted = await db.databaseDefinition.deleteMany({
+    where: { id: def.id, organizationId },
+  });
+  if (deleted.count === 0) throw new DatabaseInputError("That database could not be deleted.");
+  await writeOrgAuditLog(db, {
+    organizationId,
+    action: "database.deleted",
+    targetType: "DatabaseDefinition",
+    targetId: def.id,
+    diff: { name: def.name, rows },
+  });
+}
+
 // ---- Fields -----------------------------------------------------------------
 
-function checkOptions(type: FieldType, raw: unknown): FieldOptions {
+/** A field's options, checked and trimmed to what its type uses (DatabaseInputError otherwise). */
+export function checkFieldOptions(type: FieldType, raw: unknown): FieldOptions {
   const parsed = fieldOptionsSchema.safeParse(raw ?? {});
   if (!parsed.success) throw new DatabaseInputError("Those field options aren't valid.");
   const out: FieldOptions = {};
@@ -670,7 +829,50 @@ function checkOptions(type: FieldType, raw: unknown): FieldOptions {
     });
   }
   if (type === "NUMBER" && parsed.data.decimals !== undefined) out.decimals = parsed.data.decimals;
+  if (type === "RELATION") {
+    const target = parsed.data.target;
+    if (!target) throw new DatabaseInputError("Pick what the field links to.");
+    if (target.kind === "record" && !target.databaseId) {
+      throw new DatabaseInputError("Pick the database it links to.");
+    }
+    out.target =
+      target.kind === "person" || target.kind === "company" ? { kind: target.kind } : target;
+    if (parsed.data.single) out.single = true;
+  }
+  if (type === "AI") {
+    out.prompt = parsed.data.prompt ?? "";
+    out.output = parsed.data.output ?? "TEXT";
+    if (parsed.data.research) out.research = true;
+    if (out.output === "SELECT") {
+      const labels = new Set<string>();
+      out.choices = (parsed.data.choices ?? []).filter((c) => {
+        const k = c.label.toLowerCase();
+        if (labels.has(k)) return false;
+        labels.add(k);
+        return true;
+      });
+    }
+  }
   return out;
+}
+
+/** A RELATION field whose target database is one of this organization's, live. */
+async function checkTarget(actor: Actor, options: FieldOptions): Promise<void> {
+  const databaseId = options.target?.databaseId;
+  if (!databaseId) return;
+  const kind = options.target!.kind === "record" ? "CUSTOM" : "CRM_PIPELINE";
+  const def = await actor.db.databaseDefinition.findFirst({
+    where: { id: databaseId, organizationId: actor.organizationId, kind, archivedAt: null },
+    select: { id: true },
+  });
+  if (!def) throw new DatabaseInputError("That database isn't here any more. Pick another.");
+}
+
+/** Refuses links to records that are gone, trashed, of another organization or of the wrong kind. */
+async function checkLinks(actor: Actor, field: FieldDef, value: StoredValue | null): Promise<void> {
+  if (field.type !== "RELATION" || value === null) return;
+  const problem = await relationProblem(actor.db, actor.organizationId, field, readRelation(value));
+  if (problem) throw new DatabaseInputError(problem);
 }
 
 async function fieldOf(actor: Actor, fieldId: string) {
@@ -702,13 +904,15 @@ export async function addField(
     where: { organizationId: actor.organizationId, databaseId },
     _max: { sortOrder: true },
   });
+  const options = checkFieldOptions(type, input.options);
+  if (type === "RELATION") await checkTarget(actor, options);
   const created = await actor.db.databaseField.create({
     data: {
       organizationId: actor.organizationId,
       databaseId,
       name: cleanName(input.name, "field"),
       type,
-      options: checkOptions(type, input.options) as Prisma.InputJsonObject,
+      options: options as Prisma.InputJsonObject,
       sortOrder: (last._max.sortOrder ?? 0) + 1,
       isPrimary: count === 0,
     },
@@ -805,7 +1009,11 @@ export async function updateField(
     );
   }
   const typeChanged = type !== beforeDef.type;
-  let options = input.options !== undefined ? checkOptions(type, input.options) : beforeDef.options;
+  let options = input.options !== undefined ? checkFieldOptions(type, input.options) : beforeDef.options;
+  if (type === "RELATION" && input.options !== undefined) await checkTarget(actor, options);
+  if (type === "RELATION" && !options.target) {
+    throw new DatabaseInputError("Pick what the field links to.");
+  }
   const removedChoices =
     hasChoices(type) && hasChoices(beforeDef.type)
       ? (beforeDef.options.choices ?? []).filter(
@@ -993,6 +1201,7 @@ export async function createRecord(
     if (!field) continue;
     const parsed = parseCell(field, raw, members);
     if (!parsed.ok) throw new DatabaseInputError(`${field.name}: ${parsed.error}`);
+    await checkLinks(actor, field, parsed.value);
     if (parsed.value !== null) clean[fieldId] = parsed.value;
   }
   const row = await actor.db.databaseRecord.create({
@@ -1043,6 +1252,7 @@ export async function updateCell(
     def.type === "MEMBER" ? await memberIds(actor.db, actor.organizationId) : undefined;
   const parsed = parseCell(def, value, members);
   if (!parsed.ok) throw new DatabaseInputError(parsed.error);
+  await checkLinks(actor, def, parsed.value);
   const changed = await setCell(
     actor.db,
     actor.organizationId,

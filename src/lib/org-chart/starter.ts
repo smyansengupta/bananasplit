@@ -2,9 +2,10 @@ import { normalizeOrgChart, type NormalizedChart } from "./normalize";
 import type { OrgChartParse } from "./schema";
 
 /**
- * The starter structure: the roles a student club almost always has, laid
- * out and written up, with nobody in them. An org that has no document to
- * upload picks this instead of an empty page and fills in the names.
+ * The starter structure ("A president and VPs"): the roles an organization
+ * almost always has, laid out and written up, with nobody in them. An org
+ * that has no document to upload picks this instead of an empty page and
+ * fills in the names.
  *
  * Every title, responsibility and decision here is a suggestion the admin
  * edits or deletes in the draft editor. It goes through the same
@@ -20,7 +21,7 @@ const positions: OrgChartParse["positions"] = [
     reports_to: null,
     manages: [],
     responsibilities: [
-      "Sets the semester's goals and priorities",
+      "Sets the year's goals and priorities",
       "Runs the weekly board meeting",
       "Represents the organization to partners and the outside world",
     ],
@@ -31,7 +32,7 @@ const positions: OrgChartParse["positions"] = [
   },
   {
     id: "advisor",
-    title: "Faculty Advisor",
+    title: "Advisor",
     person_name: null,
     reports_to: "president",
     manages: [],
@@ -48,7 +49,7 @@ const positions: OrgChartParse["positions"] = [
     reports_to: "president",
     manages: [],
     responsibilities: [
-      "Owns the semester calendar and the task board",
+      "Owns the calendar and the task board",
       "Collects updates from the leads and flags blockers",
       "Steps in for the President",
     ],
@@ -124,7 +125,7 @@ const positions: OrgChartParse["positions"] = [
 export const STARTER_PARSE: OrgChartParse = {
   positions,
   open_items: [
-    { who: "President", question: "Who holds each role this semester?" },
+    { who: "President", question: "Who holds each role right now?" },
     { who: "President", question: "Which roles are still open, and when do they get filled?" },
   ],
 };

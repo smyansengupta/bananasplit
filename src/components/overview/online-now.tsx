@@ -30,16 +30,12 @@ export function OnlineNow({
       href={`/app/${orgSlug}/people?online=1`}
       className="focus-glow hover:text-foreground inline-flex items-center gap-2 rounded-full align-middle whitespace-nowrap outline-none"
     >
-      <span className="relative flex shrink-0">
+      <span className="flex shrink-0">
         {faces.map((face, i) => (
           <span key={face.id} className={i > 0 ? "-ml-1.5" : undefined}>
             <UserAvatar user={face} size="xs" className="ring-background ring-2" />
           </span>
         ))}
-        <span
-          aria-hidden="true"
-          className="bg-success ring-background absolute -right-0.5 -bottom-0.5 size-2 rounded-full ring-2"
-        />
       </span>
       {label}
     </Link>

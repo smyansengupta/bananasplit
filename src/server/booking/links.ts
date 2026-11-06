@@ -1,0 +1,366 @@
+import { Prisma } from "@/generated/prisma/client";
+import { can } from "@/lib/auth/permissions";
+import {
+  BOOKING_DURATIONS,
+  DEFAULT_HOURS,
+  readHours,
+  readOverrides,
+  type DateOverride,
+  type WeeklyHours,
+} from "@/lib/booking/hours";
+import { bookingSlug, readQuestions, SLUG_RE, type BookingQuestion } from "@/lib/crm/outreach/booking";
+import { MAX_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { isValidTimeZone } from "@/lib/tasks/dates";
+import { randomToken } from "@/server/crm/outreach/tokens";
+import type { MemberContext, TxClient } from "@/server/db/context";
+
+import { bookingAccess, mainLinkId } from "./access";
+import { tellHosts } from "./notify";
+
+/**
+ * Making and changing meeting links (Meetings > Meeting links;
+ * docs/features/booking.md). Your own link is made the first time you open
+ * the tab (every member of every space has one) and only you change it.
+ * The organization's main link is made the first time someone who runs links
+ * opens the tab, CRM or not. More organization links need the CRM
+ * (bookingAccess). Anyone in the organization can share them, and their
+ * hosts, whoever made them, owners, admins and CRM managers change them.
+ */
+
+export class BookingLinkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BookingLinkError";
+  }
+}
+
+export interface LinkInput {
+  title?: string;
+  description?: string | null;
+  durationMin?: number;
+  durations?: number[];
+  bufferMin?: number;
+  minNoticeHours?: number;
+  maxDaysAhead?: number;
+  maxPerDay?: number | null;
+  timezone?: string | null;
+  hours?: WeeklyHours | null;
+  dateOverrides?: DateOverride[];
+  hostIds?: string[];
+  questions?: BookingQuestion[];
+  pipelineId?: string | null;
+  video?: boolean;
+  location?: string | null;
+  reminderMinutes?: number[];
+  active?: boolean;
+  slug?: string;
+}
+
+const FIRST_QUESTION = [{ id: "q1", label: "What would you like to talk about?", required: false }];
+
+function suffix(): string {
+  return randomToken(3).toLowerCase().replace(/[^a-z0-9]/g, "x");
+}
+
+/** Your own link in this space, made on first use. */
+export async function ensurePersonalLink(ctx: MemberContext): Promise<{ id: string; slug: string }> {
+  const { db, organizationId, userId } = ctx;
+  const found = await db.crmBookingPage.findFirst({
+    where: { organizationId, ownerUserId: userId },
+    select: { id: true, slug: true },
+  });
+  if (found) return found;
+  const [user, org] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { name: true, timezone: true } }),
+    db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }),
+  ]);
+  const first = (user?.name ?? "").trim().split(/\s+/)[0] || "me";
+  const zone = isValidTimeZone(user?.timezone) ? user!.timezone! : (org?.timezone ?? "UTC");
+  // Skipped, not caught: this runs inside the page's transaction, and a failed
+  // insert would end it. Another tab making it at the same moment is fine.
+  await db.crmBookingPage.createMany({
+    data: [
+      {
+        organizationId,
+        ownerUserId: userId,
+        slug: bookingSlug(user?.name ?? "meet", suffix()),
+        title: `Meet with ${first}`,
+        hostIds: [userId],
+        hours: DEFAULT_HOURS as unknown as Prisma.InputJsonObject,
+        timezone: zone,
+        minNoticeHours: 12,
+        maxDaysAhead: 30,
+        questions: FIRST_QUESTION,
+        // Off until you turn it on: a live link shows when you're free.
+        active: false,
+        createdById: userId,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  const made = await db.crmBookingPage.findFirst({ where: { organizationId, ownerUserId: userId }, select: { id: true, slug: true } });
+  if (!made) throw new BookingLinkError("Your meeting link couldn't be made. Try again.");
+  return made;
+}
+
+/**
+ * The organization's main link, made the first time someone who runs links
+ * opens the tab (as your own link is): "Meet with {organization}", taking
+ * turns among the owners and admins, at the organization's own address when
+ * that's free. Off until someone turns it on, for the same reason as yours.
+ * Anyone else just finds it isn't there yet.
+ */
+export async function ensureMainLink(ctx: MemberContext): Promise<void> {
+  const { db, organizationId, userId } = ctx;
+  const id = mainLinkId(organizationId);
+  const found = () => db.crmBookingPage.findUnique({ where: { id }, select: { id: true } });
+  if ((await found()) || !(await runsLinks(ctx))) return;
+  const [org, admins] = await Promise.all([
+    db.organization.findUnique({ where: { id: organizationId }, select: { name: true, slug: true, timezone: true } }),
+    db.membership.findMany({ where: { organizationId, role: { in: ["OWNER", "ADMIN"] } }, select: { userId: true }, take: 20 }),
+  ]);
+  if (!org) return;
+  // A slug is unique across every space, so the organization's own may be taken.
+  for (const slug of [org.slug, bookingSlug(org.name, suffix())].filter((s) => SLUG_RE.test(s))) {
+    const { count } = await db.crmBookingPage.createMany({
+      data: [
+        {
+          id,
+          organizationId,
+          slug,
+          title: `Meet with ${org.name}`.slice(0, 120),
+          hostIds: admins.map((a) => a.userId),
+          hours: DEFAULT_HOURS as unknown as Prisma.InputJsonObject,
+          timezone: org.timezone ?? "UTC",
+          minNoticeHours: 12,
+          maxDaysAhead: 30,
+          questions: FIRST_QUESTION,
+          active: false,
+          createdById: userId,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    if (count > 0 || (await found())) return;
+  }
+}
+
+export async function createOrgLink(ctx: MemberContext, title: string): Promise<{ id: string; slug: string }> {
+  const { db, organizationId, userId } = ctx;
+  const access = await bookingAccess(db, organizationId);
+  if (!access.orgLinks) {
+    throw new BookingLinkError(
+      access.personal ? "A Personal space has your own link only." : "More organization links come with the CRM. Add it on Integrations and apps.",
+    );
+  }
+  const t = title.trim().slice(0, 120);
+  if (!t) throw new BookingLinkError("Give it a name.");
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+  return db.crmBookingPage.create({
+    data: {
+      organizationId,
+      slug: bookingSlug(t, suffix()),
+      title: t,
+      hostIds: [userId],
+      hours: DEFAULT_HOURS as unknown as Prisma.InputJsonObject,
+      timezone: org?.timezone ?? "UTC",
+      questions: FIRST_QUESTION,
+      createdById: userId,
+    },
+    select: { id: true, slug: true },
+  });
+}
+
+/** Who may change a link: its owner (personal), or (organization) its hosts, its maker, admins and CRM managers. */
+export async function canEditLink(
+  ctx: MemberContext,
+  page: { ownerUserId: string | null; hostIds: string[]; createdById: string | null },
+): Promise<boolean> {
+  if (page.ownerUserId) return page.ownerUserId === ctx.userId;
+  if (page.hostIds.includes(ctx.userId) || page.createdById === ctx.userId) return true;
+  return runsLinks(ctx);
+}
+
+/** Owners, admins and CRM managers: they may put anyone on an organization link. */
+async function runsLinks(ctx: MemberContext): Promise<boolean> {
+  if (can(ctx, "settings.general.write")) return true;
+  const s = await ctx.db.crmSettings.findUnique({ where: { organizationId: ctx.organizationId }, select: { managerIds: true } });
+  return Boolean(s?.managerIds.includes(ctx.userId));
+}
+
+/** The Inbox line's key: one ask per member per space, whoever asks. */
+export function askKey(organizationId: string, userId: string): string {
+  return `ask-on:${organizationId}:${userId}`;
+}
+
+/**
+ * Ask them, on a member's card: one Inbox line asking them to turn their
+ * link on (it opens Meeting links, which makes the link if they never have).
+ * Only ever one per member here, however many people ask, so nobody gets
+ * nagged; the button isn't offered again after that.
+ */
+export async function askToTurnOn(ctx: MemberContext, userId: string): Promise<void> {
+  const { db, organizationId } = ctx;
+  if (userId === ctx.userId) throw new BookingLinkError("That's your own link.");
+  const [member, page, who] = await Promise.all([
+    db.membership.findFirst({ where: { organizationId, userId }, select: { userId: true } }),
+    db.crmBookingPage.findFirst({ where: { organizationId, ownerUserId: userId }, select: { active: true } }),
+    db.user.findUnique({ where: { id: ctx.userId }, select: { name: true } }),
+  ]);
+  if (!member) throw new BookingLinkError("They aren't in the organization any more.");
+  if (page?.active) throw new BookingLinkError("Their link is already on.");
+  await tellHosts(db, organizationId, [userId], {
+    title: `${who?.name ?? "Someone"} asked you to turn on your meeting link`,
+    body: "It's off, so nobody can book time with you yet. Turn it on in Meeting links.",
+    eventId: null,
+    key: askKey(organizationId, userId),
+    actorId: ctx.userId,
+  });
+}
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(Math.round(n), lo), hi);
+
+export async function updateLink(ctx: MemberContext, id: string, input: LinkInput): Promise<void> {
+  const { db, organizationId } = ctx;
+  const page = await db.crmBookingPage.findFirst({
+    where: { id, organizationId },
+    select: { id: true, ownerUserId: true, hostIds: true, createdById: true, active: true },
+  });
+  if (!page) throw new BookingLinkError("That meeting link isn't here any more.");
+  if (!(await canEditLink(ctx, page))) throw new BookingLinkError("Only its hosts and whoever runs the CRM can change this link.");
+  const data: Prisma.CrmBookingPageUpdateInput = {};
+  if (input.title !== undefined) {
+    const t = input.title.trim().slice(0, 120);
+    if (!t) throw new BookingLinkError("Give it a name.");
+    data.title = t;
+  }
+  if (input.description !== undefined) data.description = input.description?.trim().slice(0, 2000) || null;
+  const allowed = BOOKING_DURATIONS as readonly number[];
+  if (input.durationMin !== undefined) {
+    if (!allowed.includes(input.durationMin)) throw new BookingLinkError("Pick how long.");
+    data.durationMin = input.durationMin;
+  }
+  if (input.durations !== undefined) data.durations = [...new Set(input.durations.filter((d) => allowed.includes(d)))].slice(0, 3);
+  if (input.bufferMin !== undefined) data.bufferMin = clamp(input.bufferMin, 0, 120);
+  if (input.minNoticeHours !== undefined) data.minNoticeHours = clamp(input.minNoticeHours, 0, 336);
+  if (input.maxDaysAhead !== undefined) data.maxDaysAhead = clamp(input.maxDaysAhead, 1, 90);
+  if (input.maxPerDay !== undefined) data.maxPerDay = input.maxPerDay ? clamp(input.maxPerDay, 1, 24) : null;
+  if (input.timezone !== undefined) {
+    if (input.timezone && !isValidTimeZone(input.timezone)) throw new BookingLinkError("Pick a time zone.");
+    data.timezone = input.timezone || null;
+  }
+  if (input.hours !== undefined) {
+    // A personal link always has hours ("the times you're free"); an organization link may use its hosts' availability.
+    const h = input.hours ? readHours(input.hours) : null;
+    if (!h && page.ownerUserId) throw new BookingLinkError("Fill in when you're free.");
+    data.hours = h ? (h as unknown as Prisma.InputJsonObject) : Prisma.DbNull;
+  }
+  if (input.dateOverrides !== undefined) {
+    data.dateOverrides = readOverrides(input.dateOverrides) as unknown as Prisma.InputJsonArray;
+  }
+  if (input.questions !== undefined) data.questions = readQuestions(input.questions) as unknown as Prisma.InputJsonArray;
+  if (input.video !== undefined) data.video = input.video;
+  if (input.location !== undefined) data.location = input.location?.trim().slice(0, 300) || null;
+  if (input.reminderMinutes !== undefined) {
+    data.reminderMinutes = [...new Set(input.reminderMinutes.map((m) => Math.round(m)).filter((m) => m >= 1 && m <= MAX_REMINDER_MINUTES))]
+      .sort((a, b) => b - a)
+      .slice(0, 4);
+  }
+  if (input.active !== undefined) data.active = input.active;
+  let addedHosts: string[] = [];
+  let hostsNow = page.hostIds;
+  if (!page.ownerUserId) {
+    if (input.hostIds) {
+      const hosts = [...new Set(input.hostIds)].slice(0, 20);
+      if (hosts.length === 0) throw new BookingLinkError("Someone has to host it.");
+      const members = await db.membership.findMany({ where: { organizationId, userId: { in: hosts } }, select: { userId: true } });
+      if (members.length !== hosts.length) throw new BookingLinkError("Hosts have to be in the organization.");
+      // A public link shows its hosts' open times and books their calendars,
+      // so only whoever runs the CRM puts someone else on one; anyone may add
+      // or take off themselves.
+      const added = hosts.filter((h) => h !== ctx.userId && !page.hostIds.includes(h));
+      if (added.length && !(await runsLinks(ctx))) {
+        throw new BookingLinkError("Only admins and CRM managers can add other people as hosts.");
+      }
+      addedHosts = added;
+      hostsNow = hosts;
+      data.hostIds = hosts;
+    }
+    if (input.pipelineId !== undefined) {
+      if (input.pipelineId) {
+        const p = await db.crmPipeline.findFirst({ where: { id: input.pipelineId, organizationId, archivedAt: null }, select: { id: true } });
+        if (!p) throw new BookingLinkError("Pick a pipeline.");
+      }
+      data.pipelineId = input.pipelineId || null;
+    }
+  }
+  if (input.slug !== undefined) {
+    const s = input.slug.trim().toLowerCase();
+    if (!SLUG_RE.test(s)) throw new BookingLinkError("Use 3 to 48 lowercase letters, numbers and dashes.");
+    const taken = await db.crmBookingPage.findFirst({ where: { slug: s, id: { not: id } }, select: { id: true } });
+    if (taken) throw new BookingLinkError("That link is taken.");
+    data.slug = s;
+  }
+  try {
+    await db.crmBookingPage.update({ where: { id: page.id }, data });
+  } catch (error) {
+    // Slugs are unique across every space, and another space's links aren't
+    // visible here: the index says it's taken.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new BookingLinkError("That link is taken.");
+    }
+    throw error;
+  }
+  // Someone put on a public link by someone else hears about it, and can take
+  // themselves off. So do the main link's hosts when it goes live: it starts
+  // with the owners and admins, who never asked to be on it.
+  const wentLive = page.id === mainLinkId(organizationId) && input.active === true && !page.active;
+  const alsoLive = wentLive ? hostsNow.filter((h) => !addedHosts.includes(h)) : [];
+  if (addedHosts.length || alsoLive.length) {
+    const [who, link] = await Promise.all([
+      db.user.findUnique({ where: { id: ctx.userId }, select: { name: true } }),
+      db.crmBookingPage.findUnique({ where: { id: page.id }, select: { title: true } }),
+    ]);
+    const name = who?.name ?? "Someone";
+    const title = link?.title ?? "a meeting link";
+    await tellHosts(db, organizationId, addedHosts, {
+      title: `${name} made you a host of ${title}`,
+      body: "Guests can book your open times through it. Take yourself off in Meeting links.",
+      eventId: null,
+      key: `host-added:${page.id}:${addedHosts.join(",")}:${Date.now()}`,
+      actorId: ctx.userId,
+    });
+    await tellHosts(db, organizationId, alsoLive, {
+      title: `${name} turned on ${title}`,
+      body: "You're one of its hosts, so guests can book your open times through it. Take yourself off in Meeting links.",
+      eventId: null,
+      key: `main-on:${page.id}:${Date.now()}`,
+      actorId: ctx.userId,
+    });
+  }
+}
+
+/**
+ * A member is leaving (in the removal's own transaction, as the remover):
+ * their own link stops taking bookings, they come off organization links,
+ * and a link left with nobody stops too. Their upcoming bookings are moved
+ * to another host or flagged by the booking-host-left job.
+ */
+export async function bookingMemberLeft(db: TxClient, organizationId: string, userId: string): Promise<void> {
+  await db.crmBookingPage.updateMany({ where: { organizationId, ownerUserId: userId }, data: { active: false } });
+  const pages = await db.crmBookingPage.findMany({
+    where: { organizationId, ownerUserId: null, hostIds: { has: userId } },
+    select: { id: true, hostIds: true },
+  });
+  for (const p of pages) {
+    const hosts = p.hostIds.filter((h) => h !== userId);
+    await db.crmBookingPage.update({ where: { id: p.id }, data: { hostIds: hosts, ...(hosts.length ? {} : { active: false }) } });
+  }
+  const { enqueueJob } = await import("@/server/jobs/enqueue");
+  await enqueueJob(db, {
+    orgId: organizationId,
+    kind: "booking-host-left",
+    key: `${userId}:${Date.now()}`,
+    payload: { userId },
+  });
+}

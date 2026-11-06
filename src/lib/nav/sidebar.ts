@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isAddOn } from "@/lib/addons";
 import type { PlanFeature } from "@/lib/billing/features";
 
 /**
@@ -22,6 +23,7 @@ export const SECTION_IDS = [
   "notes",
   "integrations",
   "finance",
+  "crm",
 ] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
@@ -37,9 +39,8 @@ const RETIRED_SECTION_IDS = ["org-chart", "rsvps", "polls", "find-a-time"] as co
 /**
  * The sidebar's groups, in the order people reach for them. The sidebar
  * names them (SECTION_NAMES, src/components/shell/sidebar-nav.tsx): the
- * first has no name, then Planning, Data, and Files & apps. "money" is
- * empty by default (Finance is part of Data) and stays for saved sidebars
- * that put things there.
+ * first has no name, then Planning, Data, and Integrations and apps. "money"
+ * is empty by default and stays for saved sidebars that put things there.
  */
 export const GROUP_IDS = ["main", "plan", "collect", "workspace", "money"] as const;
 export type GroupId = (typeof GROUP_IDS)[number];
@@ -63,9 +64,9 @@ export interface SectionDef {
 }
 
 // Home, Inbox and People first (yours and who's here); then planning
-// (Tasks, Calendar, Meetings); then the organization's data (Forms,
-// Databases, Finance); then where files live and apps connect (Files,
-// Integrations).
+// (Tasks, Calendar, Meetings); then the organization's data (Files, then
+// Databases); then Integrations and apps: Integrations itself, then each add-on
+// the organization has added (Forms, Finance, CRM; src/lib/addons.ts).
 export const SECTIONS: readonly SectionDef[] = [
   {
     id: "overview",
@@ -121,13 +122,12 @@ export const SECTIONS: readonly SectionDef[] = [
     description: "Calls, meet-ups, sign-up pages and finding a time.",
   },
   {
-    id: "forms",
-    label: "Forms",
-    icon: "ClipboardList",
-    path: "/forms",
-    also: ["/calendar/polls"],
+    id: "notes",
+    label: "Files",
+    icon: "FolderOpen",
+    path: "/notes",
     group: "collect",
-    description: "Quick polls, applications and sign-ups.",
+    description: "Notes, documents and uploads.",
   },
   {
     id: "databases",
@@ -136,14 +136,6 @@ export const SECTIONS: readonly SectionDef[] = [
     path: "/databases",
     group: "collect",
     description: "Attendance, sign-ups, votes and reports.",
-  },
-  {
-    id: "notes",
-    label: "Files",
-    icon: "FolderOpen",
-    path: "/notes",
-    group: "workspace",
-    description: "Notes, documents and uploads.",
   },
   {
     id: "integrations",
@@ -155,12 +147,29 @@ export const SECTIONS: readonly SectionDef[] = [
     description: "The apps your organization connects.",
   },
   {
+    id: "forms",
+    label: "Forms",
+    icon: "ClipboardList",
+    path: "/forms",
+    also: ["/calendar/polls"],
+    group: "workspace",
+    description: "Quick polls, applications and sign-ups.",
+  },
+  {
     id: "finance",
     label: "Finance",
     icon: "Wallet",
     path: "/finance",
-    group: "collect",
+    group: "workspace",
     description: "Budget, transactions and reimbursements.",
+  },
+  {
+    id: "crm",
+    label: "CRM",
+    icon: "Handshake",
+    path: "/crm",
+    group: "workspace",
+    description: "People, companies and pipelines you reach out to.",
   },
 ];
 
@@ -177,6 +186,7 @@ export const SECTION_FEATURES: Record<SectionId, PlanFeature> = {
   notes: "files",
   integrations: "integrations",
   finance: "finance",
+  crm: "crm",
 };
 
 /**
@@ -196,6 +206,19 @@ const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[numbe
   meetings: "rsvps",
   forms: "polls",
 };
+
+/**
+ * Sections that always sit in their own group, in this order, whatever an
+ * older saved sidebar says: Files heads Data, and Integrations and apps is
+ * Integrations first with each added add-on below it.
+ */
+export const PINNED_PLACE: readonly SectionId[] = [
+  "notes",
+  "integrations",
+  "forms",
+  "finance",
+  "crm",
+];
 
 /** Groups have no names any more; kept so saved configs and callers still line up. */
 export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {
@@ -247,6 +270,8 @@ export interface ResolvedItem {
   locked: boolean;
   group: GroupId;
   description: string;
+  /** An add-on the organization hasn't added: hidden, and left out of Admin panel › Sidebar. */
+  notAdded?: boolean;
 }
 
 export interface ResolvedGroup {
@@ -260,8 +285,13 @@ function groupOf(id: string | undefined): GroupId | undefined {
   return (GROUP_IDS as readonly string[]).includes(id ?? "") ? (id as GroupId) : undefined;
 }
 
-/** The full sidebar (hidden sections included, flagged), in the org's order. */
-export function resolveSidebar(raw: unknown): ResolvedGroup[] {
+/**
+ * The full sidebar (hidden sections included, flagged), in the org's order.
+ * `addOns` is the organization's added add-ons (OrgSettings.addOns); one
+ * that isn't added is hidden and marked notAdded. Left out, every add-on
+ * counts as added.
+ */
+export function resolveSidebar(raw: unknown, addOns?: readonly string[] | null): ResolvedGroup[] {
   const parsed = raw ? sidebarConfigSchema.safeParse(raw) : null;
   const config = parsed?.success ? parsed.data : null;
   const saved = new Map<string, NonNullable<typeof config>["items"][number] & { index: number }>(
@@ -282,6 +312,13 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
       config && !s && SECTIONS[i - 1]?.group === def.group ? items[items.length - 1] : undefined;
     const from = config && !s ? ADDED_FROM[def.id] : undefined;
     const fromSaved = from ? saved.get(from) : undefined;
+    const pinned = PINNED_PLACE.includes(def.id);
+    const notAdded = addOns != null && isAddOn(def.id) && !addOns.includes(def.id);
+    const group: GroupId = def.locked
+      ? "main"
+      : pinned
+        ? def.group
+        : (groupOf(s?.group) ?? before?.group ?? def.group);
     items.push({
       id: def.id,
       label: s?.label ?? def.label,
@@ -290,11 +327,27 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
       path: def.path,
       also: def.also ?? [],
       exact: def.exact ?? false,
-      hidden: def.locked ? false : (s?.hidden ?? fromSaved?.hidden ?? false),
+      hidden: notAdded || (def.locked ? false : (s?.hidden ?? fromSaved?.hidden ?? false)),
       locked: def.locked ?? false,
-      group: def.locked ? "main" : (groupOf(s?.group) ?? before?.group ?? def.group),
+      group,
       description: def.description,
-      order: s ? s.index : before ? before.order + 0.01 : 100 + i,
+      ...(notAdded ? { notAdded: true } : {}),
+      // Integrations and apps is Integrations, then the add-ons, then
+      // anything else an older saved sidebar put there.
+      // Files always heads Data; Integrations and apps is Integrations, then
+      // the add-ons.
+      order:
+        def.id === "notes"
+          ? -1
+          : pinned
+            ? 1000 + i
+            : group === "workspace"
+              ? 2000 + (s ? s.index : i)
+              : s
+                ? s.index
+                : before
+                  ? before.order + 0.01
+                  : 100 + i,
     });
   }
   // Overview always leads.
@@ -306,9 +359,9 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
   }));
 }
 
-/** What the sidebar shows: hidden sections and empty groups left out. */
-export function visibleSidebar(raw: unknown): ResolvedGroup[] {
-  return resolveSidebar(raw)
+/** What the sidebar shows: hidden sections, add-ons not added and empty groups left out. */
+export function visibleSidebar(raw: unknown, addOns?: readonly string[] | null): ResolvedGroup[] {
+  return resolveSidebar(raw, addOns)
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.hidden) }))
     .filter((g) => g.items.length > 0);
 }

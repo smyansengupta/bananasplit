@@ -11,7 +11,7 @@ import {
 
 export const KIND_LABELS: Record<TransactionKind, string> = {
   EXPENSE: "Expense",
-  SPONSORSHIP: "Sponsorship",
+  SPONSORSHIP: "Deal",
   ALLOCATION: "Allocation",
   OTHER_INCOME: "Other income",
   ADJUSTMENT: "Adjustment",
