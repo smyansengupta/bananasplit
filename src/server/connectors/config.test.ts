@@ -84,8 +84,11 @@ describe("server.json", () => {
     };
     const site = new URL(entry.websiteUrl);
     expect(entry.remotes).toEqual([{ type: "streamable-http", url: `${site.origin}${MCP_PATH}` }]);
-    // A domain namespace is the reverse of the domain the registry verifies.
-    expect(entry.name.split("/")[0]).toBe(site.hostname.split(".").reverse().join("."));
+    // A domain namespace is the reverse of the domain the registry verifies
+    // (bananasplit.fyi, by DNS); its subdomains (www, production's host) pass.
+    const domain = entry.name.split("/")[0].split(".").reverse().join(".");
+    expect(site.hostname === domain || site.hostname.endsWith(`.${domain}`)).toBe(true);
+    expect(site.hostname).toBe("www.bananasplit.fyi");
     expect(entry.description.length).toBeLessThanOrEqual(100);
   });
 });

@@ -5,9 +5,15 @@ DNS, legal sign-off and the directory submissions. The feature itself is in
 [`ai-connectors.md`](ai-connectors.md), the WorkOS staging spike in
 [`ai-connectors-spike.md`](ai-connectors-spike.md), and the draft legal
 text in [`ai-connectors-legal-draft.md`](ai-connectors-legal-draft.md).
-Production is `https://bananasplit.fyi`, so the MCP URL is
-`https://bananasplit.fyi/api/mcp`; if the canonical host changes, every URL
+Production is `https://www.bananasplit.fyi`, so the MCP URL is
+`https://www.bananasplit.fyi/api/mcp`; if the canonical host changes, every URL
 here changes with it (it must equal `NEXT_PUBLIC_APP_URL` plus `/api/mcp`).
+The apex `https://bananasplit.fyi` answers every path with a 308 to `www`
+(checked 2026-11-16), so never give the apex to WorkOS, a directory or a
+client: the Resource Indicator would not match the token's `aud`, and not
+every client follows a redirect on a POST. To make the apex canonical
+instead, switch Vercel's primary domain and `NEXT_PUBLIC_APP_URL` first,
+then change every URL here.
 
 **Already in the repository (2026-11-01):**
 
@@ -75,8 +81,8 @@ The RUNBOOK's "AI connectors" section has the exact settings; in order:
    colors and any consent-page CSS. AuthKit's consent screen shows them.
 4. **Connect › Configuration › MCP Auth**: turn on Client ID Metadata
    Document (CIMD) and Dynamic Client Registration (DCR).
-5. **External Sign-in URI**: `https://bananasplit.fyi/connect`.
-6. **Resource Indicator**: `https://bananasplit.fyi/api/mcp`, made the
+5. **External Sign-in URI**: `https://www.bananasplit.fyi/connect`.
+6. **Resource Indicator**: `https://www.bananasplit.fyi/api/mcp`, made the
    default. Without it every token's `aud` is the environment's client id
    and the app refuses them all.
 7. **JWT template**: `{"urn:bananasplit:uid": {{ user.external_id }}}`.
@@ -86,13 +92,13 @@ The RUNBOOK's "AI connectors" section has the exact settings; in order:
    Leave the Preview scope without them.
 9. **Check**: `/api/health` (with the `CRON_SECRET` bearer) lists
    `production:connectors` as ok, and
-   `curl -i -X POST https://bananasplit.fyi/api/mcp` answers 401 with
+   `curl -i -X POST https://www.bananasplit.fyi/api/mcp` answers 401 with
    `resource_metadata` in `WWW-Authenticate`.
 
 ## 4. Real clients against production
 
 With your own account, in each of Claude Code
-(`claude mcp add --transport http bananasplit https://bananasplit.fyi/api/mcp`,
+(`claude mcp add --transport http bananasplit https://www.bananasplit.fyi/api/mcp`,
 then `/mcp` to sign in), claude.ai (Customize › Connectors › Add custom
 connector, or the link on your profile's AI apps card), ChatGPT developer
 mode, Cursor, VS Code and the MCP Inspector:
@@ -139,7 +145,7 @@ MIGRATE_DATABASE_URL='<production owner URL>' CONNECTORS_REVIEWER_PASSWORD='<a n
   another email. As that account, the tools return what the reviewer
   prompts below expect through the MCP server, but not yet through a real
   client.
-- Then sign in at `https://bananasplit.fyi/sign-in` as the reviewer once,
+- Then sign in at `https://www.bananasplit.fyi/sign-in` as the reviewer once,
   and connect Claude to it, to be sure the account works end to end.
 
 ## 6. Screenshots and the video
@@ -158,12 +164,12 @@ MIGRATE_DATABASE_URL='<production owner URL>' CONNECTORS_REVIEWER_PASSWORD='<a n
 At `claude.ai/directory/manage` › Submit new › MCP connector (any paid
 Claude plan). The portal's steps:
 
-1. **Connection**: `https://bananasplit.fyi/api/mcp`; every user connects
+1. **Connection**: `https://www.bananasplit.fyi/api/mcp`; every user connects
    to the same URL.
 2. **Tools**: they sync from the server, grouped read-only and write. None
    should be flagged; `server.test.ts` checks titles and hints.
 3. **Listing**: the copy below, a documentation URL, the privacy policy
-   (`https://bananasplit.fyi/privacy`), the support contact, the icon, and
+   (`https://www.bananasplit.fyi/privacy`), the support contact, the icon, and
    the slug (permanent). **There is no public documentation page yet**:
    the connect steps live on the signed-in profile card. Publish one (the
    URL, Read only versus Read and make changes, what is and isn't exposed,
@@ -191,11 +197,11 @@ form at the time, which on 2026-11-01 asked for:
    is published under (organization settings).
 2. **Domain verification**: the submission shows a token. Set
    `OPENAI_APPS_CHALLENGE` to it in Vercel's Production scope and redeploy;
-   `curl https://bananasplit.fyi/.well-known/openai-apps-challenge` must
-   print exactly the token. Use `https://bananasplit.fyi` as the challenge
+   `curl https://www.bananasplit.fyi/.well-known/openai-apps-challenge` must
+   print exactly the token. Use `https://www.bananasplit.fyi` as the challenge
    base. Keep it set after verification, in case OpenAI checks again;
    unset, the path answers 404.
-3. **Listing URLs** (all https): website `https://bananasplit.fyi`,
+3. **Listing URLs** (all https): website `https://www.bananasplit.fyi`,
    support page (see step 2.4), privacy policy, and terms of service.
 4. **Reviewer access**: the reviewer account's email and password, the
    sign-in URL, and the steps. It must work at once, without MFA, codes or

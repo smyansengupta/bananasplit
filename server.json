@@ -4,15 +4,15 @@
   "title": "Bananasplit",
   "description": "Tasks, events, notes, databases and polls from your Bananasplit Personal space and organizations.",
   "version": "1.0.0",
-  "websiteUrl": "https://bananasplit.fyi",
+  "websiteUrl": "https://www.bananasplit.fyi",
   "icons": [
     {
-      "src": "https://bananasplit.fyi/brand/bananasplit-app-icon.svg",
+      "src": "https://www.bananasplit.fyi/brand/bananasplit-app-icon.svg",
       "mimeType": "image/svg+xml",
       "sizes": ["any"]
     },
     {
-      "src": "https://bananasplit.fyi/apple-icon.png",
+      "src": "https://www.bananasplit.fyi/apple-icon.png",
       "mimeType": "image/png",
       "sizes": ["180x180"]
     }
@@ -20,7 +20,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://bananasplit.fyi/api/mcp"
+      "url": "https://www.bananasplit.fyi/api/mcp"
     }
   ]
 }
