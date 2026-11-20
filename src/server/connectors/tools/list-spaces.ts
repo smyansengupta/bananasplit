@@ -90,7 +90,7 @@ export const registerListSpaces: ToolRegistrar = (server, { connector, grant }) 
     {
       title: "List spaces",
       description:
-        "Lists the Bananasplit spaces this connection can use: the member's Personal space and the organizations they belong to. Each has its id, the member's role, a link, whether the organization allows AI apps, and whether it is paused.",
+        "Lists the Bananasplit spaces this connection can use: the member's Personal space and the organizations they belong to. Each has its id, the member's role, a link, and whether the organization allows AI apps.",
       inputSchema: z.object({}),
       outputSchema,
       annotations: READ_ONLY,

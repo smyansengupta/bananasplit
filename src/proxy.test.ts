@@ -105,4 +105,16 @@ describe("the proxy matcher", () => {
     expect(isNonceRoute(path)).toBe(true);
     expect(matches(path)).toBe(true);
   });
+
+  // JSON and plain-text answers for MCP clients and directory checks: no
+  // page, so no nonce; they carry the static CSP (next.config.ts).
+  it.each([
+    "/api/mcp",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/api/mcp",
+    "/.well-known/openai-apps-challenge",
+  ])("leaves %s to the static policy", (path) => {
+    expect(isNonceRoute(path)).toBe(false);
+    expect(matches(path)).toBe(false);
+  });
 });

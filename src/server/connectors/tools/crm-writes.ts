@@ -6,7 +6,7 @@ import { z } from "zod";
 import { NotFoundError } from "@/lib/auth/errors";
 import { appUrl } from "@/lib/app-url";
 import { normalizeEmail } from "@/lib/crm/dedupe";
-import { emailTells, withEmailStyle } from "@/lib/crm/email-style";
+import { emailTells } from "@/lib/crm/email-style";
 import { crmApprovalsHref, crmPeopleHref } from "@/lib/crm/href";
 import { connectorAppliesDirectly, type Citation, type TargetRef } from "@/lib/crm/suggestions";
 import { CrmError, requireCrm } from "@/server/crm/access";
@@ -109,12 +109,12 @@ const text = (max: number) => z.string().trim().max(max);
 const personInput = z.object({
   space: spaceArg,
   name: text(200).min(1).describe("Their full name."),
-  email: text(254).optional(),
-  phone: text(60).optional(),
-  title: text(200).optional(),
+  email: text(254).optional().describe("Their email address."),
+  phone: text(60).optional().describe("Their phone number."),
+  title: text(200).optional().describe("Their job title."),
   company: text(200).optional().describe("Their company's name (matched to one in the CRM, or made with them)."),
-  linkedin: text(500).optional(),
-  location: text(200).optional(),
+  linkedin: text(500).optional().describe("Their LinkedIn profile URL."),
+  location: text(200).optional().describe("Where they are (a city or region)."),
   note: text(5000).optional().describe("How the member knows them, logged on their timeline once they're added."),
 });
 
@@ -151,12 +151,12 @@ export async function crmCreatePersonTool(session: ConnectorSession, raw: z.inpu
 
 const companyInput = z.object({
   space: spaceArg,
-  name: text(200).min(1),
+  name: text(200).min(1).describe("The company's name."),
   domain: text(200).optional().describe("Their email domain (example.org)."),
-  website: text(500).optional(),
-  industry: text(200).optional(),
-  size: text(60).optional(),
-  about: text(2000).optional(),
+  website: text(500).optional().describe("Its website URL."),
+  industry: text(200).optional().describe("What it does (biotech, nonprofit...)."),
+  size: text(60).optional().describe('How big it is, as the member writes it ("11-50").'),
+  about: text(2000).optional().describe("A few lines about it, shown on its card."),
 });
 
 export async function crmCreateCompanyTool(session: ConnectorSession, raw: z.input<typeof companyInput>) {
@@ -280,8 +280,8 @@ const KINDS = { note: "NOTE", call: "CALL", meeting: "MEETING", email: "EMAIL", 
 
 const logInput = z.object({
   id: itemArg("CRM record"),
-  kind: z.enum(["note", "call", "meeting", "email", "text"]),
-  subject: text(300).optional(),
+  kind: z.enum(["note", "call", "meeting", "email", "text"]).describe("What it was."),
+  subject: text(300).optional().describe("A short line for it, such as an email's subject."),
   text: text(20_000).min(1).describe("What happened, or the message, as the member would log it."),
   when: z.string().max(40).optional().describe("When it happened (ISO 8601); now unless given."),
   direction: z.enum(["inbound", "outbound"]).optional().describe("For emails, calls and texts: from them (inbound) or from us (outbound)."),
@@ -340,15 +340,15 @@ export async function logToTimeline(
   });
 }
 
-const noteInput = z.object({ id: itemArg("CRM record"), text: text(20_000).min(1) });
+const noteInput = z.object({ id: itemArg("CRM record"), text: text(20_000).min(1).describe("The note, as the member would write it.") });
 
 // ---------------------------------------------------------------- drafts
 
 const draftInput = z.object({
   id: itemArg("CRM person"),
-  subject: text(300).min(1),
+  subject: text(300).min(1).describe("The email's subject line."),
   body: text(20_000).min(1).describe("Plain text. It is saved as a draft for the member to read, edit and send themselves; it is never sent."),
-  why: text(500).optional(),
+  why: text(500).optional().describe("Why the member might send it, shown with the draft under To approve."),
 });
 
 export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<typeof draftInput>) {
@@ -393,9 +393,9 @@ export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<
 const listInput = z.object({
   space: spaceArg,
   name: text(80).min(1).describe('What to call the list ("Alumni in Boston").'),
-  kind: z.enum(["people", "companies"]).default("people"),
+  kind: z.enum(["people", "companies"]).default("people").describe("A list of people or of companies."),
   relationship: text(80).optional().describe("People only: a relationship type's name (donor, partner, alumni...)."),
-  status: z.enum(["ACTIVE", "INACTIVE", "ALUMNI"]).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE", "ALUMNI"]).optional().describe("Only records with this status."),
   mine: z.boolean().default(false).describe("Only the ones the member owns."),
   followUpDue: z.boolean().default(false).describe("Only those with a follow-up due today or earlier."),
 });
@@ -521,9 +521,9 @@ export const registerCrmWrites: ToolRegistrar = (server, session) => {
     "crm_draft_email",
     {
       title: "Draft a CRM email",
-      description: withEmailStyle(
-        "Drafts an email to a CRM person for the member to read, edit and send themselves. It waits under To approve on the CRM's Today and is never sent. Read their timeline (crm_timeline) first and write the subject and body as the member, under these rules.",
-      ),
+      // What the tool does, not the email rules: both directories reject descriptions that direct the model (docs/features/ai-connectors.md, "Launch").
+      description:
+        "Drafts an email to a CRM person for the member to read, edit and send themselves. It waits under To approve on the CRM's Today and is never sent. The draft is checked for machine-written tells (em dashes, stock openers and closers, AI vocabulary), and the answer names any it finds.",
       inputSchema: draftInput,
       outputSchema: queuedOutput,
       annotations: ADDS,

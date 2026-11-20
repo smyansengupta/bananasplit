@@ -80,6 +80,27 @@ Every number lives in `src/lib/billing/features.ts` (`PLAN_LIMITS`,
   Moving them instead (Move to a club, below) takes the originals, with
   their ids, history and comments.
 
+## AI connectors (every plan)
+
+A member can connect an AI app (Claude, ChatGPT, Cursor, VS Code) to their
+account and use Personal and their clubs from it
+(`docs/features/ai-connectors.md`). It is on every plan, Personal Free and
+Team Free included (`connectors: "FREE"`): the member's own app pays for
+the model, and the ChatGPT directory rejects in-app upsells. So it is never
+an upgrade prompt; `FEATURE_LABELS` and `FEATURE_PITCH` name it, Settings ›
+Plan lists it, and the pricing comparison has a row for it on all four team
+plans, each only while the deployment has connectors on.
+
+- **What an app sees** is what the member sees, as the member: each tool
+  also needs its own plan feature (finance needs Team; Personal has no
+  people, weekly updates or finance), and a section the club hid from
+  members stays hidden.
+- **The member chooses** at connect time one space or all of them, and
+  Read only or Read and make changes. Disconnect is on their profile.
+- **A club's owners and admins** turn it off for the club at Admin panel ›
+  Privacy › AI connectors (on by default). Personal has no switch: it is
+  only its owner's.
+
 ## Sign-up and onboarding
 
 1. Sign up: name, email, password (or Google).

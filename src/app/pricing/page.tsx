@@ -6,6 +6,7 @@ import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { PricingPlans } from "@/components/marketing/pricing-plans";
 import { getSession } from "@/lib/auth/session";
 import { shareMetadata } from "@/lib/metadata/share";
+import { connectorsConfig } from "@/server/connectors/config";
 
 // The drawn card beside this file, pricing/opengraph-image.png.
 export const metadata: Metadata = shareMetadata({
@@ -51,7 +52,7 @@ export default async function PricingPage() {
 
   return (
     <MarketingShell signedIn={signedIn}>
-      <PricingPlans signedIn={signedIn} />
+      <PricingPlans signedIn={signedIn} connectors={connectorsConfig() !== null} />
       <Faq items={PRICING_FAQS} title="Billing questions." />
       <FinalCta signedIn={signedIn} />
     </MarketingShell>

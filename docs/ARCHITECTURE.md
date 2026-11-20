@@ -252,8 +252,9 @@ credentials. The rules that matter here:
 ## AI connectors (MCP)
 
 Off unless `CONNECTORS_ENABLED`, `WORKOS_API_KEY` and
-`WORKOS_AUTHKIT_DOMAIN` are all set; the plan, the decisions and what is
-built are in `docs/features/ai-connectors.md`. Members connect Claude,
+`WORKOS_AUTHKIT_DOMAIN` are all set; the decisions and what is built are in
+`docs/features/ai-connectors.md`, and the launch steps in
+`docs/features/ai-connectors-launch.md`. Members connect Claude,
 ChatGPT, Cursor or VS Code to `/api/mcp`. WorkOS AuthKit issues the OAuth
 tokens; Auth.js stays the only sign-in (`/connect` is AuthKit's External
 Sign-in URI). The rules that matter here:
@@ -263,7 +264,10 @@ Sign-in URI). The rules that matter here:
   `VerifiedConnector`: our user id from a JWT-template claim, the client,
   the consent (`sid`) and the WorkOS user. It is branded with a symbol the
   module keeps to itself, and it is the only identity the connector
-  wrappers accept.
+  wrappers accept. The route (`src/app/api/mcp/route.ts`) runs, in order:
+  the Origin check (403), the token (a real 401 naming the protected
+  resource metadata), the grant, `connector.call` (600 an hour per grant,
+  429), then a server built for that grant.
 - **Our grant row decides.** WorkOS has no revocation endpoint and no grant
   webhooks, so every request resolves its `ConnectorGrant` (one per user and
   client: read or read-and-change, one space or all, `revokedAt`). A revoked
@@ -273,23 +277,28 @@ Sign-in URI). The rules that matter here:
 - **Tools run as the member.** `withConnectorOrgTx` is `withOrgAction` for
   a token instead of a session: RLS with the member's context, `NotFoundError`
   for a non-member, then the club switch (`OrgSettings.connectorsEnabled`),
-  then `checkSpace` with the `connectors` feature. `ctx.user` is the
-  member's own row, so services that take an `OrgContext` work unchanged.
-  Every failure is an `isError` tool result (`src/server/connectors/errors.ts`).
+  then `checkSpace` with the `connectors` feature and the tool's own.
+  `ctx.user` is the member's own row, so services that take an `OrgContext`
+  work unchanged. Every failure is an `isError` tool result
+  (`src/server/connectors/errors.ts`).
 - **Read tools open a space one way.** `inSpace` (`src/server/connectors/tools/space.ts`)
-  wraps `withConnectorOrgTx` with reads allowed while paused, the tool's plan
-  feature, and the club's hidden sidebar sections refused to members (as
-  search leaves them out). Item ids are opaque `<kind>:<spaceId>:<id>`, so
+  wraps `withConnectorOrgTx` with the tool's plan feature, and the club's
+  hidden sidebar sections refused to members (as search leaves them out).
+  Item ids are opaque `<kind>:<spaceId>:<id>`, so
   `fetch` and the `get_` tools find the space from the id; the lookup still
   filters on `organizationId`.
 - **Write tools change a space one way.** `writeInSpace`
   (`src/server/connectors/tools/write.ts`) refuses a READ grant, counts
   `connector.write` (120 an hour per grant), then runs `withConnectorOrgTx`
-  with `whenPaused: "refuse"` and the hidden-section rule, the app's own
-  service (the task service, `setOwnRsvp`, the grid's `createRecord` and
-  `updateCell`, `createNote`) and a `connector.<tool>` audit row in one
-  transaction. A READ grant's server doesn't register the write tools at
-  all.
+  with the hidden-section rule, the app's own service (the task service,
+  `setOwnRsvp`, the grid's `createRecord` and `updateCell`, `createNote`)
+  and a `connector.<tool>` audit row in one transaction. A READ grant's
+  server doesn't register the write tools at all.
+- **The tool list is reviewed.** Both directories review it, so every tool
+  has a title and all four hints, and no description directs the model;
+  `src/server/connectors/server.test.ts` lists the tools as a client does
+  and fails otherwise. A new tool is a security review item, as a new
+  `CONNECTORS` path is.
 - **RLS.** `ConnectorGrant`'s policies test only `"userId" = app.user_id()`.
   Two definer functions: `app.connector_spaces()` (app_user: the caller's
   spaces with each switch) and `app.revoke_connector_grants(user)` (app_auth
@@ -466,6 +475,6 @@ rolled-back action still counts. Keys hash their identifying parts
 tokens. Sign-in (per IP and per email), sign-up (per IP and per email),
 verification-link resends (per account), invites (per org), poll responses
 (per IP), receipt uploads (per user), CSP reports (per IP), the ICS feed
-(per token hash), AI connector requests (per connected app) and `/connect`
-completions (per user) are limited; the client IP comes from `x-real-ip`, never the
+(per token hash), AI connector requests and their writes (per connected
+app) and `/connect` completions (per user) are limited; the client IP comes from `x-real-ip`, never the
 client-controlled first `x-forwarded-for` hop.

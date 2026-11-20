@@ -389,6 +389,21 @@ answers 404 and the profile card and the club switch disappear. Connections
 are kept, so turning it back on restores them. **One club** — its owners and
 admins switch it off in Admin panel › Privacy › AI connectors.
 
+**Directory listings** — the order of the steps (WorkOS, the Claude
+Connectors Directory, ChatGPT, the MCP Registry) is the launch checklist in
+`docs/features/ai-connectors.md`. Two pieces live here:
+
+- **ChatGPT domain verification.** Set `OPENAI_APPS_CHALLENGE` (Production
+  scope) to the token OpenAI's submission shows and redeploy;
+  `curl https://<app>/.well-known/openai-apps-challenge` must print exactly
+  the token. It answers 404 while unset, and doesn't need
+  `CONNECTORS_ENABLED`.
+- **The reviewer account.** `scripts/connectors-reviewer.ts` makes the test
+  account and its populated organization the directories' reviewers sign in
+  with. It needs an explicit target and refuses a database that isn't
+  local or marked `app.fixture_only` unless given `--production`; its
+  header has the commands.
+
 ## Email (production)
 
 Verification and password-reset links must arrive on day one: password
