@@ -445,7 +445,7 @@ describe("Admin panel navigation", () => {
   it("gives Personal only its own settings, its plan and storage, and no team settings", () => {
     expect(settingsNavItems("me", "OWNER", PERSONAL).map((i) => i.label)).toEqual([
       "General",
-      "Plan and storage",
+      "Plan",
       "What's new",
       "Danger zone",
     ]);
