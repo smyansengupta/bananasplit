@@ -10,9 +10,9 @@ import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { parseAvatarVariants } from "@/lib/avatar";
 
 import {
-  ACCEPTED_IMAGE_TYPES,
   cropToSquare,
-  MAX_SOURCE_BYTES,
+  openPickedImage,
+  PICKER_ACCEPT,
   type PixelArea,
 } from "@/components/images/crop-image";
 
@@ -59,21 +59,19 @@ export function AvatarEditor({
     return () => URL.revokeObjectURL(source);
   }, [source]);
 
-  function pickFile(event: React.ChangeEvent<HTMLInputElement>) {
+  async function pickFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-      setStatus({ kind: "error", message: "Choose a JPEG, PNG or WebP image." });
-      return;
-    }
-    if (file.size > MAX_SOURCE_BYTES) {
-      setStatus({ kind: "error", message: "That file is too large. Choose one under 25 MB." });
+    void loadCropDialog();
+    const opened = await openPickedImage(file);
+    if ("error" in opened) {
+      setStatus({ kind: "error", message: opened.error });
       return;
     }
     setStatus({ kind: "idle" });
     setCropError(null);
-    setSource(URL.createObjectURL(file));
+    setSource(opened.src);
   }
 
   async function upload(area: PixelArea) {
@@ -135,7 +133,7 @@ export function AvatarEditor({
     <input
       ref={inputRef}
       type="file"
-      accept={ACCEPTED_IMAGE_TYPES.join(",")}
+      accept={PICKER_ACCEPT}
       className="sr-only"
       tabIndex={-1}
       aria-hidden="true"
@@ -266,7 +264,7 @@ export function AvatarEditor({
           )}
         </div>
         <p className="text-muted-foreground text-xs">
-          JPEG, PNG or WebP. You&apos;ll crop it to a square; it&apos;s resized for the web and
+          Any photo. You&apos;ll crop it to a square; it&apos;s resized for the web and
           location data is removed.
         </p>
         <p
