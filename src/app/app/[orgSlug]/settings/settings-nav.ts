@@ -97,6 +97,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     feature: "auditLog",
   },
   {
+    label: "What's new",
+    segment: "whats-new",
+    description: "What each version added, improved and fixed.",
+    icon: "Sparkles",
+    group: "Records",
+    personal: true,
+  },
+  {
     label: "Danger zone",
     segment: "danger",
     description: "Export everything, or delete.",

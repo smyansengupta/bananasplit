@@ -70,3 +70,9 @@ pnpm test
 `pnpm test:e2e` is slower (spins up a real server + browser); run it before
 anything touching auth, the kanban board, notes, calendar/polls, or finance —
 i.e. anything the two E2E flows actually exercise.
+
+## Changelog
+
+The Admin panel's **What's new** page reads `src/lib/changelog/releases.ts`.
+Add an entry (or a line in the newest one) with every change members would
+notice, and bump `version` in `package.json` when you cut a release.
