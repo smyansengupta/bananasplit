@@ -7,9 +7,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
-  ACCEPTED_IMAGE_TYPES,
   cropToSquare,
-  MAX_SOURCE_BYTES,
+  openPickedImage,
+  PICKER_ACCEPT,
   type PixelArea,
 } from "@/components/images/crop-image";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
@@ -515,25 +515,23 @@ export function LogoForm({
     }
   }
 
-  function pick(event: React.ChangeEvent<HTMLInputElement>) {
+  async function pick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) take(file);
+    if (file) void take(file);
   }
 
-  /** A picked or dropped file: checked, then on to the crop. */
-  function take(file: File) {
-    if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-      setStatus({ tone: "error", text: "Choose a JPEG, PNG or WebP image." });
-      return;
-    }
-    if (file.size > MAX_SOURCE_BYTES) {
-      setStatus({ tone: "error", text: "That file is too large. Choose one under 25 MB." });
+  /** A picked or dropped file: opened (the browser decides), then on to the crop. */
+  async function take(file: File) {
+    void loadCropDialog();
+    const opened = await openPickedImage(file);
+    if ("error" in opened) {
+      setStatus({ tone: "error", text: opened.error });
       return;
     }
     setStatus(null);
     setCropError(null);
-    setSource(URL.createObjectURL(file));
+    setSource(opened.src);
   }
 
   async function confirm(area: PixelArea) {
@@ -560,7 +558,7 @@ export function LogoForm({
       ref={input}
       id="org-logo"
       type="file"
-      accept={ACCEPTED_IMAGE_TYPES.join(",")}
+      accept={PICKER_ACCEPT}
       className="sr-only"
       tabIndex={-1}
       aria-hidden="true"
@@ -588,7 +586,7 @@ export function LogoForm({
       e.preventDefault();
       setDragging(false);
       const file = e.dataTransfer.files?.[0];
-      if (file) take(file);
+      if (file) void take(file);
     },
   };
 
@@ -680,7 +678,7 @@ export function LogoForm({
         {canEdit ? (
           <div className="flex flex-col items-start gap-1.5">
             <p className="text-muted-foreground text-[13px]">
-              {logoUrl ? "Click or drop to change." : "Click or drop to add."} JPEG, PNG or WebP.
+              {logoUrl ? "Click or drop to change." : "Click or drop to add."} Any image.
             </p>
             {logoUrl && (
               <Button

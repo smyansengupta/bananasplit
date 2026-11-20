@@ -7,8 +7,14 @@
 
 export const CROP_OUTPUT_SIZE = 512;
 
-/** Files the picker accepts: what browsers can decode and the server accepts. */
-export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+/**
+ * The picker's `accept`. A broad "image/*" rather than a MIME list: phones
+ * hand over HEIC/HEIF photos, and Android photo and cloud pickers often give
+ * files an empty or unexpected type, which a strict list (and a strict
+ * `file.type` check) turned away. Whatever the browser can decode is fine:
+ * only the cropped canvas output (WebP or JPEG) is uploaded.
+ */
+export const PICKER_ACCEPT = "image/*";
 
 /** The original may be large (it never leaves the browser); cap it for memory. */
 export const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
@@ -28,6 +34,29 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("That image could not be read."));
     image.src = src;
   });
+}
+
+/**
+ * Checks a picked file and opens it for the crop dialog: returns an object
+ * URL the browser has actually decoded (the caller revokes it), or a message
+ * to show. Decoding, not the declared type, decides: iOS Safari reads HEIC,
+ * and a file with an empty type is often a perfectly good JPEG.
+ */
+export async function openPickedImage(file: File): Promise<{ src: string } | { error: string }> {
+  if (file.type && !file.type.startsWith("image/")) {
+    return { error: "Choose a photo or image file." };
+  }
+  if (file.size > MAX_SOURCE_BYTES) {
+    return { error: "That file is too large. Choose one under 25 MB." };
+  }
+  const src = URL.createObjectURL(file);
+  try {
+    await loadImage(src);
+    return { src };
+  } catch {
+    URL.revokeObjectURL(src);
+    return { error: "That image couldn't be opened here. Try a JPEG or PNG." };
+  }
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {

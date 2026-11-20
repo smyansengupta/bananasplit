@@ -101,7 +101,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     segment: "whats-new",
     description: "What each version added, improved and fixed.",
     icon: "Sparkles",
-    group: "Records",
     personal: true,
   },
   {
