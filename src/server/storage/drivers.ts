@@ -57,6 +57,23 @@ export interface BlobStream {
   size: number | null;
 }
 
+/**
+ * The size of a fetched blob's stream as it will be read, or null when the
+ * response can't say. The Blob CDN compresses text (.md, .txt, .csv) and
+ * fetch() decodes it, so a Content-Length is the encoded size, and a
+ * chunked response has none (the SDK reports 0). Sent as the download's
+ * Content-Length, either one cut the file short and the browser dropped it.
+ */
+export function decodedStreamSize(
+  headers: Pick<Headers, "get" | "has">,
+  size: number | null | undefined,
+): number | null {
+  const encoding = headers.get("content-encoding");
+  if (encoding && encoding.trim().toLowerCase() !== "identity") return null;
+  if (!headers.has("content-length")) return null;
+  return size ?? null;
+}
+
 export class StorageConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -118,7 +135,7 @@ export function vercelBlobDriver(env: Env = process.env): BlobDriver {
       return {
         stream: result.stream as ReadableStream<Uint8Array>,
         contentType: result.blob.contentType,
-        size: result.blob.size ?? null,
+        size: decodedStreamSize(result.headers, result.blob.size),
       };
     },
     async delete(store, keys) {

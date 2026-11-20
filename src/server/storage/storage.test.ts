@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   blobStoreIdFromToken,
+  decodedStreamSize,
   driverFor,
   isLocalStore,
   localDriver,
@@ -368,5 +369,24 @@ describe("readUpload", () => {
       headers: { "content-type": mp.type },
     });
     expect(((await readUpload(empty).catch((e) => e)) as UploadError).status).toBe(400);
+  });
+});
+
+describe("decodedStreamSize", () => {
+  it("trusts Content-Length for an unencoded response", () => {
+    expect(decodedStreamSize(new Headers({ "content-length": "120" }), 120)).toBe(120);
+    expect(
+      decodedStreamSize(new Headers({ "content-length": "0", "content-encoding": "identity" }), 0),
+    ).toBe(0);
+  });
+
+  it("doesn't trust it when fetch decoded a compressed body (text files)", () => {
+    const headers = new Headers({ "content-length": "40", "content-encoding": "br" });
+    expect(decodedStreamSize(headers, 40)).toBeNull();
+  });
+
+  it("is unknown for a chunked response, which the SDK reports as 0", () => {
+    expect(decodedStreamSize(new Headers({ "content-encoding": "gzip" }), 0)).toBeNull();
+    expect(decodedStreamSize(new Headers(), 0)).toBeNull();
   });
 });
